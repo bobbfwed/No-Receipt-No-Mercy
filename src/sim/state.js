@@ -37,11 +37,20 @@ function blankStats() {
   return { spent: 0, built: 0, sold: 0, shipped: 0, earned: 0, stopped: 0, annoy: 0 };
 }
 
-/** Creates a new game in the first build phase. */
-export function createGame({ seed = 1 } = {}) {
+/**
+ * Creates a new game in the first build phase.
+ * @param {Object} [o]
+ * @param {number} [o.seed]
+ * @param {boolean} [o.training] training mode, used by the tutorial: the build phase never times
+ *   out, the game cannot be lost, and waves are whatever queueTrainingWave() lines up.
+ */
+export function createGame({ seed = 1, training = false } = {}) {
   return {
     v: 1,
     seed,
+    training,
+    /** Training mode only: the groups for the next wave, or null. */
+    nextWave: null,
     rng: (seed >>> 0) || 1,
     tick: 0,
     tiles: MAP.join(''),

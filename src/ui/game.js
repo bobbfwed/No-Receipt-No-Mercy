@@ -10,6 +10,7 @@ import { createDeb } from './deb.js';
 import { createToasts } from './toasts.js';
 import { createReview } from './review.js';
 import { endScreen, closedScreen, helpScreen } from './overlays.js';
+import { createTutorialPanel } from './tutorial.js';
 
 /**
  * Shows the game for a session that is ready (a host, or a client after 'ready').
@@ -21,11 +22,19 @@ import { endScreen, closedScreen, helpScreen } from './overlays.js';
  * @param {number} [o.ff]          host only: ticks to run before the first frame
  * @param {boolean} [o.autostart]  host only, for tests: open the doors whenever a build phase starts
  * @param {HTMLElement} o.mount
+ * @param {boolean} [o.tutorial]   run the training shift (the session's game must be in training mode)
+ * @param {number} [o.tutorialStep] start the training at this step (for screenshots)
+ * @param {(where: 'solo'|'menu') => void} [o.onExit] leave the training shift
+ * @param {Object} [o.sound]       the sound module from src/audio/sound.js, if there is one
  */
-export function startGame(session, { roomCode = null, roomKind = null, prepare = null, ff = 0, autostart = false, mount }) {
+export function startGame(session, {
+  roomCode = null, roomKind = null, prepare = null, ff = 0, autostart = false, mount,
+  tutorial = false, tutorialStep = 0, onExit = () => {}, sound = null,
+}) {
   const canvas = h('canvas', { class: 'world', 'aria-label': 'The warehouse floor. Use the mouse to build.' });
   const stage = h('main', { class: 'stage' }, canvas);
   const renderer = createRenderer(canvas, session);
+  const playSound = (name) => { if (sound) sound.play(name); };
 
   let help = null;
   const toggleHelp = () => {
@@ -36,23 +45,28 @@ export function startGame(session, { roomCode = null, roomKind = null, prepare =
 
   const review = createReview(session);
   const input = createInput({
-    canvas, renderer, session,
+    canvas, renderer, session, playSound,
     onEscape: () => {
       if (help) { toggleHelp(); return true; }
       if (review.open) { review.close(); return true; }
       return false;
     },
   });
-  const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp });
+  const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, sound, playSound });
   const players = createPlayersPanel(session);
   const bar = createBuildBar(input);
   const deb = createDeb();
   const toasts = createToasts();
+  const training = tutorial && session.isHost
+    ? createTutorialPanel(session, { onExit, highlight: bar.highlight, playSound })
+    : null;
 
-  stage.append(players.el, toasts.notices, toasts.reviews, deb.el, review.el);
-  const root = h('div', { class: 'game' }, top.el, stage, bar.el, bar.tip);
+  // In training the lesson panel sits where the players list normally is.
+  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el);
+  const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, bar.tip);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');
+  if (sound) sound.attach(session);
 
   // ---- Messages ----------------------------------------------------------------------------------
   let replaying = false; // true during a fast-forward: news is history, show only the latest
@@ -63,7 +77,13 @@ export function startGame(session, { roomCode = null, roomKind = null, prepare =
   const myName = () => session.state?.players[session.me]?.name || 'you';
 
   session.on('say', (m) => { lastDeb = String(m.text ?? ''); deb.say(m); });
-  session.on('nope', (m) => { if (!replaying) deb.nope(m.why, nopeLine(m.why, myName())); });
+  let lastBuzz = 0;
+  session.on('nope', (m) => {
+    if (replaying) return;
+    deb.nope(m.why, nopeLine(m.why, myName()));
+    const now = performance.now();
+    if (now - lastBuzz > 400) { lastBuzz = now; playSound('nope'); }
+  });
   session.on('review', (m) => toasts.review(m));
   session.on('players', (m) => toasts.notice(m.text));
   session.on('report', (m) => {
@@ -96,6 +116,12 @@ export function startGame(session, { roomCode = null, roomKind = null, prepare =
   if (autostart && session.isHost) {
     setInterval(() => { if (session.state.phase === 'build') session.send({ c: 'start' }); }, 300);
   }
+  if (training) {
+    // Jumping ahead plays the earlier lessons by themselves; their chatter is history.
+    replaying = tutorialStep > 0;
+    training.start(tutorialStep);
+    if (replaying) { replaying = false; deb.collapse(); }
+  }
 
   const resize = () => { renderer.resize(); input.calibrate(); };
   resize();
@@ -114,6 +140,7 @@ export function startGame(session, { roomCode = null, roomKind = null, prepare =
     input.tick(now);
     deb.tick(now);
     toasts.tick(now);
+    if (training) training.tick();
     if (!ended && (s.phase === 'won' || s.phase === 'lost')) {
       ended = true;
       root.classList.add('ended');
@@ -122,7 +149,12 @@ export function startGame(session, { roomCode = null, roomKind = null, prepare =
       // Give DEB's verdict a moment to arrive with the final update before the curtain drops.
       setTimeout(() => root.append(endScreen(session.state, lastDeb)), session.isHost ? 600 : 1200);
     }
-    renderer.draw(input.view());
+    const view = input.view();
+    // Show where shoppers will walk whenever the player is planning: between waves, while
+    // holding something to build, and all through training.
+    view.route = !!training || s.phase === 'build' || !!input.tool;
+    view.marks = training ? training.marks() : null;
+    renderer.draw(view);
   }
   requestAnimationFrame(frame);
 

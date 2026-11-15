@@ -80,6 +80,8 @@ renderer.draw(view);               // once per animation frame
   dir: 0,                // facing for the placement preview, 0-3
   hover: { x, y },       // tile under the mouse, or null
   cursors: Map,          // player id -> { x, y } in tiles (decimals): other players' pointers
+  route: true,           // draw the route shoppers will walk, and the dads' short cut
+  marks: [{ x, y, label }], // tiles to highlight with a pulsing outline and arrow (tutorial)
 }
 ```
 The renderer draws the world, the placement preview (green or red using `canPlace`, plus the range circle for towers), effects from `session.drainFx()`, and other players' pointers. It does not handle input and does not touch the DOM outside its canvas. The world is 30 x 16 tiles; the renderer scales it to fit the canvas and keeps the aspect ratio.

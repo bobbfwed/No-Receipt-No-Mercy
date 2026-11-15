@@ -29,15 +29,31 @@ export function waveSpec(n) {
   return g;
 }
 
+/**
+ * Training mode: lines up the shoppers for the next wave. The wave starts when a player opens
+ * the doors. Groups have the same shape as waveSpec() returns.
+ */
+export function queueTrainingWave(state, groups) {
+  if (state.training) state.nextWave = groups;
+}
+
+/** Training mode: sets the team's cash, so a lesson can hand out what it needs. */
+export function setTrainingCash(state, cash) {
+  if (state.training) state.cash = Math.max(0, Math.floor(cash));
+}
+
 /** Opens the doors for the next wave. */
 export function beginWave(state, ev) {
-  state.wave++;
+  // Training waves do not count up: shoppers keep their starting patience.
+  if (state.training) state.wave = 1; else state.wave++;
   state.phase = 'wave';
   state.phaseT = 0;
   resetWaveStats(state);
   const q = [];
   let dads = 0;
-  for (const g of waveSpec(state.wave)) {
+  const groups = state.training ? state.nextWave || [] : waveSpec(state.wave);
+  state.nextWave = null;
+  for (const g of groups) {
     if (g.k === 'dad') dads += g.n;
     for (let j = 0; j < g.n; j++) q.push([state.tick + secs(g.at + j * g.gap), g.k]);
   }
@@ -47,6 +63,13 @@ export function beginWave(state, ev) {
 }
 
 function endWave(state, ev) {
+  if (state.training) {
+    // Back to an untimed build phase; the lesson decides what happens next.
+    state.phase = 'build';
+    state.phaseT = -1;
+    ev.push({ e: 'waveEnd', wave: state.wave, bonus: 0, training: true });
+    return;
+  }
   const bonus = TUNE.waveBonus + TUNE.waveBonusStep * state.wave;
   state.cash += bonus;
   ev.push({ e: 'waveEnd', wave: state.wave, bonus });
@@ -66,7 +89,9 @@ function spawn(state) {
     const k = q.shift()[1];
     const def = SHOPPERS[k];
     const door = doors[(rand(state) * doors.length) | 0];
-    const single = k === 'dad'; // dads walk in a strict single file
+    // Dads walk in a strict single file. In training everyone does, so a lesson plays out the
+    // same way every time.
+    const single = k === 'dad' || state.training;
     const n = state.wave - 1;
     const hp = def.hp * (1 + TUNE.hpGrowth * n + TUNE.hpGrowth2 * n * n);
     state.shoppers.push({
@@ -218,7 +243,7 @@ function escape(state, s, ev) {
   state.ws.escaped++;
   state.ws.refunded += paid;
   ev.push({ e: 'escape', k: s.k, x: s.x, y: s.y, refund: paid });
-  if (state.refunds >= TUNE.refundLimit && state.phase !== 'lost') {
+  if (state.refunds >= TUNE.refundLimit && state.phase !== 'lost' && !state.training) {
     state.phase = 'lost';
     ev.push({ e: 'lost' });
   }
@@ -330,7 +355,8 @@ export function step(state) {
   const ev = [];
   if (state.phase === 'won' || state.phase === 'lost') return ev;
   state.tick++;
-  const waiting = state.phase === 'build' && state.phaseT === -1; // nothing runs before the first build
+  // Nothing runs before the first build. (In training the factory always runs.)
+  const waiting = !state.training && state.phase === 'build' && state.phaseT === -1;
   if (state.phase === 'build') {
     if (state.phaseT > 0 && --state.phaseT === 0) beginWave(state, ev);
   } else {

@@ -34,12 +34,14 @@ export function showMenu(mount, actions, { error = '', name = '', code = '' } = 
   }
   const status = h('p', { class: 'menu-status', role: 'status', 'aria-live': 'polite' });
 
+  const btnTrain = h('button', { type: 'button', class: 'btn-big btn-train' },
+    'Training shift', h('small', null, 'Start here: learn every building, hands on. About 10 minutes.'));
   const btnSolo = h('button', { type: 'button', class: 'btn-big btn-yellow' }, 'Play solo');
   const btnHost = h('button', { type: 'button', class: 'btn-big btn-orange' }, 'Host a game');
   const btnJoin = h('button', { type: 'submit', class: 'btn-big btn-red' }, 'Join a game');
   const btnLHost = h('button', { type: 'button', class: 'btn-small' }, 'Host in this tab');
   const btnLJoin = h('button', { type: 'button', class: 'btn-small' }, 'Join from this tab');
-  const all = [btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn];
+  const all = [btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn];
 
   function playerName() {
     const n = nameIn.value.trim().slice(0, 14);
@@ -63,6 +65,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '' } = 
     }
   }
 
+  btnTrain.addEventListener('click', () => run(() => actions.tutorial(playerName()), 'Starting your training...'));
   btnSolo.addEventListener('click', () => run(() => actions.solo(playerName()), 'Clocking in...'));
   btnHost.addEventListener('click', () => run(() => actions.host(playerName()),
     'Opening a room on the internet. Please hold, like a real customer...'));
@@ -88,6 +91,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '' } = 
       h('p', { class: 'menu-pitch' }, 'Build a factory, wall in the returns desk, and stop a horde of refund-hungry shoppers before they bankrupt the store. Co-op, for 1 to 6 disappointments.'),
       h('label', { class: 'field', for: 'name' }, h('span', null, 'Your name (for the disciplinary file)'), nameIn),
       h('div', { class: 'menu-actions' },
+        btnTrain,
         btnSolo,
         btnHost,
         h('div', { class: 'join' }, h('label', { for: 'code', class: 'join-label' }, 'Got a room code?'), joinForm)),

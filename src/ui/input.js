@@ -18,7 +18,7 @@ const CURSOR_TTL_MS = 3000;
  * @param {() => boolean} [o.onEscape] return true if Escape was used for something else (a dialog)
  * @param {() => void} [o.onChange] called when the tool or direction changes
  */
-export function createInput({ canvas, renderer, session, onEscape = () => false, onChange = () => {} }) {
+export function createInput({ canvas, renderer, session, onEscape = () => false, onChange = () => {}, playSound = () => {} }) {
   let tool = null;
   let dir = 0;
   let hover = null;
@@ -37,11 +37,18 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (next === tool) return;
     tool = next;
     canvas.dataset.tool = tool || '';
+    if (tool) playSound('select');
     onChange();
   }
 
   function send(cmds) {
-    for (const c of cmds) session.send(c);
+    let did = null;
+    for (const c of cmds) {
+      // The host answers at once. A client hears nothing back unless it is refused, so assume yes.
+      const r = session.send(c);
+      if (!r || r.ok) did = c.c;
+    }
+    if (did === 'place' || did === 'remove') playSound(did);
   }
 
   // ---- Where the grid is on screen -------------------------------------------------------------
@@ -133,10 +140,11 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       e.preventDefault();
       if (tool && tool !== 'remove') {
         dir = (dir + (e.shiftKey ? 3 : 1)) & 3;
+        playSound('rotate');
         onChange();
       } else if (!tool && hover) {
         const b = grid()?.[hover.y * W + hover.x];
-        if (b && BUILD[b.k]?.rot) session.send({ c: 'rotate', x: hover.x, y: hover.y });
+        if (b && BUILD[b.k]?.rot) { session.send({ c: 'rotate', x: hover.x, y: hover.y }); playSound('rotate'); }
       }
     } else if (key === 'Escape') {
       if (drag) { drag = null; return; }

@@ -2,6 +2,7 @@
 //
 // Page options (see docs/architecture.md):
 //   ?solo=1 [&name=Dave]          start a solo game straight away
+//   ?tutorial=1 [&step=9]         start the training shift, optionally at a later lesson (0-based)
 //   ?demo=1                       solo game with the ready-made layout, doors already open
 //   &ff=900                       run that many ticks before the first frame (host only)
 //   &seed=7                       fixed random seed
@@ -15,7 +16,7 @@ import { showError } from './ui/errors.js';
 import { HostSession, ClientSession } from './net/session.js';
 import { createDirector } from './content/director.js';
 import { hostOnline, joinOnline, hostLocal, joinLocal, makeRoomCode } from './net/transports.js';
-import { applyDemoLayout } from './sim/index.js';
+import { applyDemoLayout, createGame } from './sim/index.js';
 import { loadName, saveName } from './ui/dom.js';
 import { showMenu } from './ui/menu.js';
 import { startGame } from './ui/game.js';
@@ -38,6 +39,24 @@ function newHost(name) {
   return new HostSession({ name, seed: opts.seed, director: createDirector() });
 }
 
+// Sound is optional: if the module fails to load, the game still runs, silently.
+let sound = null;
+try {
+  const { createSound } = await import('./audio/sound.js');
+  sound = createSound();
+  // Browsers only allow sound after the player has clicked or pressed a key.
+  const unlock = () => sound.unlock();
+  addEventListener('pointerdown', unlock, true);
+  addEventListener('keydown', unlock, true);
+} catch (err) {
+  console.warn('Sound is unavailable:', err);
+}
+
+/** Leaves a game for the menu or a fresh solo game by reloading the page. */
+function leaveTo(where) {
+  location.assign(where === 'solo' ? `${location.pathname}?solo=1` : location.pathname);
+}
+
 /** Waits for a client's first state, or for the host to turn it away. */
 function whenReady(session, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
@@ -55,14 +74,21 @@ function whenReady(session, timeoutMs = 12000) {
 
 const actions = {
   async solo(name) {
-    startGame(newHost(name), { mount: app, ff: opts.ff, autostart: opts.autostart });
+    startGame(newHost(name), { mount: app, sound, ff: opts.ff, autostart: opts.autostart });
+  },
+  /** The training shift: a guided game that cannot be lost. `step` jumps ahead (for screenshots). */
+  async tutorial(name, step = 0) {
+    const session = new HostSession({
+      name, director: createDirector(), state: createGame({ seed: opts.seed || 7, training: true }),
+    });
+    startGame(session, { mount: app, sound, tutorial: true, tutorialStep: step, onExit: leaveTo });
   },
   async host(name, fixedCode) {
     const code = fixedCode || makeRoomCode();
     const session = newHost(name);
     const room = await hostOnline(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
-    startGame(session, { mount: app, roomCode: code, roomKind: 'online', ff: opts.ff, autostart: opts.autostart });
+    startGame(session, { mount: app, sound, roomCode: code, roomKind: 'online', ff: opts.ff, autostart: opts.autostart });
   },
   async join(name, code) {
     const conn = await joinOnline(code);
@@ -73,13 +99,13 @@ const actions = {
       conn.close();
       throw err;
     }
-    startGame(session, { mount: app, roomCode: code.toUpperCase(), roomKind: 'online' });
+    startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'online' });
   },
   async hostLocal(name, code) {
     const session = newHost(name);
     const room = hostLocal(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
-    startGame(session, { mount: app, roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });
+    startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });
   },
   async joinLocal(name, code) {
     const conn = await joinLocal(code);
@@ -90,7 +116,7 @@ const actions = {
       conn.close();
       throw err;
     }
-    startGame(session, { mount: app, roomCode: code.toUpperCase(), roomKind: 'local' });
+    startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'local' });
   },
 };
 
@@ -105,13 +131,15 @@ async function boot() {
   const name = defaultName();
   if (flag('demo')) {
     startGame(newHost(name), {
-      mount: app, ff: opts.ff, autostart: opts.autostart,
+      mount: app, sound, ff: opts.ff, autostart: opts.autostart,
       prepare(session) {
         const problems = applyDemoLayout(session.state, session.me);
         if (problems.length) showError(`Demo layout: ${problems.join('; ')}`);
         session.send({ c: 'start' });
       },
     });
+  } else if (flag('tutorial')) {
+    await actions.tutorial(name, Math.max(0, Math.floor(num('step') || 0)));
   } else if (flag('solo')) {
     await actions.solo(name);
   } else if (q.get('online') === 'host' || q.get('online') === 'join') {
