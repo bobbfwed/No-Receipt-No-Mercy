@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sound test</title>
+<!--
+  Measures every synthesized sound in src/audio without anyone having to listen.
+  Each effect in the SOUNDS table (and each of its variants) is rendered through an
+  OfflineAudioContext at 44100 Hz and checked:
+    silent    peak below 0.01
+    clips     peak above 0.99
+    too long  rings (above -60 dB) longer than the table's `max`
+    click     first or last rendered sample away from zero, a jump at the very start of the sound
+              (more than half the peak within 0.5 ms), or a hard cut at its end
+  Also: 8 bars of the music loop (with a check that the loop seam joins without a jump or gap),
+  a stress test (40 effects within one second through the full master chain must stay under 1.0),
+  and a few loudness relations (frequent sounds quieter and shorter than rare ones, music under
+  the effects).
+  Buttons at the bottom play everything live, and drive the real sound module with a fake session
+  (DEB speaks there).
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 14px 18px; background: #16191d; color: #e5e7eb; font: 13px/1.35 "Segoe UI", Arial, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  h2 { font-size: 15px; margin: 16px 0 6px; }
+  #summary { font-size: 26px; font-weight: 700; margin: 4px 0 8px; }
+  #summary.pass { color: #4ade80; } #summary.fail { color: #f87171; }
+  #err { color: #ff3b30; font: bold 26px/1.3 "Segoe UI", Arial, sans-serif; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 1px 6px; border-bottom: 1px solid #2a2f36; text-align: left; vertical-align: middle; white-space: nowrap; }
+  th { color: #9ca3af; font-weight: 600; }
+  td.num { text-align: right; font-family: Consolas, monospace; }
+  td.about { white-space: normal; color: #9ca3af; font-size: 11px; max-width: 360px; }
+  tr.fail td { background: #4c1d1d; }
+  tr.fail td.res { color: #fca5a5; font-weight: 700; }
+  tr.warn td.res { color: #fbbf24; font-weight: 700; }
+  td.res { color: #4ade80; font-weight: 700; }
+  canvas { display: block; background: #0d0f12; }
+  .checks div { font-family: Consolas, monospace; }
+  .checks .bad { color: #f87171; font-weight: 700; } .checks .ok { color: #4ade80; }
+  button { background: #374151; color: #fff; border: 1px solid #4b5563; border-radius: 4px; padding: 3px 9px; margin: 2px; cursor: pointer; font: inherit; }
+  button:hover { background: #4b5563; }
+  .live { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+  label { margin-right: 12px; }
+</style>
+</head>
+<body>
+<div id="err"></div>
+<h1>Returns Department: sound test</h1>
+<div id="summary">rendering...</div>
+<div class="checks" id="checks"></div>
+<h2>Effects (rendered offline, 44100 Hz, level 1, no master chain; peak and duration are the worst of 3 start times)</h2>
+<table id="tbl">
+  <thead><tr><th>sound</th><th>what it should be</th><th>max s</th><th>dur s (-60 dB)</th><th>peak</th><th>RMS</th><th>result</th><th>waveform</th><th></th></tr></thead>
+  <tbody></tbody>
+</table>
+<h2>Music and master chain</h2>
+<table id="tbl2">
+  <thead><tr><th>case</th><th>notes</th><th>dur s</th><th>peak</th><th>RMS</th><th>result</th><th>waveform</th></tr></thead>
+  <tbody></tbody>
+</table>
+<h2>Live (for listening)</h2>
+<div class="live" id="live">
+  <button id="musicBtn">Music loop on/off</button>
+</div>
+<h2>Through the real sound module (fake session)</h2>
+<div class="live" id="mod"></div>
+<div class="live" id="settings"></div>
+<div class="checks" id="liveLog"></div>
+<script>
+  // Show any uncaught error in big red text, so a screenshot shows it.
+  const showErr = (msg) => { document.getElementById('err').textContent += msg + '\n'; };
+  addEventListener('error', (e) => showErr('ERROR: ' + (e.error && e.error.stack || e.message)));
+  addEventListener('unhandledrejection', (e) => showErr('ERROR: ' + (e.reason && e.reason.stack || e.reason)));
+</script>
+<script type="module">
+import { SOUNDS } from '../src/audio/effects.js';
+import { musicBar, BAR, LOOP_BARS } from '../src/audio/music.js';
+import { createChain } from '../src/audio/mix.js';
+import { createSound } from '../src/audio/sound.js';
+
+const SR = 44100;
+const FREQUENT = ['sale', 'spray', 'shot', 'mess'];
+const RARE = ['waveStart', 'won', 'lost'];
+let failures = 0;
+const results = [];
+window.__results = results;
+
+/** Every row of the effects table: one per sound, or one per variant. */
+const cases = [];
+for (const [name, s] of Object.entries(SOUNDS)) {
+  const vs = s.variants || [{ label: '', opts: {} }];
+  for (const vr of vs) cases.push({ name, label: vr.label ? `${name} (${vr.label})` : name, opts: vr.opts || {}, max: vr.max ?? s.max, about: s.about });
+}
+
+async function render(secs, build) {
+  const ctx = new OfflineAudioContext(1, Math.ceil(secs * SR), SR);
+  build(ctx);
+  const buf = await ctx.startRendering();
+  return buf.getChannelData(0);
+}
+
+/** Level numbers and click checks for one rendered signal. */
+function analyse(x, from = 0, to = x.length) {
+  let peak = 0, first = -1, last = -1, end = -1;
+  for (let i = from; i < to; i++) {
+    const a = Math.abs(x[i]);
+    if (a > peak) peak = a;
+    if (a > 1e-4) { if (first < 0) first = i; last = i; }
+    if (a > 0.001) end = i;
+  }
+  let sum = 0;
+  const a0 = Math.max(first, from), a1 = Math.max(end, a0);
+  for (let i = a0; i <= a1; i++) sum += x[i] * x[i];
+  const rms = first < 0 ? 0 : Math.sqrt(sum / Math.max(1, a1 - a0 + 1));
+  let onset = 0, tail = 0;
+  if (first >= 0) {
+    for (let i = first; i < Math.min(to, first + Math.round(0.0005 * SR)); i++) onset = Math.max(onset, Math.abs(x[i]));
+    for (let i = Math.max(from, last - Math.round(0.001 * SR)); i <= last; i++) tail = Math.max(tail, Math.abs(x[i]));
+  }
+  return { peak, rms, dur: (end + 1 - from) / SR, onset, tail, x0: Math.abs(x[from]), x1: Math.abs(x[to - 1]) };
+}
+
+function drawWave(x, w = 360, h = 34, from = 0, to = x.length, mark = null) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.strokeStyle = '#60a5fa';
+  g.beginPath();
+  const per = (to - from) / w;
+  for (let px = 0; px < w; px++) {
+    let lo = 0, hi = 0;
+    const s0 = from + Math.floor(px * per), s1 = Math.min(to, from + Math.floor((px + 1) * per));
+    for (let i = s0; i < s1; i++) { if (x[i] < lo) lo = x[i]; if (x[i] > hi) hi = x[i]; }
+    g.moveTo(px + 0.5, h / 2 - hi * h / 2);
+    g.lineTo(px + 0.5, h / 2 - lo * h / 2 + 0.5);
+  }
+  g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.15)';
+  g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+  if (mark != null) { g.strokeStyle = '#fbbf24'; g.beginPath(); g.moveTo(mark * w, 0); g.lineTo(mark * w, h); g.stroke(); }
+  return c;
+}
+
+function td(text, cls) {
+  const e = document.createElement('td');
+  if (cls) e.className = cls;
+  if (text instanceof Node) e.appendChild(text); else e.textContent = text;
+  return e;
+}
+
+function addRow(tbody, cells, problems, warnings = []) {
+  const tr = document.createElement('tr');
+  for (const c of cells) tr.appendChild(c);
+  if (problems.length) { tr.className = 'fail'; failures++; }
+  else if (warnings.length) tr.className = 'warn';
+  return tr;
+}
+
+// ------------------------------------------------------------------ effects
+// The same sound's peak varies with its start time (how its oscillators and noise line up with the
+// browser's 128-sample blocks), by up to 30-40 % for some. So each sound is rendered starting at
+// three different times and the table shows the worst case: highest peak, longest duration, and
+// a click found in any of them. RMS and the waveform are from the first render.
+const STARTS = [0, 0.37, 1.13];
+const tbody = document.querySelector('#tbl tbody');
+const t0 = performance.now();
+for (const c of cases) {
+  const secs = Math.max(2, c.max + 0.6);
+  const problems = [];
+  let m = null, x = null;
+  for (const st of STARTS) {
+    const y = await render(secs + st, (ctx) => SOUNDS[c.name].play(ctx, ctx.destination, st, c.opts));
+    const a = analyse(y, Math.round(st * SR));
+    if (!m) { m = a; x = y; } else { m.peak = Math.max(m.peak, a.peak); m.dur = Math.max(m.dur, a.dur); }
+    if ((a.x0 > 0.01 || a.onset > Math.max(0.05, 0.5 * a.peak)) && !problems.includes('click at start')) problems.push('click at start');
+    if ((a.x1 > 0.01 || a.tail > 0.02) && !problems.includes('click at end')) problems.push('click at end');
+  }
+  if (m.peak < 0.01) problems.push('silent');
+  if (m.peak > 0.99) problems.push('clips');
+  if (m.dur > c.max) problems.push('too long');
+  const warnings = [];
+  if (m.peak < 0.1 || m.peak > 0.75) warnings.push('level');
+  results.push({ name: c.label, base: c.name, ...m, max: c.max, problems });
+  const tr = addRow(tbody, [
+    td(c.label), td(c.about, 'about'), td(c.max.toFixed(2), 'num'), td(m.dur.toFixed(3), 'num'),
+    td(m.peak.toFixed(3), 'num'), td(m.rms.toFixed(3), 'num'),
+    td(problems.length ? 'FAIL: ' + problems.join(', ') : warnings.length ? 'WARN: level' : 'pass', 'res'),
+    td(drawWave(x, 360, 30, 0, Math.ceil(Math.max(1, c.max + 0.1) * SR))),
+  ], problems, warnings);
+  const b = document.createElement('button');
+  b.textContent = 'play';
+  b.onclick = () => playLive(c.name, c.opts);
+  tr.appendChild(td(b));
+  tbody.appendChild(tr);
+}
+
+// ------------------------------------------------------------------ music and chain
+const tb2 = document.querySelector('#tbl2 tbody');
+const checks = [];
+const check = (ok, text) => { checks.push({ ok, text }); if (!ok) failures++; };
+
+// 8 bars, plus the first bar of the next time round, plus tails, so the seam can be inspected.
+const seam = LOOP_BARS * BAR;
+const mx = await render(seam + BAR + 1.5, (ctx) => {
+  for (let b = 0; b <= LOOP_BARS; b++) musicBar(ctx, ctx.destination, b * BAR, b);
+});
+const mm = analyse(mx, 0, Math.round(seam * SR));
+{
+  // Seam: the biggest sample-to-sample step near the join must be no bigger than elsewhere, and
+  // the level just before and just after must match (no gap, no pile-up).
+  const maxStep = (a, b) => { let d = 0; for (let i = Math.max(1, a); i < b; i++) d = Math.max(d, Math.abs(mx[i] - mx[i - 1])); return d; };
+  const rmsOf = (a, b) => { let s = 0; for (let i = a; i < b; i++) s += mx[i] * mx[i]; return Math.sqrt(s / (b - a)); };
+  const S = Math.round(seam * SR);
+  const stepAll = maxStep(Math.round(BAR * SR), S - Math.round(0.02 * SR));
+  const stepSeam = maxStep(S - Math.round(0.01 * SR), S + Math.round(0.01 * SR));
+  const before = rmsOf(S - Math.round(0.5 * SR), S), after = rmsOf(S, S + Math.round(0.5 * SR));
+  const bar0 = rmsOf(0, Math.round(BAR * SR)), bar8 = rmsOf(S, S + Math.round(BAR * SR));
+  const seamOk = stepSeam <= stepAll * 1.25 && after / before > 0.5 && after / before < 2 && bar8 / bar0 > 0.7 && bar8 / bar0 < 1.4;
+  const problems = [];
+  if (mm.peak < 0.01) problems.push('silent');
+  if (mm.peak > 0.99) problems.push('clips');
+  if (mm.x0 > 0.01) problems.push('click at start');
+  if (!seamOk) problems.push('seam');
+  results.push({ name: 'music', ...mm, seam: { stepAll, stepSeam, before, after, bar0, bar8 }, problems });
+  tb2.appendChild(addRow(tb2, [
+    td('music: 8 bars'),
+    td(`loop ${seam.toFixed(2)} s at 96 bpm. Seam: biggest step ${stepSeam.toFixed(4)} (elsewhere ${stepAll.toFixed(4)}); RMS 0.5 s before/after ${before.toFixed(3)}/${after.toFixed(3)}; bar 1 vs repeat ${bar0.toFixed(3)}/${bar8.toFixed(3)}`, 'about'),
+    td(seam.toFixed(2), 'num'), td(mm.peak.toFixed(3), 'num'), td(mm.rms.toFixed(3), 'num'),
+    td(problems.length ? 'FAIL: ' + problems.join(', ') : 'pass', 'res'),
+    td(drawWave(mx, 520, 34, 0, Math.round((seam + BAR) * SR), seam / (seam + BAR))),
+  ], problems));
+}
+
+// The browser's compressor starts out part-way compressed and takes about a second to settle, so
+// every measurement through the chain starts after WARM seconds of silence (as in a running game).
+const WARM = 1.5;
+// Chain gain: what a plain tone at a few levels comes out at, through the full chain at volume 1.
+{
+  const levels = [0.05, 0.2, 0.5, 1.0, 2.0];
+  const outs = [];
+  for (const L of levels) {
+    const y = await render(WARM + 0.6, (ctx) => {
+      const ch = createChain(ctx, ctx.destination, 1);
+      const o = ctx.createOscillator(); o.frequency.value = 440;
+      const g = ctx.createGain(); g.gain.value = L;
+      o.connect(g).connect(ch.sfx); o.start(WARM); o.stop(WARM + 0.6);
+    });
+    outs.push(analyse(y, Math.round((WARM + 0.4) * SR), Math.round((WARM + 0.55) * SR)).peak);
+  }
+  // Short sounds on their own, through the chain at volume 1, against their dry peak.
+  const single = [];
+  for (const n of ['click', 'sale', 'place', 'tutorial', 'report', 'lost']) {
+    const c = cases.find((k) => k.name === n);
+    const dry = results.find((r) => r.name === c.label).peak;
+    const y = await render(WARM + Math.max(1, c.max + 0.3), (ctx) => {
+      const ch = createChain(ctx, ctx.destination, 1);
+      SOUNDS[n].play(ctx, ch.sfx, WARM, c.opts);
+    });
+    single.push(`${n} ${dry.toFixed(2)} -> ${analyse(y).peak.toFixed(2)}`);
+  }
+  results.push({ name: 'chain', levels, outs, single });
+  const problems = outs.some((p) => p >= 1) ? ['clips'] : [];
+  tb2.appendChild(addRow(tb2, [
+    td('master chain'),
+    td('steady 440 Hz tone in -> out, volume 1: ' + levels.map((L, i) => `${L} -> ${outs[i].toFixed(3)}`).join(', ') +
+      '. Single effects, dry peak -> through chain: ' + single.join(', '), 'about'),
+    td('', 'num'), td(Math.max(...outs).toFixed(3), 'num'), td('', 'num'),
+    td(problems.length ? 'FAIL: clips' : 'pass', 'res'), td(''),
+  ], problems));
+}
+
+// Stress: 40 mixed effects started within one second, plus music, through the full chain.
+{
+  const names = cases.map((c) => c);
+  const secs = WARM + 4.5;
+  const plan = [];
+  for (let i = 0; i < 40; i++) plan.push([names[i % names.length], WARM + (i / 40) + ((i * 37) % 11) * 0.002]);
+  const build = (useChain) => (ctx) => {
+    const ch = useChain ? createChain(ctx, ctx.destination, 1) : { sfx: ctx.destination, music: ctx.destination };
+    musicBar(ctx, ch.music, WARM, 0); musicBar(ctx, ch.music, WARM + BAR, 1);
+    for (const [c, t] of plan) SOUNDS[c.name].play(ctx, ch.sfx, t, c.opts);
+  };
+  const raw = analyse(await render(secs, build(false)));
+  const y = await render(secs, build(true));
+  const m = analyse(y);
+  const problems = m.peak >= 1 ? ['peak >= 1.0'] : [];
+  results.push({ name: 'stress', peak: m.peak, rms: m.rms, rawPeak: raw.peak, problems });
+  tb2.appendChild(addRow(tb2, [
+    td('stress: 40 effects in 1 s'),
+    td(`mixed effects plus music, volume 1, through the master chain. Without the chain the sum peaks at ${raw.peak.toFixed(2)}.`, 'about'),
+    td(m.dur.toFixed(2), 'num'), td(m.peak.toFixed(3), 'num'), td(m.rms.toFixed(3), 'num'),
+    td(problems.length ? 'FAIL: ' + problems[0] : 'pass', 'res'),
+    td(drawWave(y, 520, 34)),
+  ], problems));
+}
+
+// ------------------------------------------------------------------ loudness relations
+{
+  const fx = results.filter((r) => r.base);
+  const pick = (list) => fx.filter((r) => list.includes(r.base));
+  const freq = pick(FREQUENT), rare = pick(RARE);
+  const fPeak = Math.max(...freq.map((r) => r.peak)), rPeak = Math.min(...rare.map((r) => r.peak));
+  const fDur = Math.max(...freq.map((r) => r.dur)), rDur = Math.min(...rare.map((r) => r.dur));
+  check(fPeak < rPeak, `frequent sounds (sale, spray, shot, mess) quieter than rare ones (waveStart, won, lost): loudest frequent ${fPeak.toFixed(3)} < quietest rare ${rPeak.toFixed(3)}`);
+  check(fDur < rDur, `frequent sounds shorter than rare ones: longest frequent ${fDur.toFixed(3)} s < shortest rare ${rDur.toFixed(3)} s`);
+  const med = (a) => { const s = a.slice().sort((p, q) => p - q); return s[Math.floor(s.length / 2)]; };
+  const ePeak = med(fx.map((r) => r.peak)), eRms = med(fx.map((r) => r.rms));
+  check(mm.peak < 0.6 * ePeak, `music peak ${mm.peak.toFixed(3)} below 0.6 x median effect peak ${ePeak.toFixed(3)}`);
+  check(mm.rms < 0.6 * eRms, `music RMS ${mm.rms.toFixed(3)} below 0.6 x median effect RMS ${eRms.toFixed(3)}`);
+  // Negative control: a noise burst switched on and off instantly must be caught by the click checks.
+  const bad = analyse(await render(1, (ctx) => {
+    const s = ctx.createBufferSource();
+    const b = ctx.createBuffer(1, SR, SR); const d = b.getChannelData(0);
+    for (let i = 0; i < SR; i++) d[i] = Math.sin(i * 0.37) * 0.4;
+    s.buffer = b; s.connect(ctx.destination); s.start(0.1); s.stop(0.3);
+  }));
+  check(bad.onset > Math.max(0.05, 0.5 * bad.peak) && bad.tail > 0.02,
+    `click detector catches a hard-switched tone (onset ${bad.onset.toFixed(3)}, tail ${bad.tail.toFixed(3)}, peak ${bad.peak.toFixed(3)})`);
+  const el = document.getElementById('checks');
+  for (const c of checks) {
+    const d = document.createElement('div');
+    d.className = c.ok ? 'ok' : 'bad';
+    d.textContent = (c.ok ? 'pass  ' : 'FAIL  ') + c.text;
+    el.appendChild(d);
+  }
+}
+
+{
+  const d = document.createElement('div');
+  d.textContent = `info  rendered everything in ${((performance.now() - t0) / 1000).toFixed(1)} s`;
+  document.getElementById('checks').appendChild(d);
+}
+const sum = document.getElementById('summary');
+const showSummary = () => {
+  sum.textContent = failures ? `${failures} FAILED` : 'ALL PASS';
+  sum.className = failures ? 'fail' : 'pass';
+  document.title = sum.textContent;
+};
+showSummary();
+
+// ------------------------------------------------------------------ live self-test (?live=1)
+// Drives a second instance of the real sound module through a scripted session, with the page's
+// AudioContext swapped for one whose speakers are tapped by an analyser and whose sources are
+// counted. Needs a browser that allows audio without a click (headless Edge with
+// --autoplay-policy=no-user-gesture-required), or press the button.
+async function liveSelfTest() {
+  const out = document.getElementById('liveLog');
+  const log = (ok, text) => {
+    const d = document.createElement('div');
+    d.className = ok === null ? '' : ok ? 'ok' : 'bad';
+    d.textContent = (ok === null ? 'info  ' : ok ? 'pass  ' : 'FAIL  ') + text;
+    out.appendChild(d);
+    if (ok === false) { failures++; showSummary(); }
+  };
+  const Real = window.AudioContext;
+  const made = [];
+  const counts = { started: 0, ended: 0 };
+  class TapContext extends Real {
+    constructor(o) { super(o); made.push(this); }
+    get destination() {
+      if (!this._tap) {
+        this._tap = this.createGain();
+        this._tap.connect(super.destination);
+        this._an = this.createAnalyser();
+        this._an.fftSize = 2048;
+        this._tap.connect(this._an);
+      }
+      return this._tap;
+    }
+  }
+  for (const m of ['createOscillator', 'createBufferSource']) {
+    TapContext.prototype[m] = function () {
+      const n = Real.prototype[m].call(this);
+      const start = n.start.bind(n);
+      n.start = (...a) => { counts.started++; n.addEventListener('ended', () => counts.ended++); return start(...a); };
+      return n;
+    };
+  }
+  window.AudioContext = TapContext;
+  let fakeHidden = false;
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => fakeHidden });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  /** Loudest sample at the speakers over the next `ms` milliseconds. */
+  const level = async (ms) => {
+    const c = made[0];
+    if (!c || !c._an) return 0;
+    const buf = new Float32Array(c._an.fftSize);
+    let peak = 0;
+    const until = performance.now() + ms;
+    while (performance.now() < until) {
+      c._an.getFloatTimeDomainData(buf);
+      for (const v of buf) peak = Math.max(peak, Math.abs(v));
+      await wait(20);
+    }
+    return peak;
+  };
+  const hs = {};
+  const ses = {
+    on(type, fn) { (hs[type] ||= []).push(fn); return () => { hs[type] = hs[type].filter((f) => f !== fn); }; },
+    emit(type, msg) { for (const fn of hs[type] || []) fn(msg); },
+  };
+  const storm = async (ms) => {
+    const kinds = ['box', 'gadget', 'giftset'];
+    for (let n = 0; n * 33 < ms; n++) {
+      ses.emit('fx', [{ e: 'sale', kind: kinds[n % 3] }, { e: 'spray' }, { e: 'spray' }, { e: 'shot' }, { e: 'grab' },
+        { e: 'left', k: 'dad' }, { e: 'escape', k: 'hunter' }, { e: 'placed', k: 'belt' }, { e: 'nonsense' }, null,
+        { e: 'mess', i: 3 }, { e: 'kid' }, { e: 'caught' }, { e: 'bolt' }, { e: 'smash', i: 9 }, { e: 'left', k: 'gymbro' }]);
+      await wait(33);
+    }
+  };
+  try {
+    window.AudioContext = TapContext;
+    const s = createSound();
+    const off = s.attach(ses);
+    // 1. Before unlock: everything is silent and harmless.
+    await storm(300);
+    ses.emit('say', { who: 'DEB', mood: 'smug', text: 'Not unlocked yet.' });
+    s.play('click'); s.play('bogus'); s.set('volume', 'loud'); s.set('nonsense', 1);
+    log(made.length === 0, `before unlock(): no AudioContext created (${made.length}), no errors`);
+    // 2. Unlock: the muzak starts on its own.
+    s.unlock(); s.unlock();
+    await wait(300);
+    const c = made[0];
+    log(made.length === 1, `unlock() twice made exactly one context (state: ${c && c.state})`);
+    if (!c || c.state !== 'running') { log(null, 'context not running here (autoplay blocked?): press the button to run the rest'); return; }
+    const musicLvl = await level(2500);
+    log(musicLvl > 0.01 && musicLvl < 0.2, `music alone at the speakers: peak ${musicLvl.toFixed(3)} (volume ${s.get('volume')})`);
+    // 3. A late-wave storm: rate limited, nothing near clipping.
+    const st0 = counts.started;
+    const [stormLvl] = await Promise.all([level(2000), storm(2000)]);
+    const perSec = (counts.started - st0) / 2;
+    log(stormLvl < 0.95, `2 s of 9 events per tick: peak ${stormLvl.toFixed(3)}, ${Math.round(perSec)} sources started per second`);
+    // 4. Music off: silence once the effects ring out; effects still work.
+    s.set('music', false);
+    await wait(900);
+    const offLvl = await level(600);
+    log(offLvl < 0.003, `music off: speakers at ${offLvl.toFixed(4)}`);
+    s.play('place');
+    const placeLvl = await level(300);
+    log(placeLvl > 0.05, `play('place') with music off: peak ${placeLvl.toFixed(3)}`);
+    // Single sounds in silence at volume 1, to compare with the offline chain numbers above.
+    await wait(3200);
+    s.set('volume', 1);
+    await wait(200);
+    const singles = [];
+    for (const n of ['click', 'place', 'tutorial']) {
+      s.play(n);
+      singles.push(`${n} ${(await level(900)).toFixed(2)}`);
+    }
+    s.set('volume', 0.7);
+    log(null, `live single sounds at volume 1 (sample rate ${c.sampleRate}): ${singles.join(', ')}`);
+    // 5. Node clean-up: with nothing playing, every source that started has ended.
+    await wait(1200);
+    log(counts.started - counts.ended === 0, `clean-up: ${counts.started} sources started, ${counts.ended} ended`);
+    // 6. Music back on; then sfx off: storm is silent apart from the music.
+    s.set('music', true);
+    await wait(800);
+    const backLvl = await level(1500);
+    log(backLvl > 0.01, `music back on: peak ${backLvl.toFixed(3)}`);
+    s.set('sfx', false);
+    const [noFx] = await Promise.all([level(1200), storm(1200)]);
+    log(noFx < musicLvl * 1.6, `sfx off during a storm: peak ${noFx.toFixed(3)} (music only)`);
+    s.set('sfx', true);
+    // 7. Hidden page: effects muted and music paused; back again when visible.
+    fakeHidden = true; document.dispatchEvent(new Event('visibilitychange'));
+    await wait(700);
+    const [hidLvl] = await Promise.all([level(800), storm(800)]);
+    log(hidLvl < 0.003, `page hidden during a storm: speakers at ${hidLvl.toFixed(4)}`);
+    fakeHidden = false; document.dispatchEvent(new Event('visibilitychange'));
+    await wait(700);
+    const visLvl = await level(1200);
+    log(visLvl > 0.01, `page visible again: music peak ${visLvl.toFixed(3)}`);
+    // 8. Volume follows the setting.
+    s.set('volume', 0.2);
+    await wait(300);
+    const quiet = await level(2000);
+    log(quiet < visLvl * 0.6, `volume 0.2: music peak ${quiet.toFixed(3)} (was ${visLvl.toFixed(3)} at 0.7)`);
+    s.set('volume', 0.7);
+    // 9. DEB: blips, speech if any voice exists, voice off cancels.
+    ses.emit('say', { who: 'DEB', mood: 'angry', text: "That's **6** refunds in a row. Dave, were the towers decorative?" });
+    await wait(400);
+    const sp = window.speechSynthesis;
+    log(null, `speech: ${sp ? `${sp.getVoices().length} voices, speaking=${sp.speaking}` : 'not available'}`);
+    s.set('voice', false);
+    await wait(100);
+    log(!sp || !sp.speaking, 'voice off: speech cancelled');
+    s.set('voice', true);
+    // 10. Settings persisted, unsubscribe works, destroy closes the context.
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('returnsDept.sound')); } catch { /* ignore */ }
+    log(saved && saved.volume === 0.7 && saved.music === true, `settings saved: ${JSON.stringify(saved)}`);
+    off();
+    log(Object.values(hs).every((a) => a.length === 0), 'unsubscribe removed every handler');
+    s.destroy(); s.destroy();
+    await wait(200);
+    log(c.state === 'closed', `destroy(): context ${c.state}`);
+    s.unlock(); s.play('click'); s.set('volume', 0.5);
+    log(made.length === 1, 'calls after destroy() are harmless');
+  } catch (err) {
+    log(false, 'live self-test threw: ' + (err.stack || err));
+  } finally {
+    window.AudioContext = Real;
+    delete document.hidden;
+    log(null, 'live self-test finished');
+  }
+}
+const liveBtn = document.createElement('button');
+liveBtn.textContent = 'Run live self-test (about 25 s)';
+liveBtn.onclick = () => liveSelfTest();
+document.getElementById('settings').before(liveBtn);
+if (new URLSearchParams(location.search).get('live') === '1') liveSelfTest();
+
+// ------------------------------------------------------------------ live listening
+let live = null;
+function liveCtx() {
+  if (!live) {
+    const ctx = new AudioContext();
+    live = { ctx, chain: createChain(ctx, ctx.destination, 0.7), music: null };
+  }
+  if (live.ctx.state !== 'running') live.ctx.resume();
+  return live;
+}
+function playLive(name, opts) {
+  const L = liveCtx();
+  SOUNDS[name].play(L.ctx, L.chain.sfx, L.ctx.currentTime + 0.03, opts);
+}
+document.getElementById('musicBtn').onclick = () => {
+  const L = liveCtx();
+  if (L.music) { clearInterval(L.music.timer); L.music.out.gain.setTargetAtTime(0, L.ctx.currentTime, 0.08); L.music = null; return; }
+  const out = L.ctx.createGain(); out.connect(L.chain.music);
+  const m = { out, next: L.ctx.currentTime + 0.1, bar: 0 };
+  m.timer = setInterval(() => {
+    while (m.next < L.ctx.currentTime + 0.6) { musicBar(L.ctx, out, m.next, m.bar); m.next += BAR; m.bar = (m.bar + 1) % LOOP_BARS; }
+  }, 100);
+  L.music = m;
+};
+
+// The real module, attached to a fake session.
+const handlers = {};
+const fake = {
+  on(type, fn) { (handlers[type] ||= []).push(fn); return () => { handlers[type] = handlers[type].filter((f) => f !== fn); }; },
+  emit(type, msg) { for (const fn of handlers[type] || []) fn(msg); },
+};
+const sound = createSound();
+sound.attach(fake);
+window.__sound = sound;
+const modBox = document.getElementById('mod');
+const btn = (box, text, fn) => {
+  const b = document.createElement('button');
+  b.textContent = text;
+  b.onclick = () => { sound.unlock(); fn(); };
+  box.appendChild(b);
+};
+btn(modBox, 'unlock (starts muzak)', () => {});
+btn(modBox, 'DEB flat', () => fake.emit('say', { who: 'DEB (HR)', mood: 'flat', text: 'Sales event 4. Doors open. Try to look employed.' }));
+btn(modBox, 'DEB angry', () => fake.emit('say', { who: 'DEB (HR)', mood: 'angry', text: "That's 6 refunds in a row. Dave, were the towers *decorative*?" }));
+btn(modBox, 'DEB smug', () => fake.emit('say', { who: 'DEB (HR)', mood: 'smug', text: '5 dads, single file, like ducks with back problems.' }));
+btn(modBox, 'review 1 star', () => fake.emit('review', { stars: 1, text: 'Wet floor. Wet me.', kind: 'karen' }));
+btn(modBox, 'review 5 stars', () => fake.emit('review', { stars: 5, text: 'In and out. 5 stars.', kind: 'dad' }));
+btn(modBox, 'report', () => fake.emit('report', { wave: 3 }));
+btn(modBox, 'players', () => fake.emit('players', { text: 'Kev has clocked in.' }));
+btn(modBox, 'wave start (dads)', () => fake.emit('fx', [{ e: 'waveStart', wave: 4, total: 20, dads: 5 }]));
+btn(modBox, 'wave end', () => fake.emit('fx', [{ e: 'waveEnd', wave: 4, bonus: 50 }]));
+btn(modBox, 'won', () => fake.emit('fx', [{ e: 'waveEnd', wave: 20, bonus: 50 }, { e: 'won' }]));
+btn(modBox, 'lost', () => fake.emit('fx', [{ e: 'escape', k: 'karen' }, { e: 'lost' }]));
+btn(modBox, 'teen / mom / guide dog / gym bro', () => {
+  fake.emit('fx', [{ e: 'mess', i: 1 }]);
+  setTimeout(() => fake.emit('fx', [{ e: 'kid' }]), 500);
+  setTimeout(() => fake.emit('fx', [{ e: 'caught' }]), 1300);
+  setTimeout(() => fake.emit('fx', [{ e: 'bolt' }]), 2000);
+  setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5 }]), 2800);
+});
+btn(modBox, 'late-wave storm (3 s)', () => {
+  // Every tick: sales, sprays and shots, the odd escape, slip and grab. Tests the rate limiting.
+  let n = 0;
+  const kinds = ['box', 'gadget', 'giftset'];
+  const id = setInterval(() => {
+    const ev = [{ e: 'sale', kind: kinds[n % 3] }, { e: 'spray' }, { e: 'spray' }, { e: 'shot' }];
+    if (n % 7 === 0) ev.push({ e: 'left', k: n % 2 ? 'dad' : 'hunter' });
+    if (n % 11 === 0) ev.push({ e: 'escape', k: n % 22 ? 'clipper' : 'dad' });
+    if (n % 13 === 0) ev.push({ e: 'slip' });
+    if (n % 9 === 0) ev.push({ e: 'grab' }, { e: 'sample' });
+    if (n % 5 === 0) ev.push({ e: 'mess', i: 40 });
+    if (n % 17 === 0) ev.push({ e: 'kid', x: 3, y: 4 }, { e: 'left', k: ['teen', 'mom', 'blind', 'gymbro'][(n / 17) % 4] });
+    if (n % 19 === 0) ev.push({ e: 'caught', x: 3, y: 4 }, { e: 'bolt', x: 5, y: 5 });
+    if (n % 29 === 0) ev.push({ e: 'smash', i: 77, x: 7, y: 2 });
+    fake.emit('fx', ev);
+    if (++n >= 90) clearInterval(id);
+  }, 33);
+});
+for (const name of ['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial']) btn(modBox, 'play ' + name, () => sound.play(name));
+
+const setBox = document.getElementById('settings');
+for (const key of ['sfx', 'music', 'voice']) {
+  const l = document.createElement('label');
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.checked = sound.get(key);
+  cb.onchange = () => { sound.unlock(); sound.set(key, cb.checked); };
+  l.append(cb, ' ' + key);
+  setBox.appendChild(l);
+}
+{
+  const l = document.createElement('label');
+  const r = document.createElement('input');
+  r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = sound.get('volume');
+  r.oninput = () => sound.set('volume', Number(r.value));
+  l.append('volume ', r);
+  setBox.appendChild(l);
+}
+</script>
+</body>
+</html>
