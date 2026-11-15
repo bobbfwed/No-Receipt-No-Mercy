@@ -12,12 +12,12 @@ For adults only. The players are men aged 37 to 41 who grew up on South Park and
 The game itself should be belligerent: it gets annoyed at the players, insults them, makes sexually charged jokes, and makes jokes at their expense. Write the humor crude and confident, not watered down.
 
 ## Current stage
-Concept selection. Ten rough concepts with mock-up screens live in `concepts/` (open `concepts/index.html` in a browser). The owner says yes, no, or "combine these" before any in-depth planning or game code is written. Do not start detailed design or pick a stack until he has chosen.
+Concept selection. Twelve rough concepts with mock-up screens live in `concepts/` (open `concepts/index.html` in a browser). The owner says yes, no, or "combine these" before any in-depth planning or game code is written. Do not start detailed design or pick a stack until he has chosen.
 
 ## Stack and layout
 - Language/frameworks: not chosen yet. Decide after a concept is picked.
 - Key folders:
-  - `concepts/` - the concept gallery. `concepts.js` holds the text for all ten concepts, `index.html` displays it, and each `NN-name/` folder holds that concept's two mock-up screens (SVG drawings).
+  - `concepts/` - the concept gallery. `concepts.js` holds the text for all the concepts, `index.html` displays it, and each `NN-name/` folder holds that concept's two mock-up screens (SVG drawings).
   - `.claude/reports/` - end-of-task reports.
 
 ## Commands

@@ -42,7 +42,7 @@
   h2 { font: 800 28px/1.15 Georgia, "Times New Roman", serif; margin: 0 0 4px; text-wrap: balance; }
   .tagline { margin: 0; color: var(--muted); font-style: italic; }
   .kind { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid; margin-left: 10px; vertical-align: middle; font-family: "Segoe UI", system-ui, sans-serif; }
-  .kind.core { color: var(--core); } .kind.wild { color: var(--wild); }
+  .kind.core { color: var(--core); } .kind.wild { color: var(--wild); } .kind.bigmap { color: var(--yes); }
 
   .verdict { display: flex; gap: 8px; }
   .verdict button { font: inherit; font-weight: 700; padding: 9px 18px; border-radius: 9px; cursor: pointer; background: transparent; border: 2px solid var(--line); color: var(--muted); }
@@ -76,7 +76,7 @@
 </head>
 <body>
 <header class="top">
-  <h1>Ten ways to get insulted <em>by your own game</em></h1>
+  <h1><span id="count">Twelve</span> ways to get insulted <em>by your own game</em></h1>
   <p class="intro">Rough concepts only, nothing is planned in depth yet. Each one has two mock-up screens (drawn, not playable), the one feature that makes it different, and the goal. Mark each <b>Yes</b>, <b>Maybe</b> or <b>No</b>, jot a note if you want to steal a part of it for another idea, then hit <b>Copy my picks</b> and paste the result back to Claude. Click any screen to enlarge it. Your marks are saved in this browser.</p>
 </header>
 
@@ -88,7 +88,7 @@
 </div></div>
 
 <main id="list"></main>
-<footer>Core = tower defense plus automated production, as in the original idea. Wild = stretches the brief but still fits 1 to 6 players, one friend hosting, and specialist roles.</footer>
+<footer>Core = tower defense plus automated production, as in the original idea. Wild = stretches the brief but still fits 1 to 6 players, one friend hosting, and specialist roles. Big map = the core idea on a large isometric map that each player scrolls around, with production and defense in different places.</footer>
 <div id="box" role="dialog" aria-label="Enlarged screen"><img alt=""></div>
 
 <script src="concepts.js"></script>
@@ -110,6 +110,8 @@
   }
   function section(title, nodes) { return el("div", {}, [el("h3", { text: title })].concat(nodes)); }
 
+  var words = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen"];
+  document.getElementById("count").textContent = words[window.CONCEPTS.length] || String(window.CONCEPTS.length);
   var list = document.getElementById("list");
   var tally = document.getElementById("tally");
   var box = document.getElementById("box");
@@ -121,7 +123,7 @@
     cards[c.id] = card;
 
     var h2 = el("h2", { text: c.title });
-    h2.appendChild(el("span", { class: "kind " + c.kind, text: c.kind }));
+    h2.appendChild(el("span", { class: "kind " + c.kind, text: c.kind === "bigmap" ? "big map" : c.kind }));
     var verdict = el("div", { class: "verdict", role: "group", "aria-label": "Verdict for " + c.title });
     [["yes", "Yes"], ["maybe", "Maybe"], ["no", "No"]].forEach(function (p) {
       var b = el("button", { type: "button", "data-v": p[0], text: p[1], "aria-pressed": "false" });
