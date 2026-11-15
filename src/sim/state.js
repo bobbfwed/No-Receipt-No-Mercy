@@ -31,6 +31,15 @@ import { W, H, MAP, TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.
  * @property {number} ox  personal offset inside a tile, so crowds do not walk in one line
  * @property {number} oy
  * @property {number} lt  index of the tile the shopper was on last tick
+ * @property {number} [m]   teenager: ticks until the next mess
+ * @property {number} [bt]  man with guide dog: ticks left of the dog bolting (he moves fast)
+ * @property {number} [kd]  mom: where the child is. 0 in the cart, 1 running away, 2 waiting to be caught
+ * @property {number} [kx]  mom: the loose child's position in tiles (only meaningful when kd > 0)
+ * @property {number} [ky]
+ * @property {number} [kvx] mom: the child's movement during the last tick (for smooth drawing)
+ * @property {number} [kvy]
+ * @property {number} [kr]  mom: tiles the child will still run
+ * @property {number} [kc]  mom: ticks before the child may escape again
  */
 
 function blankStats() {
@@ -59,6 +68,8 @@ export function createGame({ seed = 1, training = false } = {}) {
     gridVer: 0,
     /** @type {Shopper[]} */
     shoppers: [],
+    /** Messes teenagers have left on the floor, as [tile index, ticks left]. */
+    messes: [],
     nextId: 1,
     /** Shoppers still to arrive this wave, as [tick, kind], soonest first. */
     spawnQ: [],

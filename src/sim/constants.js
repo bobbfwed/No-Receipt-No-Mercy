@@ -103,6 +103,7 @@ export const BUILD = {
  * drain: patience lost per second just for being in the store.
  * ignoresSigns: not slowed by wet floor signs, but may slip on them.
  * hopsBelts: steps over conveyor belts instead of walking around them (machines and crates still stop him).
+ * messy, kid, bolts, smashes: see the comments on the shoppers that have them.
  * steady: immune to slowing and slipping.
  * nag: slows towers near her.
  */
@@ -112,6 +113,15 @@ export const SHOPPERS = {
   dad: { name: 'Dad', hp: 34, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, hopsBelts: true },
   karen: { name: 'Karen', hp: 170, speed: 0.9, refund: 40, nag: true },
   scooter: { name: 'Mobility Scooter', hp: 95, speed: 1.2, refund: 20, steady: true },
+  // messy: drops a mess every few seconds that slows everyone else (and can make a dad slip).
+  teen: { name: 'Teenager', hp: 45, speed: 1.15, refund: 12, messy: true },
+  // kid: now and then the child escapes and runs ahead; she sprints after him, past the samples.
+  mom: { name: 'Mom and Kid', hp: 55, speed: 1.3, refund: 20, browses: true, kid: true },
+  // bolts: pepper spray makes the guide dog bolt, dragging him along fast for a moment. The dog
+  // also steers him around puddles and messes (steady), and he cannot see free samples.
+  blind: { name: 'Man with Guide Dog', hp: 70, speed: 1.1, refund: 20, steady: true, bolts: true },
+  // smashes: walks straight through crate stacks, destroying them.
+  gymbro: { name: 'Gym Bro', hp: 85, speed: 1.5, refund: 30, smashes: true },
 };
 
 /** Shopper states. */
@@ -140,4 +150,14 @@ export const TUNE = {
   browseCooldown: 7, // seconds before the same shopper can be distracted again
   nagRange: 2.5, // towers this close to a Karen fire at half speed
   leaveSecs: 0.8, // how long the storming-out animation lasts
+  messEvery: 5, // seconds between a teenager's messes (each teen starts at a random point in this)
+  messSecs: 12, // how long a mess stays on the floor
+  kidChance: 0.22, // chance per second that a child in the cart escapes
+  kidSpeed: 4.2, // tiles per second: children are very fast
+  kidMin: 3, // a runaway child runs between this many...
+  kidMax: 9, // ...and this many tiles before stopping to wait
+  kidRest: 4, // seconds after being caught before the child can escape again
+  chaseSpeed: 1.9, // a mom chasing her child moves this many times faster
+  boltSecs: 1.6, // how long a sprayed guide dog bolts
+  boltSpeed: 2.3, // speed multiplier while it does
 };

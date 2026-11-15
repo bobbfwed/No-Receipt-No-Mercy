@@ -263,9 +263,10 @@ export const STEPS = [
     manual: true,
     last: true,
     text: [
-      'That is every building. In a real game, cash is limited and shared by the whole team, there are 20 sales events with a short build break between them, and shoppers get more patient every event. Karens slow down nearby security. Mobility scooters cannot be slowed.',
+      'That is every building. In a real game, cash is limited and shared by the whole team, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
+      'New kinds of shopper turn up as the game goes on: moms chasing runaway kids, teenagers spilling slushies, Karens, a man whose guide dog bolts when sprayed, gym bros who walk through crates. DEB explains each one the first time it appears, and the ? at the top right has the full list.',
       'A good opening: one production line built as a wall, one gap, sprinklers and a wet floor sign at the gap, and something covering the dad short cut.',
-      'Point at any button in the build bar to see what it does. The ? at the top right lists the controls. You can stay here and practise for as long as you like.',
+      'Pick any button in the build bar to see what it does and how to use it. You can stay here and practise for as long as you like.',
     ],
     quip: "Training complete. You've met the minimum standard. Briefly, and from below.",
     mood: 'smug',

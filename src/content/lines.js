@@ -43,6 +43,24 @@ export const LINES = {
     "Man down in aisle six. He's lying there saying 'I'm good' in a voice that isn't.",
     'A dad just hit the floor. Nobody saw. He looked around to check. That\'s the part that hurts.',
   ],
+  kid: [
+    'A child is loose. His mother is now the fastest thing in the building, and free samples will not slow her. Nothing slows a woman who has lost a toddler.',
+    'Runaway kid on the floor. Reminder: you may not spray the child. I checked. I was disappointed too.',
+    "Kid's out of the cart. {p} knows all about things getting loose when nobody's supervising.",
+  ],
+  smash: [
+    "A gym bro just walked through your crate wall. {p}, your defence was beaten by a man who can't reach his own back.",
+    "Crate stack down. He didn't go around it. Men like that never go around anything.",
+    "That's a hole in your wall, {p}. Fill it. A sentence I never enjoy saying to you.",
+  ],
+  mess: [
+    'A teenager has spilled a slushie. It is slowing everyone else down. First useful thing a teenager has ever done.',
+    'Mess in the aisle. Leave it. It is working harder than {p}.',
+  ],
+  bolt: [
+    'You pepper-sprayed a guide dog. It is now dragging its owner to the tills at speed. Use a forklift, you animals.',
+    'The dog bolted. Sprinklers make that one FASTER, {p}. Read the manual. Have someone read it to you.',
+  ],
   removed: [
     '{p} just sold something he bought a moment ago. Decisive. Like a man choosing a paint colour.',
     "Buying it and selling it again, {p}? That's not a strategy, that's a divorce.",
@@ -100,6 +118,20 @@ export const LINES = {
   reportPerfect: ["No refunds this event. I checked the cameras for cheating. I found something worse. {p}, we'll talk."],
 };
 
+/**
+ * What DEB says the first time a kind of shopper turns up: one line that explains its trick.
+ * (Dads have their own announcement every wave, in LINES.dadLine.)
+ */
+export const INTRO = {
+  clipper: 'New today: Coupon Clippers. Lots of them, fast, and each one easily discouraged. Like your exes.',
+  mom: 'New today: moms with kids. The kid escapes, she sprints after him, and she will not stop for your free samples.',
+  teen: "New today: teenagers. They spill slushies that slow everyone else down. Don't thank them. They hate that.",
+  karen: 'New today: Karens. Security near one works at half speed, because she is asking it for the manager.',
+  blind: 'New today: a man with a guide dog. Pepper spray makes the dog bolt, so sprinklers speed him UP. Use forklifts.',
+  scooter: 'New today: mobility scooters. Nothing slows them. Not wet floors, not free samples, not shame.',
+  gymbro: 'New today: gym bros. They walk straight through crate stacks. Machines and belts still stop them. So does a mirror.',
+};
+
 /** Customer reviews when a shopper reaches the tills and gets a refund. */
 export const ESCAPE_REVIEWS = {
   hunter: [
@@ -131,6 +163,25 @@ export const ESCAPE_REVIEWS = {
     [1, 'Nothing could stop me. I am eighty-four and I am inevitable.'],
     [1, "Ran over a young man's foot. He apologised. Refund processed."],
   ],
+  teen: [
+    [1, 'Spilled a slushie in aisle four. Nobody said anything. Nobody ever says anything.'],
+    [1, "Got a refund on shoes I'm literally wearing."],
+    [1, 'The staff are, like, forty. It was sad.'],
+  ],
+  mom: [
+    [1, 'Lost my son twice. Found him both times. Refund processed between incidents.'],
+    [1, "Free samples? I haven't sat down since 2019."],
+    [1, 'My child licked a conveyor belt. Nobody stopped him. One star, and a tetanus shot.'],
+  ],
+  blind: [
+    [1, "Couldn't see what all the fuss was about."],
+    [1, "Someone pepper-sprayed my dog. He's fine. He's eaten worse. I've smelled this store."],
+    [1, 'The dog chose the route. The dog was right. The dog should be running this place.'],
+  ],
+  gymbro: [
+    [1, "Walked through a wall of crates, bro. Didn't feel a thing. Refund on the protein, it was mostly sawdust."],
+    [1, "Staff wouldn't spot me. Couldn't stop me either."],
+  ],
 };
 
 /** Reviews from shoppers who gave up and left without a refund. */
@@ -150,6 +201,16 @@ export const LEFT_REVIEWS = {
   ],
   karen: [[1, 'I have never been so insulted, and I have been to a book club.']],
   scooter: [[1, 'Battery died in aisle nine. So did my will.']],
+  teen: [[1, 'Got forklifted. Whatever.'], [1, 'This place is cringe. Leaving.']],
+  mom: [
+    [1, 'Pepper-sprayed while holding a toddler. We are LEAVING.'],
+    [1, 'I do not have time for this. I do not have time for anything.'],
+  ],
+  blind: [[1, 'The dog wanted to leave. I trust the dog.']],
+  gymbro: [
+    [1, 'Got hit by a forklift. Counting it as cardio.'],
+    [1, "Leaving, bro. It's leg day anyway. It is never leg day."],
+  ],
 };
 
 export const STAMPS = {

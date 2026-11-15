@@ -2,7 +2,7 @@
 // which lets every player's browser predict the game between updates from the host.
 import { W, H, DIRS, BUILD, ITEMS, SHOPPERS, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats } from './state.js';
-import { getDist, getHopDist, UNREACHABLE } from './path.js';
+import { getField, modeOf, NORMAL, HOP, SMASH, UNREACHABLE } from './path.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
 
@@ -26,6 +26,11 @@ export function waveSpec(n) {
   if (n >= 7) g.push({ k: 'scooter', n: Math.floor((n - 5) / 2) + 1, gap: 3, at: 15 });
   if (n >= 10) g.push({ k: 'dad', n: n - 4, gap: 0.3, at: 26 });
   if (n >= 13) g.push({ k: 'hunter', n: 2 * n, gap: 0.5, at: 20 });
+  // The shoppers with a trick, introduced one kind at a time.
+  if (n >= 3) g.push({ k: 'mom', n: 1 + Math.floor(n / 3), gap: 3, at: 6 });
+  if (n >= 4) g.push({ k: 'teen', n: Math.floor(n / 2), gap: 2.5, at: 3 });
+  if (n >= 6) g.push({ k: 'blind', n: Math.floor(n / 4), gap: 5, at: 12 });
+  if (n >= 8) g.push({ k: 'gymbro', n: Math.floor((n - 5) / 3), gap: 6, at: 18 });
   return g;
 }
 
@@ -59,7 +64,7 @@ export function beginWave(state, ev) {
   }
   q.sort((a, b) => a[0] - b[0]);
   state.spawnQ = q;
-  ev.push({ e: 'waveStart', wave: state.wave, total: q.length, dads });
+  ev.push({ e: 'waveStart', wave: state.wave, total: q.length, dads, kinds: [...new Set(groups.map((g) => g.k))] });
 }
 
 function endWave(state, ev) {
@@ -94,14 +99,19 @@ function spawn(state) {
     const single = k === 'dad' || state.training;
     const n = state.wave - 1;
     const hp = def.hp * (1 + TUNE.hpGrowth * n + TUNE.hpGrowth2 * n * n);
-    state.shoppers.push({
+    const s = {
       id: state.nextId++, k,
       x: (door % W) + 0.5, y: ((door / W) | 0) + 0.5, vx: 0, vy: 0,
       hp, mhp: hp, st: ST.WALK, t: 0, cd: 0,
       ox: single ? 0 : (rand(state) - 0.5) * 0.5,
       oy: single ? 0 : (rand(state) - 0.5) * 0.5,
       lt: -1,
-    });
+    };
+    // Extra fields for the shoppers with a trick (documented in state.js).
+    if (def.messy) s.m = secs(TUNE.messEvery * (0.4 + 0.6 * rand(state)));
+    if (def.kid) { s.kd = 0; s.kx = s.x; s.ky = s.y; s.kvx = 0; s.kvy = 0; s.kr = 0; s.kc = secs(TUNE.kidRest * 0.5); }
+    if (def.bolts) s.bt = 0;
+    state.shoppers.push(s);
   }
 }
 
@@ -157,7 +167,7 @@ function hurt(state, s, dmg, by, ev) {
   if (s.hp <= 0) giveUp(state, s, by, 'annoyed', ev);
 }
 
-function stepBuildings(state, dist, hop, ev) {
+function stepBuildings(state, fields, ev) {
   const grid = state.grid, S = state.shoppers;
   const stands = [];
   const karens = [];
@@ -210,14 +220,21 @@ function stepBuildings(state, dist, hop, ev) {
         if (def.aoe) {
           let hit = 0;
           for (const s of S) {
-            if (s.st !== ST.LEAVE && (s.x - cx) ** 2 + (s.y - cy) ** 2 <= r2) { hurt(state, s, def.dmg, b.o, ev); hit++; }
+            if (s.st === ST.LEAVE || (s.x - cx) ** 2 + (s.y - cy) ** 2 > r2) continue;
+            hurt(state, s, def.dmg, b.o, ev);
+            hit++;
+            // Pepper spray panics a guide dog: it bolts, dragging its owner along.
+            if (SHOPPERS[s.k].bolts && s.st !== ST.LEAVE) {
+              if (s.bt <= 0) ev.push({ e: 'bolt', x: s.x, y: s.y });
+              s.bt = secs(TUNE.boltSecs);
+            }
           }
           if (hit) { b.cd = secs(def.cd); ev.push({ e: 'spray', i }); }
         } else {
           let best = null, bd = UNREACHABLE + 1;
           for (const s of S) {
             if (s.st === ST.LEAVE || (s.x - cx) ** 2 + (s.y - cy) ** 2 > r2) continue;
-            const d = (SHOPPERS[s.k].hopsBelts ? hop : dist)[((s.y | 0) * W) + (s.x | 0)];
+            const d = fields[modeOf(s.k)][((s.y | 0) * W) + (s.x | 0)];
             if (d < bd) { bd = d; best = s; }
           }
           if (best) {
@@ -249,9 +266,73 @@ function escape(state, s, ev) {
   }
 }
 
-function stepShoppers(state, dist, hop, stands, ev) {
+/** Scratch result of moveAlong(), reused to avoid allocating on every step. */
+const MV = { vx: 0, vy: 0 };
+
+/**
+ * Works out one tick of walking toward the tills along a distance map.
+ * @returns {boolean} false if there is nowhere to go; otherwise the move is in MV
+ */
+function moveAlong(field, x, y, ox, oy, speed, id) {
+  const i = (y | 0) * W + (x | 0);
+  let best = i, bd = field[i];
+  for (let k = 0; k < 4; k++) {
+    const ni = neighbour(i, (k + id) & 3); // vary the tie-break so crowds spread out
+    if (ni >= 0 && field[ni] < bd) { bd = field[ni]; best = ni; }
+  }
+  if (best === i) return false; // walled in; cannot normally happen
+  const dx = (best % W) + 0.5 + ox - x, dy = ((best / W) | 0) + 0.5 + oy - y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return false;
+  const m = Math.min(1, (speed * DT) / len);
+  MV.vx = dx * m;
+  MV.vy = dy * m;
+  return true;
+}
+
+/**
+ * A mom's child. In the cart it may escape at any moment; loose, it runs ahead along the route
+ * for a random distance and then waits to be caught.
+ */
+function stepKid(state, s, dist, ev) {
+  s.kvx = 0; s.kvy = 0;
+  if (s.kd === 0) {
+    if (s.kc > 0) { s.kc--; return; }
+    if (s.st === ST.WALK && rand(state) < TUNE.kidChance * DT) {
+      s.kd = 1;
+      s.kx = s.x; s.ky = s.y;
+      s.kr = TUNE.kidMin + rand(state) * (TUNE.kidMax - TUNE.kidMin);
+      ev.push({ e: 'kid', x: s.x, y: s.y });
+    }
+    return;
+  }
+  if (s.kd === 1) {
+    const onTill = state.tiles[(s.ky | 0) * W + (s.kx | 0)] === 'T';
+    if (onTill || !moveAlong(dist, s.kx, s.ky, s.ox, s.oy, TUNE.kidSpeed, s.id)) {
+      s.kd = 2; // nowhere further to run: wait here
+    } else {
+      s.kvx = MV.vx; s.kvy = MV.vy;
+      s.kx += MV.vx; s.ky += MV.vy;
+      s.kr -= Math.hypot(MV.vx, MV.vy);
+      if (s.kr <= 0) s.kd = 2;
+    }
+    return; // cannot be caught on the tick it runs
+  }
+  if ((s.x - s.kx) ** 2 + (s.y - s.ky) ** 2 < 0.45) {
+    s.kd = 0;
+    s.kc = secs(TUNE.kidRest);
+    ev.push({ e: 'caught', x: s.x, y: s.y });
+  }
+}
+
+function stepShoppers(state, fields, stands, ev) {
   const S = state.shoppers, grid = state.grid;
   const standR2 = BUILD.samples.range ** 2;
+  const dist = fields[NORMAL];
+  // Which tiles have a mess on them right now.
+  let messAt = null;
+  if (state.messes.length) { messAt = new Set(); for (const m of state.messes) messAt.add(m[0]); }
+
   for (let n = 0; n < S.length; n++) {
     const s = S[n];
     const def = SHOPPERS[s.k];
@@ -264,12 +345,13 @@ function stepShoppers(state, dist, hop, stands, ev) {
       s.hp -= def.drain * DT;
       if (s.hp <= 0) { giveUp(state, s, -1, 'bored', ev); continue; }
     }
+    if (def.kid) stepKid(state, s, dist, ev);
     if (s.cd > 0) s.cd--;
     if (s.st !== ST.WALK) {
       if (--s.t <= 0) s.st = ST.WALK;
       continue;
     }
-    const tx = s.x | 0, ty = s.y | 0, i = ty * W + tx;
+    const i = (s.y | 0) * W + (s.x | 0);
     if (state.tiles[i] === 'T') {
       escape(state, s, ev);
       S.splice(n--, 1);
@@ -277,8 +359,35 @@ function stepShoppers(state, dist, hop, stands, ev) {
     }
 
     let speed = def.speed;
-    const here = grid[i];
-    if (here && here.k === 'wetfloor' && !def.steady) {
+    let here = grid[i];
+
+    // A gym bro does not go around a crate stack. He goes through it.
+    if (def.smashes && here && here.k === 'crate') {
+      grid[i] = 0;
+      state.gridVer++;
+      here = 0;
+      ev.push({ e: 'smash', i, x: s.x, y: s.y });
+    }
+    // A sprayed guide dog drags its owner along.
+    if (def.bolts && s.bt > 0) { s.bt--; speed *= TUNE.boltSpeed; }
+    // A mom whose child has run off sprints after him and has no time for anything else.
+    const chasing = def.kid && s.kd > 0;
+    if (chasing) speed *= TUNE.chaseSpeed;
+
+    // A teenager leaves a mess behind every few seconds.
+    if (def.messy && --s.m <= 0) {
+      s.m = secs(TUNE.messEvery);
+      if (state.tiles[i] === '.' && !here) {
+        const old = state.messes.find((m) => m[0] === i);
+        if (old) old[1] = secs(TUNE.messSecs); else state.messes.push([i, secs(TUNE.messSecs)]);
+        ev.push({ e: 'mess', i });
+      }
+    }
+
+    // Slippery floor: a wet floor sign, or a teenager's mess. Teenagers are used to their own mess.
+    const wet = here && here.k === 'wetfloor';
+    const messy = !wet && messAt !== null && messAt.has(i) && !def.messy;
+    if ((wet || messy) && !def.steady) {
       if (!def.ignoresSigns) {
         speed *= TUNE.wetSlow;
       } else if (s.lt !== i && rand(state) < TUNE.slipChance) {
@@ -286,13 +395,13 @@ function stepShoppers(state, dist, hop, stands, ev) {
         s.st = ST.STUN;
         s.t = secs(TUNE.slipSecs);
         ev.push({ e: 'slip', x: s.x, y: s.y });
-        hurt(state, s, TUNE.slipDmg, here.o, ev);
+        hurt(state, s, TUNE.slipDmg, wet ? here.o : -1, ev);
         continue;
       }
     }
     s.lt = i;
 
-    if (def.browses && s.cd === 0) {
+    if (def.browses && s.cd === 0 && !chasing) {
       let stopped = false;
       for (const st of stands) {
         const sx = (st % W) + 0.5, sy = ((st / W) | 0) + 0.5;
@@ -322,24 +431,12 @@ function stepShoppers(state, dist, hop, stands, ev) {
       if (stopped) continue;
     }
 
-    // Walk toward whichever neighbouring tile is closest to the tills. Dads use their own map,
-    // on which conveyor belts count as floor.
-    const field = def.hopsBelts ? hop : dist;
-    let best = i, bd = field[i];
-    for (let k = 0; k < 4; k++) {
-      const ni = neighbour(i, (k + s.id) & 3); // vary the tie-break so crowds spread out
-      if (ni >= 0 && field[ni] < bd) { bd = field[ni]; best = ni; }
-    }
-    if (best === i) continue; // walled in; cannot normally happen
-    const gx = (best % W) + 0.5 + s.ox, gy = ((best / W) | 0) + 0.5 + s.oy;
-    const dx = gx - s.x, dy = gy - s.y;
-    const len = Math.hypot(dx, dy);
-    if (len > 1e-6) {
-      const m = Math.min(1, (speed * DT) / len);
-      s.vx = dx * m;
-      s.vy = dy * m;
-      s.x += s.vx;
-      s.y += s.vy;
+    // Walk toward whichever neighbouring tile is closest to the tills, on this shopper's own map.
+    if (moveAlong(fields[modeOf(s.k)], s.x, s.y, s.ox, s.oy, speed, s.id)) {
+      s.vx = MV.vx;
+      s.vy = MV.vy;
+      s.x += MV.vx;
+      s.y += MV.vy;
     }
   }
 }
@@ -350,6 +447,8 @@ function stepShoppers(state, dist, hop, stands, ev) {
  *   waveStart {wave,total,dads} · waveEnd {wave,bonus} · won · lost
  *   escape {k,x,y,refund} a shopper reached the tills · left {k,x,y,by,why} a shopper gave up
  *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind}
+ *   mess {i} a teenager dropped a mess on tile i · kid {x,y} a child escaped · caught {x,y}
+ *   bolt {x,y} a guide dog bolted · smash {i,x,y} a gym bro wrecked the crate stack on tile i
  */
 export function step(state) {
   const ev = [];
@@ -363,10 +462,13 @@ export function step(state) {
     spawn(state);
   }
   if (waiting) return ev;
-  const dist = getDist(state);
-  const hop = getHopDist(state);
-  const stands = stepBuildings(state, dist, hop, ev);
-  stepShoppers(state, dist, hop, stands, ev);
+  for (let k = state.messes.length - 1; k >= 0; k--) {
+    if (--state.messes[k][1] <= 0) state.messes.splice(k, 1);
+  }
+  // A gym bro can change the layout mid-tick; everyone else finishes this tick on the old maps.
+  const fields = [getField(state, NORMAL), getField(state, HOP), getField(state, SMASH)];
+  const stands = stepBuildings(state, fields, ev);
+  stepShoppers(state, fields, stands, ev);
   if (state.phase === 'wave' && !state.spawnQ.length && !state.shoppers.length) endWave(state, ev);
   return ev;
 }
