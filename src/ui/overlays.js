@@ -103,8 +103,9 @@ export function closedScreen(why) {
 export function helpScreen(onClose) {
   const btn = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: onClose }, 'Got it');
   setTimeout(() => btn.focus(), 50);
-  const el = overlay('help', h('h2', null, 'HOW THIS WORKS'),
-    h('div', { class: 'help-cols' }, howToPlay(), h('div', { class: 'howto' }, shopperGuide(), buildingGuide())), btn);
+  // The close button sits at the top, so opening the help shows the start of it, not the end.
+  const el = overlay('help', h('div', { class: 'help-head' }, h('h2', null, 'HOW THIS WORKS'), btn),
+    h('div', { class: 'help-cols' }, howToPlay(), h('div', { class: 'howto' }, buildingGuide()), h('div', { class: 'howto' }, shopperGuide())));
   el.addEventListener('click', (e) => { if (e.target === el) onClose(); });
   return el;
 }

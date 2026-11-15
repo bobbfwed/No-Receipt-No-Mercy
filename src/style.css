@@ -924,8 +924,12 @@ kbd {
 .help .ov-card { text-align: left; }
 .help h2 { margin: 0 0 0.6rem; font: 900 1.4rem var(--font-heavy); }
 .help .btn-big { display: block; margin: 1rem auto 0; }
-.help .ov-card { width: min(78rem, 100%); }
-.help-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 0 1.8rem; }
+.help .ov-card { width: min(92rem, 100%); padding: 1rem 1.4rem; }
+.help-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.6rem; }
+.help-head h2 { margin: 0; }
+.help .help-head .btn-big { margin: 0; min-width: 9rem; padding: 0.35rem 1rem; font-size: 1rem; }
+.help-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 5fr) minmax(0, 6fr); gap: 0 1.6rem; }
+.help .howto { font-size: 0.84rem; }
 .guide { margin: 0; font-size: 0.82rem; line-height: 1.3; }
 .guide dt { margin-top: 0.3rem; font-weight: 800; }
 .guide dd { margin: 0; }
