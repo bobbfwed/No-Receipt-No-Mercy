@@ -5,11 +5,9 @@ A co-op browser game for 1 to 6 players. Shoppers pour into a discount warehouse
 ## Play on this computer
 You need Node.js (any recent version) to serve the files.
 
-```
-node tools/serve.mjs
-```
+Double-click `play.bat`. It starts a small local server and opens the game in your browser. Keep its window open while you play; closing it stops the server, and the page will then say "Unable to connect".
 
-Then open http://localhost:5173/ in Chrome or Edge.
+Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chrome, Edge or Firefox.
 
 - **Play solo** starts straight away.
 - To try multiplayer alone, open http://localhost:5173/tools/two-player.html : a host and a second player side by side.
