@@ -56,6 +56,22 @@ export const HOW = {
   },
 };
 
+/**
+ * The shoppers: `trick` = what makes this one different, `beat` = what works against it.
+ * Shown in the in-game help, in the order they first appear.
+ */
+export const SHOPPER_HELP = {
+  hunter: { trick: 'The ordinary shopper. Stops for free samples and grabs goods off belts.', beat: 'Anything. Slow them at a gap and spray them.' },
+  dad: { trick: 'Arrives in a single-file line, walks fast, ignores samples, and steps over conveyor belts.', beat: 'Time: his patience drains by itself. Crates and machines block him. He slips on wet floor signs. Cover his short cut.' },
+  clipper: { trick: 'Fast, weak, and there are a lot of them.', beat: 'Sprinklers. Anything that hits a crowd.' },
+  mom: { trick: 'Her kid escapes the cart and runs ahead. While she chases him she sprints and ignores free samples.', beat: 'Forklifts and wet floor signs. Samples only work while the kid is in the cart.' },
+  teen: { trick: 'Slow. Spills a slushie every few seconds; the mess slows every other shopper and dads slip on it.', beat: 'Let him loiter in range. His messes work for you.' },
+  karen: { trick: 'Enormous patience. Security near her works at half speed while she asks for the manager.', beat: 'Long routes and forklifts out of her reach. Do not rely on one cluster of towers.' },
+  blind: { trick: 'The guide dog steers him around puddles and messes, and he cannot see free samples. Pepper spray makes the dog bolt, dragging him along fast.', beat: 'Forklifts. Sprinklers make him faster.' },
+  scooter: { trick: 'Cannot be slowed by anything.', beat: 'Raw damage over a long route.' },
+  gymbro: { trick: 'Walks straight through crate stacks and destroys them.', beat: 'Walls made of machines and belts. Patch the holes he leaves.' },
+};
+
 /** What the Remove tool does, for the same info card. */
 export const HOW_REMOVE = {
   does: 'Removes a building and gives back 75% of its price.',

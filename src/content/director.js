@@ -3,7 +3,7 @@
 // output is sent to every player, so everyone sees the same insult at the same time.
 import { TICK_HZ, TUNE } from '../sim/index.js';
 import {
-  LINES, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, fill,
+  LINES, INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, fill,
 } from './lines.js';
 
 const DEB = 'DEB (HR)';
@@ -19,6 +19,7 @@ export function createDirector(random = Math.random) {
   let sold = false;
   let warned = -1; // wave whose "ten seconds" warning has been given
   const lastPlaced = new Map(); // "x,y" -> { tick, by }
+  const met = new Set(); // kinds of shopper DEB has already introduced
 
   function pick(bank) {
     let i = (random() * bank.length) | 0;
@@ -90,8 +91,29 @@ export function createDirector(random = Math.random) {
           case 'waveStart':
             escapes = [];
             if (state.training) break; // the tutorial does its own talking
-            say(out, state, LINES.waveStart, { w: e.wave }, { must: true });
+            {
+              // The first time a kind of shopper turns up, explain its trick instead of the usual quip.
+              let introduced = false;
+              for (const k of e.kinds || []) {
+                if (met.has(k)) continue;
+                met.add(k);
+                if (INTRO[k]) { out.push({ t: 'say', who: DEB, mood: 'flat', text: INTRO[k] }); lastSay = state.tick; introduced = true; }
+              }
+              if (!introduced) say(out, state, LINES.waveStart, { w: e.wave }, { must: true });
+            }
             if (e.dads > 0) say(out, state, LINES.dadLine, { n: e.dads }, { must: true, mood: 'smug' });
+            break;
+          case 'kid':
+            say(out, state, LINES.kid, {}, { gap: 20 });
+            break;
+          case 'smash':
+            say(out, state, LINES.smash, {}, { gap: 10, mood: 'angry' });
+            break;
+          case 'mess':
+            say(out, state, LINES.mess, {}, { gap: 45 });
+            break;
+          case 'bolt':
+            say(out, state, LINES.bolt, {}, { gap: 20, mood: 'angry' });
             break;
           case 'escape':
             escapes.push(state.tick);

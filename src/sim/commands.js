@@ -1,8 +1,8 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
-import { W, BUILD, SHOPPERS, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
+import { W, BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
 import { inBounds, idxOf, bump } from './state.js';
-import { computeDist, UNREACHABLE } from './path.js';
+import { computeDist, modeOf, UNREACHABLE } from './path.js';
 import { beginWave } from './step.js';
 
 /** Seconds of build time before wave 1, counted from the first thing placed. */
@@ -33,10 +33,12 @@ export function canPlace(state, k, x, y) {
     for (let t = 0; t < state.tiles.length; t++) {
       if (state.tiles[t] === 'D' && dist[t] === UNREACHABLE) return 'blocked';
     }
-    let hop = null; // dads step over belts, so they are checked against their own map
+    // Dads and gym bros get through things others cannot, so each is checked on his own map.
+    const fields = [dist, null, null];
     for (const s of state.shoppers) {
       if (s.st === ST.LEAVE) continue;
-      const field = SHOPPERS[s.k].hopsBelts ? (hop ||= computeDist(state, i, true)) : dist;
+      const mode = modeOf(s.k);
+      const field = (fields[mode] ||= computeDist(state, i, mode));
       if (field[tileOf(s)] === UNREACHABLE) return 'blocked';
     }
   }

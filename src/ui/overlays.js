@@ -1,5 +1,6 @@
 // Full-screen overlays: the end of the game, losing the host, and the in-game "how to play".
-import { TUNE } from '../sim/index.js';
+import { TUNE, SHOPPERS, BUILD } from '../sim/index.js';
+import { HOW, SHOPPER_HELP } from '../content/help.js';
 import { h, money, safeColor } from './dom.js';
 import { debFace } from './icons.js';
 
@@ -21,6 +22,26 @@ export function howToPlay() {
       h('li', null, h('kbd', null, 'R'), ' rotate what you are holding, or the building under the mouse when holding nothing'),
       h('li', null, h('kbd', null, 'Right-click'), ' or ', h('kbd', null, 'X'), ' remove (75% back) · ', h('kbd', null, 'Esc'), ' put it down'),
       h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early, for the impatient')));
+}
+
+/** Every kind of shopper: what makes it different and what works against it. */
+function shopperGuide() {
+  return h('div', null,
+    h('h3', null, 'Who comes through the door'),
+    h('dl', { class: 'guide' }, Object.entries(SHOPPER_HELP).map(([k, v]) => [
+      h('dt', null, SHOPPERS[k] ? SHOPPERS[k].name : k),
+      h('dd', null, v.trick, ' ', h('em', null, `Beat it with: ${v.beat}`)),
+    ])));
+}
+
+/** Every building in one line each. Holding a building in the build bar shows the full version. */
+function buildingGuide() {
+  return h('div', null,
+    h('h3', null, 'What the buildings do'),
+    h('dl', { class: 'guide' }, Object.entries(HOW).map(([k, v]) => [
+      h('dt', null, BUILD[k] ? `${BUILD[k].name} ($${BUILD[k].cost})` : k),
+      h('dd', null, v.does),
+    ])));
 }
 
 function overlay(cls, ...children) {
@@ -82,7 +103,8 @@ export function closedScreen(why) {
 export function helpScreen(onClose) {
   const btn = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: onClose }, 'Got it');
   setTimeout(() => btn.focus(), 50);
-  const el = overlay('help', h('h2', null, 'HOW THIS WORKS'), howToPlay(), btn);
+  const el = overlay('help', h('h2', null, 'HOW THIS WORKS'),
+    h('div', { class: 'help-cols' }, howToPlay(), h('div', { class: 'howto' }, shopperGuide(), buildingGuide())), btn);
   el.addEventListener('click', (e) => { if (e.target === el) onClose(); });
   return el;
 }
