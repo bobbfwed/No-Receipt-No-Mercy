@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Poke the game (test page)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; }
+  iframe { border: 0; width: 100%; height: 100%; display: block; }
+  #log { position: fixed; left: 6px; top: 6px; z-index: 9; background: #000c; color: #9f9; font: 11px Consolas, monospace; padding: 3px 8px; white-space: pre; pointer-events: none; }
+</style>
+</head>
+<body>
+<!--
+  A test page: opens the game with the options you give and then performs a list of actions, so a
+  screenshot tool can photograph screens that need a click or a key press to reach.
+    tools/poke.html?u=<game options>&do=<actions separated by ;>
+  Actions:  click:<css selector>   key:<key>   tile:<x>,<y>   hover:<x>,<y>   wait:<ms>   text:<button text>
+  Example:  tools/poke.html?u=solo%3D1&do=key:7;hover:8,10;click:.btn-help
+  Photograph it with:  node tools/realshot.mjs "<url>" out.png 4000
+-->
+<iframe id="game" title="Game"></iframe>
+<div id="log"></div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const frame = document.getElementById('game');
+  const log = (t) => { document.getElementById('log').textContent += t + '\n'; };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  frame.src = `../index.html?${q.get('u') || 'solo=1'}`;
+  frame.addEventListener('load', async () => {
+    const win = frame.contentWindow, doc = frame.contentDocument;
+    await wait(700);
+    const canvas = () => doc.querySelector('canvas');
+    const at = (tx, ty) => {
+      const r = canvas().getBoundingClientRect();
+      const s = Math.min(r.width / 1200, r.height / 640);
+      return { clientX: r.left + (r.width - 1200 * s) / 2 + (tx + 0.5) * 40 * s, clientY: r.top + (r.height - 640 * s) / 2 + (ty + 0.5) * 40 * s };
+    };
+    const mouse = (type, x, y) => canvas().dispatchEvent(new win.PointerEvent(type, { ...at(x, y), button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerId: 1, bubbles: true, cancelable: true }));
+    for (const step of (q.get('do') || '').split(';').filter(Boolean)) {
+      const [verb, ...rest] = step.split(':');
+      const arg = rest.join(':');
+      if (verb === 'wait') await wait(Number(arg) || 300);
+      else if (verb === 'click') { const el = doc.querySelector(arg); if (el) el.click(); else log('no element ' + arg); }
+      else if (verb === 'text') { const el = [...doc.querySelectorAll('button')].find((b) => b.textContent.trim().toLowerCase().startsWith(arg.toLowerCase())); if (el) el.click(); else log('no button ' + arg); }
+      else if (verb === 'key') win.dispatchEvent(new win.KeyboardEvent('keydown', { key: arg, code: /^\d$/.test(arg) ? `Digit${arg}` : `Key${arg.toUpperCase()}`, bubbles: true }));
+      else if (verb === 'hover' || verb === 'tile') {
+        const [x, y] = arg.split(',').map(Number);
+        mouse('pointermove', x, y);
+        if (verb === 'tile') { mouse('pointerdown', x, y); mouse('pointerup', x, y); }
+      }
+      await wait(120);
+    }
+  });
+</script>
+</body>
+</html>
