@@ -1,0 +1,242 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="Segoe UI, Arial, sans-serif">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06222b"/><stop offset="0.6" stop-color="#0d3d46"/><stop offset="1" stop-color="#1b5560"/></linearGradient>
+<linearGradient id="room" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b4a24"/><stop offset="1" stop-color="#2f2012"/></linearGradient>
+<linearGradient id="hull" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f08a2c"/><stop offset="1" stop-color="#c9560f"/></linearGradient>
+<linearGradient id="mon" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8a47c4"/><stop offset="1" stop-color="#5a2a8a"/></linearGradient>
+<radialGradient id="reac"><stop offset="0" stop-color="#e8ffff"/><stop offset="0.45" stop-color="#4cc9ff"/><stop offset="1" stop-color="#0a5fb0"/></radialGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#ffd27a" stop-opacity="0.9"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>
+<pattern id="win" width="22" height="26" patternUnits="userSpaceOnUse"><rect width="22" height="26" fill="#0a1a22"/><rect x="4" y="5" width="12" height="14" fill="#ffd36b"/></pattern>
+<pattern id="win2" width="22" height="26" patternUnits="userSpaceOnUse"><rect width="22" height="26" fill="#0a1a22"/><rect x="4" y="5" width="12" height="14" fill="#7ee6ff"/><rect x="4" y="5" width="12" height="7" fill="#0a1a22" opacity="0.5"/></pattern>
+<pattern id="rain" width="50" height="70" patternUnits="userSpaceOnUse" patternTransform="rotate(12)"><path d="M10 0v22M35 30v26M22 44v18" stroke="#bfefff" stroke-width="2" opacity="0.5"/></pattern>
+<pattern id="rungs" width="20" height="12" patternUnits="userSpaceOnUse"><rect width="20" height="12" fill="#3a3f45"/><rect y="4" width="20" height="3" fill="#aab3bb"/></pattern>
+<pattern id="belt" width="16" height="12" patternUnits="userSpaceOnUse"><rect width="16" height="12" fill="#2b2f34"/><path d="M0 0l8 12M8 0l8 12" stroke="#555c63" stroke-width="2"/></pattern>
+<symbol id="crew" viewBox="0 0 30 50"><rect x="6" y="22" width="18" height="18" rx="4" fill="currentColor" stroke="#111" stroke-width="3"/><rect x="7" y="38" width="6" height="11" fill="#223" stroke="#111" stroke-width="2"/><rect x="17" y="38" width="6" height="11" fill="#223" stroke="#111" stroke-width="2"/><circle cx="15" cy="13" r="10" fill="#f2c28d" stroke="#111" stroke-width="3"/><path d="M5 10a10 9 0 0 1 20 0z" fill="#ffcf2e" stroke="#111" stroke-width="2.5"/><circle cx="11.5" cy="14" r="1.8" fill="#111"/><circle cx="18.5" cy="14" r="1.8" fill="#111"/><path d="M11 19q4 3 8 0" stroke="#111" stroke-width="1.8" fill="none"/></symbol>
+<symbol id="shell" viewBox="0 0 16 8"><path d="M0 1h10q6 3 6 3t-6 3H0z" fill="#e0a830" stroke="#111" stroke-width="1.2"/></symbol>
+<symbol id="flame" viewBox="0 0 40 60"><path d="M20 2C26 18 38 24 36 42C35 54 26 58 20 58C12 58 3 54 4 40C5 30 12 26 14 16C17 20 18 12 20 2z" fill="#ff5a14" stroke="#7a1a05" stroke-width="2"/><path d="M20 24C25 32 30 36 28 46C27 52 23 54 20 54C16 54 12 50 13 44C14 38 18 34 20 24z" fill="#ffd23a"/></symbol>
+</defs>
+
+<!-- sky and city -->
+<rect width="1280" height="720" fill="url(#sky)"/>
+<g stroke="#04141a" stroke-width="4">
+<rect x="10" y="190" width="90" height="520" fill="#12303a"/><rect x="10" y="190" width="90" height="520" fill="url(#win)" opacity="0.8"/>
+<rect x="110" y="120" width="110" height="590" fill="#0f2a33"/><rect x="110" y="120" width="110" height="590" fill="url(#win2)" opacity="0.7"/>
+<rect x="225" y="250" width="100" height="460" fill="#143641"/><rect x="225" y="250" width="100" height="460" fill="url(#win)" opacity="0.7"/>
+<rect x="800" y="210" width="95" height="500" fill="#0f2a33"/><rect x="800" y="210" width="95" height="500" fill="url(#win2)" opacity="0.7"/>
+<rect x="1000" y="260" width="110" height="450" fill="#143641"/><rect x="1000" y="260" width="110" height="450" fill="url(#win)" opacity="0.7"/>
+<rect x="1170" y="170" width="110" height="540" fill="#12303a"/><rect x="1170" y="170" width="110" height="540" fill="url(#win2)" opacity="0.7"/>
+<rect x="690" y="40" width="70" height="30" fill="#0f2a33"/>
+</g>
+<!-- neon signs -->
+<g font-weight="bold" font-size="14" text-anchor="middle">
+<rect x="116" y="300" width="70" height="26" rx="5" fill="#2a0a2e" stroke="#ff3fd0" stroke-width="3"/><text x="151" y="319" fill="#ff7be6">RAMEN</text>
+<rect x="232" y="330" width="84" height="26" rx="5" fill="#0a2a1e" stroke="#3dff9a" stroke-width="3"/><text x="274" y="349" fill="#7dffbf">HOTEL</text>
+<rect x="18" y="260" width="70" height="26" rx="5" fill="#2e1a0a" stroke="#ffb02e" stroke-width="3"/><text x="53" y="279" fill="#ffd07a">BAR</text>
+<rect x="1010" y="330" width="90" height="26" rx="5" fill="#0a1a2e" stroke="#3dc8ff" stroke-width="3"/><text x="1055" y="349" fill="#8fe0ff">ARCADE</text>
+<rect x="806" y="260" width="82" height="26" rx="5" fill="#2e0a14" stroke="#ff4060" stroke-width="3"/><text x="847" y="279" fill="#ff90a0">KEBAB</text>
+</g>
+
+<!-- crumbling building under monster -->
+<g stroke="#04141a" stroke-width="5">
+<path d="M870 470l30-12 25 18 28-20 35 14 20-6v230h-138z" fill="#4d5a63"/>
+<path d="M870 470l30-12 25 18 28-20 35 14 20-6v230h-138z" fill="url(#win)" opacity="0.6" stroke="none"/>
+<path d="M925 476l-14 60 18 40-12 70" stroke="#04141a" stroke-width="4" fill="none"/>
+<rect x="838" y="540" width="30" height="22" fill="#6b7a84" transform="rotate(25 850 550)"/>
+<rect x="1000" y="500" width="26" height="20" fill="#6b7a84" transform="rotate(-20 1010 510)"/>
+<rect x="850" y="610" width="24" height="18" fill="#6b7a84" transform="rotate(40 860 620)"/>
+</g>
+<ellipse cx="900" cy="690" rx="90" ry="26" fill="#9aa8b0" opacity="0.55"/>
+<ellipse cx="1000" cy="700" rx="70" ry="20" fill="#9aa8b0" opacity="0.5"/>
+
+<!-- monster -->
+<g stroke="#1a0a2a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+<path d="M1270 520q-120 60-60 140q30 30 70 10" fill="none" stroke-width="40"/>
+<path d="M1270 520q-120 60-60 140q30 30 70 10" fill="none" stroke="#6a35a0" stroke-width="28"/>
+<path d="M1000 140l-10-60 40 40 10-60 30 60 30-50 10 60 40-40-10 70z" fill="#c9a3ee"/>
+<ellipse cx="1130" cy="440" rx="170" ry="260" fill="url(#mon)"/>
+<ellipse cx="1090" cy="470" rx="95" ry="190" fill="#d6b4f0" stroke-width="4"/>
+<path d="M1040 360h100M1040 410h100M1040 460h100M1040 510h100M1040 560h100" stroke="#a97dd0" stroke-width="4"/>
+<path d="M1040 690q-40 0-70 4l-20 14h130z" fill="#6a35a0"/>
+<path d="M980 700l-6 18M1010 702l-2 18M1040 700l4 18" stroke-width="5"/>
+<path d="M1060 330q-110-10-210-30" fill="none" stroke-width="64"/>
+<path d="M1060 330q-110-10-210-30" fill="none" stroke="#7a3fb0" stroke-width="50"/>
+<path d="M1090 160q-80 40-60 120" fill="none" stroke-width="30"/>
+<path d="M1090 160q-80 40-60 120" fill="none" stroke="#7a3fb0" stroke-width="20"/>
+<ellipse cx="960" cy="220" rx="115" ry="92" fill="#7a3fb0"/>
+<path d="M880 240q10 70 80 75q80 0 100-70q-60 30-180-5z" fill="#3a0f2a"/>
+<path d="M895 245l10 22 10-18 12 24 10-20 12 24 10-20 14 22 8-18 14 20 8-16" fill="#fff" stroke-width="3"/>
+<path d="M905 305l8-18 10 20 10-22 10 22 12-22 10 22 10-20 10 18" fill="#fff" stroke-width="3"/>
+<ellipse cx="925" cy="298" rx="30" ry="12" fill="#ff5a9a" stroke-width="3"/>
+<circle cx="920" cy="175" r="22" fill="#ffee3a"/><circle cx="1005" cy="180" r="22" fill="#ffee3a"/>
+<path d="M914 160v30M999 165v30" stroke-width="7"/>
+<path d="M895 150l50 14M1030 162l-35 10" stroke-width="8"/>
+<path d="M905 310q-40 50-10 100q15 25-5 50" fill="none" stroke-width="22"/>
+<path d="M905 310q-40 50-10 100q15 25-5 50" fill="none" stroke="#a15fd8" stroke-width="12"/>
+<path d="M940 318q30 60 0 110q-10 25 10 45" fill="none" stroke-width="22"/>
+<path d="M940 318q30 60 0 110q-10 25 10 45" fill="none" stroke="#a15fd8" stroke-width="12"/>
+<path d="M975 316q55 40 40 100q-6 30 20 50" fill="none" stroke-width="22"/>
+<path d="M975 316q55 40 40 100q-6 30 20 50" fill="none" stroke="#a15fd8" stroke-width="12"/>
+<circle cx="888" cy="468" r="9" fill="#d6b4f0" stroke-width="3"/><circle cx="905" cy="462" r="9" fill="#d6b4f0" stroke-width="3"/>
+<path d="M812 285l-26-8M810 300l-30 0M812 315l-26 10" stroke="#e8e0f0" stroke-width="9"/>
+</g>
+
+<!-- ROBOT: hulls -->
+<g stroke="#111" stroke-width="6" stroke-linejoin="round">
+<rect x="321" y="196" width="132" height="198" rx="14" fill="url(#hull)"/>
+<rect x="667" y="196" width="132" height="198" rx="14" fill="url(#hull)"/>
+<rect x="441" y="190" width="238" height="160" rx="16" fill="url(#hull)"/>
+<rect x="461" y="338" width="198" height="106" rx="14" fill="url(#hull)"/>
+<rect x="451" y="436" width="218" height="72" rx="14" fill="url(#hull)"/>
+<rect x="455" y="498" width="108" height="206" rx="12" fill="url(#hull)"/>
+<rect x="557" y="498" width="108" height="206" rx="12" fill="url(#hull)"/>
+<rect x="490" y="82" width="140" height="108" rx="30" fill="url(#hull)"/>
+<rect x="540" y="176" width="40" height="22" fill="#6b747c"/>
+<!-- cannon -->
+<rect x="322" y="452" width="140" height="36" rx="8" fill="#5a636b"/>
+<rect x="306" y="446" width="30" height="48" rx="8" fill="#2e353b"/>
+<path d="M345 458v24M372 458v24M400 458v24" stroke="#9aa5ad" stroke-width="5"/>
+<!-- feet -->
+<path d="M440 704q0-20 25-20h100v22h-125z" fill="#3a4047"/><path d="M555 684h100q25 0 25 20v2h-125z" fill="#3a4047"/>
+</g>
+<ellipse cx="300" cy="470" rx="46" ry="30" fill="#ffd27a" opacity="0.75"/>
+<circle cx="312" cy="470" r="12" fill="#fff6c8"/>
+
+<!-- rooms -->
+<g stroke="#111" stroke-width="4">
+<rect x="333" y="208" width="108" height="174" fill="url(#room)"/>
+<rect x="679" y="208" width="108" height="174" fill="url(#room)"/>
+<rect x="453" y="202" width="214" height="136" fill="url(#room)"/>
+<rect x="473" y="350" width="174" height="82" fill="url(#room)"/>
+<rect x="463" y="448" width="194" height="48" fill="url(#room)"/>
+<rect x="467" y="510" width="84" height="182" fill="url(#room)"/>
+<rect x="569" y="510" width="84" height="182" fill="url(#room)"/>
+<rect x="502" y="94" width="116" height="84" rx="22" fill="url(#room)"/>
+</g>
+<ellipse cx="560" cy="136" rx="60" ry="40" fill="url(#glow)"/>
+<ellipse cx="400" cy="300" rx="60" ry="90" fill="url(#glow)" opacity="0.6"/>
+
+<!-- ladders / corridors -->
+<rect x="583" y="178" width="16" height="30" fill="url(#rungs)" stroke="#111" stroke-width="3"/>
+<rect x="520" y="496" width="16" height="16" fill="url(#rungs)" stroke="#111" stroke-width="3"/>
+<rect x="590" y="496" width="16" height="16" fill="url(#rungs)" stroke="#111" stroke-width="3"/>
+<rect x="441" y="262" width="14" height="30" fill="#8a949c" stroke="#111" stroke-width="3"/>
+<rect x="665" y="262" width="14" height="30" fill="#8a949c" stroke="#111" stroke-width="3"/>
+
+<!-- HEAD cockpit -->
+<rect x="516" y="104" width="52" height="26" rx="4" fill="#0b2a3a" stroke="#111" stroke-width="3"/><path d="M522 124l12-10 10 6 12-12" stroke="#4cffa0" stroke-width="2.5" fill="none"/>
+<rect x="574" y="104" width="34" height="26" rx="4" fill="#0b2a3a" stroke="#111" stroke-width="3"/><circle cx="591" cy="117" r="7" fill="#ff5a3a"/>
+<rect x="520" y="150" width="60" height="20" rx="6" fill="#8a3a1a" stroke="#111" stroke-width="3"/>
+<use href="#crew" x="528" y="116" width="26" height="42" color="#2f6fe0"/>
+<text x="590" y="168" font-size="13" font-weight="bold" fill="#ffe9b0" text-anchor="start">HEAD</text>
+<rect x="528" y="82" width="48" height="18" rx="4" fill="#0b1a22" stroke="#111" stroke-width="2"/><text x="552" y="96" font-size="13" font-weight="bold" fill="#8fe0ff" text-anchor="middle">Steve</text>
+
+<!-- CHEST reactor -->
+<g>
+<circle cx="560" cy="272" r="52" fill="#143a5a" stroke="#111" stroke-width="5"/>
+<circle cx="560" cy="272" r="38" fill="url(#reac)" stroke="#111" stroke-width="4"/>
+<path d="M534 272a26 26 0 0 1 26-26" stroke="#fff" stroke-width="4" fill="none" opacity="0.8"/>
+<path d="M470 230h50M470 316h50M600 230h50M600 316h50" stroke="#3aa8e8" stroke-width="8" stroke-linecap="round"/>
+<path d="M470 230v-14h60M650 230v-14" stroke="#3aa8e8" stroke-width="6" fill="none"/>
+<circle cx="532" cy="318" r="6" fill="#ff5a3a" stroke="#111" stroke-width="2"/>
+</g>
+<text x="560" y="333" font-size="13" font-weight="bold" fill="#ffe9b0" text-anchor="middle">REACTOR</text>
+<path d="M453 250h-30" stroke="#3aa8e8" stroke-width="7"/><path d="M667 250h30" stroke="#3aa8e8" stroke-width="7"/>
+
+<!-- BELLY foundry -->
+<circle cx="500" cy="400" r="20" fill="#ff7a1a" stroke="#111" stroke-width="4"/><circle cx="500" cy="400" r="9" fill="#ffe27a"/>
+<rect x="530" y="388" width="110" height="14" fill="url(#belt)" stroke="#111" stroke-width="3"/>
+<rect x="530" y="410" width="110" height="10" fill="url(#belt)" stroke="#111" stroke-width="3"/>
+<use href="#shell" x="548" y="383" width="22" height="11"/><use href="#shell" x="590" y="383" width="22" height="11"/><use href="#shell" x="620" y="383" width="22" height="11"/><use href="#shell" x="578" y="406" width="22" height="11"/>
+<text x="585" y="374" font-size="13" font-weight="bold" fill="#ffe9b0" text-anchor="middle">FOUNDRY</text>
+<use href="#crew" x="520" y="394" width="22" height="38" color="#e0382f"/>
+<rect x="470" y="352" width="46" height="18" rx="4" fill="#0b1a22" stroke="#111" stroke-width="2"/><text x="493" y="366" font-size="13" font-weight="bold" fill="#ff9a8f" text-anchor="middle">Dave</text>
+
+<!-- HIPS -->
+<rect x="480" y="458" width="150" height="26" rx="6" fill="#0b1a22" stroke="#111" stroke-width="3"/>
+<text x="555" y="476" font-size="13" font-weight="bold" fill="#ffb24a" text-anchor="middle">CANNON CORE</text>
+
+<!-- ARM rooms -->
+<g>
+<rect x="345" y="330" width="84" height="12" fill="url(#belt)" stroke="#111" stroke-width="3"/>
+<use href="#shell" x="360" y="324" width="24" height="12"/>
+<rect x="390" y="224" width="22" height="90" rx="5" fill="#9aa5ad" stroke="#111" stroke-width="3"/><rect x="396" y="314" width="10" height="14" fill="#c9d2d9" stroke="#111" stroke-width="2"/>
+<use href="#flame" x="340" y="262" width="52" height="78"/><use href="#flame" x="384" y="290" width="40" height="60"/><use href="#flame" x="362" y="300" width="30" height="46"/>
+<text x="387" y="374" font-size="13" font-weight="bold" fill="#ffe9b0" text-anchor="middle">L ARM</text>
+<use href="#crew" x="342" y="346" width="20" height="30" color="#2fa84a"/>
+<rect x="693" y="330" width="84" height="12" fill="url(#belt)" stroke="#111" stroke-width="3"/>
+<use href="#shell" x="716" y="324" width="24" height="12"/>
+<rect x="710" y="224" width="22" height="90" rx="5" fill="#9aa5ad" stroke="#111" stroke-width="3"/><rect x="716" y="314" width="10" height="14" fill="#c9d2d9" stroke="#111" stroke-width="2"/>
+<rect x="745" y="230" width="30" height="60" rx="5" fill="#0b2a3a" stroke="#111" stroke-width="3"/><path d="M750 280l8-30 8 14 8-24" stroke="#4cffa0" stroke-width="2.5" fill="none"/>
+<text x="733" y="374" font-size="13" font-weight="bold" fill="#ffe9b0" text-anchor="middle">R ARM</text>
+</g>
+<path d="M387 150l30 52h-60z" fill="#ff2a2a" stroke="#111" stroke-width="4" stroke-linejoin="round"/>
+<text x="387" y="196" font-size="22" font-weight="bold" fill="#fff" text-anchor="middle">!</text>
+<rect x="344" y="212" width="40" height="18" rx="4" fill="#0b1a22" stroke="#111" stroke-width="2"/><text x="364" y="226" font-size="13" font-weight="bold" fill="#9dffb0" text-anchor="middle">Kev</text>
+
+<!-- LEGS -->
+<g>
+<rect x="495" y="540" width="28" height="80" rx="6" fill="#9aa5ad" stroke="#111" stroke-width="3"/><rect x="503" y="614" width="12" height="50" fill="#d4dce2" stroke="#111" stroke-width="2"/>
+<circle cx="509" cy="676" r="10" fill="#555c63" stroke="#111" stroke-width="3"/>
+<rect x="595" y="540" width="28" height="80" rx="6" fill="#9aa5ad" stroke="#111" stroke-width="3"/><rect x="603" y="614" width="12" height="50" fill="#d4dce2" stroke="#111" stroke-width="2"/>
+<circle cx="609" cy="676" r="10" fill="#555c63" stroke="#111" stroke-width="3"/>
+<text x="509" y="528" font-size="13" font-weight="bold" fill="#ffe9b0" text-anchor="middle">LEG 1</text>
+<text x="611" y="528" font-size="13" font-weight="bold" fill="#ffe9b0" text-anchor="middle">LEG 2</text>
+<path d="M636 570l12 22h-24z" fill="#ffc21a" stroke="#111" stroke-width="3" stroke-linejoin="round"/>
+</g>
+
+<!-- street and rain -->
+<rect x="0" y="704" width="1280" height="16" fill="#1a2a30" stroke="#04141a" stroke-width="4"/>
+<path d="M0 712h1280" stroke="#ffd36b" stroke-width="3" stroke-dasharray="30 24"/>
+<rect width="1280" height="720" fill="url(#rain)"/>
+
+<!-- Charge bar panel -->
+<g>
+<rect x="170" y="506" width="282" height="64" rx="10" fill="#0b1a22" fill-opacity="0.88" stroke="#ffb24a" stroke-width="3"/>
+<text x="311" y="530" font-size="16" font-weight="bold" fill="#ffd07a" text-anchor="middle">CROTCH CANNON 100%</text>
+<rect x="184" y="540" width="254" height="18" rx="6" fill="#222" stroke="#111" stroke-width="2"/>
+<rect x="186" y="542" width="250" height="14" rx="5" fill="#ff8a1a"/>
+<rect x="186" y="542" width="250" height="5" rx="2" fill="#ffd27a"/>
+</g>
+
+<!-- Alerts list -->
+<g>
+<rect x="12" y="66" width="250" height="96" rx="10" fill="#0b1a22" fill-opacity="0.85" stroke="#ff5a3a" stroke-width="3"/>
+<text x="26" y="88" font-size="14" font-weight="bold" fill="#ffd07a">ROOM ALERTS</text>
+<rect x="22" y="98" width="230" height="26" rx="5" fill="#a01818"/><path d="M36 117l9-16 9 16z" fill="#ffe14a"/><text x="62" y="117" font-size="15" font-weight="bold" fill="#fff">LEFT ARM: FIRE</text>
+<rect x="22" y="128" width="230" height="26" rx="5" fill="#8a6a10"/><path d="M36 147l9-16 9 16z" fill="#ffe14a"/><text x="62" y="147" font-size="15" font-weight="bold" fill="#fff">LEG 2: LOW PRESSURE</text>
+</g>
+
+<!-- UNIT bubble -->
+<g>
+<rect x="14" y="590" width="416" height="112" rx="16" fill="#fff8e6" stroke="#111" stroke-width="4"/>
+<rect x="24" y="604" width="56" height="56" rx="10" fill="#5a636b" stroke="#111" stroke-width="4"/>
+<rect x="32" y="614" width="40" height="22" rx="4" fill="#0b2a3a" stroke="#111" stroke-width="2"/><circle cx="43" cy="625" r="5" fill="#ffe14a"/><circle cx="61" cy="625" r="5" fill="#ffe14a"/>
+<path d="M40 647h24" stroke="#111" stroke-width="4"/>
+<text x="52" y="682" font-size="14" font-weight="bold" fill="#111" text-anchor="middle">UNIT</text>
+<text x="92" y="622" font-size="18" font-weight="bold" fill="#111">“Crotch cannon is at full charge.<tspan x="92" dy="26">I did not name it.</tspan><tspan x="92" dy="26">I did request it.”</tspan></text>
+</g>
+
+<!-- Top HUD -->
+<rect width="1280" height="56" fill="#07141a" fill-opacity="0.9"/>
+<g font-weight="bold">
+<rect x="10" y="6" width="244" height="44" rx="8" fill="#13303a" stroke="#ff5a3a" stroke-width="2"/>
+<path d="M22 40v-14h8v14zM32 40v-22h8v22zM42 40v-10h8v10z" fill="#ff9a5a"/>
+<text x="58" y="24" font-size="14" fill="#ffd0b0">CITY DAMAGE 41%</text>
+<rect x="58" y="31" width="186" height="12" rx="4" fill="#222" stroke="#111" stroke-width="2"/><rect x="60" y="33" width="76" height="8" rx="3" fill="#ff4a2a"/>
+<rect x="264" y="6" width="262" height="44" rx="8" fill="#13303a" stroke="#b46ae8" stroke-width="2"/>
+<circle cx="285" cy="28" r="12" fill="#7a3fb0" stroke="#111" stroke-width="2"/><circle cx="281" cy="25" r="3" fill="#ffee3a"/><circle cx="290" cy="25" r="3" fill="#ffee3a"/>
+<text x="306" y="24" font-size="14" fill="#e6c8ff">MONSTER 4 / 10</text>
+<rect x="306" y="31" width="212" height="12" rx="4" fill="#222" stroke="#111" stroke-width="2"/><rect x="308" y="33" width="140" height="8" rx="3" fill="#b46ae8"/>
+<rect x="536" y="6" width="170" height="44" rx="8" fill="#13303a" stroke="#4cc9ff" stroke-width="2"/>
+<path d="M552 40a16 16 0 1 1 32 0" stroke="#4cc9ff" stroke-width="5" fill="none"/><path d="M552 40a16 16 0 0 1 8-14" stroke="#ffd23a" stroke-width="5" fill="none"/><path d="M568 40l9-12" stroke="#fff" stroke-width="3"/>
+<text x="594" y="24" font-size="14" fill="#bfefff">REACTOR TEMP</text><text x="594" y="43" font-size="15" fill="#ffd23a">78°C</text>
+<rect x="716" y="6" width="130" height="44" rx="8" fill="#13303a" stroke="#e0a830" stroke-width="2"/>
+<use href="#shell" x="728" y="20" width="30" height="15"/><text x="766" y="36" font-size="18" fill="#ffd07a">Shells 12</text>
+<rect x="856" y="6" width="150" height="44" rx="8" fill="#13303a" stroke="#4cc9ff" stroke-width="2"/>
+<path d="M876 14q10 14 10 22a10 10 0 0 1-20 0q0-8 10-22z" fill="#4cc9ff" stroke="#111" stroke-width="2"/>
+<text x="896" y="36" font-size="18" fill="#bfefff">Coolant 60%</text>
+<rect x="1016" y="6" width="80" height="44" rx="22" fill="#2f6fe0" stroke="#111" stroke-width="2"/><text x="1056" y="35" font-size="16" fill="#fff" text-anchor="middle">Steve</text>
+<rect x="1102" y="6" width="80" height="44" rx="22" fill="#e0382f" stroke="#111" stroke-width="2"/><text x="1142" y="35" font-size="16" fill="#fff" text-anchor="middle">Dave</text>
+<rect x="1188" y="6" width="82" height="44" rx="22" fill="#2fa84a" stroke="#111" stroke-width="2"/><text x="1229" y="35" font-size="16" fill="#fff" text-anchor="middle">Kev</text>
+</g>
+</svg>
