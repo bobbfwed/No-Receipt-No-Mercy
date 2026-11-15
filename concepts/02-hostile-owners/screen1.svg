@@ -1,0 +1,180 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+<defs>
+<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4aa8ee"/><stop offset="1" stop-color="#bfe6ff"/></linearGradient>
+<linearGradient id="dirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a4d2c"/><stop offset="0.5" stop-color="#58361d"/><stop offset="1" stop-color="#2f1c10"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#ffe680" stop-opacity="0.9"/><stop offset="1" stop-color="#ffe680" stop-opacity="0"/></radialGradient>
+<radialGradient id="fire"><stop offset="0" stop-color="#fff2a0"/><stop offset="0.5" stop-color="#ff9a1f"/><stop offset="1" stop-color="#e03a12"/></radialGradient>
+<pattern id="belt" width="16" height="12" patternUnits="userSpaceOnUse"><rect width="16" height="12" fill="#3a3a44"/><rect width="8" height="12" fill="#50505c"/></pattern>
+<pattern id="picket" width="16" height="40" patternUnits="userSpaceOnUse"><path d="M2 40V10L8 3L14 10V40Z" fill="#fff" stroke="#8a8a96" stroke-width="2"/></pattern>
+<g id="ppl">
+<rect x="-6" y="-16" width="5" height="16" fill="#2d2d3a" stroke="#111" stroke-width="2"/>
+<rect x="1" y="-16" width="5" height="16" fill="#2d2d3a" stroke="#111" stroke-width="2"/>
+<rect x="-9" y="-35" width="18" height="21" rx="5" fill="currentColor" stroke="#111" stroke-width="2.5"/>
+<circle cx="0" cy="-44" r="9.5" fill="#f2c9a0" stroke="#111" stroke-width="2.5"/>
+<path d="M-7 -49L-1 -46M7 -49L1 -46" stroke="#111" stroke-width="2.2"/>
+<circle cx="-3.5" cy="-44" r="1.5" fill="#111"/><circle cx="3.5" cy="-44" r="1.5" fill="#111"/>
+<ellipse cx="0" cy="-39" rx="3.5" ry="2.5" fill="#7a1010" stroke="#111" stroke-width="1.5"/>
+</g>
+<g id="crate"><rect width="30" height="30" fill="#b9833f" stroke="#111" stroke-width="3"/><path d="M0 0L30 30M30 0L0 30" stroke="#6e4a1e" stroke-width="3"/></g>
+<g id="lamp"><circle r="26" fill="url(#glow)"/><circle r="5" fill="#ffd84a" stroke="#111" stroke-width="2"/></g>
+<g id="ore"><path d="M0 8L6 -6L16 -4L20 8L10 14Z" fill="#e8872a" stroke="#111" stroke-width="2"/></g>
+<g id="oret"><path d="M0 8L6 -6L16 -4L20 8L10 14Z" fill="#2fc7b4" stroke="#111" stroke-width="2"/></g>
+<g id="drill"><rect x="0" y="-30" width="46" height="34" rx="6" fill="#e5b82a" stroke="#111" stroke-width="3"/><rect x="8" y="-22" width="14" height="10" fill="#bfe6ff" stroke="#111" stroke-width="2"/><path d="M46 -26L76 -13L46 0Z" fill="#9aa0aa" stroke="#111" stroke-width="3"/><path d="M52 -20L62 -8M54 -6L66 -14" stroke="#111" stroke-width="2"/><circle cx="10" cy="8" r="8" fill="#333" stroke="#111" stroke-width="2"/><circle cx="36" cy="8" r="8" fill="#333" stroke="#111" stroke-width="2"/></g>
+</defs>
+
+<!-- sky and background -->
+<rect width="1280" height="262" fill="url(#sky)"/>
+<circle cx="1180" cy="100" r="34" fill="#ffe97a" stroke="#f2b800" stroke-width="3"/>
+<g fill="#fff" stroke="#9cc7e6" stroke-width="2"><ellipse cx="300" cy="90" rx="60" ry="20"/><ellipse cx="340" cy="78" rx="40" ry="20"/><ellipse cx="760" cy="110" rx="70" ry="20"/><ellipse cx="800" cy="98" rx="40" ry="18"/></g>
+<!-- background houses -->
+<g stroke="#111" stroke-width="3">
+<rect x="190" y="165" width="120" height="90" fill="#f7b6c8"/><path d="M180 165L250 118L320 165Z" fill="#a4505e"/><rect x="225" y="205" width="24" height="50" fill="#fff"/>
+<rect x="420" y="150" width="140" height="105" fill="#bde3a8"/><path d="M410 150L490 100L570 150Z" fill="#5b7a4a"/><rect x="450" y="185" width="26" height="26" fill="#bfe6ff"/><rect x="510" y="185" width="26" height="26" fill="#bfe6ff"/>
+<rect x="640" y="170" width="130" height="85" fill="#f9e39a"/><path d="M630 170L705 125L780 170Z" fill="#b5842a"/><rect x="690" y="210" width="24" height="45" fill="#fff"/>
+</g>
+<rect x="0" y="215" width="900" height="40" fill="url(#picket)" opacity="0.9"/>
+<rect x="0" y="228" width="900" height="6" fill="#d8d8e0" stroke="#8a8a96" stroke-width="1.5"/>
+
+<!-- ground -->
+<rect y="252" width="1280" height="468" fill="url(#dirt)"/>
+<rect y="248" width="1280" height="18" fill="#58b84a" stroke="#111" stroke-width="3"/>
+<path d="M0 248h1280" stroke="#2f7d2a" stroke-width="4"/>
+
+<!-- player house -->
+<g stroke="#111" stroke-width="4">
+<rect x="935" y="140" width="300" height="110" fill="#8fd0f0"/><path d="M915 142L1085 70L1255 142Z" fill="#d1573d"/>
+<rect x="1105" y="170" width="46" height="80" fill="#fff"/><rect x="965" y="168" width="50" height="42" fill="#ffe680"/><rect x="1180" y="168" width="40" height="42" fill="#ffe680"/>
+<rect x="1060" y="190" width="30" height="60" fill="#8a5a2c"/>
+</g>
+<path d="M1075 175q10 -10 20 0" stroke="#111" stroke-width="3" fill="none"/>
+<rect x="1005" y="98" width="30" height="40" fill="#a46a3a" stroke="#111" stroke-width="3"/>
+<!-- property value -->
+<g><rect x="935" y="56" width="300" height="40" rx="8" fill="#101826" fill-opacity="0.82" stroke="#fff" stroke-width="2"/>
+<text x="947" y="73" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#fff">PROPERTY VALUE</text><text x="1222" y="73" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#9df29d">$412,000</text>
+<rect x="947" y="79" width="276" height="11" rx="5" fill="#3a1010" stroke="#111" stroke-width="2"/><rect x="947" y="79" width="198" height="11" rx="5" fill="#4ed04a"/></g>
+
+<!-- Linda on golf cart -->
+<g stroke="#111" stroke-width="3">
+<rect x="14" y="214" width="140" height="28" rx="9" fill="#7b3fa0"/>
+<rect x="30" y="170" width="6" height="46" fill="#ccc"/><rect x="26" y="162" width="110" height="10" rx="4" fill="#9a5cc0"/>
+<circle cx="45" cy="246" r="14" fill="#2a2a2a"/><circle cx="125" cy="246" r="14" fill="#2a2a2a"/><circle cx="45" cy="246" r="5" fill="#bbb"/><circle cx="125" cy="246" r="5" fill="#bbb"/>
+<rect x="60" y="188" width="38" height="28" rx="8" fill="#e8467c"/>
+<circle cx="80" cy="170" r="16" fill="#f2c9a0"/><path d="M62 168Q64 148 82 150Q100 150 97 170Q90 158 72 160Z" fill="#e8d36a"/>
+<path d="M70 166L78 169M92 166L84 169" stroke="#111" stroke-width="2.5"/><circle cx="74" cy="173" r="1.8" fill="#111"/><circle cx="88" cy="173" r="1.8" fill="#111"/><ellipse cx="81" cy="180" rx="5" ry="3.5" fill="#7a1010"/>
+<path d="M96 196L130 184L138 168L156 174L146 194L106 206Z" fill="#ffd84a"/><path d="M130 184L152 160L170 170L146 194Z" fill="#ff7a3a"/>
+</g>
+<!-- speech bubble Linda -->
+<g><path d="M70 150L90 112L120 112Z" fill="#fff" stroke="#111" stroke-width="3"/>
+<rect x="30" y="56" width="440" height="62" rx="14" fill="#fff" stroke="#111" stroke-width="3"/><rect x="72" y="110" width="44" height="8" fill="#fff"/>
+<text font-family="Segoe UI, Arial, sans-serif" font-size="19" font-weight="700" fill="#111"><tspan x="46" y="82">Your bins are visible from the street, Brian.</tspan><tspan x="46" y="106">So is your hairline.</tspan></text>
+<text x="480" y="108" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#4a1a66" stroke="#fff" stroke-width="3" paint-order="stroke">LINDA, HOA President</text></g>
+
+<!-- back row neighbours -->
+<g transform="translate(0,-8) scale(0.9)">
+<use href="#ppl" x="260" y="276" color="#e86a5a"/><use href="#ppl" x="340" y="276" color="#6a8ee8"/><use href="#ppl" x="430" y="276" color="#f0b040"/><use href="#ppl" x="520" y="276" color="#8a6ae8"/><use href="#ppl" x="610" y="276" color="#4ec0a0"/><use href="#ppl" x="700" y="276" color="#e86aa8"/>
+</g>
+<!-- front row -->
+<!-- jogger -->
+<g><use href="#ppl" x="215" y="254" color="#2fb86a" transform="rotate(-8 215 254)"/><rect x="205" y="196" width="20" height="5" fill="#e83030" stroke="#111" stroke-width="1.5"/></g>
+<!-- golf woman -->
+<use href="#ppl" x="262" y="254" color="#f2e6a0"/><path d="M270 222L300 262" stroke="#999" stroke-width="3"/><rect x="296" y="258" width="12" height="6" fill="#555" stroke="#111" stroke-width="2" transform="rotate(30 300 260)"/>
+<!-- leaf blower dad -->
+<use href="#ppl" x="312" y="254" color="#d86a2a"/><path d="M318 226L350 232" stroke="#111" stroke-width="8"/><path d="M318 226L350 232" stroke="#2fa84a" stroke-width="4"/><path d="M356 224L376 218M358 234L382 236M356 242L374 252" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+<use href="#ppl" x="390" y="254" color="#6a8ee8"/>
+<!-- mower man -->
+<g stroke="#111" stroke-width="3"><rect x="428" y="232" width="70" height="20" rx="6" fill="#e03030"/><rect x="450" y="212" width="26" height="20" fill="#c02020"/><circle cx="442" cy="254" r="9" fill="#333"/><circle cx="486" cy="254" r="9" fill="#333"/><path d="M498 238h14" stroke-width="5"/></g>
+<use href="#ppl" x="463" y="228" color="#3f9be0"/>
+<use href="#ppl" x="535" y="254" color="#f26a9a" transform="rotate(-8 535 254)"/><rect x="525" y="196" width="20" height="5" fill="#3050e8" stroke="#111" stroke-width="1.5"/>
+<use href="#ppl" x="580" y="254" color="#a870e8"/><path d="M590 214V262" stroke="#8a5a2c" stroke-width="4"/><path d="M582 214h16M582 214v-8M590 214v-8M598 214v-8" stroke="#aaa" stroke-width="3"/>
+<use href="#ppl" x="672" y="254" color="#e8c040"/>
+<use href="#ppl" x="716" y="254" color="#d85050"/><use href="#ppl" x="755" y="254" color="#50c0d8"/>
+
+<!-- mailbox mine exploding -->
+<g><circle cx="640" cy="222" r="38" fill="url(#fire)" stroke="#111" stroke-width="3"/>
+<path d="M640 176l6 18 18-8-8 18 20 2-18 10 14 14-20-2 2 20-14-14-12 16-4-20-18 8 8-18-20-6 20-8-10-18 20 4z" fill="#ffd84a" opacity="0.8"/>
+<rect x="626" y="232" width="28" height="18" rx="6" fill="#4a68c8" stroke="#111" stroke-width="3"/><rect x="636" y="250" width="8" height="14" fill="#8a5a2c" stroke="#111" stroke-width="2"/></g>
+<text x="640" y="168" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="22" fill="#ffe680" stroke="#111" stroke-width="4" paint-order="stroke">BOOM</text>
+
+<!-- turrets -->
+<!-- flame sprinkler -->
+<g stroke="#111" stroke-width="3"><rect x="808" y="236" width="22" height="16" fill="#777"/><rect x="814" y="216" width="10" height="22" fill="#2f9a3a"/><rect x="796" y="208" width="34" height="12" rx="4" fill="#d9d9e0"/></g>
+<path d="M796 214Q770 198 742 214Q770 224 796 222Z" fill="url(#fire)" stroke="#111" stroke-width="2.5"/><path d="M772 214Q750 206 730 214Q750 220 772 218Z" fill="#ffd84a"/>
+<!-- gnome mortar -->
+<g stroke="#111" stroke-width="3"><rect x="860" y="228" width="34" height="24" rx="6" fill="#8a5a2c"/><circle cx="877" cy="216" r="12" fill="#f2c9a0"/><path d="M866 212L877 188L888 212Z" fill="#d83030"/><path d="M866 220Q877 238 888 220Z" fill="#fff"/><rect x="872" y="192" width="30" height="12" rx="4" fill="#555" transform="rotate(-35 880 200)"/></g>
+<path d="M862 190Q800 130 700 170" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="7 6"/><circle cx="700" cy="170" r="6" fill="#333" stroke="#fff" stroke-width="2"/>
+<rect x="895" y="225" width="40" height="30" fill="url(#picket)"/>
+
+<!-- UNDERGROUND -->
+<!-- ore veins -->
+<g stroke="#111" stroke-width="2"><use href="#ore" x="80" y="300"/><use href="#ore" x="110" y="320"/><use href="#ore" x="55" y="330"/><use href="#oret" x="560" y="300"/><use href="#oret" x="590" y="318"/><use href="#ore" x="760" y="296"/><use href="#oret" x="300" y="300"/><use href="#ore" x="320" y="318"/><use href="#oret" x="100" y="680"/><use href="#ore" x="640" y="690"/><use href="#ore" x="1120" y="470"/><use href="#oret" x="1150" y="480"/><use href="#oret" x="1180" y="560"/><use href="#ore" x="1210" y="590"/><use href="#oret" x="1130" y="640"/></g>
+<path d="M20 460q30 10 50 0M380 570q20 6 40 0" stroke="#e8d6b0" stroke-width="5" fill="none"/>
+
+<!-- Level 1 tunnel -->
+<g>
+<rect x="40" y="340" width="1020" height="64" rx="8" fill="#26160c" stroke="#111" stroke-width="3"/>
+<rect x="40" y="462" width="1020" height="64" rx="8" fill="#26160c" stroke="#111" stroke-width="3"/>
+<rect x="40" y="584" width="1020" height="64" rx="8" fill="#26160c" stroke="#111" stroke-width="3"/>
+<!-- connecting dig shafts with ladder -->
+<rect x="250" y="400" width="40" height="66" fill="#26160c"/><rect x="250" y="522" width="40" height="66" fill="#26160c"/>
+<path d="M258 404V586M282 404V586" stroke="#a07a4a" stroke-width="3"/><path d="M258 420h24M258 440h24M258 460h24M258 540h24M258 560h24M258 580h24" stroke="#a07a4a" stroke-width="3"/>
+</g>
+<!-- Elevator shaft -->
+<rect x="1000" y="262" width="62" height="440" fill="#1a1612" stroke="#111" stroke-width="3"/>
+<path d="M1017 262V452M1045 262V452" stroke="#888" stroke-width="2"/>
+<rect x="1004" y="440" width="54" height="52" fill="#d9a62a" stroke="#111" stroke-width="3"/><path d="M1004 440l54 52M1058 440l-54 52" stroke="#8a6410" stroke-width="3"/><rect x="1004" y="440" width="54" height="10" fill="#f2c94a" stroke="#111" stroke-width="2"/>
+<rect x="1006" y="256" width="50" height="14" fill="#555" stroke="#111" stroke-width="3"/>
+<rect x="1075" y="330" width="130" height="28" rx="6" fill="#101826" fill-opacity="0.85" stroke="#fff" stroke-width="2"/><text x="1140" y="350" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffd84a">FREIGHT ELEVATOR</text>
+
+<!-- Level 1: belt, crate queue -->
+<rect x="640" y="378" width="350" height="12" fill="url(#belt)" stroke="#111" stroke-width="2"/>
+<g stroke="#111" stroke-width="2"><use href="#ore" x="680" y="366"/><use href="#oret" x="760" y="366"/><use href="#ore" x="830" y="366"/></g>
+<use href="#crate" x="850" y="342" transform="scale(0.95)"/>
+<g><use href="#crate" x="902" y="372"/><use href="#crate" x="934" y="372"/><use href="#crate" x="966" y="372"/><use href="#crate" x="934" y="342"/><use href="#crate" x="966" y="342"/></g>
+<text x="640" y="334" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#fff" stroke="#111" stroke-width="3" paint-order="stroke">ELEVATOR QUEUE: 5 crates</text>
+<use href="#drill" x="470" y="392"/>
+<use href="#lamp" x="400" y="352"/><use href="#lamp" x="580" y="352"/>
+<text x="56" y="360" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#e8d6b0">LEVEL 1</text>
+
+<!-- Level 2: smelter -->
+<g stroke="#111" stroke-width="3"><rect x="400" y="470" width="90" height="52" rx="8" fill="#8a3a2a"/><rect x="420" y="496" width="50" height="26" rx="4" fill="url(#fire)"/><rect x="440" y="440" width="18" height="34" fill="#666"/></g>
+<circle cx="449" cy="436" r="9" fill="#999" opacity="0.7"/><circle cx="458" cy="420" r="12" fill="#aaa" opacity="0.5"/>
+<rect x="500" y="500" width="490" height="12" fill="url(#belt)" stroke="#111" stroke-width="2"/>
+<g stroke="#111" stroke-width="2"><rect x="560" y="490" width="22" height="10" fill="#c0c4cc"/><rect x="690" y="490" width="22" height="10" fill="#e08a40"/><rect x="840" y="490" width="22" height="10" fill="#c0c4cc"/></g>
+<g><use href="#crate" x="930" y="470"/><use href="#crate" x="966" y="470"/></g>
+<use href="#drill" x="130" y="514" transform="scale(1)"/>
+<g stroke="#111" stroke-width="2"><use href="#ore" x="210" y="488"/><use href="#oret" x="224" y="500"/></g>
+<use href="#lamp" x="360" y="478"/><use href="#lamp" x="700" y="474"/>
+<text x="56" y="482" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#e8d6b0">LEVEL 2</text>
+<!-- miner -->
+<use href="#ppl" x="320" y="522" color="#f0a020"/><path d="M311 -0" /><path d="M310 478h20l-3 -8h-14z" fill="#ffd84a" stroke="#111" stroke-width="2"/>
+
+<!-- Level 3 -->
+<use href="#drill" x="90" y="636"/>
+<g stroke="#111" stroke-width="2"><use href="#oret" x="180" y="610"/><use href="#ore" x="196" y="624"/></g>
+<use href="#drill" x="330" y="636"/>
+<rect x="470" y="622" width="520" height="12" fill="url(#belt)" stroke="#111" stroke-width="2"/>
+<g stroke="#111" stroke-width="2"><use href="#oret" x="520" y="610"/><use href="#ore" x="640" y="610"/><use href="#oret" x="780" y="610"/><use href="#ore" x="900" y="610"/></g>
+<g><use href="#crate" x="960" y="594"/></g>
+<path d="M990 628L1000 628" stroke="#fff" stroke-width="3"/>
+<use href="#lamp" x="260" y="600"/><use href="#lamp" x="620" y="596"/>
+<text x="56" y="604" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#e8d6b0">LEVEL 3</text>
+<path d="M1000 628L1062 628" stroke="#555" stroke-width="3"/>
+<!-- belt arrows -->
+<path d="M960 384l14 0M958 378l16 6-16 6" stroke="#ffd84a" stroke-width="3" fill="none"/>
+
+<!-- workshop room (right) -->
+<g stroke="#111" stroke-width="3"><rect x="1080" y="400" width="180" height="50" rx="8" fill="#26160c"/><rect x="1100" y="424" width="70" height="26" fill="#8a5a2c"/><rect x="1180" y="414" width="40" height="36" fill="#4a68c8"/></g>
+<use href="#lamp" x="1140" y="410"/>
+<text x="1090" y="394" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#e8d6b0">WORKSHOP</text>
+
+<!-- HUD top bar -->
+<rect width="1280" height="48" fill="#0c1220" fill-opacity="0.85"/><rect y="46" width="1280" height="3" fill="#ffd84a"/>
+<g font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#fff">
+<path d="M18 14l22 0 6 10-17 14-17-14z" fill="#aeb4c0" stroke="#fff" stroke-width="2"/><text x="56" y="32">Iron 340</text>
+<circle cx="190" cy="24" r="14" fill="#d9803a" stroke="#fff" stroke-width="2"/><text x="214" y="32">Copper 120</text>
+<circle cx="372" cy="24" r="14" fill="#4ed04a" stroke="#fff" stroke-width="2"/><text x="364" y="30" font-size="16" fill="#143">$</text><text x="396" y="32">Cash $2,150</text></g>
+<rect x="540" y="5" width="200" height="38" rx="10" fill="#c0392b" stroke="#fff" stroke-width="2"/><text x="640" y="32" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="22" fill="#fff">WAVE 11 / 25</text>
+<g font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="700" fill="#fff">
+<rect x="790" y="7" width="200" height="34" rx="17" fill="#2f6fe0" stroke="#fff" stroke-width="2"/><circle cx="810" cy="24" r="12" fill="#f2c9a0" stroke="#111" stroke-width="2"/><text x="832" y="30">Brian - Mole</text>
+<rect x="1005" y="7" width="215" height="34" rx="17" fill="#e07a1f" stroke="#fff" stroke-width="2"/><circle cx="1025" cy="24" r="12" fill="#f2c9a0" stroke="#111" stroke-width="2"/><text x="1047" y="30">Dave - Lawn Guy</text></g>
+</svg>

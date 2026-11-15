@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+<defs>
+<linearGradient id="rockL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a4558"/><stop offset="1" stop-color="#262e3d"/></linearGradient>
+<linearGradient id="rockR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a566b"/><stop offset="1" stop-color="#2d3646"/></linearGradient>
+<radialGradient id="dome" cx=".4" cy=".35"><stop offset="0" stop-color="#ffd9a0"/><stop offset="1" stop-color="#ff8a1f"/></radialGradient>
+<radialGradient id="glow" cx=".5" cy=".5"><stop offset="0" stop-color="#77ffff" stop-opacity=".7"/><stop offset="1" stop-color="#77ffff" stop-opacity="0"/></radialGradient>
+<pattern id="belt" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#2a2d33"/><path d="M0 16L16 0" stroke="#f0a020" stroke-width="3"/></pattern>
+<symbol id="bug" viewBox="-26 -20 52 40"><g stroke="#2a0a30" stroke-width="2.5" stroke-linecap="round"><path d="M-14-10l-8-6M-16 0l-8 0M-14 10l-8 6M14-10l8-6M16 0l8 0M14 10l8 6" fill="none"/><ellipse rx="15" ry="13" fill="#d12fb8"/><circle cx="-6" cy="-5" r="5" fill="#fff"/><circle cx="6" cy="-5" r="5" fill="#fff"/><circle cx="-6" cy="-4" r="2" fill="#000"/><circle cx="6" cy="-4" r="2" fill="#000"/><path d="M-7 6q7 6 14 0" fill="#440000"/></g></symbol>
+<symbol id="crys" viewBox="-20 -30 40 40"><g stroke="#05414d" stroke-width="2.5" stroke-linejoin="round"><path d="M-14 8L-8-18 0 8z" fill="#2fd8e8"/><path d="M-2 8L6-28 14 8z" fill="#7ff3ff"/><path d="M8 8L14-8 20 8z" fill="#1bb5c9"/></g></symbol>
+<symbol id="turret" viewBox="-20 -26 40 46"><g stroke="#111111" stroke-width="2.5"><circle r="14" fill="#e8ecf0"/><circle r="8" fill="#ff8a1f"/><rect x="-3" y="-24" width="6" height="18" fill="#555555"/></g></symbol>
+</defs>
+<rect width="1280" height="720" fill="#070a14"/>
+<!-- stars strip -->
+<g fill="#ffffff" opacity=".8"><circle cx="300" cy="62" r="1.5"/><circle cx="800" cy="70" r="1.5"/><circle cx="1100" cy="64" r="1.5"/><circle cx="900" cy="80" r="1.5"/></g>
+<!-- LEFT -->
+<rect x="0" y="50" width="640" height="670" fill="url(#rockL)"/>
+<g fill="#1c2230" opacity=".6"><ellipse cx="90" cy="640" rx="60" ry="26"/><ellipse cx="580" cy="560" rx="40" ry="18"/><ellipse cx="460" cy="650" rx="50" ry="22"/></g>
+<path d="M0 90Q160 150 330 100T640 120L640 50 0 50z" fill="#161b27" stroke="#0a0d14" stroke-width="5"/>
+<path d="M0 90Q160 150 330 100T640 120" fill="none" stroke="#6a7790" stroke-width="3" stroke-dasharray="14 8"/>
+<!-- belts -->
+<g stroke="#111111" stroke-width="3"><rect x="135" y="395" width="60" height="22" fill="url(#belt)"/><rect x="236" y="430" width="22" height="90" fill="url(#belt)"/><rect x="290" y="545" width="30" height="20" fill="url(#belt)"/><rect x="395" y="535" width="60" height="20" fill="url(#belt)"/><rect x="480" y="494" width="22" height="42" fill="url(#belt)"/></g>
+<!-- crusher -->
+<g stroke="#111111" stroke-width="3.5"><rect x="40" y="370" width="95" height="75" rx="8" fill="#e8ecf0"/><rect x="40" y="370" width="95" height="18" fill="#ff8a1f"/><circle cx="88" cy="418" r="19" fill="#555555"/><path d="M88 399v38M69 418h38" stroke="#aaaaaa"/></g>
+<text x="88" y="466" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">ORE CRUSHER</text>
+<!-- refinery -->
+<g stroke="#111111" stroke-width="3.5"><rect x="190" y="520" width="100" height="70" rx="8" fill="#e8ecf0"/><rect x="190" y="520" width="100" height="16" fill="#ff8a1f"/><rect x="205" y="548" width="30" height="30" fill="#2fd8e8"/><rect x="245" y="548" width="30" height="30" fill="#2fd8e8"/><ellipse cx="340" cy="560" rx="22" ry="30" fill="#c9d1da"/><ellipse cx="340" cy="545" rx="22" ry="8" fill="#9aa5b2"/><ellipse cx="385" cy="570" rx="12" ry="26" fill="#c9d1da"/></g>
+<text x="240" y="607" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">REFINERY</text>
+<!-- reactor -->
+<circle cx="500" cy="440" r="85" fill="url(#glow)"/>
+<g stroke="#111111" stroke-width="4"><circle cx="500" cy="440" r="52" fill="#e8ecf0"/><circle cx="500" cy="440" r="38" fill="url(#dome)"/><circle cx="500" cy="440" r="14" fill="#ffffff" opacity=".7"/></g>
+<rect x="445" y="372" width="110" height="16" rx="4" fill="#111111"/><rect x="448" y="375" width="78" height="10" rx="3" fill="#3ddc5a"/>
+<text x="500" y="508" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">REACTOR 71%</text>
+<!-- cannon -->
+<g stroke="#111111" stroke-width="4"><circle cx="330" cy="290" r="46" fill="#d6dbe2"/><circle cx="330" cy="290" r="30" fill="#5b6574"/><g transform="rotate(-18 330 290)"><rect x="330" y="277" width="95" height="26" rx="6" fill="#ff8a1f"/><rect x="418" y="273" width="14" height="34" rx="3" fill="#444444"/></g><rect x="316" y="278" width="28" height="24" rx="3" fill="#c98a3a"/><path d="M316 290h28M330 278v24" stroke="#6b4a1c" stroke-width="2"/></g>
+<text x="330" y="360" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">LAUNCH CANNON</text>
+<!-- trajectory -->
+<!-- turrets -->
+<use href="#turret" x="30" y="150" width="40" height="46"/><use href="#turret" x="170" y="165" width="40" height="46"/><use href="#turret" x="430" y="150" width="40" height="46"/><use href="#turret" x="570" y="185" width="40" height="46"/><use href="#turret" x="15" y="280" width="40" height="46"/><use href="#turret" x="590" y="320" width="40" height="46"/>
+<g stroke="#ffe14a" stroke-width="3" stroke-linecap="round"><path d="M50 150L60 115M190 165L200 135M450 150L440 125M590 185L570 150M35 280L50 240M610 320L580 285"/></g>
+<!-- left bugs -->
+<g>
+<use href="#bug" x="60" y="95" width="42" height="32"/><use href="#bug" x="110" y="110" width="42" height="32"/><use href="#bug" x="160" y="85" width="42" height="32"/><use href="#bug" x="215" y="105" width="42" height="32"/><use href="#bug" x="270" y="85" width="42" height="32"/><use href="#bug" x="330" y="100" width="42" height="32"/><use href="#bug" x="395" y="85" width="42" height="32"/><use href="#bug" x="455" y="100" width="42" height="32"/><use href="#bug" x="520" y="95" width="42" height="32"/><use href="#bug" x="580" y="110" width="42" height="32"/>
+<use href="#bug" x="90" y="175" width="42" height="32"/><use href="#bug" x="250" y="180" width="42" height="32"/><use href="#bug" x="360" y="170" width="42" height="32"/><use href="#bug" x="500" y="195" width="42" height="32"/><use href="#bug" x="110" y="240" width="42" height="32"/><use href="#bug" x="545" y="250" width="42" height="32"/><use href="#bug" x="220" y="250" width="42" height="32"/>
+</g>
+<rect x="12" y="130" width="0" height="0"/>
+<!-- RIGHT -->
+<rect x="640" y="50" width="640" height="670" fill="url(#rockR)"/>
+<g fill="#222a38" opacity=".7"><ellipse cx="720" cy="620" rx="70" ry="30"/><ellipse cx="1200" cy="260" rx="50" ry="22"/><ellipse cx="1180" cy="640" rx="60" ry="24"/><ellipse cx="780" cy="190" rx="50" ry="20"/></g>
+<g fill="#5d6a82" stroke="#222a38" stroke-width="3"><circle cx="700" cy="300" r="14"/><circle cx="740" cy="380" r="10"/><circle cx="1130" cy="260" r="14"/><circle cx="800" cy="560" r="12"/></g>
+<g fill="#5d6a82" stroke="#222a38" stroke-width="3"><circle cx="680" cy="560" r="16"/><circle cx="870" cy="640" r="12"/><circle cx="1240" cy="320" r="12"/><circle cx="690" cy="170" r="12"/><circle cx="880" cy="250" r="10"/></g>
+<g fill="#2fd8e8" stroke="#05414d" stroke-width="2"><path d="M690 400l8-16 8 16z"/><path d="M960 660l8-16 8 16z"/><path d="M880 330l8-16 8 16z"/></g>
+<circle cx="1010" cy="290" r="95" fill="url(#glow)"/>
+<use href="#crys" x="950" y="240" width="60" height="60"/><use href="#crys" x="1000" y="250" width="70" height="70"/><use href="#crys" x="1045" y="250" width="55" height="55"/><use href="#crys" x="985" y="285" width="50" height="50"/>
+<!-- target marker -->
+<ellipse cx="800" cy="450" rx="64" ry="24" fill="none" stroke="#ff3b3b" stroke-width="5"/><ellipse cx="800" cy="450" rx="38" ry="14" fill="#ff3b3b" opacity=".4"/>
+<path d="M800 410v80M750 450h100" stroke="#ff3b3b" stroke-width="2.5"/>
+<g stroke="#111111" stroke-width="3"><rect x="778" y="378" width="44" height="34" fill="#c98a3a"/><path d="M778 395h44M800 378v34" stroke="#6b4a1c"/></g>
+<path d="M800 378v-22" stroke="#ffffff" stroke-width="2"/><path d="M776 358Q800 330 824 358" fill="#e8ecf0" stroke="#111111" stroke-width="2.5"/>
+<rect x="735" y="490" width="130" height="26" rx="5" fill="#000000" opacity=".75"/><text x="800" y="509" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="bold" fill="#ff6b6b" text-anchor="middle">SUPPLY DROP 0:04</text>
+<!-- headlights -->
+<path d="M990 400L930 270H1050z" fill="#fff6b0" opacity=".28"/>
+<!-- drill beam -->
+<path d="M990 395L995 330" stroke="#ffe14a" stroke-width="6" stroke-dasharray="5 4"/>
+<!-- rover -->
+<g transform="translate(990 450)" stroke="#111111" stroke-width="3.5">
+<g fill="#222222"><rect x="-44" y="-36" width="22" height="26" rx="6"/><rect x="22" y="-36" width="22" height="26" rx="6"/><rect x="-44" y="-8" width="22" height="26" rx="6"/><rect x="22" y="-8" width="22" height="26" rx="6"/><rect x="-44" y="20" width="22" height="26" rx="6"/><rect x="22" y="20" width="22" height="26" rx="6"/></g>
+<rect x="-30" y="-48" width="60" height="100" rx="14" fill="#ff8a1f"/><rect x="-20" y="-38" width="40" height="30" rx="8" fill="#9fe8ff"/><rect x="-16" y="4" width="32" height="34" rx="4" fill="#e8ecf0"/>
+<circle cx="0" cy="20" r="9" fill="#555555"/>
+<circle cx="-20" cy="-52" r="6" fill="#fff6b0"/><circle cx="20" cy="-52" r="6" fill="#fff6b0"/></g>
+<!-- bugs chasing -->
+<use href="#bug" x="1060" y="480" width="48" height="37"/><use href="#bug" x="1110" y="440" width="48" height="37"/><use href="#bug" x="1140" y="510" width="48" height="37"/><use href="#bug" x="1070" y="560" width="48" height="37"/><use href="#bug" x="1180" y="470" width="48" height="37"/><use href="#bug" x="1010" y="540" width="48" height="37"/><use href="#bug" x="1120" y="590" width="48" height="37"/><use href="#bug" x="1200" y="560" width="48" height="37"/><use href="#bug" x="1170" y="400" width="48" height="37"/><use href="#bug" x="940" y="570" width="48" height="37"/>
+<g stroke="#ffe14a" stroke-width="3" stroke-linecap="round"><path d="M1022 450L1065 485M1025 460L1112 450M1015 470L1030 545"/></g>
+<!-- right HUD -->
+<rect x="1010" y="98" width="260" height="118" rx="10" fill="#000000" opacity=".7" stroke="#6ee7ff" stroke-width="2"/>
+<g font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="bold" fill="#ffffff"><text x="1022" y="122">ORE 7 / 10</text><text x="1022" y="152">HEALTH</text><text x="1022" y="182">AMMO</text></g>
+<rect x="1110" y="108" width="150" height="18" rx="4" fill="#222222"/><rect x="1110" y="108" width="105" height="18" rx="4" fill="#2fd8e8"/>
+<rect x="1110" y="138" width="150" height="18" rx="4" fill="#222222"/><rect x="1110" y="138" width="100" height="18" rx="4" fill="#3ddc5a"/>
+<rect x="1110" y="168" width="150" height="18" rx="4" fill="#222222"/><rect x="1110" y="168" width="64" height="18" rx="4" fill="#ffb04a"/>
+<g transform="translate(1214 650)"><circle r="40" fill="#000000" opacity=".7" stroke="#ffe14a" stroke-width="2"/><path d="M-14 16L0-28 14 16 0 8z" fill="#ffe14a" stroke="#111111" stroke-width="2" transform="rotate(-80)"/></g>
+<rect x="1030" y="630" width="130" height="40" rx="8" fill="#000000" opacity=".7"/><text x="1095" y="656" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="bold" fill="#ffe14a" text-anchor="middle">BASE 1.4 km</text>
+<path d="M412 258Q620 20 800 372" fill="none" stroke="#ffe14a" stroke-width="5" stroke-dasharray="3 12" stroke-linecap="round"/>
+<!-- divider -->
+<rect x="637" y="50" width="6" height="670" fill="#0a0d14"/><rect x="639" y="50" width="2" height="670" fill="#6ee7ff"/>
+<!-- half labels -->
+<rect x="12" y="58" width="150" height="30" rx="6" fill="#000000" opacity=".75"/><text x="24" y="79" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="bold" fill="#ffb04a">BASE - Dave</text>
+<rect x="652" y="58" width="190" height="30" rx="6" fill="#000000" opacity=".75"/><text x="664" y="79" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="bold" fill="#6ee7ff">ROVER - Steve</text>
+<!-- top bar -->
+<rect width="1280" height="50" fill="#0b1020"/><rect y="48" width="1280" height="3" fill="#6ee7ff"/>
+<g font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="bold">
+<circle cx="40" cy="25" r="13" fill="#ffd23f" stroke="#111111" stroke-width="2.5"/><text x="40" y="31" font-size="16" fill="#7a5a00" text-anchor="middle">$</text>
+<text x="62" y="33" fill="#ffd23f">Credits 48,200</text>
+<text x="640" y="33" fill="#ff5a5a" text-anchor="middle">DEBT 812,000</text>
+<text x="1240" y="33" fill="#ffffff" text-anchor="end">DAY 12 / 30</text></g>
+<!-- KAREN -->
+<g transform="translate(52 650)"><circle r="40" fill="#0b1020" stroke="#111111" stroke-width="3"/><circle r="34" fill="none" stroke="#ffd23f" stroke-width="7"/><path d="M-6-37l6-10 6 10z" fill="#9fe8ff" stroke="#111111" stroke-width="2"/><ellipse rx="22" ry="13" fill="#bff6ff" stroke="#111111" stroke-width="2.5"/><circle r="9" fill="#ff3b3b"/><circle r="3.5" fill="#000000"/></g>
+<rect x="12" y="696" width="80" height="20" rx="4" fill="#000000" opacity=".75"/><text x="52" y="711" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">K.A.R.E.N.</text>
+<rect x="104" y="620" width="560" height="72" rx="14" fill="#ffffff" stroke="#111111" stroke-width="3.5"/>
+<path d="M106 640L88 650 106 662z" fill="#ffffff" stroke="#111111" stroke-width="3.5"/><rect x="102" y="641" width="6" height="20" fill="#ffffff"/>
+<g font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="bold" fill="#111111"><text x="120" y="650">Supply drop launched. It will arrive early, finish quickly,</text><text x="120" y="676">and disappoint. Sound familiar?</text></g>
+</svg>

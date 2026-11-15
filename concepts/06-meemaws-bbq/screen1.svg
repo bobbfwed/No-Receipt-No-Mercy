@@ -1,0 +1,220 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" font-family="Segoe UI, Arial, sans-serif">
+<defs>
+<pattern id="grass" width="40" height="40" patternUnits="userSpaceOnUse">
+<rect width="40" height="40" fill="#35502d"/>
+<path d="M6 14 l2 -8 l2 8 M24 30 l2 -8 l2 8 M32 10 l2 -7 l2 7" stroke="#4a6b3a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+<circle cx="14" cy="32" r="2" fill="#2a4025"/>
+</pattern>
+<linearGradient id="smoke" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ccc" stop-opacity=".2"/><stop offset="1" stop-color="#999" stop-opacity=".9"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#c8ff4a" stop-opacity=".9"/><stop offset="1" stop-color="#c8ff4a" stop-opacity="0"/></radialGradient>
+<symbol id="gator" overflow="visible">
+<path d="M-18 0 L-36 -4 L-36 6 Z" fill="#4d8a2e" stroke="#12180d" stroke-width="2.5" stroke-linejoin="round"/>
+<ellipse cx="-4" cy="0" rx="22" ry="11" fill="#5c9e34" stroke="#12180d" stroke-width="2.5"/>
+<rect x="-18" y="11" width="7" height="6" rx="2" fill="#4d8a2e" stroke="#12180d" stroke-width="2"/><rect x="4" y="11" width="7" height="6" rx="2" fill="#4d8a2e" stroke="#12180d" stroke-width="2"/>
+<rect x="12" y="-14" width="20" height="11" rx="5" fill="#6bb23c" stroke="#12180d" stroke-width="2.5"/>
+<rect x="12" y="1" width="20" height="11" rx="5" fill="#6bb23c" stroke="#12180d" stroke-width="2.5"/>
+<circle cx="18" cy="-11" r="3" fill="#ffe14a" stroke="#12180d" stroke-width="1.5"/><circle cx="18" cy="4" r="3" fill="#ffe14a" stroke="#12180d" stroke-width="1.5"/>
+<path d="M24 -4 l2 3 l2 -3 M24 11 l2 -3 l2 3" stroke="#fff" stroke-width="2" fill="none"/>
+</symbol>
+<symbol id="possum" overflow="visible">
+<path d="M-14 2 Q-32 6 -30 -8" stroke="#e9a0a0" stroke-width="4" fill="none" stroke-linecap="round"/>
+<ellipse cx="-2" cy="0" rx="18" ry="13" fill="#9a9a96" stroke="#12180d" stroke-width="2.5"/>
+<path d="M12 -10 L34 2 L12 12 Z" fill="#e8e6dc" stroke="#12180d" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="35" cy="2" r="3.5" fill="#e87a8a" stroke="#12180d" stroke-width="1.5"/>
+<circle cx="10" cy="-13" r="5" fill="#777" stroke="#12180d" stroke-width="2"/>
+<circle cx="19" cy="-3" r="3" fill="#ff3b2e" stroke="#12180d" stroke-width="1.5"/>
+<path d="M22 6 l2 3 l2 -3 l2 3" stroke="#fff" stroke-width="1.5" fill="none"/>
+</symbol>
+<symbol id="frog" overflow="visible">
+<circle r="26" fill="url(#glow)"/>
+<ellipse cx="0" cy="2" rx="15" ry="11" fill="#9ce03a" stroke="#12180d" stroke-width="2.5"/>
+<circle cx="-7" cy="-9" r="6" fill="#d8ff6a" stroke="#12180d" stroke-width="2.2"/><circle cx="7" cy="-9" r="6" fill="#d8ff6a" stroke="#12180d" stroke-width="2.2"/>
+<circle cx="-7" cy="-9" r="2.5" fill="#12180d"/><circle cx="7" cy="-9" r="2.5" fill="#12180d"/>
+<path d="M-8 5 Q0 12 8 5" stroke="#12180d" stroke-width="2.2" fill="none"/>
+<path d="M-14 8 l-8 6 M14 8 l8 6" stroke="#12180d" stroke-width="4" stroke-linecap="round"/>
+</symbol>
+<symbol id="catfish" overflow="visible">
+<path d="M-22 0 L-38 -12 L-38 12 Z" fill="#5d6e7a" stroke="#12180d" stroke-width="2.5" stroke-linejoin="round"/>
+<ellipse cx="-2" cy="0" rx="26" ry="14" fill="#6f8593" stroke="#12180d" stroke-width="2.5"/>
+<ellipse cx="0" cy="6" rx="18" ry="6" fill="#c9d6dc"/>
+<path d="M-12 14 l-2 12 M10 14 l2 12" stroke="#12180d" stroke-width="5" stroke-linecap="round"/>
+<rect x="-18" y="24" width="9" height="5" rx="2" fill="#8a3b1a" stroke="#12180d" stroke-width="1.5"/><rect x="8" y="24" width="9" height="5" rx="2" fill="#8a3b1a" stroke="#12180d" stroke-width="1.5"/>
+<circle cx="18" cy="-5" r="5" fill="#fff" stroke="#12180d" stroke-width="2"/><circle cx="19" cy="-5" r="2" fill="#12180d"/>
+<path d="M24 2 l16 -6 M24 5 l16 6 M24 3 l15 0" stroke="#12180d" stroke-width="2" stroke-linecap="round"/>
+</symbol>
+<symbol id="carc" overflow="visible"><ellipse rx="10" ry="7" fill="#b3664a" stroke="#12180d" stroke-width="2"/><path d="M-6 5 l-3 8 M6 5 l3 8" stroke="#12180d" stroke-width="2.5" stroke-linecap="round"/></symbol>
+<symbol id="rib" overflow="visible"><rect x="-8" y="-5" width="16" height="10" rx="4" fill="#c4452a" stroke="#12180d" stroke-width="2"/><circle cx="-10" cy="-2" r="2.5" fill="#f3e9d0" stroke="#12180d" stroke-width="1.5"/><circle cx="10" cy="2" r="2.5" fill="#f3e9d0" stroke="#12180d" stroke-width="1.5"/></symbol>
+<symbol id="sauce" overflow="visible"><rect x="-5" y="-4" width="10" height="13" rx="3" fill="#d62a1e" stroke="#12180d" stroke-width="2"/><rect x="-3" y="-10" width="6" height="7" fill="#f2c230" stroke="#12180d" stroke-width="1.5"/></symbol>
+<symbol id="jug" overflow="visible"><rect x="-7" y="-4" width="14" height="14" rx="5" fill="#e6c36a" stroke="#12180d" stroke-width="2"/><rect x="-3" y="-9" width="6" height="6" fill="#8a5a2a" stroke="#12180d" stroke-width="1.5"/><text y="7" font-size="9" font-weight="bold" text-anchor="middle" fill="#12180d">XXX</text></symbol>
+<symbol id="plate" overflow="visible"><ellipse rx="11" ry="7" fill="#f3f0e4" stroke="#12180d" stroke-width="2"/><rect x="-5" y="-4" width="10" height="5" rx="2" fill="#c4452a"/></symbol>
+<symbol id="tower" overflow="visible">
+<rect x="-34" y="-8" width="68" height="36" rx="4" fill="#9a6a38" stroke="#12180d" stroke-width="3"/>
+<path d="M-34 4 H34 M-34 16 H34 M-12 -8 V28 M14 -8 V28" stroke="#6a4522" stroke-width="2.5"/>
+<rect x="-12" y="0" width="24" height="26" rx="6" fill="#2f6fb5" stroke="#12180d" stroke-width="2.5"/>
+<circle cx="0" cy="-12" r="12" fill="#f0c49a" stroke="#12180d" stroke-width="2.5"/>
+</symbol>
+<symbol id="lady" overflow="visible">
+<path d="M-26 -34 Q-30 10 -22 28 M26 -34 Q30 10 22 28" stroke="#12180d" stroke-width="5" fill="none"/>
+<path d="M-26 -34 Q0 -50 26 -34 L24 6 L-24 6 Z" fill="#8a5a2a" stroke="#12180d" stroke-width="3"/>
+<path d="M-26 28 Q0 40 26 28 M-24 28 Q-34 44 -14 40 M24 28 Q34 44 14 40" stroke="#12180d" stroke-width="4" fill="none"/>
+<rect x="-14" y="-6" width="28" height="30" rx="8" fill="#c4452a" stroke="#12180d" stroke-width="2.5"/>
+<circle cx="0" cy="-16" r="13" fill="#f0c49a" stroke="#12180d" stroke-width="2.5"/>
+<circle cx="0" cy="-32" r="7" fill="#eee" stroke="#12180d" stroke-width="2.5"/>
+<path d="M-12 -22 Q0 -34 12 -22 Q0 -28 -12 -22Z" fill="#eee"/>
+<circle cx="-5" cy="-16" r="4" fill="#fff" stroke="#12180d" stroke-width="1.5"/><circle cx="5" cy="-16" r="4" fill="#fff" stroke="#12180d" stroke-width="1.5"/>
+<path d="M-4 -9 H5 Q5 -5 0 -5 Q-4 -5 -4 -9Z" fill="#12180d"/>
+<path d="M5 -9 l12 -2" stroke="#fff" stroke-width="3"/><circle cx="18" cy="-11" r="1.8" fill="#ff7b2e"/>
+</symbol>
+</defs>
+
+<rect width="1280" height="720" fill="url(#grass)"/>
+<!-- water patches -->
+<g fill="#2b5a55" stroke="#1b3a38" stroke-width="3">
+<ellipse cx="90" cy="400" rx="80" ry="50"/><ellipse cx="560" cy="170" rx="100" ry="45"/><ellipse cx="760" cy="640" rx="0" ry="0"/><ellipse cx="1100" cy="200" rx="110" ry="55"/><ellipse cx="470" cy="610" rx="120" ry="40"/><ellipse cx="800" cy="130" rx="70" ry="30"/>
+</g>
+<g fill="#6ab04c" stroke="#12180d" stroke-width="2"><circle cx="60" cy="395" r="9"/><circle cx="120" cy="415" r="8"/><circle cx="540" cy="165" r="9"/><circle cx="600" cy="178" r="8"/><circle cx="1080" cy="190" r="9"/><circle cx="1140" cy="215" r="8"/><circle cx="440" cy="605" r="9"/><circle cx="520" cy="620" r="8"/></g>
+<!-- bayou -->
+<ellipse cx="90" cy="150" rx="150" ry="90" fill="#0e2a2c" stroke="#081718" stroke-width="4"/>
+<ellipse cx="90" cy="150" rx="105" ry="60" fill="#0a1d1f"/>
+<g fill="#ffe23a" stroke="#12180d" stroke-width="1.5"><ellipse cx="40" cy="130" rx="6" ry="4"/><ellipse cx="64" cy="132" rx="6" ry="4"/><ellipse cx="110" cy="170" rx="5" ry="3.5"/><ellipse cx="130" cy="171" rx="5" ry="3.5"/><ellipse cx="70" cy="190" rx="7" ry="4.5"/><ellipse cx="96" cy="189" rx="7" ry="4.5"/><ellipse cx="150" cy="120" rx="5" ry="3.5"/><ellipse cx="170" cy="122" rx="5" ry="3.5"/></g>
+<g fill="#ff3b2e"><circle cx="40" cy="130" r="2"/><circle cx="64" cy="132" r="2"/><circle cx="70" cy="190" r="2.5"/><circle cx="96" cy="189" r="2.5"/></g>
+<text x="12" y="238" font-size="15" font-weight="bold" fill="#c8ff4a" stroke="#0a1d1f" stroke-width="3" paint-order="stroke">THE BAYOU</text>
+<!-- trees -->
+<g stroke="#12180d" stroke-width="3">
+<g transform="translate(520,90)"><rect x="-6" y="0" width="12" height="40" fill="#5a3d22"/><circle r="40" cy="-8" fill="#2a4a2a"/><circle cx="-22" cy="12" r="24" fill="#335a30"/><circle cx="22" cy="10" r="26" fill="#2f5230"/></g>
+<g transform="translate(1180,120)"><rect x="-6" y="0" width="12" height="40" fill="#5a3d22"/><circle r="42" cy="-8" fill="#2a4a2a"/><circle cx="-24" cy="12" r="24" fill="#335a30"/><circle cx="24" cy="10" r="26" fill="#2f5230"/></g>
+<g transform="translate(40,610)"><rect x="-6" y="0" width="12" height="40" fill="#5a3d22"/><circle r="38" cy="-8" fill="#2a4a2a"/><circle cx="-22" cy="12" r="22" fill="#335a30"/></g>
+<g transform="translate(330,660)"><rect x="-6" y="0" width="12" height="30" fill="#5a3d22"/><circle r="34" cy="-8" fill="#2a4a2a"/><circle cx="22" cy="10" r="22" fill="#2f5230"/></g>
+<g transform="translate(1000,160)"><rect x="-5" y="0" width="10" height="34" fill="#5a3d22"/><circle r="32" cy="-6" fill="#2f5230"/></g>
+</g>
+
+<!-- path -->
+<polyline points="150,150 420,150 420,330 200,330 200,520 620,520 620,260 900,260 900,480 1060,480" fill="none" stroke="#2a1d10" stroke-width="82" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="150,150 420,150 420,330 200,330 200,520 620,520 620,260 900,260 900,480 1060,480" fill="none" stroke="#7a5430" stroke-width="68" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="150,150 420,150 420,330 200,330 200,520 620,520 620,260 900,260 900,480 1060,480" fill="none" stroke="#946a3e" stroke-width="6" stroke-dasharray="14 18" stroke-linejoin="round"/>
+
+<!-- smokehouse -->
+<g stroke="#12180d" stroke-width="3.5" stroke-linejoin="round">
+<rect x="780" y="520" width="38" height="50" fill="#6a4a3a"/>
+<rect x="690" y="560" width="170" height="130" rx="4" fill="#8a5a38"/>
+<path d="M690 560 H860 M690 600 H860 M690 640 H860" stroke="#5a3a22" stroke-width="2.5" fill="none"/>
+<path d="M676 566 L775 508 L874 566 Z" fill="#a8452a"/>
+<path d="M696 566 L775 520 M726 566 L790 528 M756 566 L800 540 M786 566 L820 545 M816 566 L840 553" stroke="#7a2e1a" stroke-width="3" fill="none"/>
+<rect x="740" y="610" width="70" height="80" rx="3" fill="#2a1d10"/>
+<rect x="822" y="590" width="30" height="30" fill="#e9d29a"/>
+<rect x="778" y="500" width="42" height="26" fill="#7a5a4a"/>
+</g>
+<circle cx="799" cy="480" r="14" fill="url(#smoke)"/><circle cx="812" cy="456" r="18" fill="url(#smoke)"/><circle cx="800" cy="428" r="22" fill="url(#smoke)"/><circle cx="822" cy="398" r="26" fill="url(#smoke)"/>
+<rect x="700" y="660" width="150" height="26" rx="6" fill="#1b1710" opacity=".85"/>
+<text x="775" y="679" font-size="15" font-weight="bold" fill="#ffd34a" text-anchor="middle">SMOKEHOUSE</text>
+<g><rect x="748" y="632" width="54" height="18" rx="3" fill="#ff7b2e" stroke="#12180d" stroke-width="2"/><path d="M756 632 q4 -12 8 0 q4 -14 8 0 q4 -10 8 0" fill="#ffd34a" stroke="#12180d" stroke-width="1.5"/></g>
+
+<!-- ATV with trailer -->
+<g transform="translate(590,625)" stroke="#12180d" stroke-width="3" stroke-linejoin="round">
+<rect x="-118" y="-16" width="60" height="30" rx="4" fill="#7a6a4a"/>
+<use href="#carc" x="-104" y="-18"/><use href="#carc" x="-86" y="-20"/><use href="#carc" x="-68" y="-18"/>
+<path d="M-58 0 H-40" stroke-width="4"/>
+<rect x="-40" y="-14" width="56" height="26" rx="8" fill="#e8b020"/>
+<rect x="-6" y="-24" width="22" height="12" rx="4" fill="#333"/>
+<circle cx="-8" cy="-30" r="8" fill="#f0c49a"/><rect x="-14" y="-40" width="14" height="6" fill="#c4452a"/>
+<circle cx="-30" cy="16" r="11" fill="#333"/><circle cx="6" cy="16" r="11" fill="#333"/>
+<circle cx="-100" cy="18" r="9" fill="#333"/><circle cx="-72" cy="18" r="9" fill="#333"/>
+<path d="M22 0 H44 M38 -8 L46 0 L38 8" fill="none" stroke="#ffd34a" stroke-width="4"/>
+</g>
+<!-- ribs cart -->
+<g transform="translate(920,630)" stroke="#12180d" stroke-width="3" stroke-linejoin="round">
+<rect x="-26" y="-14" width="52" height="30" rx="4" fill="#9a6a38"/>
+<use href="#plate" x="-12" y="-8"/><use href="#plate" x="12" y="-8"/><use href="#rib" x="-12" y="-13"/><use href="#rib" x="12" y="-13"/>
+<circle cx="-14" cy="20" r="7" fill="#333"/><circle cx="14" cy="20" r="7" fill="#333"/>
+<path d="M-4 -34 V-22 M-9 -29 L-4 -36 L1 -29" fill="none" stroke="#ffd34a" stroke-width="3.5"/>
+</g>
+
+<!-- critters -->
+<g>
+<use href="#gator" x="190" y="150"/><use href="#possum" x="250" y="155"/><use href="#frog" x="310" y="146"/><use href="#catfish" x="372" y="150"/>
+<use href="#possum" x="420" y="195"/><use href="#gator" x="423" y="252"/><use href="#frog" x="417" y="300"/>
+<use href="#catfish" x="375" y="330"/><use href="#gator" x="305" y="334"/><use href="#possum" x="240" y="328"/>
+<use href="#frog" x="200" y="385"/><use href="#catfish" x="204" y="440"/><use href="#gator" x="198" y="490"/>
+<use href="#possum" x="262" y="520"/><use href="#frog" x="332" y="524"/><use href="#gator" x="400" y="516"/><use href="#catfish" x="472" y="522"/><use href="#possum" x="540" y="518"/><use href="#frog" x="600" y="524"/>
+<use href="#gator" x="620" y="462"/><use href="#catfish" x="624" y="400"/><use href="#frog" x="616" y="342"/><use href="#possum" x="622" y="292"/>
+<use href="#gator" x="682" y="262"/><use href="#frog" x="742" y="258"/><use href="#catfish" x="802" y="264"/><use href="#possum" x="862" y="258"/>
+<use href="#gator" x="900" y="322"/><use href="#possum" x="896" y="382"/><use href="#frog" x="902" y="432"/><use href="#catfish" x="962" y="482"/>
+</g>
+
+<!-- towers -->
+<g stroke-linejoin="round">
+<!-- Dwayne nail gun -->
+<g transform="translate(305,262)"><use href="#tower"/><path d="M-6 -22 H10 L10 -26 H-6Z" fill="#c4452a" stroke="#12180d" stroke-width="2.5"/>
+<rect x="12" y="2" width="30" height="9" rx="2" fill="#e8b020" stroke="#12180d" stroke-width="2.5"/><rect x="38" y="4" width="10" height="4" fill="#bbb" stroke="#12180d" stroke-width="1.5"/>
+<circle cx="-4" cy="-13" r="1.8" fill="#12180d"/><circle cx="4" cy="-13" r="1.8" fill="#12180d"/><path d="M-4 -7 q4 3 8 0" stroke="#12180d" stroke-width="2" fill="none"/>
+<path d="M-44 -4 l-6 -4 M-44 2 l-8 0" stroke="#ffe23a" stroke-width="3" opacity="0"/></g>
+<!-- Rooster potato cannon -->
+<g transform="translate(520,425)"><use href="#tower"/><rect x="-10" y="-30" width="20" height="6" fill="#d9c04a" stroke="#12180d" stroke-width="2.5"/>
+<rect x="8" y="-2" width="38" height="14" rx="4" fill="#888" stroke="#12180d" stroke-width="2.5" transform="rotate(-18 8 4)"/><ellipse cx="50" cy="-8" rx="6" ry="5" fill="#b8884a" stroke="#12180d" stroke-width="2"/>
+<circle cx="-4" cy="-13" r="1.8" fill="#12180d"/><circle cx="4" cy="-13" r="1.8" fill="#12180d"/><path d="M-5 -6 q5 -3 10 0" stroke="#12180d" stroke-width="2" fill="none"/></g>
+<!-- Darlene shotgun -->
+<g transform="translate(755,395)"><use href="#tower"/><path d="M-12 -18 Q0 -34 12 -18" fill="#e86aa0" stroke="#12180d" stroke-width="2.5"/>
+<rect x="6" y="2" width="44" height="6" rx="2" fill="#555" stroke="#12180d" stroke-width="2.5"/><rect x="-4" y="4" width="14" height="9" rx="2" fill="#7a4a22" stroke="#12180d" stroke-width="2"/>
+<circle cx="-4" cy="-13" r="1.8" fill="#12180d"/><circle cx="4" cy="-13" r="1.8" fill="#12180d"/><path d="M-5 -6 h10" stroke="#12180d" stroke-width="2.2"/></g>
+<!-- Skeeter sleeping -->
+<g transform="translate(335,445)"><use href="#tower"/><rect x="-10" y="-26" width="20" height="8" rx="3" fill="#6a9a3a" stroke="#12180d" stroke-width="2.5"/>
+<path d="M12 6 l26 -8" stroke="#7a4a22" stroke-width="4" stroke-linecap="round"/><path d="M38 -2 l6 -8 M38 -2 l-4 -10" stroke="#7a4a22" stroke-width="3" stroke-linecap="round"/>
+<path d="M-7 -13 q3 2 6 0 M2 -13 q3 2 6 0" stroke="#12180d" stroke-width="2" fill="none"/><ellipse cx="0" cy="-5" rx="3" ry="2" fill="#12180d"/>
+<text x="-58" y="-6" font-size="16" font-weight="bold" fill="#fff" stroke="#12180d" stroke-width="3" paint-order="stroke">Z</text><text x="-70" y="-18" font-size="19" font-weight="bold" fill="#fff" stroke="#12180d" stroke-width="3" paint-order="stroke">z</text><text x="-84" y="-32" font-size="22" font-weight="bold" fill="#fff" stroke="#12180d" stroke-width="3" paint-order="stroke">Z</text></g>
+</g>
+<!-- tower labels and bars -->
+<g font-weight="bold" font-size="14" text-anchor="middle">
+<g transform="translate(305,262)"><rect x="-64" y="-64" width="128" height="22" rx="6" fill="#1b1710" opacity=".9"/><text y="-48" fill="#fff">Cousin Dwayne</text><rect x="-34" y="33" width="68" height="10" rx="4" fill="#12180d" stroke="#fff" stroke-width="1.5"/><rect x="-32" y="35" width="45" height="6" rx="2" fill="#6ac43a"/></g>
+<g transform="translate(520,425)"><rect x="-64" y="-64" width="128" height="22" rx="6" fill="#1b1710" opacity=".9"/><text y="-48" fill="#fff">Uncle Rooster</text><rect x="-34" y="33" width="68" height="10" rx="4" fill="#12180d" stroke="#fff" stroke-width="1.5"/><rect x="-32" y="35" width="29" height="6" rx="2" fill="#f2c230"/></g>
+<g transform="translate(755,395)"><rect x="-64" y="-64" width="128" height="22" rx="6" fill="#1b1710" opacity=".9"/><text y="-48" fill="#fff">Aunt Darlene</text><rect x="-34" y="33" width="68" height="10" rx="4" fill="#12180d" stroke="#fff" stroke-width="1.5"/><rect x="-32" y="35" width="15" height="6" rx="2" fill="#e8402a"/></g>
+<g transform="translate(335,445)"><rect x="-64" y="-64" width="128" height="22" rx="6" fill="#1b1710" opacity=".9"/><text y="-48" fill="#fff">Lil Skeeter</text><rect x="-34" y="33" width="68" height="10" rx="4" fill="#12180d" stroke="#e8402a" stroke-width="2"/><text x="0" y="58" font-size="13" fill="#ff6a5a" stroke="#12180d" stroke-width="3" paint-order="stroke">EMPTY</text></g>
+</g>
+
+<!-- shack and porch -->
+<g stroke="#12180d" stroke-width="3.5" stroke-linejoin="round">
+<rect x="1040" y="430" width="240" height="130" fill="#b88a50"/>
+<path d="M1040 446 H1280 M1040 462 H1280 M1040 478 H1280 M1040 494 H1280 M1040 510 H1280 M1040 526 H1280 M1040 542 H1280" stroke="#8a6232" stroke-width="2" fill="none"/>
+<rect x="1030" y="560" width="250" height="150" fill="#a8452a"/>
+<path d="M1030 590 H1280 M1030 620 H1280 M1030 650 H1280 M1030 680 H1280" stroke="#7a2e1a" stroke-width="3" fill="none"/>
+<rect x="1060" y="440" width="60" height="30" fill="#2a1d10"/>
+</g>
+<g transform="translate(1160,505)"><path d="M-40 28 Q-30 48 30 48 Q40 40 40 28" fill="#7a4a22" stroke="#12180d" stroke-width="3"/><use href="#lady" transform="scale(1.05)"/></g>
+<rect x="1042" y="664" width="150" height="26" rx="6" fill="#1b1710" opacity=".85"/>
+<text x="1117" y="683" font-size="15" font-weight="bold" fill="#ffd34a" text-anchor="middle">MEEMAW'S PORCH</text>
+<g transform="translate(1210,610)" fill="#fff" stroke="#12180d" stroke-width="2.5"><circle r="0"/></g>
+
+<!-- speech bubble -->
+<g stroke="#12180d" stroke-width="3.5" stroke-linejoin="round">
+<path d="M1128 396 L1148 452 L1170 396 Z" fill="#fffbe8"/>
+<rect x="948" y="300" width="318" height="100" rx="16" fill="#fffbe8"/>
+<path d="M1131 398 H1167" stroke="#fffbe8" stroke-width="5"/>
+</g>
+<circle cx="983" cy="350" r="26" fill="#f0c49a" stroke="#12180d" stroke-width="3"/>
+<circle cx="983" cy="320" r="10" fill="#eee" stroke="#12180d" stroke-width="3"/>
+<path d="M960 340 Q983 318 1006 340 Q983 332 960 340Z" fill="#eee"/>
+<circle cx="975" cy="350" r="7" fill="#fff" stroke="#12180d" stroke-width="2"/><circle cx="991" cy="350" r="7" fill="#fff" stroke="#12180d" stroke-width="2"/>
+<circle cx="975" cy="350" r="2.5" fill="#12180d"/><circle cx="991" cy="350" r="2.5" fill="#12180d"/>
+<path d="M974 366 q9 -4 18 0" stroke="#12180d" stroke-width="3" fill="none"/>
+<path d="M1000 362 l14 -5" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+<text font-size="19" font-weight="bold" fill="#12180d"><tspan x="1022" y="334">I've passed kidney</tspan><tspan x="1022" y="359">stones with better</tspan><tspan x="1022" y="384">aim than you.</tspan></text>
+<text x="948" y="294" font-size="13" font-weight="bold" fill="#fff" stroke="#12180d" stroke-width="3" paint-order="stroke">MEEMAW</text>
+
+<!-- HUD top -->
+<rect x="0" y="0" width="1280" height="54" fill="#1b1710" opacity=".9"/>
+<g font-size="15" font-weight="bold" fill="#fff">
+<rect x="8" y="6" width="166" height="42" rx="8" fill="#3a3224" stroke="#8a7a5a" stroke-width="2"/><use href="#carc" x="32" y="27"/><text x="52" y="33">Carcasses 14</text>
+<rect x="182" y="6" width="106" height="42" rx="8" fill="#3a3224" stroke="#8a7a5a" stroke-width="2"/><use href="#rib" x="206" y="27"/><text x="226" y="33">Ribs 32</text>
+<rect x="296" y="6" width="150" height="42" rx="8" fill="#3a3224" stroke="#8a7a5a" stroke-width="2"/><use href="#sauce" x="320" y="27"/><text x="338" y="33">Hot Sauce 9</text>
+<rect x="454" y="6" width="150" height="42" rx="8" fill="#3a3224" stroke="#8a7a5a" stroke-width="2"/><use href="#jug" x="478" y="27"/><text x="496" y="33">Moonshine 6</text>
+<rect x="618" y="6" width="330" height="42" rx="8" fill="#3a3224" stroke="#ffd34a" stroke-width="2.5"/><use href="#plate" x="642" y="22"/><text x="662" y="26" fill="#ffd34a">PLATES BANKED 212 / 500</text>
+<rect x="662" y="33" width="270" height="10" rx="4" fill="#12180d" stroke="#8a7a5a" stroke-width="1.5"/><rect x="664" y="35" width="115" height="6" rx="2" fill="#ffd34a"/>
+<rect x="1062" y="6" width="208" height="42" rx="8" fill="#a8452a" stroke="#ffd34a" stroke-width="2.5"/><text x="1166" y="34" font-size="19" text-anchor="middle" fill="#fff">WAVE 8 / 20</text>
+<rect x="960" y="6" width="90" height="42" rx="8" fill="#3a3224" stroke="#8a7a5a" stroke-width="2"/><path d="M984 17 V37 M996 17 V37" stroke="#fff" stroke-width="5" stroke-linecap="round"/><text x="1012" y="33" font-size="14">1x</text>
+</g>
+
+<!-- player list -->
+<rect x="10" y="606" width="250" height="100" rx="10" fill="#1b1710" opacity=".88" stroke="#8a7a5a" stroke-width="2"/>
+<text x="24" y="628" font-size="14" font-weight="bold" fill="#ffd34a">PLAYERS</text>
+<circle cx="32" cy="652" r="11" fill="#2f6fb5" stroke="#fff" stroke-width="2"/><text x="52" y="658" font-size="16" font-weight="bold" fill="#fff">Dave - Pitmaster</text>
+<circle cx="32" cy="682" r="11" fill="#4ab04a" stroke="#fff" stroke-width="2"/><text x="52" y="688" font-size="16" font-weight="bold" fill="#fff">Steve - Kin Wrangler</text>
+</svg>
