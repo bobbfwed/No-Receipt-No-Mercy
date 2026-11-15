@@ -5,6 +5,8 @@ Read this before changing anything. It is the contract between the parts of the 
 ## The game in one paragraph
 Shoppers enter a warehouse by the doors on the left and walk to the tills on the right. Every shopper who reaches a till takes a refund out of the team's shared cash; 40 refunds and the store closes. Players build a factory (belts and machines that turn boxes into goods and sell them for cash) and security (towers that wear down shoppers' patience until they storm out). Belts and machines block shoppers, so **the factory is the maze**. There are 20 waves ("sales events") with a build pause between them.
 
+Dads are the special case the owner asked for. They arrive in a single-file "dad line", walk fast, ignore free samples and goods on belts, and **step over conveyor belts** (only machines, crates and towers stop them). Their patience drains every second they are in the store, so the way to beat a dad is to waste his time: solid walls, wet floor signs (he ignores the sign and may slip) and towers along his route. A dad who gets through leaves a smug five-star review.
+
 ## Layers
 
 ```

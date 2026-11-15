@@ -1,28 +1,38 @@
-# Project: Browser Game (temporary name)
+# Project: Returns Department (browser game)
 
 ## What this is
 A browser game the owner and his friends play together, each from his own house.
 - **No permanent server.** One player acts as a temporary host for the session; the others join him from their browsers.
 - **Players:** must work well for 1 to 6. Most sessions will be 1 to 3, so balance for that first.
-- **Starting idea:** tower defense with shared resources, where players automate the production of building materials while defending against waves of enemies.
-- **Roles:** each area (for example production and defense) must be deep enough that a player has to learn its layout and becomes the "expert" for it. A solo player switches back and forth between areas; a group splits them up.
+- **The game:** Returns Department, a tower defense with shared cash where players run a factory (belts and machines that make goods) while security stops waves of shoppers reaching the tills. The factory is the maze the shoppers walk through.
+- **Roles:** each area (factory, security) must be deep enough that a player has to learn its layout and becomes the "expert" for it. A solo player switches back and forth between areas; a group splits them up.
+- **Dads:** a shopper type the owner asked for. Men who just want to get through the line: single file, fast, ignore distractions, step over conveyor belts. Keep them prominent.
 
 ## Tone
 For adults only. The players are men aged 37 to 41 who grew up on South Park and Family Guy and do not get offended.
-The game itself should be belligerent: it gets annoyed at the players, insults them, makes sexually charged jokes, and makes jokes at their expense. Write the humor crude and confident, not watered down.
+The game itself should be belligerent: it gets annoyed at the players, insults them, makes sexually charged jokes, and makes jokes at their expense. Write the humor crude and confident, not watered down. All dialogue lives in `src/content/lines.js`.
 
 ## Current stage
-Concept selection. Twelve rough concepts with mock-up screens live in `concepts/` (open `concepts/index.html` in a browser). The owner says yes, no, or "combine these" before any in-depth planning or game code is written. Do not start detailed design or pick a stack until he has chosen.
+Building the first playable version. `PLAN.md` has the plan, the decisions made on the owner's behalf, and what is done. Read `docs/architecture.md` before changing code: it is the contract between the parts.
 
 ## Stack and layout
-- Language/frameworks: not chosen yet. Decide after a concept is picked.
+- Plain JavaScript ES modules. No build step, no packages, no framework. Canvas for the game, plain DOM and CSS for the interface. Node 24 for tests and tools only.
 - Key folders:
-  - `concepts/` - the concept gallery. `concepts.js` holds the text for all the concepts, `index.html` displays it, and each `NN-name/` folder holds that concept's two mock-up screens (SVG drawings).
+  - `src/sim/` - the rules. Pure and deterministic: no DOM, no network, no clock, no `Math.random()`. All tuning numbers are in `src/sim/constants.js`.
+  - `src/net/` - host and client sessions, and the transports that link browsers.
+  - `src/content/` - every joke, and the director that chooses them.
+  - `src/render/` - canvas drawing. `src/ui/`, `src/main.js`, `index.html`, `src/style.css` - menu and interface.
+  - `test/` - tests. `tools/` - dev server, screenshot script, balance bots.
+  - `vendor/peerjs.min.js` - third-party network library (PeerJS 1.5.4, MIT licence). Do not edit.
+  - `concepts/` - the earlier concept gallery. Kept for reference; not part of the game.
   - `.claude/reports/` - end-of-task reports.
 
 ## Commands
-- Build / Test / Lint: none yet.
-- View the concept gallery: open `concepts/index.html` in a browser (no server needed).
+- Test: `node --test`
+- Run locally: `node tools/serve.mjs` then open `http://localhost:5173/` (modules do not load from a double-clicked file).
+- Screenshot a page for UI checks: `tools/shot.ps1` (usage is in the file). Useful URLs: `/?demo=1&ff=600` (ready-made layout, mid-wave), `/?solo=1`.
+- Difficulty check: `node tools/balance.mjs`
+- Lint/format: none.
 
 ## Git
 - This folder must stay under git control. GitHub will be set up later by the owner.
@@ -37,4 +47,8 @@ You are the owner and long-term maintainer of this codebase, and its design is u
 - Deleting or rewriting git history.
 
 ## Conventions
-- To be set once a stack is chosen.
+- Edit files with the editor tools, not PowerShell `Get-Content`/`Set-Content`: Windows PowerShell 5.1 corrupts non-ASCII characters and adds a byte-order mark.
+- The simulation must stay deterministic and JSON-safe; the host sends the whole state to clients, who keep simulating from it.
+- Anything a player can do goes through `applyCommand` in `src/sim/commands.js`, validated on the host.
+- New rules need a test in `test/`. After changing numbers in `constants.js`, run `node tools/balance.mjs` and compare with the results noted in `PLAN.md`.
+- Comments explain why, in plain words. Commit messages say what changed for a reader who has not seen the work.

@@ -2,7 +2,7 @@
 // which lets every player's browser predict the game between updates from the host.
 import { W, H, DIRS, BUILD, ITEMS, SHOPPERS, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats } from './state.js';
-import { getDist, UNREACHABLE } from './path.js';
+import { getDist, getHopDist, UNREACHABLE } from './path.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
 
@@ -67,7 +67,8 @@ function spawn(state) {
     const def = SHOPPERS[k];
     const door = doors[(rand(state) * doors.length) | 0];
     const single = k === 'dad'; // dads walk in a strict single file
-    const hp = def.hp * (1 + TUNE.hpGrowth * (state.wave - 1));
+    const n = state.wave - 1;
+    const hp = def.hp * (1 + TUNE.hpGrowth * n + TUNE.hpGrowth2 * n * n);
     state.shoppers.push({
       id: state.nextId++, k,
       x: (door % W) + 0.5, y: ((door / W) | 0) + 0.5, vx: 0, vy: 0,
@@ -131,7 +132,7 @@ function hurt(state, s, dmg, by, ev) {
   if (s.hp <= 0) giveUp(state, s, by, 'annoyed', ev);
 }
 
-function stepBuildings(state, dist, ev) {
+function stepBuildings(state, dist, hop, ev) {
   const grid = state.grid, S = state.shoppers;
   const stands = [];
   const karens = [];
@@ -191,7 +192,7 @@ function stepBuildings(state, dist, ev) {
           let best = null, bd = UNREACHABLE + 1;
           for (const s of S) {
             if (s.st === ST.LEAVE || (s.x - cx) ** 2 + (s.y - cy) ** 2 > r2) continue;
-            const d = dist[((s.y | 0) * W) + (s.x | 0)];
+            const d = (SHOPPERS[s.k].hopsBelts ? hop : dist)[((s.y | 0) * W) + (s.x | 0)];
             if (d < bd) { bd = d; best = s; }
           }
           if (best) {
@@ -223,7 +224,7 @@ function escape(state, s, ev) {
   }
 }
 
-function stepShoppers(state, dist, stands, ev) {
+function stepShoppers(state, dist, hop, stands, ev) {
   const S = state.shoppers, grid = state.grid;
   const standR2 = BUILD.samples.range ** 2;
   for (let n = 0; n < S.length; n++) {
@@ -296,11 +297,13 @@ function stepShoppers(state, dist, stands, ev) {
       if (stopped) continue;
     }
 
-    // Walk toward whichever neighbouring tile is closest to the tills.
-    let best = i, bd = dist[i];
+    // Walk toward whichever neighbouring tile is closest to the tills. Dads use their own map,
+    // on which conveyor belts count as floor.
+    const field = def.hopsBelts ? hop : dist;
+    let best = i, bd = field[i];
     for (let k = 0; k < 4; k++) {
       const ni = neighbour(i, (k + s.id) & 3); // vary the tie-break so crowds spread out
-      if (ni >= 0 && dist[ni] < bd) { bd = dist[ni]; best = ni; }
+      if (ni >= 0 && field[ni] < bd) { bd = field[ni]; best = ni; }
     }
     if (best === i) continue; // walled in; cannot normally happen
     const gx = (best % W) + 0.5 + s.ox, gy = ((best / W) | 0) + 0.5 + s.oy;
@@ -335,8 +338,9 @@ export function step(state) {
   }
   if (waiting) return ev;
   const dist = getDist(state);
-  const stands = stepBuildings(state, dist, ev);
-  stepShoppers(state, dist, stands, ev);
+  const hop = getHopDist(state);
+  const stands = stepBuildings(state, dist, hop, ev);
+  stepShoppers(state, dist, hop, stands, ev);
   if (state.phase === 'wave' && !state.spawnQ.length && !state.shoppers.length) endWave(state, ev);
   return ev;
 }

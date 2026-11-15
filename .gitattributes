@@ -1,0 +1,3 @@
+# Keep line endings as written (LF) on every machine, so files do not change when checked out on Windows.
+* text=auto eol=lf
+*.png binary
