@@ -1,12 +1,14 @@
-// Shoppers: five kinds of small cartoon people, drawn side-on in three-quarter view, facing the
+// Shoppers: nine kinds of small cartoon people, drawn side-on in three-quarter view, facing the
 // way they walk. Each kind is built from a few shared parts (limbs, head, face) plus its own
-// props: trolley, coupons, dad cap and receipt, Karen hair and pointing finger, mobility scooter.
+// props: trolley, coupons, dad cap and receipt, Karen hair and pointing finger, mobility scooter,
+// hoodie and slushie, mom's trolley with a child in the seat, guide dog and white cane, the gym
+// bro's boxed TV. A mom's runaway child is a separate little figure (drawKid).
 //
 // A big wave has well over a hundred shoppers, so each figure is drawn once per pose into a small
 // offscreen canvas (a sprite) and then stamped with one drawImage. A pose is: kind, colour
-// variant, facing, one of six walking frames or standing, and an "alt" flag for a second
-// gesture (dad checking his watch, Karen shouting). Overlays such as the patience bar are drawn
-// directly every frame.
+// variant, facing, one of six walking frames, standing or lying down, and an "alt" flag for a
+// second gesture (dad checking his watch, Karen shouting, mom chasing her child, the guide dog
+// bolting). Overlays such as the patience bar are drawn directly every frame.
 import { ST, TUNE, TICK_HZ } from '../sim/index.js';
 import { INK, C, rr, paint, box, circle, label, ramp, starPath } from './paint.js';
 
@@ -16,6 +18,7 @@ const LEAVE_TICKS = Math.max(1, Math.round(TUNE.leaveSecs * TICK_HZ));
 const OUT = 1.8; // outline width on people
 const WALK_FRAMES = 6;
 const STAND = WALK_FRAMES; // frame index used when not walking
+const DOWN = WALK_FRAMES + 1; // lying on the floor: kinds with `down` leave out loose props (the dog)
 const TAU = Math.PI * 2;
 
 /** The sprite box around the feet, in logical pixels: wide enough for trolleys and scooter flags. */
@@ -24,18 +27,39 @@ const BX = -28, BY = -52, BW = 60, BH = 64;
 const HUNTER_SHIRTS = ['#3fae49', '#8e44ad', '#ff8c1a', '#2f8fe0', '#e0457b', '#14b8a6'];
 const DAD_POLOS = ['#7cc4f0', '#f4a6a0', '#a8d88a', '#f3e3a3'];
 const HAIR = ['#5a3a1e', '#2b2118', '#8a5a2b', '#c9a15a', '#3d3d3d'];
+const HOODIES = ['#59606b', '#2b2f36', '#b0303a', '#2f7d4f'];
+const MOM_TOPS = ['#9b59b6', '#e67e5a', '#16a085', '#e84393'];
+const MOM_HAIR = ['#8a5a2b', '#2b2118', '#c9a15a', '#5a3a1e'];
+const TANKS = ['#ffffff', '#ff3d7f', '#39d353', '#ffd23f'];
+const DOG = '#e2b15f', DOG_DARK = '#b8873a', VEST = '#f4e04d';
+const KID_HAIR = '#e07b24';
 
 /**
  * Per kind: index (for sprite keys), drawing scale, figure height (for the patience bar), walking
- * cadence, number of colour variants.
+ * cadence, number of colour variants. Optional: `box` sprite box [x, y, w, h] when the default
+ * one is too small (drawn for facing right; mirrored for left), `still` no walking lean (the
+ * drawing leans by itself, or not at all), `down` has its own lying-down pose.
  */
 const KIND = {
   hunter: { n: 0, sc: 1, top: 33, step: 11, vars: HUNTER_SHIRTS.length },
   clipper: { n: 1, sc: 0.82, top: 33, step: 17, vars: 1 },
   dad: { n: 2, sc: 1.05, top: 35, step: 15, vars: DAD_POLOS.length },
   karen: { n: 3, sc: 1.12, top: 37, step: 9, vars: 1 },
-  scooter: { n: 4, sc: 1, top: 38, step: 6, vars: 1 },
+  scooter: { n: 4, sc: 1, top: 38, step: 6, vars: 1, still: true },
+  teen: { n: 5, sc: 1, top: 34, step: 7, vars: HOODIES.length },
+  mom: { n: 6, sc: 1, top: 37, step: 11, vars: MOM_TOPS.length },
+  blind: { n: 7, sc: 1, top: 35, step: 9, vars: 1, still: true, down: true, box: [-30, -52, 88, 64] },
+  gymbro: { n: 8, sc: 1.08, top: 38, step: 13, vars: TANKS.length, box: [-31, -52, 63, 64] },
 };
+/** Not shoppers, but drawn with the same sprite cache: a mom's runaway child, a sitting guide dog. */
+const KID = { n: 9, sc: 1, top: 22, step: 24, vars: 1, box: [-20, -32, 40, 40] };
+const DOGSIT = { n: 10, sc: 1, top: 24, step: 1, vars: 1, box: [-16, -30, 32, 36] };
+for (const K of [...Object.values(KIND), KID, DOGSIT]) {
+  const b = K.box || [BX, BY, BW, BH];
+  K.bx = b[0]; K.by = b[1]; K.bw = b[2]; K.bh = b[3];
+}
+/** Left edge of a kind's sprite box for a facing (the box is mirrored for facing left). */
+const boxX = (K, face) => (face > 0 ? K.bx : -(K.bx + K.bw));
 
 // --- shared body parts ---------------------------------------------------------------------
 
@@ -121,6 +145,12 @@ function hunter(ctx, P) {
   face(ctx, 1, -24.5, 0);
   // Trolley in front, with a bargain in the basket.
   box(ctx, 11, -20, 7, 6, 1, C.cardboard, 1.4);
+  trolley(ctx);
+  limb(ctx, 1.5, -15, 5.5, -16, C.skin, 3);
+}
+
+/** A shopping trolley in front of the shopper (contents are drawn first, so they sit inside). */
+function trolley(ctx) {
   rr(ctx, 8, -15.5, 16, 10, 1.5);
   paint(ctx, '#d3d7e0', OUT);
   ctx.beginPath();
@@ -135,7 +165,6 @@ function hunter(ctx, P) {
   ctx.strokeStyle = INK; ctx.lineWidth = 1.8; ctx.stroke();
   circle(ctx, 11, -2, 2.3, '#333', 1.2);
   circle(ctx, 20, -2, 2.3, '#333', 1.2);
-  limb(ctx, 1.5, -15, 5.5, -16, C.skin, 3);
 }
 
 function clipper(ctx, P) {
@@ -379,11 +408,514 @@ function wheel(ctx, x, y, spin) {
   ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 1.2; ctx.stroke();
 }
 
-const DRAW = [hunter, clipper, dad, karen, scooter];
+/** White speed lines trailing behind someone in a hurry (x is where they start). */
+function speedLines(ctx, x, y, ph, len = 8, gap = 7) {
+  const k = ph * 3;
+  ctx.beginPath();
+  for (let j = 0; j < 3; j++) {
+    const l = j === 1 ? len + 3 : len;
+    ctx.moveTo(x - k - (j === 1 ? 1 : 0), y + j * gap);
+    ctx.lineTo(x - k - l, y + j * gap);
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke();
+}
+
+/** A giant slushie: red and white cup, dome of blue slush, a straw. (x, y) is the cup's base. */
+function slushie(ctx, x, y) {
+  ctx.beginPath();
+  ctx.moveTo(x + 0.8, y - 13); ctx.lineTo(x + 2.4, y - 20.5); ctx.lineTo(x + 5, y - 21.5);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = INK; ctx.lineWidth = 3.2; ctx.stroke();
+  ctx.strokeStyle = '#ffe14a'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(x, y - 12.5, 5.2, 3.8, 0, Math.PI, TAU);
+  ctx.closePath();
+  paint(ctx, '#3fc6ff', 1.3);
+  ctx.beginPath();
+  ctx.moveTo(x - 3.3, y); ctx.lineTo(x + 3.3, y); ctx.lineTo(x + 5.2, y - 12.5); ctx.lineTo(x - 5.2, y - 12.5);
+  ctx.closePath();
+  paint(ctx, '#e8303a', 1.4);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x - 3.9, y - 8.6, 7.8, 2.8);
+}
+
+function teen(ctx, P) {
+  const sw = P.sw;
+  const hood = HOODIES[P.v];
+  // Skinny jeans, big white trainers, a shuffle rather than a walk.
+  limb(ctx, -2.5, -9, -2.5 - sw * 2, -1.5, '#2c3e66', 3);
+  shoe(ctx, -2.5 - sw * 2, -0.8, '#f4f4f4');
+  limb(ctx, 2, -9, 2 + sw * 2, -1.5, '#34497a', 3);
+  shoe(ctx, 2 + sw * 2, -0.8, '#f4f4f4');
+  limb(ctx, -2, -18, -6.5, -12, hood, 3.2);
+  // Hoodie, slouched, with the front pouch.
+  ctx.beginPath();
+  ctx.ellipse(0, -14, 7.4, 7.8, 0, 0, TAU);
+  paint(ctx, hood, OUT);
+  rr(ctx, -0.5, -13.5, 6.5, 4, 1.5);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fill();
+  // The giant slushie, swinging a little in the back hand.
+  slushie(ctx, -9 + sw * 0.6, -6);
+  circle(ctx, -6.4 + sw * 0.4, -11.8, 1.9, C.skin, 1.1);
+  // Hood up: the head sits low and forward inside it.
+  const hx = 3.4, hy = -24.2;
+  circle(ctx, 1.4, -25.4, 8.2, hood, OUT);
+  ctx.beginPath();
+  ctx.arc(hx, hy, 6.6, 0, TAU);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fill();
+  head(ctx, hx, hy, 5.7);
+  hairCap(ctx, hx, hy, 5.7, '#2b2118');
+  ctx.beginPath(); // emo fringe swept across
+  ctx.moveTo(hx - 1, hy - 5.4);
+  ctx.quadraticCurveTo(hx + 4.5, hy - 5.2, hx + 6.4, hy - 1.2);
+  ctx.lineTo(hx + 3.6, hy - 2.4);
+  ctx.closePath();
+  paint(ctx, '#2b2118', 1);
+  // Lit up by the phone, eyes down on it, not here.
+  ctx.beginPath();
+  ctx.ellipse(hx + 4, hy + 1.6, 2.8, 3.4, 0, 0, TAU);
+  ctx.fillStyle = 'rgba(150,225,255,0.45)';
+  ctx.fill();
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(hx + 1.5, hy + 0.6, 1.25, 0, Math.PI);
+  ctx.closePath();
+  ctx.moveTo(hx + 5.9, hy + 0.6);
+  ctx.arc(hx + 4.7, hy + 0.6, 1.25, 0, Math.PI);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(hx - 0.1, hy + 0.6); ctx.lineTo(hx + 3, hy + 0.6);
+  ctx.moveTo(hx + 3.4, hy + 0.6); ctx.lineTo(hx + 6.2, hy + 0.6);
+  ctx.moveTo(hx + 2.6, hy + 3.7); ctx.lineTo(hx + 4.8, hy + 3.4);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.lineCap = 'round'; ctx.stroke();
+  // Hoodie strings.
+  ctx.beginPath();
+  ctx.moveTo(4.6, -17.6); ctx.lineTo(5, -14);
+  ctx.moveTo(7, -17.8); ctx.lineTo(7.6, -14.6);
+  ctx.strokeStyle = '#f4f4f4'; ctx.lineWidth = 1.2; ctx.stroke();
+  // Phone held out at chest height, its glow lighting his face.
+  limb(ctx, 1, -15.5, 10.4, -15.4, hood, 3.2);
+  ctx.beginPath();
+  ctx.moveTo(10.6, -22); ctx.lineTo(10.6, -16.5); ctx.lineTo(6.5, -20.5);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(160,230,255,0.35)';
+  ctx.fill();
+  box(ctx, 10.4, -22.6, 3, 6.8, 0.8, '#2b2f34', 1.1);
+  ctx.fillStyle = '#9fe3ff';
+  ctx.fillRect(10.6, -22, 1.1, 5.6);
+  circle(ctx, 11.6, -15.6, 1.9, C.skin, 1.1);
+}
+
+function mom(ctx, P) {
+  const chase = P.alt; // her child has escaped: she sprints after him, shouting
+  const sw = P.sw * (chase ? 1.4 : 1);
+  if (chase && P.moving) speedLines(ctx, -10, -23, P.ph, 8, 7.5);
+  if (chase) ctx.rotate(0.14);
+  limb(ctx, -2.5, -8.5, -2.5 - sw * 2.8, -1.5, '#2b2b38', 3);
+  shoe(ctx, -2.5 - sw * 2.8, -0.8, '#f4f4f4');
+  limb(ctx, 2, -8.5, 2 + sw * 2.8, -1.5, '#383846', 3);
+  shoe(ctx, 2 + sw * 2.8, -0.8, '#f4f4f4');
+  // Top, and the enormous bag every mom carries.
+  ctx.beginPath();
+  ctx.ellipse(0, -14.5, 6.8, 7, 0, 0, TAU);
+  paint(ctx, MOM_TOPS[P.v], OUT);
+  ctx.beginPath();
+  ctx.moveTo(-1.5, -21); ctx.lineTo(-5, -12);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.stroke();
+  box(ctx, -10, -13, 7.5, 7, 2, '#8a5a2b', 1.5);
+  // Messy bun, frazzled strands.
+  const hair = MOM_HAIR[P.v];
+  circle(ctx, -3.2, -33.2, 3.6, hair, OUT);
+  head(ctx, 1, -25.5, 6.6);
+  hairCap(ctx, 1, -25.5, 6.6, hair);
+  ctx.beginPath();
+  ctx.moveTo(-5.5, -35.5); ctx.quadraticCurveTo(-8.5, -38, -7, -40);
+  ctx.moveTo(-1.5, -36); ctx.quadraticCurveTo(0, -39.5, 2, -38.5);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.stroke();
+  if (chase) {
+    face(ctx, 1, -24.5, 2);
+    circle(ctx, 8.5, -31, 1.4, '#9fe3ff', 0.9); // sweat
+  } else {
+    face(ctx, 1, -24.5, 1);
+    ctx.beginPath(); // tired eyes, flat mouth: she has had a day
+    ctx.moveTo(1.3, -22.9); ctx.quadraticCurveTo(2.2, -22.1, 3.2, -22.9);
+    ctx.moveTo(5, -22.9); ctx.quadraticCurveTo(6, -22.1, 7, -22.9);
+    ctx.moveTo(3.2, -20.6); ctx.lineTo(5.8, -20.6);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
+  }
+  // The child in the trolley seat, reaching for things; an empty seat when he is loose.
+  box(ctx, 16.5, -21, 6, 5.5, 1, '#ffd23f', 1.2); // cereal
+  ctx.fillStyle = C.red;
+  ctx.fillRect(17.5, -19.5, 4, 1.4);
+  if (!chase) {
+    limb(ctx, 13, -17, 16, -24, C.skin, 1.8);
+    ctx.beginPath();
+    ctx.ellipse(11.5, -16.2, 3.4, 2.6, 0, 0, TAU);
+    paint(ctx, '#ffd23f', 1.2);
+    kidHead(ctx, 12, -20.8, 3.9, 0);
+  }
+  trolley(ctx);
+  box(ctx, 8.8, -15.2, 5, 3.4, 1, chase ? '#d9372b' : '#b8252b', 1.1); // child seat flap
+  limb(ctx, 1.5, -16, 5.5, -16.5, C.skin, 3);
+  if (chase) {
+    // Arm flung forward, reaching for him.
+    limb(ctx, 2, -19, 9, -24, C.skin, 2.8);
+    circle(ctx, 9.6, -24.6, 1.8, C.skin, 1.1);
+  }
+}
+
+/** The child's head: ginger mop, big eyes, open grin (mood 1: tongue out). */
+function kidHead(ctx, x, y, r, mood) {
+  // Spiky ginger tufts.
+  ctx.beginPath();
+  ctx.moveTo(x - r, y - 1);
+  ctx.lineTo(x - r * 0.9, y - r * 1.45);
+  ctx.lineTo(x - r * 0.3, y - r * 1.05);
+  ctx.lineTo(x + r * 0.15, y - r * 1.6);
+  ctx.lineTo(x + r * 0.5, y - r * 1.0);
+  ctx.lineTo(x + r * 1.1, y - r * 1.3);
+  ctx.lineTo(x + r, y - 1);
+  ctx.closePath();
+  paint(ctx, KID_HAIR, 1.2);
+  circle(ctx, x, y, r, C.skin, 1.4);
+  ctx.beginPath();
+  ctx.arc(x, y, r + 0.3, Math.PI * 1.02, Math.PI * 1.9);
+  ctx.quadraticCurveTo(x, y - r * 0.7, x - r - 0.2, y);
+  ctx.closePath();
+  paint(ctx, KID_HAIR, 1);
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(x + r * 0.25, y - 0.2, r * 0.22, 0, TAU);
+  ctx.arc(x + r * 0.85, y - 0.2, r * 0.22, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + r * 0.55, y + r * 0.35, r * 0.42, 0, Math.PI);
+  ctx.closePath();
+  paint(ctx, '#7a1010', 0.9);
+  if (mood === 1) {
+    ctx.beginPath();
+    ctx.ellipse(x + r * 0.62, y + r * 0.85, r * 0.26, r * 0.36, 0, 0, TAU);
+    paint(ctx, '#ff6b8a', 0.8);
+  }
+}
+
+/** A mom's runaway child: arms in the air, very fast. alt: stopped, waiting to be caught. */
+function kid(ctx, P) {
+  const sw = P.sw * 1.5;
+  if (P.moving) speedLines(ctx, -7, -17, P.ph, 6, 5.5);
+  limb(ctx, -1.5, -5, -1.5 - sw * 2.2, -1.2, '#3b5fa8', 2.2);
+  shoe(ctx, -1.5 - sw * 2.2, -0.7, '#e8303a');
+  limb(ctx, 1.5, -5, 1.5 + sw * 2.2, -1.2, '#4468b5', 2.2);
+  shoe(ctx, 1.5 + sw * 2.2, -0.7, '#e8303a');
+  const wv = P.moving ? Math.sin(P.ph * TAU * 2) * 1.5 : 0;
+  limb(ctx, -1.5, -10, -5, -17 + wv, C.skin, 1.9);
+  // Striped T-shirt.
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(0, -8.5, 4.4, 4.6, 0, 0, TAU);
+  ctx.fillStyle = '#ffd23f';
+  ctx.fill();
+  ctx.clip();
+  ctx.fillStyle = C.red;
+  ctx.fillRect(-5, -11.5, 10, 1.6);
+  ctx.fillRect(-5, -8.5, 10, 1.6);
+  ctx.fillRect(-5, -5.5, 10, 1.6);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.ellipse(0, -8.5, 4.4, 4.6, 0, 0, TAU);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.stroke();
+  kidHead(ctx, 1, -16, 4.6, P.alt ? 1 : 0);
+  limb(ctx, 1.8, -10, 5.5, -18 - wv, C.skin, 1.9);
+  circle(ctx, -5, -17.4 + wv, 1.4, C.skin, 1);
+  circle(ctx, 5.5, -18.4 - wv, 1.4, C.skin, 1);
+}
+
+/**
+ * A guide dog in a hi-vis harness, facing +x, body centred at x. run: stretched out at a full
+ * gallop. Returns nothing; the harness handle meets the body at (x + 0.5, top of the back).
+ */
+function guideDog(ctx, x, P, run) {
+  const sw = P.sw;
+  const by = run ? -11 : -9.5; // body centre
+  const rx = run ? 10.5 : 8.5, ry = run ? 4 : 4.6;
+  if (run) {
+    limb(ctx, x - 9, by - 1, x - 16, by - 3.5 + sw, DOG, 2.2); // tail straight out
+    limb(ctx, x - 5, by + 1.5, x - 11.5 - sw, by + 8.5, DOG_DARK, 2.2);
+    limb(ctx, x + 5, by + 1.5, x + 11.5 + sw, by + 8, DOG_DARK, 2.2);
+    limb(ctx, x - 6.5, by + 2, x - 13.5 + sw, by + 9.5, DOG, 2.4);
+    limb(ctx, x + 6.5, by + 2, x + 13.5 - sw, by + 9, DOG, 2.4);
+  } else {
+    const wag = Math.sin(P.ph * TAU * 2) * 1.5;
+    limb(ctx, x - 7.5, by - 1.5, x - 11 + wag * 0.3, by - 6 + wag, DOG, 2.2);
+    limb(ctx, x - 4.5, by + 2.5, x - 4.5 + sw * 2, -1, DOG_DARK, 2.2);
+    limb(ctx, x + 5, by + 2.5, x + 5 - sw * 2, -1, DOG_DARK, 2.2);
+    limb(ctx, x - 5.5, by + 2.5, x - 5.5 - sw * 2, -1, DOG, 2.4);
+    limb(ctx, x + 4, by + 2.5, x + 4 + sw * 2, -1, DOG, 2.4);
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(x, by, rx, ry, 0, 0, TAU);
+  ctx.fillStyle = DOG;
+  ctx.fill();
+  ctx.clip();
+  ctx.fillStyle = VEST;
+  ctx.fillRect(x - 3, by - 6, 7, 12);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x - 3, by - 1, 7, 1.6);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.ellipse(x, by, rx, ry, 0, 0, TAU);
+  ctx.strokeStyle = INK; ctx.lineWidth = OUT; ctx.stroke();
+  // Head: forward and low when running, ears flying, tongue out.
+  const hx = x + (run ? 12 : 9.5), hy = run ? by - 1.5 : by - 5;
+  ctx.beginPath();
+  ctx.ellipse(hx + 3.6, hy + 1.4, 2.9, 2.1, 0, 0, TAU);
+  paint(ctx, DOG, 1.4);
+  circle(ctx, hx, hy, 4.1, DOG, 1.6);
+  if (run) {
+    ctx.beginPath();
+    ctx.ellipse(hx + 4.4, hy + 3.8, 1.2, 2, 0.3, 0, TAU);
+    paint(ctx, '#ff6b8a', 0.8);
+  }
+  circle(ctx, hx + 6.3, hy + 0.7, 1.2, INK, 0);
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(hx + 1.6, hy - 1, 0.9, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  if (run) ctx.ellipse(hx - 3.6, hy - 1.8, 3.6, 1.6, -0.25, 0, TAU);
+  else ctx.ellipse(hx - 1.4, hy + 0.8, 1.8, 3.4, 0.25, 0, TAU);
+  paint(ctx, DOG_DARK, 1.2);
+}
+
+function blind(ctx, P) {
+  const bolt = P.alt; // the dog has bolted and is dragging him along
+  const sw = P.sw;
+  const lean = bolt ? -0.3 : P.moving ? 0.07 : 0;
+  const cs = Math.cos(lean), sn = Math.sin(lean);
+  const lhx = bolt ? 12.5 : 9.5, lhy = bolt ? -19 : -15.5; // his front hand, before the lean
+  const hX = lhx * cs - lhy * sn, hY = lhx * sn + lhy * cs;
+  const dogX = bolt ? 31 : 22;
+  if (!P.down) guideDog(ctx, dogX, P, bolt);
+  if (bolt && P.moving) speedLines(ctx, -11, -27, P.ph, 9, 8);
+  ctx.save();
+  ctx.rotate(lean);
+  const jacket = '#7a6a4f';
+  if (bolt) {
+    // Heels dug in, both feet out in front.
+    limb(ctx, -2.5, -9, 3 + sw, -1.5, '#5d6470');
+    shoe(ctx, 3 + sw, -0.8, '#3a2a20');
+    limb(ctx, 2, -9, 7 - sw, -1.5, '#6b7380');
+    shoe(ctx, 7 - sw, -0.8, '#3a2a20');
+  } else {
+    limb(ctx, -2.5, -9, -2.5 - sw * 2.4, -1.5, '#5d6470');
+    shoe(ctx, -2.5 - sw * 2.4, -0.8, '#3a2a20');
+    limb(ctx, 2, -9, 2 + sw * 2.4, -1.5, '#6b7380');
+    shoe(ctx, 2 + sw * 2.4, -0.8, '#3a2a20');
+  }
+  ctx.beginPath();
+  ctx.ellipse(0, -15, 7.2, 7.6, 0, 0, TAU);
+  paint(ctx, jacket, OUT);
+  ctx.beginPath(); // lapel
+  ctx.moveTo(2.5, -22); ctx.lineTo(4.5, -16); ctx.lineTo(6.5, -20.5);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke();
+  // Head: grey hair, round black glasses.
+  const x = 1.5, y = -26.5;
+  head(ctx, x, y, 6.6);
+  hairCap(ctx, x, y, 6.6, '#b9bcc2');
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(x + 1.4, y - 0.2, 2.5, 0, TAU);
+  ctx.moveTo(x + 7.9, y - 0.2);
+  ctx.arc(x + 5.4, y - 0.2, 2.5, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y - 0.6); ctx.lineTo(x - 5.5, y - 1.4);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x + 0.4, y - 1.6, 1.1, 1.1);
+  ctx.fillRect(x + 4.4, y - 1.6, 1.1, 1.1);
+  if (bolt) {
+    ctx.beginPath();
+    ctx.ellipse(x + 3.6, y + 3.6, 1.6, 2.1, 0, 0, TAU);
+    paint(ctx, '#7a1010', 1);
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x + 1.8, y + 3.2); ctx.quadraticCurveTo(x + 3.6, y + 4.6, x + 5.4, y + 3);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.stroke();
+  }
+  // White cane with a red tip: tapping the floor ahead, or waved in the air while dragged.
+  const cx1 = bolt ? -7 : -4.5, cy1 = bolt ? -27 : -12.5;
+  limb(ctx, -2, -19.5, cx1, cy1, jacket, 3);
+  const cx2 = bolt ? -15 : 5.5 + sw * 1.5, cy2 = bolt ? -40 : -0.5;
+  limb(ctx, cx1, cy1, cx2, cy2, '#ffffff', 1.6);
+  limb(ctx, cx1 + (cx2 - cx1) * 0.82, cy1 + (cy2 - cy1) * 0.82, cx2, cy2, '#e8303a', 1.6);
+  circle(ctx, cx1, cy1, 1.9, C.skin, 1.1);
+  // Front arm out to the harness handle.
+  limb(ctx, 2, -19.5, lhx, lhy, jacket, 3);
+  ctx.restore();
+  if (!P.down) {
+    // The harness handle: a short rigid bar, or a taut strap when the dog is off.
+    const ax = dogX + 0.5, ay = (bolt ? -11 : -9.5) - (bolt ? 3.6 : 4.2);
+    ctx.beginPath();
+    ctx.moveTo(hX, hY);
+    ctx.lineTo(ax, ay);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.stroke();
+    ctx.strokeStyle = '#6b4423'; ctx.lineWidth = 1.6; ctx.stroke();
+  }
+  circle(ctx, hX, hY, 2, C.skin, 1.2);
+}
+
+/** The guide dog sitting by its fallen owner, waiting. */
+function dogSit(ctx) {
+  limb(ctx, -5, -2, -11, -1.2, DOG, 2.2);
+  ctx.beginPath();
+  ctx.ellipse(-2.5, -5, 5.5, 4.5, 0, 0, TAU);
+  paint(ctx, DOG, OUT);
+  limb(ctx, 2, -7, 2.5, -1, DOG_DARK, 2.2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(1, -10.5, 4.4, 7, 0.35, 0, TAU);
+  ctx.fillStyle = DOG;
+  ctx.fill();
+  ctx.clip();
+  ctx.fillStyle = VEST;
+  ctx.fillRect(-4, -14, 9, 6);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.ellipse(1, -10.5, 4.4, 7, 0.35, 0, TAU);
+  ctx.strokeStyle = INK; ctx.lineWidth = OUT; ctx.stroke();
+  limb(ctx, 3.5, -7, 4, -1, DOG, 2.4);
+  const hx = 4, hy = -19;
+  ctx.beginPath();
+  ctx.ellipse(hx + 3.6, hy + 1.4, 2.9, 2.1, 0, 0, TAU);
+  paint(ctx, DOG, 1.4);
+  circle(ctx, hx, hy, 4.1, DOG, 1.6);
+  circle(ctx, hx + 6.3, hy + 0.7, 1.2, INK, 0);
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(hx + 1.6, hy - 1, 0.9, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(hx - 1.4, hy + 0.8, 1.8, 3.4, 0.25, 0, TAU);
+  paint(ctx, DOG_DARK, 1.2);
+}
+
+/** A word printed on a box, kept readable when the sprite is mirrored (flip = facing). */
+function print(ctx, str, x, y, size, color, flip) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(flip, 1);
+  label(ctx, str, 0, 0, size, color, null);
+  ctx.restore();
+}
+
+/** The gym bro's purchase, on his shoulder: a boxed TV (0) or a rowing machine (1). */
+function carton(ctx, kind, flip) {
+  if (kind === 0) {
+    // Black box with a picture of the telly on the side the world can see.
+    box(ctx, -13, -8, 26, 15, 1.5, '#23272e', 1.8);
+    box(ctx, -11, -5.5, 14, 10, 1, '#4fb3ff', 1.2);
+    ctx.fillStyle = '#bfe6ff';
+    ctx.fillRect(-9.5, -4, 5, 1.6);
+    print(ctx, 'TV', -4, 0.6, 6.5, '#ffffff', flip);
+    ctx.fillStyle = '#ff3d3d';
+    ctx.fillRect(-12, -7.2, 5, 2.2);
+  } else {
+    box(ctx, -13, -8, 26, 15, 1.5, C.cardboard, 1.8);
+    ctx.fillStyle = C.cardboardLight;
+    ctx.fillRect(-1.5, -7.2, 3, 13.4);
+    // A rowing machine drawn on the side: rail, seat, flywheel.
+    ctx.beginPath();
+    ctx.moveTo(-10, 3.5); ctx.lineTo(9, -1);
+    ctx.strokeStyle = '#3a2a20'; ctx.lineWidth = 1.6; ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(8.5, -1.5, 2.6, 0, TAU);
+    ctx.stroke();
+    ctx.fillStyle = '#3a2a20';
+    ctx.fillRect(-6, -0.6, 4, 1.8);
+    print(ctx, 'ROW', -6.5, -4.5, 5, '#3a2a20', flip);
+  }
+}
+
+function gymbro(ctx, P) {
+  const sw = P.sw;
+  // Tiny legs: he skips leg day.
+  limb(ctx, -2, -6.5, -2 - sw * 1.6, -1.5, C.skin, 2.3);
+  shoe(ctx, -2 - sw * 1.6, -0.8, '#2b2f34');
+  limb(ctx, 2, -6.5, 2 + sw * 1.6, -1.5, C.skin, 2.3);
+  shoe(ctx, 2 + sw * 1.6, -0.8, '#2b2f34');
+  box(ctx, -4.6, -10, 9.2, 4.5, 1.5, '#2b2f36', 1.5);
+  // The box resting on his back shoulder, behind his head, his arm reaching back to steady it.
+  ctx.save();
+  ctx.translate(-11.5, -28.5);
+  ctx.rotate(0.12);
+  carton(ctx, P.v % 2, P.face);
+  ctx.restore();
+  limb(ctx, -8, -19.5, -15.5, -21, C.skin, 4.6);
+  circle(ctx, -16.5, -21.8, 2.6, C.skin, 1.2);
+  // Torso: a wedge of muscle, tank top over it.
+  ctx.beginPath();
+  ctx.moveTo(-4, -8);
+  ctx.lineTo(4, -8);
+  ctx.lineTo(11.5, -20.5);
+  ctx.quadraticCurveTo(0, -29, -11.5, -20.5);
+  ctx.closePath();
+  paint(ctx, C.skin, OUT);
+  ctx.beginPath();
+  ctx.moveTo(-3.6, -8.4);
+  ctx.lineTo(3.6, -8.4);
+  ctx.lineTo(7, -19);
+  ctx.lineTo(5.4, -24);
+  ctx.lineTo(3.6, -24.2);
+  ctx.quadraticCurveTo(1, -18.5, -1.8, -24.2);
+  ctx.lineTo(-3.8, -24);
+  ctx.lineTo(-7, -19);
+  ctx.closePath();
+  paint(ctx, TANKS[P.v], 1.5);
+  ctx.beginPath(); // pecs
+  ctx.moveTo(-4.5, -16.5); ctx.quadraticCurveTo(-1, -14.5, 1, -17);
+  ctx.moveTo(1, -17); ctx.quadraticCurveTo(3, -14.5, 5.8, -16.5);
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 1.1; ctx.stroke();
+  // Small head on a thick neck, buzz cut, smug grin.
+  const x = 1.8, y = -29.5;
+  box(ctx, -1.5, -28, 6.5, 4, 1.5, C.skin, 0);
+  head(ctx, x, y, 5.2);
+  ctx.beginPath();
+  ctx.arc(x, y, 5.6, Math.PI * 1.02, Math.PI * 1.98);
+  ctx.closePath();
+  paint(ctx, '#3a2a1e', 1.2);
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(x + 1.1, y - 0.2, 1.05, 0, TAU);
+  ctx.arc(x + 4, y - 0.2, 1.05, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - 0.8, y - 2.6); ctx.lineTo(x + 2.2, y - 2);
+  ctx.moveTo(x + 3, y - 2); ctx.lineTo(x + 5.8, y - 2.6);
+  ctx.moveTo(x + 0.6, y + 2.2); ctx.quadraticCurveTo(x + 3, y + 4.2, x + 5.4, y + 1.4);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.lineCap = 'round'; ctx.stroke();
+  // Front arm: boulder shoulder, bicep, fist.
+  const fx = 13.5 + sw * 1.2, fy = -9.5;
+  limb(ctx, 8.5, -18, 10.5, -12.5, C.skin, 5.4);
+  limb(ctx, 10.5, -12.5, fx, fy, C.skin, 4.4);
+  circle(ctx, 8.5, -19.5, 4.6, C.skin, OUT);
+  ctx.beginPath();
+  ctx.ellipse(10, -15, 3.2, 2.4, 1.2, 0, TAU);
+  paint(ctx, C.skin, 1.2);
+  circle(ctx, fx + 0.3, fy + 0.3, 2.5, C.skin, 1.2);
+}
+
+const DRAW = [hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit];
 
 // --- sprite cache ----------------------------------------------------------------------------
 
-const pose = { v: 0, sw: 0, moving: false, alt: false, ph: 0 };
+const pose = { v: 0, sw: 0, moving: false, alt: false, ph: 0, down: false, face: 1 };
 
 /**
  * Pre-rendered shopper poses. Call setScale() whenever the screen scale changes; sprites are
@@ -402,18 +934,20 @@ export function createShopperSprites() {
     let c = map.get(key);
     if (c) return c;
     c = document.createElement('canvas');
-    c.width = Math.max(1, Math.ceil(BW * scale));
-    c.height = Math.max(1, Math.ceil(BH * scale));
+    c.width = Math.max(1, Math.ceil(K.bw * scale));
+    c.height = Math.max(1, Math.ceil(K.bh * scale));
     const g = c.getContext('2d');
-    const kx = c.width / BW, ky = c.height / BH;
-    g.setTransform(kx, 0, 0, ky, -BX * kx, -BY * ky);
+    const kx = c.width / K.bw, ky = c.height / K.bh;
+    g.setTransform(kx, 0, 0, ky, -boxX(K, face) * kx, -K.by * ky);
     pose.v = v;
-    pose.moving = frame !== STAND;
+    pose.moving = frame < WALK_FRAMES;
+    pose.down = frame === DOWN;
     pose.ph = pose.moving ? frame / WALK_FRAMES : 0;
     pose.sw = pose.moving ? Math.sin(pose.ph * TAU) : 0;
     pose.alt = alt;
+    pose.face = face > 0 ? 1 : -1;
     g.scale(face * K.sc, K.sc);
-    if (pose.moving && K.n !== 4) g.rotate(0.07); // lean into the walk (scooters do not lean)
+    if (pose.moving && !K.still) g.rotate(0.07); // lean into the walk (scooters do not lean)
     DRAW[K.n](g, pose);
     map.set(key, c);
     return c;
@@ -467,11 +1001,42 @@ function puff(ctx, x, y, k) {
 }
 
 /** Adds this shopper's ground shadow to the current path (all shadows are filled at once). */
-export function shadowPath(ctx, s, sx, sy) {
+export function shadowPath(ctx, s, sx, sy, face = 1) {
   const K = KIND[s.k] || KIND.hunter;
-  const rx = (s.k === 'scooter' ? 18 : 9) * K.sc;
-  ctx.moveTo(sx + rx, sy + FEET);
-  ctx.ellipse(sx, sy + FEET, rx, 3.5, 0, 0, TAU);
+  let rx = (s.k === 'scooter' ? 18 : s.k === 'gymbro' ? 11 : 9) * K.sc;
+  let cx = sx;
+  if (s.k === 'blind' && s.st !== ST.STUN) {
+    // One long shadow under the man and his dog.
+    const bolt = s.bt > 0;
+    cx += face * (bolt ? 15 : 10);
+    rx = bolt ? 27 : 20;
+  }
+  ctx.moveTo(cx + rx, sy + FEET);
+  ctx.ellipse(cx, sy + FEET, rx, 3.5, 0, 0, TAU);
+}
+
+/** Adds the shadow of a mom's loose child (at its own position) to the current path. */
+export function kidShadowPath(ctx, sx, sy) {
+  ctx.moveTo(sx + 5.5, sy + FEET);
+  ctx.ellipse(sx, sy + FEET, 5.5, 2.4, 0, 0, TAU);
+}
+
+/**
+ * Draws a mom's runaway child at its own position (only while mom.kd > 0): sprinting with motion
+ * lines while it runs (kd 1), bouncing on the spot and pulling faces while it waits (kd 2).
+ */
+export function drawKid(ctx, mom, sx, sy, face, F, sprites) {
+  const running = mom.kd === 1;
+  let frame = STAND, hop;
+  if (running) {
+    const ph = F.time * KID.step + mom.id * 1.3;
+    frame = ((((ph / TAU) % 1) + 1) % 1 * WALK_FRAMES) | 0;
+    hop = Math.abs(Math.cos(frame / WALK_FRAMES * TAU)) * 2;
+  } else {
+    hop = Math.abs(Math.sin(F.time * 9 + mom.id)) * 5;
+  }
+  const img = sprites.get(KID, 0, face, frame, !running);
+  ctx.drawImage(img, sx + boxX(KID, face), sy + FEET + KID.by - hop, KID.bw, KID.bh);
 }
 
 /**
@@ -485,40 +1050,52 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites) {
   const leaving = s.st === ST.LEAVE;
   const stunned = s.st === ST.STUN;
   const moving = (s.vx !== 0 || s.vy !== 0) && !leaving && !stunned;
-  const ph = F.time * K.step + s.id * 1.7; // walking cycle, radians
-  const frame = moving ? ((((ph / TAU) % 1) * WALK_FRAMES) | 0) : STAND;
-  let alt = false;
+  let alt = false, pace = 1;
   if (s.k === 'dad') {
     // Every few seconds he checks his watch; much more often when nearly out of patience.
     const f = s.mhp > 0 ? s.hp / s.mhp : 1;
     alt = (F.time * (f < 0.4 ? 1.6 : 0.8) + s.id * 0.37) % 3 < 1.3;
   } else if (s.k === 'karen') {
     alt = ((F.time * 2.5 + s.id) | 0) % 2 === 0;
+  } else if (s.k === 'mom') {
+    alt = s.kd > 0; // chasing her child
+    if (alt) pace = 1.7;
+  } else if (s.k === 'blind') {
+    alt = s.bt > 0; // the dog is bolting
+    if (alt) pace = 2.2;
   }
+  const ph = F.time * K.step * pace + s.id * 1.7; // walking cycle, radians
+  const frame = stunned && K.down ? DOWN : moving ? ((((ph / TAU) % 1) * WALK_FRAMES) | 0) : STAND;
   const v = K.vars > 1 ? s.id % K.vars : 0;
   const img = sprites.get(K, v, face, frame, alt);
   const fy = sy + FEET;
+  const bx = boxX(K, face);
 
   if (leaving) {
     const fade = Math.max(0, Math.min(1, (s.t - F.alpha) / LEAVE_TICKS));
     ctx.globalAlpha = fade;
-    ctx.drawImage(img, sx + BX + Math.sin(F.time * 60) * 1.2, fy + BY, BW, BH); // shaking with rage
+    ctx.drawImage(img, sx + bx + Math.sin(F.time * 60) * 1.2, fy + K.by, K.bw, K.bh); // shaking with rage
     ctx.globalAlpha = Math.min(1, fade * 1.6);
     puff(ctx, sx, fy - K.top * K.sc - 4 - (1 - fade) * 10, 1 - fade);
     ctx.globalAlpha = 1;
     return;
   }
   if (stunned) {
+    if (s.k === 'blind') {
+      // His dog sits by him, ahead, looking back at him.
+      const dimg = sprites.get(DOGSIT, 0, -face, STAND, false);
+      ctx.drawImage(dimg, sx + face * 21 + boxX(DOGSIT, -face), fy + DOGSIT.by, DOGSIT.bw, DOGSIT.bh);
+    }
     // Flat on his back, feet toward where he was going, stars round his head.
     ctx.save();
     ctx.translate(sx - face * 2, fy - 3);
     ctx.rotate(-face * Math.PI * 0.47);
-    ctx.drawImage(img, BX, BY + 14, BW, BH);
+    ctx.drawImage(img, bx, K.by + 14, K.bw, K.bh);
     ctx.restore();
     stars(ctx, sx - face * 16, fy - 10, F.time);
   } else {
-    const bob = moving ? Math.abs(Math.cos(frame / WALK_FRAMES * TAU)) * 1.3 : 0;
-    ctx.drawImage(img, sx + BX, fy + BY - bob, BW, BH);
+    const bob = moving ? Math.abs(Math.cos(frame / WALK_FRAMES * TAU)) * (pace > 1 ? 2.2 : 1.3) : 0;
+    ctx.drawImage(img, sx + bx, fy + K.by - bob, K.bw, K.bh);
   }
   const top = fy - K.top * K.sc;
   if (s.st === ST.BROWSE) thought(ctx, sx + 10, top - 10, s.k === 'clipper' ? '%' : '$');

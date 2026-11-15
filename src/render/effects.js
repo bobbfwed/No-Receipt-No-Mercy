@@ -1,16 +1,16 @@
 // Short-lived effects driven by simulation events: floating cash, speech blips, "WHOA" pops,
-// forklift shots and sprinkler bursts. A fixed pool of effect objects is reused so a big wave
-// does not allocate, and every kind has a cap so the screen stays readable.
+// forklift shots, sprinkler bursts and crate debris. A fixed pool of effect objects is reused so
+// a big wave does not allocate, and every kind has a cap so the screen stays readable.
 import { W, H, BUILD } from '../sim/index.js';
-import { TILE, INK, C, rr, paint, label, starPath, font } from './paint.js';
+import { TILE, INK, C, rr, paint, label, starPath, burstPath, font, hash2 } from './paint.js';
 import { drawItem } from './items.js';
 
 const T = TILE;
-const TEXT = 1, BLIP = 2, POP = 3, SHOT = 4, SPRAY = 5;
+const TEXT = 1, BLIP = 2, POP = 3, SHOT = 4, SPRAY = 5, DEBRIS = 6;
 /** At most this many of each kind on screen at once; extra events are skipped. */
-const CAP = [0, 24, 6, 12, 16, 24];
+const CAP = [0, 24, 6, 12, 16, 24, 6];
 /** Lifetime of each kind in ms. */
-const DUR = [0, 1100, 1900, 850, 280, 420];
+const DUR = [0, 1100, 1900, 850, 280, 420, 950];
 const POOL = 90;
 /**
  * Events processed per frame at most. Normally a frame brings a handful; after a fast-forward or
@@ -20,12 +20,24 @@ const MAX_EVENTS = 48;
 
 const DAD_LINES = ["I'll come back Tuesday", 'Forget it', 'I have a lawn'];
 const ANGRY = ['#@!', '%$#!', '>:(', '!!!'];
+/** What each kind says as it storms out, and in what colour (kinds not listed just swear). */
+const LEFT_LINES = {
+  dad: [DAD_LINES, INK],
+  teen: [['whatever'], '#7c3aed'],
+  mom: [['we are LEAVING'], '#c2307a'],
+  blind: [['come on, boy'], '#1a5fa0'],
+  gymbro: [['bro.'], '#d9372b'],
+};
+const KID_LINES = ['WHEEE', "CAN'T CATCH ME", 'NO'];
+/** Pop styles: plain word, white star (WHOA), jagged burst (WOOF, CRUNCH), flying droplets. */
+const PLAIN = 0, STAR = 1, JAGGED = 2, SPLASH = 3;
+const DEBRIS_BITS = 9;
 const SPRAY_DROPS = 12;
 
 export function createEffects() {
   const pool = [];
   for (let k = 0; k < POOL; k++) {
-    pool.push({ type: 0, t0: 0, x: 0, y: 0, x2: 0, y2: 0, text: '', color: '', w: 0, r: 0 });
+    pool.push({ type: 0, t0: 0, x: 0, y: 0, x2: 0, y2: 0, text: '', color: '', w: 0, r: 0, st: PLAIN, sz: 0 });
   }
   const count = new Int32Array(CAP.length);
   /** Times (ms) of the latest event per tile or row, read by buildings and the tills. */
@@ -49,7 +61,7 @@ export function createEffects() {
       if (!oldest || e.t0 < oldest.t0) oldest = e;
     }
     if (!slot) { slot = oldest; count[slot.type]--; }
-    slot.type = type; slot.t0 = now; slot.x = x; slot.y = y; slot.w = 0;
+    slot.type = type; slot.t0 = now; slot.x = x; slot.y = y; slot.w = 0; slot.r = 0; slot.st = PLAIN; slot.sz = 0;
     count[type]++;
     return slot;
   }
@@ -74,13 +86,15 @@ export function createEffects() {
           f = add(BLIP, now, e.x * T, e.y * T - 30);
           if (f) {
             pick++;
-            f.text = e.k === 'dad' ? DAD_LINES[pick % DAD_LINES.length] : ANGRY[pick % ANGRY.length];
-            f.color = e.k === 'dad' ? INK : '#d9372b';
+            const said = LEFT_LINES[e.k];
+            f.text = said ? said[0][pick % said[0].length] : ANGRY[pick % ANGRY.length];
+            f.color = said ? said[1] : '#d9372b';
+            f.sz = f.text.length > 5 ? 11 : 13;
           }
           break;
         case 'slip':
           f = add(POP, now, e.x * T, e.y * T - 26);
-          if (f) { f.text = 'WHOA!'; f.color = C.yellow; f.r = -0.15; }
+          if (f) { f.text = 'WHOA!'; f.color = C.yellow; f.r = -0.15; f.st = STAR; }
           break;
         case 'grab':
           f = add(POP, now, e.x * T, e.y * T - 30);
@@ -98,6 +112,28 @@ export function createEffects() {
           timers.shotAt[e.i] = now;
           f = add(SHOT, now, (e.i % W) * T + T / 2, ((e.i / W) | 0) * T + T / 2);
           if (f) { f.x2 = e.x * T; f.y2 = e.y * T; }
+          break;
+        case 'mess':
+          f = add(POP, now, (e.i % W) * T + T / 2, ((e.i / W) | 0) * T + 8);
+          if (f) { f.text = 'splat'; f.color = '#3fc6ff'; f.r = -0.1; f.st = SPLASH; f.sz = 12; }
+          break;
+        case 'kid':
+          f = add(BLIP, now, e.x * T + 6, e.y * T - 24);
+          if (f) { pick++; f.text = KID_LINES[pick % KID_LINES.length]; f.color = '#e8590c'; f.sz = 12; }
+          break;
+        case 'caught':
+          f = add(POP, now, e.x * T, e.y * T - 34);
+          if (f) { f.text = 'gotcha'; f.color = '#4ade80'; f.r = 0.08; f.sz = 13; }
+          break;
+        case 'bolt':
+          f = add(POP, now, e.x * T + 14, e.y * T - 30);
+          if (f) { f.text = 'WOOF!'; f.color = '#d9372b'; f.r = -0.12; f.st = JAGGED; f.sz = 15; }
+          break;
+        case 'smash':
+          f = add(DEBRIS, now, (e.i % W) * T + T / 2, ((e.i / W) | 0) * T + T / 2);
+          if (f) f.x2 = e.i;
+          f = add(POP, now, (e.i % W) * T + T / 2, ((e.i / W) | 0) * T - 6);
+          if (f) { f.text = 'CRUNCH'; f.color = C.orange; f.r = 0.1; f.st = JAGGED; f.sz = 14; }
           break;
         default:
       }
@@ -120,6 +156,7 @@ export function createEffects() {
         case POP: pop(ctx, e, k01); break;
         case SHOT: shot(ctx, e, k01, sprites); break;
         case SPRAY: spray(ctx, e, k01); break;
+        case DEBRIS: debris(ctx, e, k01); break;
         default:
       }
     }
@@ -143,7 +180,7 @@ function floatText(ctx, e, k) {
 /** A speech bubble with a tail, kept inside the world so it is never cut off. */
 function blip(ctx, e, k) {
   ctx.globalAlpha = fadeOut(k, 0.8);
-  const size = e.color === INK ? 11 : 13;
+  const size = e.sz || 13;
   ctx.font = font(size);
   if (!e.w) e.w = ctx.measureText(e.text).width + 12;
   const w = e.w, h = size + 9;
@@ -173,11 +210,25 @@ function pop(ctx, e, k) {
   ctx.translate(e.x, e.y - k * 12);
   ctx.rotate(e.r);
   ctx.scale(s, s);
-  if (e.text === 'WHOA!') {
+  if (e.st === STAR) {
     starPath(ctx, 0, 0, 22, 0);
     paint(ctx, '#ffffff', 2);
+  } else if (e.st === JAGGED) {
+    burstPath(ctx, 0, 0, 22, 11, 0.2);
+    paint(ctx, '#fff3a8', 2);
+  } else if (e.st === SPLASH) {
+    // Droplets thrown up out of the splat, falling back.
+    ctx.beginPath();
+    for (let j = 0; j < 7; j++) {
+      const a = -Math.PI * (0.08 + 0.84 * (j / 6));
+      const d = 10 + k * 20;
+      const x = Math.cos(a) * d * 1.3, y = 10 + Math.sin(a) * d + k * k * 26;
+      ctx.moveTo(x + 2.2, y);
+      ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+    }
+    paint(ctx, e.color, 1.2);
   }
-  label(ctx, e.text, 0, 0, e.text === 'ooh' ? 13 : 14, e.color, INK, 3.5);
+  label(ctx, e.text, 0, 0, e.sz || (e.text === 'ooh' ? 13 : 14), e.color, INK, 3.5);
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -244,5 +295,41 @@ function spray(ctx, e, k) {
   }
   ctx.fillStyle = '#ff5a1a';
   ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/** A crate stack smashed apart: planks and splinters flung outward, and a puff of dust. */
+function debris(ctx, e, k) {
+  const seed = e.x2 | 0;
+  ctx.globalAlpha = 0.55 * (1 - k);
+  ctx.beginPath();
+  ctx.ellipse(e.x, e.y + 4, 12 + k * 26, 7 + k * 12, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#d8c7a6';
+  ctx.fill();
+  ctx.globalAlpha = fadeOut(k, 0.6);
+  for (let j = 0; j < DEBRIS_BITS; j++) {
+    const h1 = hash2(seed, j), h2 = hash2(j, seed + 7);
+    const a = (j / DEBRIS_BITS) * Math.PI * 2 + h1 * 0.6;
+    const v = 30 + h2 * 34;
+    // Out along the angle, thrown up and falling back down.
+    const x = e.x + Math.cos(a) * v * k;
+    const y = e.y + Math.sin(a) * v * k * 0.6 - 40 * k + 46 * k * k;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a + k * (h1 > 0.5 ? 9 : -9));
+    if (j % 3 !== 2) {
+      ctx.beginPath();
+      ctx.rect(-6, -1.8, 12, 3.6);
+      paint(ctx, j % 2 ? '#b57a3c' : C.wood, 1.3);
+      ctx.fillStyle = '#7a4f22';
+      ctx.fillRect(-4, -0.4, 2, 0.9);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(-4, 0); ctx.lineTo(4, -1.2); ctx.lineTo(3, 1.2);
+      ctx.closePath();
+      paint(ctx, C.cardboardLight, 1);
+    }
+    ctx.restore();
+  }
   ctx.globalAlpha = 1;
 }

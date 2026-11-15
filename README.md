@@ -9,7 +9,9 @@ Double-click `play.bat`. It starts a small local server and opens the game in yo
 
 Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chrome, Edge or Firefox.
 
-- **Play solo** starts straight away.
+- **Training shift** teaches every building hands on, in about ten minutes. Start here.
+- **Play solo** starts a real game straight away.
+- The speaker button at the top right turns sound effects, music and DEB's voice on or off.
 - To try multiplayer alone, open http://localhost:5173/tools/two-player.html : a host and a second player side by side.
 
 ## Play with friends in other houses

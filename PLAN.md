@@ -17,6 +17,8 @@ A discount warehouse on Black Friday. Shoppers come in on the left and want a re
 | Late joining | Friends can join at any time; a dropped player gets his slot back by name | Friends turn up late |
 | Roles | Job titles are cosmetic in this version; anyone can build anything | Lets one or two players cover everything. Restricting roles can come later if wanted |
 | Dads | As described above | Interpretation of "dads that just want to get through the line as quickly as possible" |
+| Sound | Everything is generated in the browser (no audio files); DEB's lines are read aloud by the browser's built-in voice; all three (effects, music, voice) are on by default with a menu to switch them off | No assets to make or license. The voice depends on what the player's computer has installed |
+| Extra shoppers | Besides the teenager, mom-and-kid and guide dog the owner described, a Gym Bro who walks through crate stacks | Owner asked for "a couple more"; this one gives crate walls a weakness, as dads do for belts |
 | Difficulty | Tuned with scripted players (`node tools/balance.mjs`): a player who stops investing mid-game loses around wave 17; one who keeps investing wins with 10 to 18 refunds | Needs real playtesting; all numbers are in `src/sim/constants.js` |
 
 ## Milestones
@@ -26,13 +28,16 @@ A discount warehouse on Black Friday. Shoppers come in on the left and want a re
 4. **Graphics** - done. Canvas drawing of the warehouse, every building, five shopper types with states, and effects.
 5. **Interface** - done. Menu, host/join with invite link, HUD, build bar, mouse and keyboard building, speech bubble, reviews, performance review, end screens.
 6. **Integration and checks** - done on one machine. Checked by screenshot: menu, solo, mid-wave, performance review, game over, two players side by side (between tabs and through the internet broker), and building with simulated mouse and keyboard events.
-7. **Playtest with real people** - owner. Needs the files on a web address (see README.md), then two or more people on different networks. Things only a real session can show: whether every friend's home network lets the browsers connect directly, how it feels with real lag, and whether the difficulty is right.
+7. **Training shift (tutorial)** - done. Fifteen hands-on lessons covering every building, the shopper route and dads. A test plays it end to end. The floor also shows the shopper route while building, holding a building explains it in the build bar, and the ? screen lists every building and shopper.
+8. **Sound** - done, not yet heard by a person. Synthesized effects, store muzak and DEB's spoken lines, with a speaker menu to switch each off. Measured (audible, not clipping), not listened to.
+9. **More shoppers** - done. Teenager (messes slow others), Mom and Kid (runaway child, she sprints after him), Man with Guide Dog (spray makes the dog bolt), Gym Bro (walks through crates). DEB introduces each kind when it first appears. With these in, the scripted player who keeps investing wins with 26 to 32 of 40 refunds (it was 10 to 18), so the late game is tighter.
+10. **Playtest with real people** - owner. Needs the files on a web address (see README.md), then two or more people on different networks. Things only a real session can show: whether every friend's home network lets the browsers connect directly, how it feels with real lag, and whether the difficulty is right.
 
 ## Ideas for later (not started)
 - Tower upgrades, so late-game cash has somewhere to go.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
 - More shopper types and a boss every fifth wave (the Regional Manager).
 - A second, larger map; choosing a map in the menu.
-- Sound.
+- Teaching the newer shoppers in the training shift (it currently covers dads only; the others are explained by DEB and the ? screen).
 - Saving a game in the host's browser so a session can be resumed.
 - Role restrictions as an optional hard mode.

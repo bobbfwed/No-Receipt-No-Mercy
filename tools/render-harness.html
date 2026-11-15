@@ -16,14 +16,18 @@
     ?seed=7        random seed (default 7)
     &demo=0        do not build the demo layout
     &extra=1       also build belt corners and spare machines (to see every building kind)
-    &wave=N        start at wave N (later waves bring dads, Karens and scooters)
+    &wave=N        start at wave N (later waves bring dads, Karens and scooters; moms from 3,
+                   teenagers from 4, guide dogs from 6, gym bros from 8)
     &nostart=1     stay in the build phase
     &ff=600        run that many ticks before the first frame
     &tool=belt&hx=10&hy=5&dir=1   placement preview (tool may be 'remove'); no hx/hy = follow the mouse
     &cursors=1     two more players with pointers
+    &wall=3        crate stacks down that column (gym bros smash through; seed 7 wave 8: tick 652)
     &stats=1       show frame timing (and every 60 frames the average draw time)
     &null=1        a session with no state (should draw only the background)
-    &lineup=1      every shopper kind in every state, large, plus every effect at &fxage=350 ms old
+    &lineup=1      every shopper kind in every state, large (fitted to the window, or &zoom=2),
+                   plus messes and every effect at &fxage=350 ms old; &pan=x,y scrolls it
+                   (logical pixels) for close-ups with a big &zoom
     &allfx=1       inject one of every effect event every &every=1200 ms at fixed places
     &zoom=1.6&at=24,7   draw bigger than the window, centred on that tile (close-ups)
   Debugging and stress tests:
@@ -84,6 +88,11 @@ if (q.get('null') === '1') {
       const r = applyCommand(s, 0, { c: 'place', k, x, y, d });
       if (!r.ok) console.warn('extra', k, x, y, r.why);
     }
+  }
+  // &wall=3  a wall of crate stacks down column 3 (gap in the top row): gym bros smash through it
+  if (q.has('wall')) {
+    s.cash += 5000;
+    for (let y = 2; y < 15; y++) applyCommand(s, 0, { c: 'place', k: 'crate', x: num('wall', 3), y, d: 0 });
   }
   if (q.get('cursors') === '1') { addPlayer(s, 'Steve'); addPlayer(s, 'Kev'); }
   if (q.has('wave')) s.wave = Math.max(0, num('wave', 1) - 1);
@@ -172,6 +181,11 @@ if (q.get('allfx') === '1' && session.fx) {
     { e: 'sample', x: 9.5, y: 12.2 },
     { e: 'spray', i: 3 * 30 + 12 },
     { e: 'shot', i: 8 * 30 + 9, x: 12.5, y: 6.5 },
+    { e: 'mess', i: 13 * 30 + 13 },
+    { e: 'kid', x: 22.5, y: 2.5 },
+    { e: 'caught', x: 22.5, y: 13.5 },
+    { e: 'bolt', x: 6.5, y: 2.5 },
+    { e: 'smash', i: 13 * 30 + 24, x: 24.5, y: 13.5 },
   );
   inject();
   setInterval(inject, num('every', 1200));
@@ -205,39 +219,75 @@ let drawn = 0;
 const maxFrames = num('frames', Infinity);
 if (q.get('lineup') === '1') {
   // Every shopper kind in every state, drawn large, for checking the art.
-  const { drawShopper, createShopperSprites } = await import('../src/render/shoppers.js');
+  // Rows: the nine kinds. Columns: walking right, walking left, browsing, stunned, leaving; then
+  // two extra poses for the mom (chasing her running child, child waiting) and the man with the
+  // guide dog (bolting, right and left). To the right: messes and one of each effect.
+  const { drawShopper, drawKid, createShopperSprites } = await import('../src/render/shoppers.js');
+  const { createMessSprites, drawMesses } = await import('../src/render/messes.js');
+  const { TUNE, TICK_HZ } = await import('../src/sim/index.js');
   const sprites = createShopperSprites();
+  const messSprites = createMessSprites();
   const g = canvas.getContext('2d');
-  const kinds = ['hunter', 'clipper', 'dad', 'karen', 'scooter'];
+  const kinds = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro'];
   const states = [[0, 1, 0.05], [0, -1, -0.05], [1, 1, 0], [2, 1, 0], [3, 1, 0]];
-  const z = num('zoom', 2.4);
+  const colX = [36, 98, 160, 222, 284, 360, 470];
+  const rowY = (r) => 46 + r * 52;
+  canvas.width = innerWidth; canvas.height = innerHeight;
+  // Logical size of the line-up is about 880 x 520; fit it unless &zoom is given.
+  const z = num('zoom', Math.min(canvas.width / 880, canvas.height / 520));
   sprites.setScale(z);
-  // To the right: one of each effect, frozen at &fxage ms old (default 350).
+  messSprites.setScale(z);
+  // One of each effect, frozen at &fxage ms old (default 350).
   const { createEffects } = await import('../src/render/effects.js');
   const { buildItemSprites } = await import('../src/render/items.js');
   const items = buildItemSprites(z);
   const fxAge = num('fxage', 350);
+  const life = Math.round(TUNE.messSecs * TICK_HZ);
+  const ti = (x, y) => y * 30 + x;
   const lineup = (t) => {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#8d9093';
     g.fillRect(0, 0, canvas.width, canvas.height);
-    g.setTransform(z, 0, 0, z, 0, 0);
+    const [panX, panY] = (q.get('pan') || '0,0').split(',').map(Number);
+    g.setTransform(z, 0, 0, z, -panX * z, -panY * z);
     const F = { time: t / 1000, now: t, alpha: 0 };
-    kinds.forEach((k, r) => states.forEach(([st, face, vx], c) => {
-      const sh = { id: r * 7 + c, k, x: 0, y: 0, vx, vy: 0, hp: c === 0 ? 30 : 15, mhp: 30, st, t: st === 3 ? 12 : 20, cd: 0 };
-      drawShopper(g, sh, 40 + c * 60, 40 + r * 52, face, F, sprites);
-    }));
+    // Messes along the bottom right: fresh (splashing in), settled (both flavours), fading out.
+    drawMesses(g, [[ti(14, 12), life - 2], [ti(16, 12), 200], [ti(18, 12), 150], [ti(20, 12), 14]], 0, messSprites);
+    kinds.forEach((k, r) => {
+      const cols = states.map(([st, face, vx]) => ({ st, face, vx }));
+      if (k === 'mom') cols.push({ st: 0, face: 1, vx: 0.05, kd: 1 }, { st: 0, face: 1, vx: 0.05, kd: 2 });
+      if (k === 'blind') cols.push({ st: 0, face: 1, vx: 0.08, bt: 20 }, { st: 0, face: -1, vx: -0.08, bt: 20 });
+      cols.forEach(({ st, face, vx, kd = 0, bt = 0 }, c) => {
+        const sh = {
+          id: r * 7 + c, k, x: 0, y: 0, vx, vy: 0, hp: c === 0 ? 30 : 15, mhp: 30, st, t: st === 3 ? 12 : 20, cd: 0,
+          kd, kx: 0, ky: 0, kvx: kd === 1 ? 0.14 : 0, kvy: 0, bt,
+        };
+        const x = colX[c], y = rowY(r);
+        drawShopper(g, sh, x, y, face, F, sprites);
+        // The loose child, out ahead of her (drawKid is told where; the renderer uses kx, ky).
+        if (kd) drawKid(g, sh, x + 36, y + 4, kd === 2 ? -1 : 1, F, sprites);
+      });
+    });
     const fx = createEffects();
     fx.handle([
-      { e: 'sale', i: 0 * 30 + 8, v: 24 }, { e: 'escape', x: 10.5, y: 1.5, refund: 25 },
-      { e: 'left', k: 'dad', x: 8.6, y: 3.5 }, { e: 'left', k: 'karen', x: 10.4, y: 3.5 },
-      { e: 'slip', x: 8.5, y: 5 }, { e: 'grab', x: 10.5, y: 5 }, { e: 'sample', x: 8.5, y: 6.5 },
-      { e: 'spray', i: 6 * 30 + 10 }, { e: 'shot', i: 8 * 30 + 8, x: 10.5, y: 8 },
+      { e: 'sale', i: ti(14, 1), v: 24 }, { e: 'escape', x: 15.05, y: 3.3, refund: 25 },
+      { e: 'left', k: 'dad', x: 14.5, y: 5.1 }, { e: 'left', k: 'karen', x: 14.5, y: 6.6 },
+      { e: 'slip', x: 14.5, y: 7.9 }, { e: 'grab', x: 14.5, y: 9.3 }, { e: 'sample', x: 14.5, y: 10.6 },
+      { e: 'spray', i: ti(17, 2) }, { e: 'shot', i: ti(16, 5), x: 18.5, y: 5.5 },
     ], t - fxAge);
     fx.draw(g, t, 0, items);
     fx.draw(g, t, 1, items);
+    // The newer events in a second effects system, as blips are capped at six on screen.
+    const fx2 = createEffects();
+    fx2.handle([
+      { e: 'mess', i: ti(17, 7) }, { e: 'smash', i: ti(17, 9), x: 17.6, y: 9.5 },
+      { e: 'left', k: 'teen', x: 20.5, y: 2.1 }, { e: 'left', k: 'mom', x: 20.5, y: 3.6 },
+      { e: 'left', k: 'blind', x: 20.5, y: 5.1 }, { e: 'left', k: 'gymbro', x: 20.5, y: 6.6 },
+      { e: 'kid', x: 20, y: 8.1 }, { e: 'caught', x: 20.5, y: 9.4 }, { e: 'bolt', x: 20.1, y: 10.9 },
+    ], t - fxAge);
+    fx2.draw(g, t, 0, items);
+    fx2.draw(g, t, 1, items);
   };
-  canvas.width = innerWidth; canvas.height = innerHeight;
   const loop = (t) => { lineup(t); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
   session.stop && session.stop();

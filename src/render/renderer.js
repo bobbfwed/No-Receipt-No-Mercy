@@ -11,8 +11,9 @@
 //   floor.js      walls, doors, tills (mostly cached in an offscreen layer)
 //   buildings.js  belts, machines, security
 //   items.js      goods on belts (pre-rendered sprites)
-//   shoppers.js   the five kinds of shopper
-//   effects.js    floating cash, speech blips, shots and sprays from session.drainFx()
+//   messes.js     slushie spills teenagers leave on the floor
+//   shoppers.js   the nine kinds of shopper (and a mom's runaway child)
+//   effects.js    floating cash, speech blips, shots, sprays and crate debris from session.drainFx()
 import { W, H, MAP, BUILD, TUNE, TICK_HZ, ST, canPlace } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { drawStatic, drawDynamic, findSpecial } from './floor.js';
@@ -20,7 +21,8 @@ import {
   beltShape, drawBelt, drawBeltItems, drawBuilding, createBeltSprites, createBuildingSprites, SP,
 } from './buildings.js';
 import { buildItemSprites } from './items.js';
-import { drawShopper, shadowPath, createShopperSprites } from './shoppers.js';
+import { drawShopper, shadowPath, drawKid, kidShadowPath, createShopperSprites } from './shoppers.js';
+import { createMessSprites, drawMesses } from './messes.js';
 import { createEffects } from './effects.js';
 import { drawRoutes, drawMarks } from './guides.js';
 
@@ -50,7 +52,9 @@ export function createRenderer(canvas, session) {
   const shopperSprites = createShopperSprites();
   const fx = createEffects();
   const special = findSpecial(MAP.join(''));
-  const order = []; // shoppers sorted for drawing, reused every frame
+  const order = []; // shoppers (and loose children) sorted for drawing, reused every frame
+  const kids = []; // reusable stand-ins for loose children in `order`: { kid: true, y, m: mom }
+  const messSprites = createMessSprites();
   const facing = new Map(); // shopper id -> 1 or -1, so a stopped shopper keeps facing the same way
   const shapes = new Int8Array(W * H); // belt bend per tile, worked out once per frame
   let doorOpen = 0;
@@ -80,6 +84,7 @@ export function createRenderer(canvas, session) {
     beltSprites.setScale(scale);
     buildingSprites.setScale(scale);
     shopperSprites.setScale(scale);
+    messSprites.setScale(scale);
   }
 
   function tileAt(clientX, clientY) {
@@ -134,6 +139,8 @@ export function createRenderer(canvas, session) {
     // Doors slide open while a wave is on.
     doorOpen += ((s.phase === 'wave' ? 1 : 0) - doorOpen) * Math.min(1, dt * 4);
     drawDynamic(ctx, special, doorOpen, fx.timers.tillAt, now);
+    // Teenagers' slushie spills, on the floor under everything else.
+    if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites);
 
     const grid = s.grid;
     // Belts first (flat on the floor), then the goods riding on them, then everything else.
@@ -165,28 +172,57 @@ export function createRenderer(canvas, session) {
     ctx.restore();
   }
 
+  /** Which way a shopper faces, remembered so one who stops keeps facing the same way. */
+  function faceOf(key, vx) {
+    let f = facing.get(key);
+    if (vx > 0.002 && f !== 1) { f = 1; facing.set(key, 1); } else if (vx < -0.002 && f !== -1) { f = -1; facing.set(key, -1); }
+    return f || 1;
+  }
+
   function drawShoppers(s, alpha) {
     order.length = 0;
-    for (const sh of s.shoppers) order.push(sh);
+    let nk = 0;
+    for (const sh of s.shoppers) {
+      order.push(sh);
+      // A mom's loose child is a figure of its own on the floor, sorted in with everyone else.
+      if (sh.kd > 0 && sh.st !== ST.LEAVE) {
+        let p = kids[nk];
+        if (!p) { p = { kid: true, y: 0, m: null }; kids.push(p); }
+        p.y = sh.ky; p.m = sh;
+        order.push(p);
+        nk++;
+      }
+    }
     order.sort(byY);
     // All ground shadows in one path, then the figures back to front.
     ctx.beginPath();
     for (let n = 0; n < order.length; n++) {
       const sh = order[n];
-      if (sh.st !== ST.LEAVE) shadowPath(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T);
+      if (sh.kid) {
+        const m = sh.m;
+        kidShadowPath(ctx, (m.kx + m.kvx * alpha) * T, (m.ky + m.kvy * alpha) * T);
+      } else if (sh.st !== ST.LEAVE) {
+        shadowPath(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T, faceOf(sh.id, sh.vx));
+      }
     }
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.fill();
     for (let n = 0; n < order.length; n++) {
       const sh = order[n];
-      let f = facing.get(sh.id);
-      if (sh.vx > 0.002 && f !== 1) { f = 1; facing.set(sh.id, 1); } else if (sh.vx < -0.002 && f !== -1) { f = -1; facing.set(sh.id, -1); }
-      drawShopper(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T, f || 1, F, shopperSprites);
+      if (sh.kid) {
+        const m = sh.m;
+        // Running: faces where it runs. Waiting: turns round to pull faces at its mother.
+        const f = m.kd === 2 ? (m.x >= m.kx ? 1 : -1) : faceOf(-m.id, m.kvx);
+        drawKid(ctx, m, (m.kx + m.kvx * alpha) * T, (m.ky + m.kvy * alpha) * T, f, F, shopperSprites);
+        continue;
+      }
+      drawShopper(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T, faceOf(sh.id, sh.vx), F, shopperSprites);
     }
+    for (let k = 0; k < nk; k++) kids[k].m = null;
     // Forget shoppers who have gone, now and then.
     if (++frames % 600 === 0 && facing.size > order.length + 20) {
       const live = new Set();
-      for (const sh of order) live.add(sh.id);
+      for (const sh of s.shoppers) { live.add(sh.id); live.add(-sh.id); }
       for (const id of facing.keys()) if (!live.has(id)) facing.delete(id);
     }
   }
