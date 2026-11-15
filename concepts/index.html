@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Concepts: Pick Your Poison</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --panel2: #262a32; --line: #353a45;
+    --text: #e9e6df; --muted: #a09c93; --accent: #ffb000;
+    --yes: #3fbf6b; --maybe: #e0a92e; --no: #e0553f; --core: #5aa9e6; --wild: #c77dff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 "Segoe UI", system-ui, Arial, sans-serif; }
+  header.top { max-width: 1500px; margin: 0 auto; padding: 36px 24px 12px; }
+  h1 { font: 800 clamp(30px, 4vw, 46px)/1.1 Georgia, "Times New Roman", serif; margin: 0 0 10px; letter-spacing: -0.5px; text-wrap: balance; }
+  h1 em { color: var(--accent); font-style: normal; }
+  .intro { color: var(--muted); max-width: 78ch; margin: 0; }
+  .intro b { color: var(--text); }
+
+  .bar { position: sticky; top: 0; z-index: 5; background: rgba(20,22,26,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+  .bar-in { max-width: 1500px; margin: 0 auto; padding: 10px 24px; display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; }
+  .tally { display: flex; gap: 8px; flex-wrap: wrap; flex: 1 1 320px; }
+  .pip { min-width: 34px; height: 34px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--muted);
+         display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-variant-numeric: tabular-nums; text-decoration: none; }
+  .pip.yes { background: var(--yes); border-color: var(--yes); color: #08210f; }
+  .pip.maybe { background: var(--maybe); border-color: var(--maybe); color: #2b1e00; }
+  .pip.no { background: transparent; border-color: var(--no); color: var(--no); text-decoration: line-through; }
+  .bar button { font: inherit; font-weight: 700; padding: 8px 16px; border-radius: 8px; border: 0; background: var(--accent); color: #221700; cursor: pointer; }
+  .bar button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 600; }
+  .bar button:hover { filter: brightness(1.1); }
+  #copied { color: var(--yes); font-weight: 600; min-width: 7ch; }
+
+  main { max-width: 1500px; margin: 0 auto; padding: 24px; display: grid; gap: 28px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; scroll-margin-top: 70px; }
+  .card.v-yes { border-color: var(--yes); }
+  .card.v-maybe { border-color: var(--maybe); }
+  .card.v-no { opacity: .55; }
+  .head { padding: 20px 24px 14px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .num { font: 800 44px/1 Georgia, serif; color: var(--accent); font-variant-numeric: tabular-nums; min-width: 1.4em; }
+  .titles { flex: 1 1 320px; }
+  h2 { font: 800 28px/1.15 Georgia, "Times New Roman", serif; margin: 0 0 4px; text-wrap: balance; }
+  .tagline { margin: 0; color: var(--muted); font-style: italic; }
+  .kind { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid; margin-left: 10px; vertical-align: middle; font-family: "Segoe UI", system-ui, sans-serif; }
+  .kind.core { color: var(--core); } .kind.wild { color: var(--wild); }
+
+  .verdict { display: flex; gap: 8px; }
+  .verdict button { font: inherit; font-weight: 700; padding: 9px 18px; border-radius: 9px; cursor: pointer; background: transparent; border: 2px solid var(--line); color: var(--muted); }
+  .verdict button:hover { color: var(--text); border-color: var(--muted); }
+  .verdict button[data-v="yes"].on { background: var(--yes); border-color: var(--yes); color: #08210f; }
+  .verdict button[data-v="maybe"].on { background: var(--maybe); border-color: var(--maybe); color: #2b1e00; }
+  .verdict button[data-v="no"].on { background: var(--no); border-color: var(--no); color: #2a0700; }
+
+  .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; padding: 0 24px; }
+  figure { margin: 0; }
+  .shot { display: block; width: 100%; aspect-ratio: 16/9; border-radius: 8px; border: 1px solid var(--line); background: #0c0d10; cursor: zoom-in; object-fit: cover; }
+  .shot.missing { cursor: default; }
+  figcaption { color: var(--muted); font-size: 14px; padding: 6px 2px 0; }
+
+  .body { padding: 18px 24px 22px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 18px 32px; }
+  .body h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px; }
+  .body p { margin: 0 0 14px; max-width: 70ch; }
+  .body ul { margin: 0 0 14px; padding-left: 18px; }
+  .body li { margin-bottom: 3px; }
+  blockquote { margin: 0 0 8px; padding: 8px 14px; background: var(--panel2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; font-style: italic; }
+  .who { color: var(--muted); margin-bottom: 8px !important; }
+  textarea { width: 100%; min-height: 58px; resize: vertical; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  textarea::placeholder { color: #777; }
+  button:focus-visible, textarea:focus-visible, .shot:focus-visible, .pip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #box { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none; align-items: center; justify-content: center; z-index: 20; cursor: zoom-out; padding: 2vmin; }
+  #box.open { display: flex; }
+  #box img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+  footer { max-width: 1500px; margin: 0 auto; padding: 0 24px 60px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Ten ways to get insulted <em>by your own game</em></h1>
+  <p class="intro">Rough concepts only, nothing is planned in depth yet. Each one has two mock-up screens (drawn, not playable), the one feature that makes it different, and the goal. Mark each <b>Yes</b>, <b>Maybe</b> or <b>No</b>, jot a note if you want to steal a part of it for another idea, then hit <b>Copy my picks</b> and paste the result back to Claude. Click any screen to enlarge it. Your marks are saved in this browser.</p>
+</header>
+
+<div class="bar"><div class="bar-in">
+  <div class="tally" id="tally" aria-label="Your verdicts so far"></div>
+  <span id="copied" role="status"></span>
+  <button class="ghost" id="reset" type="button">Clear all</button>
+  <button id="copy" type="button">Copy my picks</button>
+</div></div>
+
+<main id="list"></main>
+<footer>Core = tower defense plus automated production, as in the original idea. Wild = stretches the brief but still fits 1 to 6 players, one friend hosting, and specialist roles.</footer>
+<div id="box" role="dialog" aria-label="Enlarged screen"><img alt=""></div>
+
+<script src="concepts.js"></script>
+<script>
+(function () {
+  var KEY = "browser-game-concept-picks-v1";
+  var store = {};
+  try { store = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { store = {}; }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+  function get(id) { return store[id] || (store[id] = { v: "", note: "" }); }
+
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    for (var k in (attrs || {})) {
+      if (k === "text") n.textContent = attrs[k]; else if (k === "class") n.className = attrs[k]; else n.setAttribute(k, attrs[k]);
+    }
+    (kids || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  function section(title, nodes) { return el("div", {}, [el("h3", { text: title })].concat(nodes)); }
+
+  var list = document.getElementById("list");
+  var tally = document.getElementById("tally");
+  var box = document.getElementById("box");
+  var cards = {};
+
+  window.CONCEPTS.forEach(function (c) {
+    var s = get(c.id);
+    var card = el("article", { class: "card", id: "c" + c.id });
+    cards[c.id] = card;
+
+    var h2 = el("h2", { text: c.title });
+    h2.appendChild(el("span", { class: "kind " + c.kind, text: c.kind }));
+    var verdict = el("div", { class: "verdict", role: "group", "aria-label": "Verdict for " + c.title });
+    [["yes", "Yes"], ["maybe", "Maybe"], ["no", "No"]].forEach(function (p) {
+      var b = el("button", { type: "button", "data-v": p[0], text: p[1], "aria-pressed": "false" });
+      b.addEventListener("click", function () { s.v = (s.v === p[0]) ? "" : p[0]; save(); paint(); });
+      verdict.appendChild(b);
+    });
+    card.appendChild(el("div", { class: "head" }, [
+      el("div", { class: "num", text: String(c.id) }),
+      el("div", { class: "titles" }, [h2, el("p", { class: "tagline", text: c.tagline })]),
+      verdict
+    ]));
+
+    var shots = el("div", { class: "shots" });
+    c.screens.forEach(function (sc) {
+      var img = el("img", { class: "shot", src: c.slug + "/" + sc.file, alt: c.title + ": " + sc.caption, loading: "lazy", tabindex: "0" });
+      img.addEventListener("error", function () { img.classList.add("missing"); img.alt = "Screen not drawn yet"; });
+      function open() { if (img.classList.contains("missing")) return; box.firstElementChild.src = img.src; box.classList.add("open"); }
+      img.addEventListener("click", open);
+      img.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+      shots.appendChild(el("figure", {}, [img, el("figcaption", { text: sc.caption })]));
+    });
+    card.appendChild(shots);
+
+    var note = el("textarea", { placeholder: "Notes: what you'd keep, drop, or combine with another idea", "aria-label": "Notes for " + c.title });
+    note.value = s.note || "";
+    note.addEventListener("input", function () { s.note = note.value; save(); });
+
+    card.appendChild(el("div", { class: "body" }, [
+      el("div", {}, [
+        section("The pitch", [el("p", { text: c.pitch })]),
+        section("Key feature", [el("p", { text: c.feature })]),
+        section("Goal", [el("p", { text: c.goals })])
+      ]),
+      el("div", {}, [
+        section("Who does what", [el("ul", {}, c.roles.map(function (r) { return el("li", { text: r }); }))]),
+        section("Who insults you", [el("p", { class: "who", text: c.voice })].concat(c.lines.map(function (l) { return el("blockquote", { text: l }); }))),
+        section("Your notes", [note])
+      ])
+    ]));
+    list.appendChild(card);
+  });
+
+  function paint() {
+    tally.textContent = "";
+    window.CONCEPTS.forEach(function (c) {
+      var s = get(c.id), card = cards[c.id];
+      card.className = "card" + (s.v ? " v-" + s.v : "");
+      card.querySelectorAll(".verdict button").forEach(function (b) {
+        var on = b.getAttribute("data-v") === s.v;
+        b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      tally.appendChild(el("a", { class: "pip " + s.v, href: "#c" + c.id, text: String(c.id), title: c.title + (s.v ? ": " + s.v : ": undecided") }));
+    });
+  }
+  paint();
+
+  document.getElementById("copy").addEventListener("click", function () {
+    var out = ["My picks for the browser game concepts:"];
+    window.CONCEPTS.forEach(function (c) {
+      var s = get(c.id);
+      out.push(c.id + ". " + c.title + ": " + (s.v ? s.v.toUpperCase() : "undecided") + (s.note && s.note.trim() ? " | Notes: " + s.note.trim() : ""));
+    });
+    var text = out.join("\n"), msg = document.getElementById("copied");
+    function done(ok) { msg.textContent = ok ? "Copied." : "Copy failed."; setTimeout(function () { msg.textContent = ""; }, 2500); }
+    function fallback() {
+      var t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(t); done(ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(function () { done(true); }, fallback); } else { fallback(); }
+  });
+  document.getElementById("reset").addEventListener("click", function () {
+    if (!confirm("Clear all your verdicts and notes?")) return;
+    store = {}; save();
+    document.querySelectorAll("textarea").forEach(function (t) { t.value = ""; });
+    paint();
+  });
+  box.addEventListener("click", function () { box.classList.remove("open"); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") box.classList.remove("open"); });
+})();
+</script>
+</body>
+</html>
