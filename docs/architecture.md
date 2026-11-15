@@ -13,6 +13,8 @@ Dads are the special case the owner asked for. They arrive in a single-file "dad
 index.html, src/main.js      page, menu, wiring                      (UI)
 src/ui/                      HUD, build bar, speech bubbles, review  (UI, plain DOM)
 src/render/                  draws the warehouse on a canvas         (rendering)
+src/audio/                   sound effects, music, DEB's voice       (all synthesized, no files)
+src/tutorial/lessons.js      the training shift's lessons            (no DOM; a test plays them)
 src/net/session.js           HostSession / ClientSession             (multiplayer)
 src/net/transports.js        how two browsers exchange messages
 src/content/                 every joke, and the director that picks them
@@ -91,6 +93,12 @@ The renderer draws the world, the placement preview (green or red using `canPlac
 - `director.js` runs on the host, turns simulation events into `say`, `review` and `report` messages, and rate-limits them.
 - `nopeLine(why, name)` gives the line shown to one player when his command is refused.
 
+## Sound (`src/audio`)
+`createSound()` in `src/audio/sound.js` makes every sound with the Web Audio API and speaks DEB's lines with the browser's speech synthesis. `src/main.js` loads it with a dynamic import, so the game still runs (silently) if it fails. It listens to the session's `fx`, `say`, `review`, `report` and `players` messages; the interface calls `sound.play(name)` for its own sounds (`select`, `place`, `remove`, `rotate`, `nope`, `click`, `tutorial`). Every effect is one entry in the table in `src/audio/effects.js`. Nobody can check sound by ear in an automated run, so `tools/sound-test.html` renders each effect offline and measures it (silent, clipping, clicks, too long); keep it at ALL PASS and add new sounds to the table.
+
+## Training shift (`src/tutorial`, `src/ui/tutorial.js`)
+A game created with `createGame({ training: true })` has no build timer, cannot be lost, and only runs the waves queued with `queueTrainingWave()`. `src/tutorial/lessons.js` holds the lessons as data plus a small engine; each lesson has a `solve()` list of commands, which the tests use to play the whole tutorial and check that every lesson can be completed and shows what its text claims. If you change a building's rules or numbers, run the tests: a lesson that no longer works will fail there. Plain-language explanations of buildings and shoppers live in `src/content/help.js`.
+
 ## Tools
 - `node --test` runs all tests in `test/`.
 - `node tools/serve.mjs [port]` serves the game at `http://localhost:5173/`.
@@ -99,11 +107,15 @@ The renderer draws the world, the placement preview (green or red using `canPlac
 - `node tools/realshot.mjs <url> <out.png> [waitMs]` takes a screenshot after waiting in real time (needed for anything that uses the network, which `shot.ps1` cannot wait for).
 - `tools/two-player.html` shows a host and a joined player side by side in one window (`?online=1` links them through the internet broker; `?autostart=1` opens the doors by itself).
 - `tools/input-test.html` plays a solo game with simulated mouse and keyboard events and logs each step.
+- `tools/tutorial-test.html` plays the first ten lessons of the training shift with simulated mouse and keyboard events (photograph it with `realshot.mjs`, about 70 seconds).
+- `tools/poke.html?u=<game options>&do=<actions>` opens the game and clicks, presses keys or hovers tiles, to reach screens a plain screenshot cannot (actions are listed in the file).
+- `tools/sound-test.html` measures every sound and has a play button for each.
 - `tools/render-harness.html` shows the renderer alone; its options are listed at the top of the file (`?lineup=1` shows every shopper in every state).
 
 ## Page options for testing
 `index.html` accepts these in the URL:
 - `?solo=1` skip the menu and start a solo game. `&name=Dave` sets the name.
+- `?tutorial=1` start the training shift. `&step=9` jumps to that lesson (0-based), playing the earlier ones by itself.
 - `?demo=1` solo game with the ready-made layout from `src/sim/demo.js`, wave already started.
 - `&ff=900` run that many ticks before the first frame (30 ticks = 1 second).
 - `&seed=7` fixed random seed.
