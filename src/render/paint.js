@@ -130,6 +130,18 @@ export function starPath(ctx, x, y, r, rot = 0) {
   ctx.closePath();
 }
 
+/** A jagged comic "impact" burst path with n points, centred on (x, y), wider than tall. */
+export function burstPath(ctx, x, y, r, n = 11, rot = 0) {
+  ctx.beginPath();
+  for (let k = 0; k < n * 2; k++) {
+    const a = rot + (k * Math.PI) / n;
+    const rad = k % 2 ? r * 0.58 : r * (k % 4 ? 0.92 : 1.08);
+    const px = x + Math.cos(a) * rad * 1.3, py = y + Math.sin(a) * rad * 0.85;
+    if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+}
+
 /** Cheap deterministic hash of two integers to [0, 1), for decoration that must not flicker. */
 export function hash2(x, y) {
   let h = (x * 374761393 + y * 668265263) | 0;
