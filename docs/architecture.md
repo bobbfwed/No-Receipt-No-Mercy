@@ -94,6 +94,10 @@ The renderer draws the world, the placement preview (green or red using `canPlac
 - `node tools/serve.mjs [port]` serves the game at `http://localhost:5173/`.
 - `tools/shot.ps1` takes a headless-Edge screenshot of a URL (see the comments in the file).
 - `node tools/balance.mjs` plays whole games with a scripted player and prints how they went.
+- `node tools/realshot.mjs <url> <out.png> [waitMs]` takes a screenshot after waiting in real time (needed for anything that uses the network, which `shot.ps1` cannot wait for).
+- `tools/two-player.html` shows a host and a joined player side by side in one window (`?online=1` links them through the internet broker; `?autostart=1` opens the doors by itself).
+- `tools/input-test.html` plays a solo game with simulated mouse and keyboard events and logs each step.
+- `tools/render-harness.html` shows the renderer alone; its options are listed at the top of the file (`?lineup=1` shows every shopper in every state).
 
 ## Page options for testing
 `index.html` accepts these in the URL:
@@ -102,3 +106,6 @@ The renderer draws the world, the placement preview (green or red using `canPlac
 - `&ff=900` run that many ticks before the first frame (30 ticks = 1 second).
 - `&seed=7` fixed random seed.
 - `?local=host&code=TEST` / `?local=join&code=TEST` host or join between tabs on one computer.
+- `?join=ABCDE` an invite link: opens the menu with that room code filled in. The in-game "Copy link" button produces it.
+- `?online=host&code=ABCDE` / `?online=join&code=ABCDE` test only: host or join online without the menu.
+- `&autostart=1` test only: the host opens the doors whenever a build phase starts.
