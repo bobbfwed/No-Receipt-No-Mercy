@@ -9,7 +9,7 @@ import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } f
  * @param {string|null} o.roomKind 'online' | 'local' | null
  * @param {() => void} o.onHelp
  */
-export function createTopBar(session, { roomCode = null, roomKind = null, onHelp }) {
+export function createTopBar(session, { roomCode = null, roomKind = null, onHelp, sound = null, playSound = () => {} }) {
   const cashVal = h('b', { class: 'val' });
   const cash = h('div', { class: 'hud-box hud-cash', title: 'Shared cash. Everyone spends it. Nobody earns it.' },
     h('span', { class: 'coin', 'aria-hidden': 'true' }, '$'), h('span', { class: 'lbl' }, 'CASH'), cashVal);
@@ -24,7 +24,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   const openBtn = h('button', {
     type: 'button', class: 'btn-doors',
     title: 'Start the next sales event now. Shoppers will not wait for you to finish.',
-    onclick: () => session.send({ c: 'start' }),
+    onclick: () => { playSound('click'); session.send({ c: 'start' }); },
   }, 'OPEN THE DOORS');
   const leftVal = h('b');
   const remaining = h('div', { class: 'hud-stat remaining' }, h('small', null, 'SHOPPERS LEFT'), leftVal);
@@ -51,13 +51,17 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     roomKind === 'online' ? copyButton(() => `${location.origin}${location.pathname}?join=${roomCode}`, 'Copy link') : null) : null;
 
   const help = h('button', { type: 'button', class: 'btn-help', 'aria-label': 'How to play', title: 'How to play', onclick: onHelp }, '?');
+  const audio = sound ? createSoundMenu(sound) : null;
 
-  const el = h('header', { class: 'topbar' }, cash, event, phase, h('div', { class: 'spacer' }), refunds, speed, room, help);
+  const el = h('header', { class: 'topbar' }, cash, event, phase, h('div', { class: 'spacer' }), refunds, speed, room, audio, help);
 
   function update(s) {
     setText(cashVal, money(s.cash));
     const total = TUNE.waves;
-    if (s.phase === 'wave') {
+    if (s.training) {
+      setText(evTitle, 'TRAINING SHIFT');
+      setText(evSub, s.phase === 'wave' ? 'doors open' : 'you cannot lose here');
+    } else if (s.phase === 'wave') {
       setText(evTitle, `SALES EVENT ${s.wave} / ${total}`);
       setText(evSub, '');
     } else if (s.phase === 'build') {
@@ -71,8 +75,11 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     setClass(event, 'is-over', s.phase === 'won' || s.phase === 'lost');
 
     const build = s.phase === 'build';
-    setClass(countdown, 'hidden', !build);
+    setClass(countdown, 'hidden', !build || !!s.training);
     setClass(openBtn, 'hidden', !build);
+    // In training the doors only open when the lesson has shoppers lined up.
+    setClass(openBtn, 'waiting', !!s.training && !s.nextWave);
+    setClass(openBtn, 'ready', !!s.training && !!s.nextWave);
     setClass(remaining, 'hidden', s.phase !== 'wave');
     if (build) {
       if (s.phaseT < 0) {
@@ -102,6 +109,40 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   }
 
   return { el, update };
+}
+
+/**
+ * The speaker button and its small menu: sound effects, music, DEB's voice, and volume.
+ * @param {Object} sound the sound module (get/set settings, unlock)
+ */
+function createSoundMenu(sound) {
+  const box = (key, text) => {
+    const input = h('input', { type: 'checkbox', checked: !!sound.get(key) });
+    input.addEventListener('change', () => { sound.unlock(); sound.set(key, input.checked); refresh(); });
+    return h('label', { class: 'snd-row' }, input, h('span', null, text));
+  };
+  const vol = h('input', { type: 'range', min: '0', max: '100', step: '5', 'aria-label': 'Volume', value: String(Math.round((sound.get('volume') ?? 0.7) * 100)) });
+  vol.addEventListener('input', () => { sound.unlock(); sound.set('volume', Number(vol.value) / 100); refresh(); });
+  const menu = h('div', { class: 'snd-menu hidden', role: 'group', 'aria-label': 'Sound settings' },
+    box('sfx', 'Sound effects'), box('music', 'Store music'), box('voice', "DEB's voice"),
+    h('label', { class: 'snd-row snd-vol' }, h('span', null, 'Volume'), vol));
+  const btn = h('button', {
+    type: 'button', class: 'btn-help btn-sound', 'aria-label': 'Sound settings', title: 'Sound settings', 'aria-expanded': 'false',
+    onclick: (e) => {
+      e.stopPropagation();
+      sound.unlock();
+      const open = menu.classList.toggle('hidden') === false;
+      btn.setAttribute('aria-expanded', String(open));
+    },
+  });
+  function refresh() {
+    const silent = (!sound.get('sfx') && !sound.get('music') && !sound.get('voice')) || sound.get('volume') === 0;
+    btn.textContent = silent ? '🔇' : '🔊';
+  }
+  refresh();
+  menu.addEventListener('click', (e) => e.stopPropagation());
+  addEventListener('click', () => { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); });
+  return h('div', { class: 'hud-sound' }, btn, menu);
 }
 
 /** Who is on shift. Click your own job title to change it. */

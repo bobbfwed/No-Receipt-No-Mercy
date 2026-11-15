@@ -174,6 +174,7 @@ export const NOPE = {
   bounds: ["You can't build there. That's a wall. It's doing more work than you."],
   over: ['The store is closed. Building now would just be sad.'],
   phase: ['The doors are already open, {p}. Do keep up.'],
+  notyet: ["Not yet, {p}. Do the thing I asked first. It's called foreplay."],
   empty: ["There's nothing there, {p}. Like your Friday nights."],
 };
 

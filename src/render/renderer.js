@@ -22,6 +22,7 @@ import {
 import { buildItemSprites } from './items.js';
 import { drawShopper, shadowPath, createShopperSprites } from './shoppers.js';
 import { createEffects } from './effects.js';
+import { drawRoutes, drawMarks } from './guides.js';
 
 const T = TILE;
 const WORLD_W = W * T, WORLD_H = H * T;
@@ -154,10 +155,12 @@ export function createRenderer(canvas, session) {
       if (b && b.k !== 'belt') drawBuilding(ctx, b, i, F, buildingSprites);
     }
 
+    if (view.route) drawRoutes(ctx, s, now / 1000);
     fx.draw(ctx, now, 0, sprites);
     drawShoppers(s, alpha);
     fx.draw(ctx, now, 1, sprites);
     drawPreview(s, view);
+    if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now);
     if (view.cursors) drawCursors(s, view.cursors);
     ctx.restore();
   }

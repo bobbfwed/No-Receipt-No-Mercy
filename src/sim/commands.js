@@ -80,7 +80,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       state.cash -= def.cost;
       bump(state, pid, 'spent', def.cost);
       bump(state, pid, 'built');
-      if (state.phase === 'build' && state.phaseT === -1) state.phaseT = FIRST_BUILD_SECS * TICK_HZ;
+      if (state.phase === 'build' && state.phaseT === -1 && !state.training) state.phaseT = FIRST_BUILD_SECS * TICK_HZ;
       ev.push({ e: 'placed', k: cmd.k, x: cmd.x, y: cmd.y, by: pid });
       return { ok: true };
     }
@@ -107,6 +107,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
     }
     case 'start': {
       if (state.phase !== 'build') return { ok: false, why: 'phase' };
+      // In training the doors only open when the lesson has a wave lined up.
+      if (state.training && !state.nextWave) return { ok: false, why: 'notyet' };
       beginWave(state, ev);
       return { ok: true };
     }

@@ -24,6 +24,10 @@
 //   'nope'    {why, cmd}               your command was refused
 //   'cursor'  {pid, x, y}              where another player is pointing, in tiles
 //   'closed'  {why}                    client only: lost the host
+//   'fx'      [event, ...]             the simulation events of one tick (see step() in
+//                                      src/sim/step.js), for sound and the tutorial. The handler
+//                                      receives the array itself, not an object. On a client these
+//                                      come from its own prediction, so treat them as cosmetic.
 import { createGame, addPlayer, setPlayerOnline, applyCommand, step, TICK_HZ } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
@@ -106,8 +110,9 @@ export class HostSession extends Session {
     conn.onclose = () => this._onClose(conn);
   }
 
+  /** On the host the answer is known at once and returned; a client's send() returns nothing. */
   send(cmd) {
-    this._apply(this.me, cmd);
+    return this._apply(this.me, cmd);
   }
 
   /** Where the local player is pointing, in tiles. */
@@ -191,6 +196,7 @@ export class HostSession extends Session {
 
   _onSimEvents(ev) {
     for (const e of ev) this.fx.push(e);
+    this.emit('fx', ev);
     this._direct(ev);
   }
 
@@ -253,6 +259,7 @@ export class ClientSession extends Session {
       if (this.state.tick > this._fxTick) {
         this._fxTick = this.state.tick;
         for (const e of ev) this.fx.push(e);
+        if (ev.length) this.emit('fx', ev);
       }
     }
   }

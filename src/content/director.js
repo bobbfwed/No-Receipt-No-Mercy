@@ -89,6 +89,7 @@ export function createDirector(random = Math.random) {
         switch (e.e) {
           case 'waveStart':
             escapes = [];
+            if (state.training) break; // the tutorial does its own talking
             say(out, state, LINES.waveStart, { w: e.wave }, { must: true });
             if (e.dads > 0) say(out, state, LINES.dadLine, { n: e.dads }, { must: true, mood: 'smug' });
             break;
@@ -130,7 +131,7 @@ export function createDirector(random = Math.random) {
             break;
           }
           case 'waveEnd':
-            report(out, state, e);
+            if (!e.training) report(out, state, e);
             break;
           case 'won':
             say(out, state, LINES.won, {}, { must: true, mood: 'smug' });

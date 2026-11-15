@@ -3,6 +3,7 @@ import { BUILD, TUNE } from '../sim/index.js';
 import { h, setClass } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, HOTKEYS } from './input.js';
+import { HOW, HOW_REMOVE } from '../content/help.js';
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
 /** Names short enough for a button; the tooltip has the full one. */
@@ -20,13 +21,13 @@ export function createBuildBar(input) {
     const def = BUILD[k];
     const lines = [];
     if (def) {
+      const how = HOW[k];
       lines.push(h('div', { class: 'tip-head' }, h('b', null, def.name), h('span', { class: 'tip-cost' }, `$${def.cost}`)));
-      lines.push(h('p', null, def.desc));
+      lines.push(h('p', null, how ? how.does : def.desc));
+      if (how) lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), how.use));
       const facts = [];
-      if (def.blocks) facts.push('Blocks shoppers');
-      else facts.push('Shoppers walk over it');
-      if (def.rot) facts.push('Rotates (R)');
-      if (def.range) facts.push(`Range ${def.range}`);
+      if (how && how.maze) facts.push(how.maze.replace(/\.$/, ''));
+      if (def.rot) facts.push('R rotates');
       lines.push(h('small', null, `${facts.join(' · ')} · key ${HOTKEYS[BUILD_KEYS.indexOf(k)]}`));
     } else {
       lines.push(h('div', { class: 'tip-head' }, h('b', null, 'Remove')));
@@ -74,8 +75,33 @@ export function createBuildBar(input) {
     h('div', null, 'Drag to lay belts'),
     h('div', null, h('kbd', null, 'Right-click'), ' remove · ', h('kbd', null, 'Esc'), ' drop it'));
 
-  const el = h('footer', { class: 'buildbar' }, groups, tools, hint);
+  // A card in the build bar that stays up while a tool is held, explaining what it does and how
+  // to use it. It takes the place of the control hints, so it never covers the floor.
+  const info = h('aside', { class: 'bb-info hidden', 'aria-live': 'polite' });
+  const el = h('footer', { class: 'buildbar' }, groups, tools, info, hint);
   let lastCash = null, lastTool, lastDir;
+
+  function showInfo(k) {
+    const def = BUILD[k];
+    const how = def ? HOW[k] : k === 'remove' ? HOW_REMOVE : null;
+    setClass(info, 'hidden', !how);
+    setClass(hint, 'hidden', !!how);
+    if (!how) return;
+    info.replaceChildren(
+      h('div', { class: 'bbi-head' },
+        h('span', { class: 'bbi-icon', html: buildingIcon(k) }),
+        h('b', null, def ? def.name : 'Remove'),
+        // What it means for the maze, in two words.
+        def ? h('span', { class: 'bbi-maze' }, !def.blocks ? 'Walkable' : k === 'belt' ? 'Blocks all but dads' : 'Blocks everyone') : null,
+        def ? h('span', { class: 'bbi-cost' }, `$${def.cost}`) : null),
+      h('p', null, how.does),
+      h('p', null, h('b', null, 'How: '), how.use));
+  }
+
+  /** Lights up one button (the tutorial points at the tool to pick). Pass null to clear. */
+  function highlight(k) {
+    for (const [key, btn] of buttons) setClass(btn, 'teach', key === k);
+  }
 
   function update(s) {
     if (s.cash !== lastCash) {
@@ -89,6 +115,7 @@ export function createBuildBar(input) {
         setClass(btn, 'on', on);
         btn.setAttribute('aria-pressed', String(on));
       }
+      showInfo(input.tool);
     }
     if (input.dir !== lastDir) {
       lastDir = input.dir;
@@ -96,5 +123,5 @@ export function createBuildBar(input) {
     }
   }
 
-  return { el, tip, update };
+  return { el, tip, info, update, highlight };
 }
