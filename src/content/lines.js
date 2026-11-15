@@ -20,6 +20,8 @@ export const LINES = {
     '{n} dads, single file, like ducks with back problems.',
     "Dad line: {n}. They won't fight you. They'll just sigh until someone dies.",
     '{n} dads coming through. The only thing that stops a dad is time. Waste his.',
+    "{n} dads. They don't walk around a conveyor belt. They step over it, mutter \"'scuse me\", and keep going.",
+    'Dad line, {n} strong. Your belts are not a wall to these men. They are a mild inconvenience, like their children.',
   ],
   manyEscapes: [
     "That's {n} refunds in a row. {p}, were the towers decorative?",
