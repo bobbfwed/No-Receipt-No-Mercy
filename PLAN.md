@@ -23,10 +23,10 @@ A discount warehouse on Black Friday. Shoppers come in on the left and want a re
 1. **Rules engine** - done. Belts, four machines, crates, four security items, five shopper types, 20 waves, shared cash, win and lose. Covered by tests.
 2. **Multiplayer core** - done. Host and client sessions, three ways to connect (in-memory for tests, between tabs, online). Covered by tests except the real online link, which needs two real browsers.
 3. **Dialogue** - done. DEB's lines, customer reviews, end-of-wave performance review.
-4. **Graphics** - in progress. Canvas drawing of the warehouse, shoppers and effects.
-5. **Interface** - in progress. Menu, host/join, HUD, build bar, mouse and keyboard building, speech bubble, reviews, performance review, end screens.
-6. **Integration and checks** - to do. Put 4 and 5 together, screenshot every screen, fix what is wrong.
-7. **Playtest with real people** - owner. Two browsers on two networks; then tune difficulty.
+4. **Graphics** - done. Canvas drawing of the warehouse, every building, five shopper types with states, and effects.
+5. **Interface** - done. Menu, host/join with invite link, HUD, build bar, mouse and keyboard building, speech bubble, reviews, performance review, end screens.
+6. **Integration and checks** - done on one machine. Checked by screenshot: menu, solo, mid-wave, performance review, game over, two players side by side (between tabs and through the internet broker), and building with simulated mouse and keyboard events.
+7. **Playtest with real people** - owner. Needs the files on a web address (see README.md), then two or more people on different networks. Things only a real session can show: whether every friend's home network lets the browsers connect directly, how it feels with real lag, and whether the difficulty is right.
 
 ## Ideas for later (not started)
 - Tower upgrades, so late-game cash has somewhere to go.
