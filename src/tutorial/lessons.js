@@ -66,7 +66,8 @@ export const STEPS = [
     tool: 'unpacker',
     text: [
       'Every line starts with an Unpacker. It makes a Mystery Box every 2.5 seconds, for free, and pushes it out of the side its arrow points to.',
-      'Do this: pick Unpacker in the bar at the bottom (or press 2). Press R until the arrow on the preview points DOWN. Then click the highlighted tile.',
+      'Look at the floor. Patches of it are painted and named: LOADING BAY, PRESS SHOP, GIFT WRAP, SHIPPING. Each of the four factory machines can only be built on its own patch: Unpackers on Loading Bay floor. The patches are apart from each other, so the goods travel between them on belts. Belts, crates and security can go anywhere.',
+      'Do this: pick Unpacker in the bar at the bottom (or press 2). Press R until the arrow on the preview points DOWN. Then click the highlighted tile, on the Loading Bay floor.',
     ],
     quip: "It's a box that makes boxes. Try not to overthink it. I know that isn't usually your problem.",
     marks: (s) => wanted(s, [[X, 2, 'unpacker', S, 'Unpacker, arrow down']]),
@@ -99,7 +100,7 @@ export const STEPS = [
     title: 'Sell the goods: the Shipping Chute',
     tool: 'chute',
     text: [
-      'Nothing earns money until it falls into a Shipping Chute. A chute takes goods from any side and sells them on the spot.',
+      'Nothing earns money until it falls into a Shipping Chute. A chute takes goods from any side and sells them on the spot. Chutes only go on SHIPPING floor, which is why the belt had to come all this way.',
       'Do this: pick Chute (press 5) and click the highlighted tile at the end of the belt.',
       'Then watch the cash at the top left. Each Mystery Box sells for $2.',
     ],
@@ -114,7 +115,7 @@ export const STEPS = [
     title: 'Make goods worth more: the Press',
     tool: 'press',
     text: [
-      'A Press turns a Mystery Box ($2) into a Gadget ($6). Machines take goods in from the back or the sides, and push the result out of the side their arrow points to.',
+      'A Press turns a Mystery Box ($2) into a Gadget ($7). It only goes on PRESS SHOP floor. Machines take goods in from the back or the sides, and push the result out of the side their arrow points to.',
       'Do this: right-click the highlighted belt to remove it. Then pick Press (press 3), make sure its arrow points DOWN (press R to turn it), and click the same tile.',
       'Then wait for a Gadget to reach the chute.',
     ],
@@ -130,7 +131,7 @@ export const STEPS = [
     title: 'Worth even more: the Packer',
     tool: 'packer',
     text: [
-      'A Packer turns a Gadget ($6) into a Gift Set ($13). It only accepts Gadgets, so it has to come somewhere after the Press.',
+      'A Packer turns a Gadget ($7) into a Gift Set ($16). It only goes on GIFT WRAP floor. It only accepts Gadgets, so it has to come somewhere after the Press.',
       'Do this: right-click the highlighted belt, then put a Packer (press 4) there with its arrow pointing DOWN.',
       'That makes a complete production line: Unpacker, Press, Packer, Chute. In a real game you will want several.',
     ],

@@ -1,6 +1,6 @@
 // The build bar: one button per building, grouped Factory and Security, plus the Upgrade and
 // Remove tools.
-import { BUILD, TUNE, levelOf, upgradeCost, statsOf } from '../sim/index.js';
+import { BUILD, TUNE, ZONES, levelOf, upgradeCost, statsOf } from '../sim/index.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, HOTKEYS } from './input.js';
@@ -52,6 +52,7 @@ export function createBuildBar(input, session) {
       if (how) lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), how.use));
       const facts = [];
       if (how && how.maze) facts.push(how.maze.replace(/\.$/, ''));
+      if (def.zone) facts.push(`${ZONES[def.zone].name} floor only`);
       if (def.rot) facts.push('R rotates');
       if (def.up) facts.push('U upgrades');
       lines.push(h('small', null, `${facts.join(' · ')} · key ${HOTKEYS[BUILD_KEYS.indexOf(k)]}`));
@@ -122,6 +123,7 @@ export function createBuildBar(input, session) {
         h('b', null, def ? def.name : TOOLS[k].name),
         // What it means for the maze, in two words.
         def ? h('span', { class: 'bbi-maze' }, !def.blocks ? 'Walkable' : k === 'belt' ? 'Blocks all but dads' : 'Blocks everyone') : null,
+        def && def.zone ? h('span', { class: 'bbi-maze bbi-zone', style: { background: ZONES[def.zone].color } }, `${ZONES[def.zone].name} only`) : null,
         def ? h('span', { class: 'bbi-cost' }, `$${def.cost}`) : null),
       h('p', null, how.does),
       h('p', null, h('b', null, 'How: '), how.use));
