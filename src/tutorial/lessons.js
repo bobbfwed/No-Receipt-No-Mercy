@@ -267,7 +267,7 @@ export const STEPS = [
     wave: [{ k: 'hunter', n: 3, gap: 1.5, at: 0, sup: 3 }],
     text: [
       'Later in a real game, SUPER versions of every shopper turn up. They are bigger, marked in gold, far more patient, and take a double refund. Three Doorbusters (super Bargain Hunters, with three times the patience) are waiting outside. Your two Sprinklers will not stop them as they are.',
-      'Security can be upgraded. Each level hits harder and reaches a little further, and costs nearly twice as much as the level before. When the floor is full, this is what your money is for.',
+      'Security can be upgraded. Each level hits harder and reaches a little further, and costs nearly twice as much as the level before. It gets more out of the floor space the security already stands on.',
       `Do this: point at each of the two Sprinklers beside the gap and press U three times, until both are level ${UP_TO}. (Or pick Upgrade in the build bar and click them.) Then press OPEN THE DOORS.`,
     ],
     quip: "It gets bigger if you pay for it. I'm told there are clinics. For you, there's the U key.",
