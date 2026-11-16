@@ -1,5 +1,6 @@
 // The training shift panel: shows the current lesson's instructions, a live hint, and the buttons
 // to move through the lessons. The lessons themselves are in src/tutorial/lessons.js.
+import { worded } from '../content/touch.js';
 import { h, setText, setClass } from './dom.js';
 import { createTutorial, STEPS } from '../tutorial/lessons.js';
 
@@ -55,7 +56,8 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
     setText(count, `${tut.index + 1} of ${tut.total}`);
     fill.style.width = `${((tut.index + 1) / tut.total) * 100}%`;
     setText(title, st.title);
-    body.replaceChildren(...st.text.map((p) => {
+    body.replaceChildren(...st.text.map((raw) => {
+      const p = worded(raw); // keys and mouse on a desktop, buttons and taps on a touch screen
       // "Do this:" paragraphs are the actual instruction; make them stand out.
       const task = p.startsWith('Do this:');
       return h('p', { class: task ? 'tut-task' : null }, task ? h('b', null, 'Do this: ') : null, task ? p.slice(9) : p);
@@ -101,7 +103,7 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
         advancing = setTimeout(() => { advancing = null; tick.classList.add('hidden'); el.classList.remove('done'); tut.next(); }, DONE_PAUSE_MS);
         return;
       }
-      const text = tut.hint();
+      const text = tut.hint() && worded(tut.hint());
       setClass(hint, 'hidden', !text);
       if (text) setText(hint, text);
     },

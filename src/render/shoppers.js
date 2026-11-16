@@ -1174,6 +1174,23 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites) {
     ctx.drawImage(img, bx, by + 14 * z, bw, bh);
     ctx.restore();
     stars(ctx, sx - face * 16 * z, fy - 10, F.time);
+  } else if (s.cr === 1) {
+    // A mom on her hands and knees, dragging herself toward her child. Nothing can touch her:
+    // the dashed ring says so.
+    ctx.save();
+    ctx.translate(sx + face * 2, fy - 3 + Math.sin(F.time * 9 + s.id) * 0.8);
+    ctx.rotate(face * Math.PI * 0.42);
+    ctx.drawImage(img, bx, by + 12 * z, bw, bh);
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = 0.6 + 0.3 * Math.sin(F.time * 6);
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.ellipse(sx, fy - 7, 18 * z, 10 * z, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   } else {
     const bob = moving ? Math.abs(Math.cos(frame / WALK_FRAMES * TAU)) * (pace > 1 ? 2.2 : 1.3) : 0;
     ctx.drawImage(img, sx + bx, fy + by - bob, bw, bh);

@@ -15,6 +15,7 @@ import { endScreen, closedScreen, handoverScreen, helpScreen } from './overlays.
 import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { createChat } from './chat.js';
+import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
 import { BUILD, ZONES } from '../sim/index.js';
 
@@ -230,6 +231,7 @@ export function startGame(session, {
   session.start();
 
   // ---- Drawing loop --------------------------------------------------------------------------------
+  const touchWords = isTouch();
   let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false;
   function frame(now) {
     if (dead) return;
@@ -293,6 +295,8 @@ export function startGame(session, {
     // Nor does he get the tile outline under the mouse that says "you could build here".
     if (office) view.hover = null;
     view.marks = training ? training.marks() : null;
+    // The captions on highlighted tiles speak of the mouse; on a touch screen, of taps.
+    if (view.marks && touchWords) for (const m of view.marks) if (m.label) m.label = forTouch(m.label);
     // On a phone the training floor does not fit on screen: when a lesson marks tiles that are
     // out of view, bring them into view. (A big screen always shows the whole training floor.)
     if (view.marks && view.marks.length && (isCoarse() || narrow())) {

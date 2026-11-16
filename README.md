@@ -54,7 +54,7 @@ With two or more players, one can stop defending and run the other side. Between
 | F | Show the whole map |
 | H | Go to your own entrance |
 | Click the small map | Jump there (it appears when the store does not fit on screen) |
-| Give $100 (players list) | Hand a colleague some of your cash; hold Shift for $1,000 |
+| Give $50 / $200 / $1,000 (players list) | Hand a colleague some of your cash |
 
 ## On a phone or tablet
 The game works by touch, in either orientation (a tablet, or a phone held sideways, is more comfortable).
@@ -71,7 +71,12 @@ The game works by touch, in either orientation (a tablet, or a phone held sidewa
 | MAP and HOME on the floor | Show the whole store; go to your entrance |
 | The menu button at the top right | Speed, room code and link, sound, help |
 
-The tutorial and the help text still describe the keyboard ("press 5", "right-click"); on a phone use the buttons above instead.
+The tutorial and the help text word their instructions for touch when the game is opened on a touch screen.
+
+**Full screen.** The button at the top right (⛶, inside the menu button on a phone) switches full screen on and off on Android and on computers. To get an app icon that opens the game full screen:
+- Android (Chrome): open the game, tap the browser's menu (three dots), then **Install app** or **Add to Home screen**.
+- iPhone and iPad (Safari): tap the Share button, then **Add to Home Screen**. iPhones do not allow the full-screen button, so this is the only way there.
+- Computer (Chrome or Edge): the install icon at the right of the address bar.
 
 ## Chat
 With more than one player in the game, press Enter (or the Chat button) to type a line to everyone. It works in the lobby too.

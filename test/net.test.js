@@ -289,7 +289,8 @@ test('when the host leaves, another player takes the game over and the others ge
   assert.deepEqual(next.state.players.map((p) => p.on), [false, true, false], 'the others count as gone until they reconnect');
   assert.equal(next.state.wave, 1);
   assert.equal(next.state.grid[4 * next.state.w + 4].k, 'sprinkler', 'what was built is still there');
-  assert.deepEqual(next.state.players.map((p) => p.cash), cash);
+  // Dave left for good as far as the game knows, so his money was shared out between the other two.
+  assert.deepEqual(next.state.players.map((p) => p.cash), [0, cash[1] + cash[0] / 2, cash[2] + cash[0] / 2]);
 
   // Gaz reconnects and gets his place back; so does Dave, later, as an ordinary player.
   const relink = (name) => { const [a, b] = memoryPair(); next.accept(a); return new ClientSession(b, name); };

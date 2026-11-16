@@ -48,6 +48,12 @@ export const LINES = {
     'Runaway kid on the floor. Reminder: you may not spray the child. I checked. I was disappointed too.',
     "Kid's out of the cart. {p} knows all about things getting loose when nobody's supervising.",
   ],
+  // A mom ran out of patience with her child loose, and is crawling to him. Nothing can touch her.
+  crawl: [
+    "She's down, but the kid's still loose, so she's CRAWLING to him. You can't touch her now. Every shot you fire at her is wasted. Stop wasting them.",
+    'A mother on her hands and knees going after a toddler. Unstoppable. Your security is now shooting at a force of nature.',
+    "Mom's on the floor and still coming. {p}, that's more commitment than you've shown to anything.",
+  ],
   smash: [
     "A gym bro just walked through your crate wall. {p}, your defence was beaten by a man who can't reach his own back.",
     "Crate stack down. He didn't go around it. Men like that never go around anything.",

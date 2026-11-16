@@ -239,6 +239,11 @@ export const TUNE = {
   kidMax: 9, // ...and this many tiles before stopping to wait
   kidRest: 4, // seconds after being caught before the child can escape again
   kidCatch: 0.67, // how close (in tiles) the mom must get to grab him
+  // A mom whose patience runs out while her child is loose does not leave: she drops and crawls
+  // to him, and nothing can touch her on the way (security still shoots at her, and wastes it).
+  crawlSpeed: 0.55, // how fast she crawls, as a share of her walking speed
+  crawlBack: 0.35, // the share of her patience she gets back when she reaches him
+
   chaseSpeed: 1.9, // a mom chasing her child moves this many times faster
   boltSecs: 1.6, // how long a sprayed guide dog bolts
   boltSpeed: 2.3, // speed multiplier while it does

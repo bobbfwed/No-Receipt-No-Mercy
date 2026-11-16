@@ -44,6 +44,8 @@ import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
  * @property {number} [kvy]
  * @property {number} [kr]  mom: tiles the child will still run
  * @property {number} [kc]  mom: ticks before the child may escape again
+ * @property {number} [cr]  mom: 1 while she is crawling to her child (nothing can hurt her), 2 once she
+ *                         has done it (it only happens once)
  */
 
 /**
@@ -217,7 +219,18 @@ export function addPlayer(state, name) {
 export function setPlayerOnline(state, id, on) {
   const p = state.players[id];
   if (!p) return;
+  const was = p.on;
   p.on = on;
+  // A player who leaves once the game is under way hands his money to those who stay, split
+  // evenly. If he comes back he starts from nothing and earns his share like everyone else.
+  // (Otherwise leaving and rejoining would be a way to keep money safe from refunds.)
+  if (was && !on && state.phase !== 'lobby' && p.cash > 0) {
+    const stay = state.players.filter((q) => q.on && q.side !== 'office');
+    if (stay.length) {
+      for (const q of stay) q.cash = tidy(q.cash + p.cash / stay.length);
+      p.cash = 0;
+    }
+  }
   // If nobody is left running the store, the Head Office player has to come back and do it.
   const o = state.office;
   if (o && !state.players.some((q) => q.on && q.side === 'store')) {

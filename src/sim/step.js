@@ -198,9 +198,21 @@ function giveUp(state, s, by, why, ev) {
 
 function hurt(state, s, dmg, by, ev) {
   if (s.st === ST.LEAVE) return;
+  // A mom crawling to her child soaks up everything thrown at her.
+  if (s.cr === 1) return;
   s.hp -= dmg;
   if (by >= 0) bump(state, by, 'annoy', dmg);
-  if (s.hp <= 0) giveUp(state, s, by, 'annoyed', ev);
+  if (s.hp > 0) return;
+  // Out of patience with her child loose: she is not going anywhere without him. Once.
+  if (s.kd > 0 && !s.cr) {
+    s.cr = 1;
+    s.hp = 0;
+    s.st = ST.WALK;
+    s.t = 0;
+    ev.push({ e: 'crawl', x: s.x, y: s.y });
+    return;
+  }
+  giveUp(state, s, by, 'annoyed', ev);
 }
 
 /** A hit that panics a guide dog: it bolts, dragging its owner along. */
@@ -390,6 +402,8 @@ function stepKid(state, s, def, dist, ev) {
   if ((s.x - s.kx) ** 2 + (s.y - s.ky) ** 2 < TUNE.kidCatch ** 2) {
     s.kd = 0;
     s.kc = secs(tv(def, 'kidRest'));
+    // Reaching him on her hands and knees puts her back on her feet, with some patience restored.
+    if (s.cr === 1) { s.cr = 2; s.hp = s.mhp * TUNE.crawlBack; }
     ev.push({ e: 'caught', x: s.x, y: s.y });
   }
 }
@@ -482,7 +496,7 @@ function stepShoppers(state, fields, stands, ev) {
     if (def.bolts && s.bt > 0) { s.bt--; speed *= tv(def, 'boltSpeed'); }
     // A mom whose child has run off sprints after him and has no time for anything else.
     const chasing = def.kid && s.kd > 0;
-    if (chasing) speed *= tv(def, 'chaseSpeed');
+    if (s.cr === 1) speed *= TUNE.crawlSpeed; else if (chasing) speed *= tv(def, 'chaseSpeed');
 
     // A teenager leaves a mess behind every few seconds.
     if (def.messy && --s.m <= 0) {
@@ -498,7 +512,7 @@ function stepShoppers(state, fields, stands, ev) {
     // Slippery floor: a wet floor sign, or a teenager's mess. Teenagers are used to their own mess.
     const wet = here && here.k === 'wetfloor';
     const messy = !wet && messAt !== null && messAt.has(i) && !def.messy;
-    if ((wet || messy) && !def.steady) {
+    if ((wet || messy) && !def.steady && s.cr !== 1) {
       const sign = wet ? statsOf(here) : null;
       if (!def.ignoresSigns) {
         speed *= sign ? sign.slow : TUNE.wetSlow;
@@ -570,7 +584,8 @@ function stepShoppers(state, fields, stands, ev) {
  *   escape {k,sup,x,y,refund} a shopper reached the tills · left {k,sup,x,y,by,why} one gave up
  *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind}
  *   mess {i} a teenager dropped a mess on tile i · kid {x,y} a child escaped · caught {x,y}
- *   bolt {x,y} a guide dog bolted
+ *   bolt {x,y} a guide dog bolted · crawl {x,y} a mom ran out of patience with her child loose
+ *     and is crawling to him, untouchable
  *   smash {i,x,y,k,owner,down} a gym bro wrecked the building of kind k on tile i; with
  *     down: 1 it was upgraded and only lost a level
  * (Commands add: placed, removed, upgraded {k,x,y,by,lv}, gave {by,to,n}, rebuilt {by,n}.)

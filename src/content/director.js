@@ -118,6 +118,9 @@ export function createDirector(random = Math.random) {
             }
             if (e.dads > 0) say(out, state, LINES.dadLine, { n: e.dads }, { must: true, mood: 'smug' });
             break;
+          case 'crawl':
+            say(out, state, LINES.crawl, {}, { gap: 12, mood: 'angry' });
+            break;
           case 'kid':
             say(out, state, LINES.kid, {}, { gap: 20 });
             break;

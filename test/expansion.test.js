@@ -807,3 +807,77 @@ test('laying a belt over a belt turns it for free and keeps its goods', () => {
   assert.equal(place(s, 'crate', 5, 3).why, 'occupied');
   assert.equal(place(s, 'belt', 3, 3, 0).why, 'occupied');
 });
+
+// ---------------------------------------------------------------- mom on her knees, players leaving
+
+test('a mom taken down while her child is loose crawls to him, untouchable, then gets up', (t) => {
+  tune(t, { kidChance: 100, kidMin: 8, kidMax: 8 });
+  const s = stage(6);
+  send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
+  // Wait until the child has run off and is waiting somewhere ahead.
+  let mom = null;
+  for (let i = 0; i < 20 * TICK_HZ && !(mom && mom.kd === 2); i++) { step(s); mom = s.shoppers[0] || mom; }
+  assert.equal(mom.kd, 2);
+  // Then finish her off: nearly out of patience, with a forklift right beside her.
+  const mx = mom.x | 0, my = mom.y | 0;
+  const spot = [[0, -2], [0, 2], [-1, -2], [1, 2]].map(([dx, dy]) => [mx + dx, my + dy]).find(([x, y]) => canPlace(s, 'forklift', x, y) === null);
+  assert.ok(place(s, 'forklift', spot[0], spot[1]).ok);
+  mom.hp = 1;
+  let crawled = 0, shotsWhileCrawling = 0, gotUpWith = -1;
+  const hpWhileCrawling = [];
+  const ev = play(s, 200, (tick) => {
+    if (mom.cr === 1) {
+      crawled++;
+      hpWhileCrawling.push(mom.hp);
+      shotsWhileCrawling += tick.filter((e) => e.e === 'shot').length;
+    }
+    if (mom.cr === 2 && gotUpWith < 0) gotUpWith = mom.hp;
+  });
+  assert.ok(ev.some((e) => e.e === 'crawl'), 'she went down with the child loose');
+  assert.ok(crawled > 10, 'and crawled for a while');
+  assert.ok(shotsWhileCrawling >= 1, 'security kept shooting at her');
+  assert.ok(hpWhileCrawling.every((h) => h === 0), 'and none of it counted');
+  assert.ok(ev.some((e) => e.e === 'caught'), 'she reached him');
+  assert.ok(Math.abs(gotUpWith - mom.mhp * TUNE.crawlBack) < 1e-6, 'and got up with some patience back');
+  assert.equal(ev.filter((e) => e.e === 'crawl').length, 1, 'it only happens once');
+  assert.equal(ev.filter((e) => e.e === 'left' || e.e === 'escape').length, 1, 'after that she is stopped, or gets through, like anyone else');
+});
+
+test('a mom with her child in the cart is stopped like anyone else', (t) => {
+  tune(t, { kidChance: 0 });
+  const s = stage(6);
+  place(s, 'forklift', 4, 5);
+  for (let i = 0; i < 9; i++) applyCommand(s, 0, { c: 'upgrade', x: 4, y: 5 });
+  send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
+  const ev = play(s, 100);
+  assert.equal(ev.filter((e) => e.e === 'crawl').length, 0);
+  assert.equal(ev.filter((e) => e.e === 'left').length, 1);
+});
+
+test('a player who leaves mid-game hands his money to the others and comes back with none', () => {
+  const s = createGame();
+  for (const n of ['Dave', 'Steve', 'Gaz']) addPlayer(s, n);
+  s.players[1].cash = 900;
+  setPlayerOnline(s, 1, false);
+  assert.equal(s.players[1].cash, 0);
+  assert.equal(s.players[0].cash, TUNE.startCash + 450);
+  assert.equal(s.players[2].cash, TUNE.startCash + 450);
+  assert.equal(teamCash(s), 2 * TUNE.startCash + 900, 'nothing is lost');
+  // Back again: his place, but no money. A brand new player still gets starting cash.
+  assert.equal(addPlayer(s, 'Steve'), 1);
+  assert.equal(s.players[1].cash, 0);
+  assert.equal(s.players[addPlayer(s, 'Baz')].cash, TUNE.startCash);
+  // Going offline twice does nothing more, and the last player to leave keeps what he has.
+  setPlayerOnline(s, 1, false);
+  setPlayerOnline(s, 1, false);
+  const solo = createGame();
+  addPlayer(solo, 'Dave');
+  setPlayerOnline(solo, 0, false);
+  assert.equal(solo.players[0].cash, TUNE.startCash);
+  // In the lobby nothing has started, so nothing changes hands.
+  const lobby = createGame({ lobby: true, map: { design: 'warehouse', size: 's' } });
+  addPlayer(lobby, 'Dave');
+  addPlayer(lobby, 'Steve');
+  setPlayerOnline(lobby, 1, false);
+  assert.equal(lobby.players[1].cash, TUNE.startCash);
+});

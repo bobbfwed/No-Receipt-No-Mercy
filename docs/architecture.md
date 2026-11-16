@@ -44,6 +44,10 @@ Super shoppers: a shopper with `sup: 1` plays by `SUPERS[kind]` instead of `SHOP
 
 Host hand-over: `state.host` is the player whose browser runs the game. When a joined player's connection to the host closes, `hostLost()` in `src/main.js` runs in every remaining browser. All of them pick the same successor (the first connected player in the list who is not the old host). The successor makes a `HostSession` from its own copy of the state with `takeOver: true` and opens the room again under the same code, retrying until the old host's code is released; the others retry joining it. Players are matched to their old places by name. The game screen is torn down and started again on the new session (`destroy()` on what `startGame` returns).
 
+Touch wording: lessons and help are written once, for mouse and keyboard. `src/content/touch.js` rewords them for touch screens (`worded(text)`), and a test fails if any lesson or help text still names a key or the mouse afterwards. Add a rule there when a new lesson mentions a key.
+
+Installing: `manifest.webmanifest`, the icons in `icons/` (photographs of `tools/icon.html`) and `sw.js` let phones offer "Install app". `sw.js` deliberately caches nothing, so the newest version always loads.
+
 Chat: `session.chat(text)` sends a line to everyone and `session.on('chat', fn)` receives `{ pid, name, color, text }`. The host tidies and rate-limits it; it is not part of the game state. `src/ui/chat.js` is the box.
 
 Touch: `src/ui/input.js` treats `pointerType === 'touch'` separately from the mouse. Two fingers always pan and pinch-zoom and never build; one finger with nothing held drags the view; one finger with a tool held builds (tap) or lays a line (drag). Nothing is built until the finger lifts or has moved a little, so a second finger arriving late still makes a pinch. `src/ui/touch.js` adds the on-screen buttons for what the keyboard does and the sheet of actions for a tapped building; they appear only on `(pointer: coarse)` devices. Phone and tablet layouts are one block at the end of `src/style.css`, switched on by screen size; desktop layouts must not change.
