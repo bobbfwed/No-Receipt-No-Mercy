@@ -149,6 +149,32 @@ for (const [k, def] of Object.entries(SHOPPERS)) {
 /** The definition a shopper plays by: s is a shopper from the game state. */
 export const defOf = (s) => (s.sup ? SUPERS[s.k] : SHOPPERS[s.k]);
 
+/**
+ * Head Office: a player who runs the shoppers instead of the store (see office.js).
+ * kinds: for each kind of shopper, the first wave it can be bought for (the same wave the
+ *   automatic waves first include it), a price weight for its trick, and the seconds between
+ *   arrivals in a group.
+ */
+export const OFFICE = {
+  share: 0.85, // his budget is this share of what the automatic wave is worth...
+  carry: 0.5, // ...plus this share of what he left unspent last wave...
+  perRefund: 5, // ...plus this much for every shopper who got a refund last wave
+  maxGroups: 24, // most groups in one plan
+  maxSize: 200, // most shoppers in one group
+  maxAt: 60, // latest a group may start arriving, in seconds after the doors open
+  kinds: {
+    hunter: { from: 1, weight: 1, gap: 0.6 },
+    dad: { from: 2, weight: 1.5, gap: 0.3 },
+    clipper: { from: 3, weight: 1, gap: 0.35 },
+    mom: { from: 3, weight: 1.3, gap: 2 },
+    teen: { from: 4, weight: 1.2, gap: 2 },
+    karen: { from: 5, weight: 1.3, gap: 3 },
+    blind: { from: 6, weight: 1.2, gap: 3 },
+    gymbro: { from: 6, weight: 1.5, gap: 3 },
+    scooter: { from: 7, weight: 1.2, gap: 2 },
+  },
+};
+
 /** Shopper states. */
 export const ST = { WALK: 0, BROWSE: 1, STUN: 2, LEAVE: 3 };
 

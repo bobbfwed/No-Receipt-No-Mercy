@@ -53,6 +53,7 @@ import { makeMap } from './maps.js';
  * @property {string} color
  * @property {string} role   job title (cosmetic)
  * @property {boolean} on    connected right now
+ * @property {string} side   'store' (builds and defends) or 'office' (runs the shoppers; see office.js)
  * @property {number} cash   this player's own money. Everything the store earns or loses is
  *                           split evenly between the connected players.
  * @property {Object} w      statistics for this wave
@@ -104,7 +105,8 @@ export function createGame({ seed = 1, training = false, map = null } = {}) {
      *  [tile index, kind, facing, owner]. The 'rebuild' command puts these back. */
     rubble: [],
     nextId: 1,
-    /** Shoppers still to arrive this wave, as [tick, kind, super 0|1], soonest first. */
+    /** Shoppers still to arrive this wave, as [tick, kind, super 0|1, entrance or -1 for any],
+     *  soonest first. */
     spawnQ: [],
     refunds: 0,
     /** Refunds that close the store. Grows with the number of players. */
@@ -115,6 +117,10 @@ export function createGame({ seed = 1, training = false, map = null } = {}) {
     /** Ticks left in the build phase; -1 means wait until a player starts the wave. */
     phaseT: -1,
     speed: 1,
+    /** The player running the shoppers, if any: see office.js. */
+    office: null,
+    /** With a Head Office player: the store side has said the doors may open early. */
+    storeReady: false,
     /** Totals for the current wave, shown in the performance review. */
     ws: { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0 },
     /** @type {Player[]} */
@@ -164,7 +170,7 @@ export function addPlayer(state, name) {
   const id = state.players.length;
   state.players.push({
     id, name: clean, color: PLAYER_COLORS[id % PLAYER_COLORS.length],
-    role: ROLES[Math.min(id, ROLES.length - 1)], on: true,
+    role: ROLES[Math.min(id, ROLES.length - 1)], on: true, side: 'store',
     cash: TUNE.startCash + (id > 0 ? TUNE.joinCash * state.wave : 0),
     w: blankStats(), // this wave
     all: blankStats(), // whole game
@@ -179,10 +185,14 @@ export function setPlayerOnline(state, id, on) {
   if (p) p.on = on;
 }
 
-/** The players who share income and losses: everyone connected (or everyone, if nobody is). */
+/**
+ * The players who share income and losses: everyone connected who is running the store (or
+ * everyone running it, if nobody is connected). Head Office has no part in the store's money.
+ */
 function sharers(state) {
-  const on = state.players.filter((p) => p.on);
-  return on.length ? on : state.players;
+  const store = state.players.filter((p) => p.side !== 'office');
+  const on = store.filter((p) => p.on);
+  return on.length ? on : store.length ? store : state.players;
 }
 
 /** How many players are sharing right now (at least 1). */
