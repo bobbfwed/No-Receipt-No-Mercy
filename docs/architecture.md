@@ -1,4 +1,4 @@
-# Returns Department: how the code is organised
+# No Receipt, No Mercy: how the code is organised
 
 Read this before changing anything. It is the contract between the parts of the game.
 

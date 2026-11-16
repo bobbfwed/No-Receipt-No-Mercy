@@ -1,4 +1,4 @@
-// Game rules data for Returns Department. Pure data, no logic.
+// Game rules data for No Receipt, No Mercy. Pure data, no logic.
 // All tuning numbers live here so balance changes never touch the simulation code.
 
 export const TICK_HZ = 30;

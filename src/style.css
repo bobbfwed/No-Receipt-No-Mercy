@@ -1,4 +1,4 @@
-/* Returns Department: bold, flat, chunky. Dark top bar, safety yellow, hi-vis orange, sale-sign red. */
+/* No Receipt, No Mercy: bold, flat, chunky. Dark top bar, safety yellow, hi-vis orange, sale-sign red. */
 
 :root {
   --ink: #111827;
@@ -1157,3 +1157,7 @@ kbd {
 .bb-btn.tool-rebuild.idle { opacity: 0.45; }
 .bb-btn.tool-rebuild.alert { border-color: var(--orange); animation: rebuild-nudge 1.4s ease-in-out infinite; }
 @keyframes rebuild-nudge { 50% { box-shadow: 0 0 0 0.2rem rgba(249, 115, 22, 0.45); } }
+
+/* ---------------------------------------------------------------- menu tagline */
+
+.menu-tagline { margin: -0.3rem 0 0.7rem; font: 900 1.05rem var(--font-heavy); color: var(--orange); letter-spacing: 0.04em; text-transform: uppercase; }

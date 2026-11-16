@@ -32,5 +32,5 @@ createServer(async (req, res) => {
     res.end('Not found');
   }
 }).listen(port, '127.0.0.1', () => {
-  console.log(`Returns Department dev server: http://localhost:${port}/`);
+  console.log(`No Receipt, No Mercy dev server: http://localhost:${port}/`);
 });

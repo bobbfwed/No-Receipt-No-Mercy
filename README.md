@@ -1,6 +1,8 @@
-# Returns Department
+# No Receipt, No Mercy
 
-A co-op browser game for 1 to 6 players. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
+*The customer is always a prick.*
+
+A co-op browser game for 1 to 6 players, set in the returns department of a discount warehouse. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
 
 ## Play on this computer
 You need Node.js (any recent version) to serve the files.
