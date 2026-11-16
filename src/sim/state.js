@@ -112,6 +112,8 @@ export function createGame({ seed = 1, training = false, map = null } = {}) {
     /** Refunds that close the store. Grows with the number of players. */
     refundLimit: TUNE.refundLimit,
     wave: 0,
+    /** The tick the doors last opened. */
+    waveAt: 0,
     /** 'build' | 'wave' | 'won' | 'lost' */
     phase: 'build',
     /** Ticks left in the build phase; -1 means wait until a player starts the wave. */
@@ -182,7 +184,15 @@ export function addPlayer(state, name) {
 
 export function setPlayerOnline(state, id, on) {
   const p = state.players[id];
-  if (p) p.on = on;
+  if (!p) return;
+  p.on = on;
+  // If nobody is left running the store, the Head Office player has to come back and do it.
+  const o = state.office;
+  if (o && !state.players.some((q) => q.on && q.side === 'store')) {
+    if (state.players[o.pid]) state.players[o.pid].side = 'store';
+    state.office = null;
+    state.storeReady = false;
+  }
 }
 
 /**

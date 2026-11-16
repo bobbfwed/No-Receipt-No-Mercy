@@ -209,3 +209,23 @@ test('Head Office wins by closing the store, and a game with him stays identical
   assert.equal(s.refundLimit, TUNE.refundLimit + TUNE.refundPerPlayer);
   assert.equal(JSON.stringify(s), JSON.stringify(b));
 });
+
+test('editing the plan takes back his ready, and he returns to the store if nobody else is in it', () => {
+  const s = withOffice();
+  assert.ok(applyCommand(s, 1, { c: 'start' }).ok);
+  assert.equal(s.office.ready, true);
+  assert.ok(plan(s, [{ k: 'hunter', n: 2, sup: 0, door: 0, at: 0 }]).ok);
+  assert.equal(s.office.ready, false);
+  // The store asks; the doors stay shut until he asks again.
+  applyCommand(s, 0, { c: 'start' });
+  assert.equal(s.phase, 'build');
+  applyCommand(s, 1, { c: 'start' });
+  assert.equal(s.phase, 'wave');
+  assert.equal(s.waveAt, s.tick, 'the state records when the doors opened');
+
+  const t = withOffice();
+  setPlayerOnline(t, 0, false); // Dave, the only store player, drops out
+  assert.equal(t.office, null);
+  assert.equal(t.players[1].side, 'store');
+  assert.ok(applyCommand(t, 1, { c: 'place', k: 'crate', x: 5, y: 5 }).ok, 'Steve can build again');
+});

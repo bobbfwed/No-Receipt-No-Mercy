@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Head Office (test page)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+  .row { display: flex; height: 100%; gap: 4px; }
+  iframe { border: 0; flex: 1; min-width: 0; height: 100%; }
+  /* One player full size, the other full size underneath (so its game keeps running). */
+  .solo iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .solo iframe.front { z-index: 2; }
+  #log { position: fixed; right: 6px; bottom: 6px; z-index: 9; max-width: 40%; background: #000c; color: #f99; font: 11px Consolas, monospace; padding: 3px 8px; white-space: pre-wrap; pointer-events: none; }
+  #log:empty { display: none; }
+</style>
+</head>
+<body>
+<!--
+  A test page for the Head Office mode: a host (Dave) and a joined player (Steve), linked between
+  frames without the internet. Steve takes the Head Office job and builds a plan through the real
+  buttons, and the page goes as far as `step` asks, so each state can be photographed.
+    http://localhost:5173/tools/office-test.html?view=join&step=plan&wave=7
+  view   join (Steve full size), host (Dave full size), both (side by side)
+  wave   make the coming sales event this one (set before Steve takes the job, so his budget fits)
+  step   how far to go, each one including the ones before:
+           job        both in the game, nobody has the job (Steve's row shows the button)
+           empty      Steve has taken the job, nothing bought
+           plan       a few groups on two entrances, changed with the row buttons
+           budget     the last group raised with MAX, so the money has run out
+           officeready Steve has pressed READY (the store has not)
+           storeready instead of Steve, Dave has pressed OPEN THE DOORS
+           wave       both have asked; the doors open; wait &secs (default 6) real seconds
+           next       then the wave is played out at once: the next build phase, a fresh plan
+           closed     then the store reaches its refund limit (Head Office wins)
+           survived   then the store gets through the last sales event (Head Office loses)
+  noplan=1   Steve buys nothing (the usual crowd comes)
+  check=1    after the plan, test that Head Office cannot build (keys and clicks do nothing) but can
+             move the view, and that the host's copy of the plan replaces his after a second;
+             results are listed in the corner (use with step=plan)
+  map, size  the store (see MAP_DESIGNS and MAP_SIZES)
+  Photograph it with:  node tools/realshot.mjs "<url>" out.png 14000 1600 900
+-->
+<div class="row" id="row">
+  <iframe id="host" title="Host (Dave)"></iframe>
+  <iframe id="join" title="Joined player (Steve)"></iframe>
+</div>
+<div id="log"></div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const view = q.get('view') || 'join';
+  const STEPS = ['job', 'empty', 'plan', 'budget', 'officeready', 'storeready', 'wave', 'next', 'closed', 'survived'];
+  const step = q.get('step') || 'plan';
+  const upTo = (s) => STEPS.indexOf(step) >= STEPS.indexOf(s);
+  const log = (t) => { document.getElementById('log').textContent += t + '\n'; };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const host = document.getElementById('host'), join = document.getElementById('join');
+  if (view !== 'both') {
+    document.getElementById('row').classList.add('solo');
+    (view === 'host' ? host : join).classList.add('front');
+  }
+  const code = 'O' + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const extra = ['seed', 'map', 'size'].filter((k) => q.has(k)).map((k) => `&${k}=${encodeURIComponent(q.get(k))}`).join('');
+  host.src = `../index.html?local=host&code=${code}&name=Dave${extra}`;
+  setTimeout(() => { join.src = `../index.html?local=join&code=${code}&name=Steve`; }, 1200);
+
+  const until = async (fn, ms = 15000, what = 'something') => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { try { const v = fn(); if (v) return v; } catch { /* not yet */ } await wait(100); }
+    throw new Error(`gave up waiting for ${what}`);
+  };
+  const doc = (f) => f.contentDocument;
+  const game = (f) => f.contentWindow.__game;
+  const $ = (f, sel) => doc(f).querySelector(sel);
+  const $$ = (f, sel) => [...doc(f).querySelectorAll(sel)];
+  function click(f, sel, opts = {}) {
+    const el = typeof sel === 'string' ? $(f, sel) : sel;
+    if (!el) throw new Error(`no element ${sel}`);
+    if (el.disabled) throw new Error(`disabled: ${typeof sel === 'string' ? sel : el.outerHTML.slice(0, 80)}`);
+    el.dispatchEvent(new (f.contentWindow.MouseEvent)('click', { bubbles: true, cancelable: true, ...opts }));
+  }
+  /** The plan row n's control: dn, up, mx, ad, au, x, n, a, d. */
+  const ctl = (n, f) => $(join, `.plr-rows [data-f="${f}${n}"]`);
+  function card(k, sup = false) {
+    const i = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'blind', 'gymbro', 'scooter'].indexOf(k);
+    return $$(join, '.pl-card')[i].querySelector(sup ? '.plc-sup' : '.plc-main');
+  }
+  function setValue(el, v) {
+    el.value = String(v);
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  async function checks() {
+    const say = (ok, text) => { const el = document.getElementById('log'); el.style.color = '#9f9'; el.textContent += `${ok ? 'PASS' : 'FAIL'} ${text}\n`; };
+    const g = game(join), win = join.contentWindow, canvas = $(join, 'canvas.world');
+    const key = (type, k) => win.dispatchEvent(new win.KeyboardEvent(type, { key: k, code: /^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`, bubbles: true }));
+    const at = (tx, ty) => {
+      const r = canvas.getBoundingClientRect(), cam = g.renderer.cam;
+      return { clientX: r.left + r.width / 2 + (tx + 0.5 - cam.x) * cam.zoom, clientY: r.top + r.height / 2 + (ty + 0.5 - cam.y) * cam.zoom };
+    };
+    const mouse = (type, x, y, button = 0) => canvas.dispatchEvent(new win.PointerEvent(type, { ...at(x, y), button, buttons: type === 'pointerup' ? 0 : 1 << (button === 2 ? 1 : 0), pointerId: 1, bubbles: true, cancelable: true }));
+    // Building keys and the build bar do nothing.
+    for (const k of ['1', '7', 'x', 'u']) key('keydown', k);
+    say(g.input.tool === null, `number keys, X and U pick no tool (tool: ${g.input.tool})`);
+    g.input.setTool('belt');
+    say(g.input.tool === null, 'setTool from the build bar is ignored');
+    const before = JSON.stringify(game(host).session.state.grid);
+    mouse('pointermove', 6, 6); mouse('pointerdown', 6, 6); mouse('pointerup', 6, 6);
+    mouse('pointerdown', 6, 6, 2); mouse('pointerup', 6, 6, 2);
+    await wait(500);
+    say(JSON.stringify(game(host).session.state.grid) === before, 'clicking and right-clicking the floor changes nothing');
+    say(g.input.view().tool === null, 'no placement preview (view.tool is null)');
+    say($(join, '.buildbar').classList.contains('hidden'), 'the build bar is hidden');
+    // The camera still moves. Zoom in first, so there is room to move.
+    canvas.dispatchEvent(new win.WheelEvent('wheel', { ...at(10, 8), deltaY: -600, bubbles: true, cancelable: true }));
+    const cam0 = { ...g.renderer.cam };
+    say(cam0.zoom > 0, `the wheel zooms (zoom ${cam0.zoom.toFixed(1)})`);
+    key('keydown', 'd'); await wait(400); key('keyup', 'd');
+    say(g.renderer.cam.x > cam0.x + 0.5, `D moves the view (x ${cam0.x.toFixed(1)} -> ${g.renderer.cam.x.toFixed(1)})`);
+    key('keydown', 'f');
+    await wait(100);
+    // The host's copy wins once he stops editing for a second.
+    const hostState = game(host).session.state;
+    hostState.office.plan = [{ k: 'hunter', n: 3, sup: 0, door: 0, at: 2 }];
+    await wait(2500);
+    const rowsNow = $$(join, '.plr-rows .plr').length;
+    const n = $(join, '.plr-rows [data-f="n0"]');
+    say(rowsNow === 1 && n && n.value === '3', `the host's plan replaces his after a second (rows ${rowsNow}, first n ${n && n.value})`);
+  }
+
+  (async () => {
+    try {
+      await until(() => game(host) && game(join) && game(join).session.state && game(join).session.state.players.length === 2, 20000, 'both games');
+      const hs = () => game(host).session.state;
+      if (q.has('wave')) hs().wave = Math.max(0, Number(q.get('wave')) - 1);
+      await wait(800);
+      if (!upTo('empty')) return;
+      await until(() => $(join, '.side-btn'), 5000, 'the Run the shoppers button');
+      click(join, '.side-btn');
+      await until(() => $(join, '.planner:not(.hidden)'), 5000, 'the planner');
+      await wait(500);
+      if (upTo('plan') && !q.has('noplan')) {
+        const wave = hs().wave + 1;
+        // Group 1: bargain hunters through Dave's entrance, raised to five with the + button.
+        click(join, card('hunter'));
+        await wait(250);
+        for (let i = 0; i < 4; i++) { click(join, ctl(0, 'up')); await wait(120); }
+        // Group 2: dads through Steve's own entrance, starting 4 seconds in, eight of them typed in.
+        if (wave >= 2) {
+          click(join, card('dad'));
+          await wait(250);
+          setValue(ctl(1, 'd'), 1);
+          await wait(150);
+          setValue(ctl(1, 'n'), 8);
+          await wait(150);
+          for (let i = 0; i < 4; i++) { click(join, ctl(1, 'au')); await wait(120); }
+        }
+        // Group 3: a super if one can be bought, otherwise clippers, starting 10 seconds in.
+        if (wave >= 6) click(join, card('hunter', true));
+        else if (wave >= 3) click(join, card('clipper'));
+        await wait(250);
+        const last = $$(join, '.plr-rows .plr').length - 1;
+        if (last >= 2) { setValue(ctl(last, 'a'), 10); await wait(150); click(join, ctl(last, 'up')); await wait(150); }
+        if (wave >= 5) { click(join, card('karen')); await wait(250); }
+      }
+      if (upTo('budget') && !q.has('noplan')) {
+        const last = $$(join, '.plr-rows .plr').length - 1;
+        click(join, ctl(last, 'mx'));
+        await wait(300);
+      }
+      await wait(1300); // let the host's copy settle
+      if (q.has('check')) await checks();
+      if (step === 'officeready' || upTo('wave')) click(join, '.pl-ready');
+      if (step === 'storeready' || upTo('wave')) click(host, '.btn-doors');
+      if (!upTo('wave')) return;
+      await until(() => hs().phase === 'wave', 5000, 'the doors to open');
+      await wait(Number(q.get('secs') || 6) * 1000);
+      if (step === 'next') {
+        for (let i = 0; i < 400 && hs().phase === 'wave'; i++) game(host).session.fastForward(30);
+        if (hs().phase !== 'build') log('the wave did not end');
+      } else if (step === 'closed') {
+        hs().refunds = hs().refundLimit - 1;
+        for (let i = 0; i < 400 && hs().phase === 'wave'; i++) game(host).session.fastForward(30);
+        if (hs().phase !== 'lost') log('the store did not close');
+      } else if (step === 'survived') {
+        const s = hs();
+        s.wave = 20;
+        s.spawnQ = [];
+        s.shoppers = [];
+        game(host).session.fastForward(2);
+        if (s.phase !== 'won') log('the store did not survive');
+      }
+    } catch (err) {
+      log(String(err && err.stack || err));
+    }
+  })();
+</script>
+</body>
+</html>

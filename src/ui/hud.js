@@ -1,6 +1,16 @@
 // The top bar (cash, sales event, doors, refunds, speed, room code) and the players panel.
-import { TUNE, ROLES, teamCash } from '../sim/index.js';
+import { TUNE, ROLES, officePlayer } from '../sim/index.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } from './dom.js';
+
+const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
+const BUDGET_TITLE = 'What you have left to spend on shoppers for the coming sales event. Half of what you leave unspent carries over to the next one.';
+
+/** The store players' money added up (Head Office's frozen cash is not the store's). */
+function storeCash(s) {
+  let sum = 0;
+  for (const p of s.players) if (p.side !== 'office') sum += p.cash;
+  return Math.floor(sum + 1e-6);
+}
 
 /**
  * @param {Object} session
@@ -8,15 +18,14 @@ import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } f
  * @param {string|null} o.roomCode
  * @param {string|null} o.roomKind 'online' | 'local' | null
  * @param {() => void} o.onHelp
+ * @param {(s) => number|null} [o.budgetLeft] Head Office's budget left, or null if this player is not Head Office
  */
-export function createTopBar(session, { roomCode = null, roomKind = null, onHelp, sound = null, playSound = () => {} }) {
+export function createTopBar(session, { roomCode = null, roomKind = null, onHelp, sound = null, playSound = () => {}, budgetLeft = () => null }) {
   const cashVal = h('b', { class: 'val' });
   const teamVal = h('small', { class: 'team-cash' });
-  const cash = h('div', {
-    class: 'hud-box hud-cash',
-    title: 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.',
-  },
-  h('span', { class: 'coin', 'aria-hidden': 'true' }, '$'), h('span', { class: 'lbl' }, 'YOUR CASH'), cashVal, teamVal);
+  const cashLbl = h('span', { class: 'lbl' }, 'YOUR CASH');
+  const cash = h('div', { class: 'hud-box hud-cash', title: CASH_TITLE },
+    h('span', { class: 'coin', 'aria-hidden': 'true' }, '$'), cashLbl, cashVal, teamVal);
 
   const evTitle = h('b', { class: 'ev-title' });
   const evSub = h('small', { class: 'ev-sub' });
@@ -60,11 +69,27 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
 
   const el = h('header', { class: 'topbar' }, cash, event, phase, h('div', { class: 'spacer' }), refunds, speed, room, audio, help);
 
+  let wasOffice = null;
   function update(s) {
     const mine = s.players[session.me];
-    setText(cashVal, money(mine ? Math.floor(mine.cash) : 0));
-    // With company, also show what the whole team has.
-    setText(teamVal, s.players.length > 1 ? `team ${money(teamCash(s))}` : '');
+    const budget = budgetLeft(s);
+    const isOffice = budget !== null;
+    if (isOffice !== wasOffice) {
+      wasOffice = isOffice;
+      setClass(cash, 'is-budget', isOffice);
+      cash.title = isOffice ? BUDGET_TITLE : CASH_TITLE;
+    }
+    if (isOffice) {
+      // Head Office has no cash to spend, only his budget for shoppers.
+      setText(cashLbl, s.phase === 'build' ? 'BUDGET LEFT' : 'CARRIES OVER');
+      setText(cashVal, money(s.phase === 'build' ? budget : s.office?.bank || 0));
+      setText(teamVal, `store ${money(storeCash(s))}`);
+    } else {
+      setText(cashLbl, 'YOUR CASH');
+      setText(cashVal, money(mine ? Math.floor(mine.cash) : 0));
+      // With company, also show what the whole team has.
+      setText(teamVal, s.players.length > 1 ? `team ${money(storeCash(s))}` : '');
+    }
     const total = TUNE.waves;
     if (s.training) {
       setText(evTitle, 'TRAINING SHIFT');
@@ -83,11 +108,26 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     setClass(event, 'is-over', s.phase === 'won' || s.phase === 'lost');
 
     const build = s.phase === 'build';
+    const boss = build && !s.training ? officePlayer(s) : null;
     setClass(countdown, 'hidden', !build || !!s.training);
-    setClass(openBtn, 'hidden', !build);
+    // Head Office has his own READY button in the planner.
+    setClass(openBtn, 'hidden', !build || isOffice);
     // In training the doors only open when the lesson has shoppers lined up.
     setClass(openBtn, 'waiting', !!s.training && !s.nextWave);
-    setClass(openBtn, 'ready', !!s.training && !!s.nextWave);
+    setClass(openBtn, 'ready', (!!s.training && !!s.nextWave) || (!!boss && s.office.ready && !s.storeReady));
+    // The store has asked and is waiting for Head Office: say so on the button.
+    const storeAsked = !!boss && s.storeReady;
+    if (storeAsked !== openBtn.classList.contains('asked')) {
+      setClass(openBtn, 'asked', storeAsked);
+      openBtn.replaceChildren(...(storeAsked
+        ? [h('b', null, 'ASKED ✓'), h('small', null, 'waiting for Head Office')]
+        : ['OPEN THE DOORS']));
+    }
+    const doorTip = !boss ? 'Start the next sales event now. Shoppers will not wait for you to finish.'
+      : storeAsked ? `The store has asked to open the doors. They open when ${boss.name} (Head Office) presses READY, or when the clock runs out.`
+        : s.office.ready ? `${boss.name} (Head Office) is ready. Press to open the doors now.`
+          : `Ask to open the doors now. With ${boss.name} running Head Office, they open early only when he is ready too.`;
+    if (openBtn.title !== doorTip) openBtn.title = doorTip;
     setClass(remaining, 'hidden', s.phase !== 'wave');
     if (build) {
       if (s.phaseT < 0) {
@@ -154,32 +194,93 @@ function createSoundMenu(sound) {
   return h('div', { class: 'hud-sound' }, btn, menu);
 }
 
-/** Who is on shift, and what each has in the bank. Click your own job title to change it. */
-export function createPlayersPanel(session) {
+/**
+ * Who is on shift, and what each has in the bank. Click your own job title to change it.
+ * Between sales events, a player's own row also has the button to take the Head Office job
+ * (run the shoppers) or hand it back.
+ */
+export function createPlayersPanel(session, { playSound = () => {} } = {}) {
   const list = h('ul', { class: 'players-list' });
   const foot = h('div', { class: 'players-foot' });
-  const el = h('section', { class: 'panel players', 'aria-label': 'Players' }, h('h3', null, 'ON SHIFT'), list, foot);
+  // With a Head Office player the doors open early only when both sides have asked: show who has.
+  const storeLight = h('span', { class: 'rl' });
+  const officeLight = h('span', { class: 'rl' });
+  const lights = h('div', {
+    class: 'ready-lights hidden', role: 'status',
+    title: 'Before the clock runs out, the doors open only when the store (any store player presses OPEN THE DOORS) and Head Office (READY) have both asked.',
+  }, h('small', null, 'OPEN EARLY'), storeLight, officeLight);
+  const el = h('section', { class: 'panel players', 'aria-label': 'Players' }, h('h3', null, 'ON SHIFT'), list, lights, foot);
   let sig = '';
   const cashEls = new Map(); // player id -> the element showing his cash
+  let statusEl = null; // what Head Office is doing, on his row
   const GIVE = 100;
 
+  /** Whether this player may be offered the Head Office job right now. */
+  function canTakeJob(s, p) {
+    if (s.training || s.phase !== 'build' || p.side === 'office') return false;
+    if (officePlayer(s)) return false; // someone else has it
+    // Somebody has to be left running the store.
+    return s.players.some((q) => q !== p && q.on && q.side !== 'office');
+  }
+
   function update(s) {
-    const next = JSON.stringify([session.me, s.players.map((p) => [p.name, p.role, p.on, p.color])]);
+    const boss = officePlayer(s);
+    const me = s.players[session.me];
+    const next = JSON.stringify([session.me, s.players.map((p) => [p.name, p.role, p.on, p.color, p.side]),
+      boss ? boss.id : -1, me ? canTakeJob(s, me) : false, s.phase === 'build' && !s.training]);
     if (next !== sig) { sig = next; rebuild(s); }
-    for (const p of s.players) setText(cashEls.get(p.id), money(Math.floor(p.cash)));
+    for (const p of s.players) if (cashEls.has(p.id)) setText(cashEls.get(p.id), money(Math.floor(p.cash)));
+    if (statusEl && s.office) {
+      setText(statusEl, s.phase === 'build' ? (s.office.ready ? 'ready to open' : 'planning the next wave') : s.phase === 'wave' ? 'sending shoppers' : '');
+      setClass(statusEl, 'on', s.phase === 'build' && !!s.office.ready);
+    }
+    const asking = !!boss && s.phase === 'build' && !s.training;
+    setClass(lights, 'hidden', !asking);
+    if (asking) {
+      setText(storeLight, s.storeReady ? 'STORE ✓' : 'STORE …');
+      setClass(storeLight, 'on', s.storeReady);
+      setText(officeLight, s.office.ready ? 'HEAD OFFICE ✓' : 'HEAD OFFICE …');
+      setClass(officeLight, 'on', !!s.office.ready);
+    }
     const online = s.players.filter((p) => p.on).length;
-    setText(foot, online === 1 ? '1 player online. Says a lot.' : `${online} players online · income is split evenly`);
+    setText(foot, online === 1 ? '1 player online. Says a lot.'
+      : boss ? `${online} players online · income is split between the store players`
+        : `${online} players online · income is split evenly`);
+  }
+
+  function sideButton(s, p) {
+    if (p.id !== session.me || s.training || s.phase !== 'build') return null;
+    if (p.side === 'office') {
+      return h('button', {
+        type: 'button', class: 'side-btn back',
+        title: 'Hand back the Head Office job and help run the store again. Only between sales events.',
+        onclick: () => { playSound('click'); session.send({ c: 'side', side: 'store' }); },
+      }, 'Back to the store');
+    }
+    if (!canTakeJob(s, p)) return null;
+    return h('button', {
+      type: 'button', class: 'side-btn',
+      title: 'Take the Head Office job: stop defending, and instead buy the shoppers for each sales event and choose where and when they come in. You win if the store closes. Only between sales events.',
+      onclick: () => { playSound('click'); session.send({ c: 'side', side: 'office' }); },
+    }, 'Run the shoppers');
   }
 
   function rebuild(s) {
     const hadFocus = document.activeElement && list.contains(document.activeElement);
+    const focusSide = hadFocus && document.activeElement.classList.contains('side-btn');
     cashEls.clear();
+    statusEl = null;
+    const iAmOffice = s.players[session.me]?.side === 'office';
     list.replaceChildren(...s.players.map((p) => {
       const mine = p.id === session.me;
-      const cashEl = h('b', { class: 'pcash' });
-      cashEls.set(p.id, cashEl);
+      const office = p.side === 'office';
+      // Head Office has no money in the store: no cash, and no point giving him any.
+      const cashEl = office ? null : h('b', { class: 'pcash' });
+      if (cashEl) cashEls.set(p.id, cashEl);
+      const tag = office ? h('span', { class: 'ho-tag', title: 'Head Office: runs the shoppers instead of the store, and wins if the store closes.' }, 'HEAD OFFICE') : null;
+      if (office && p.on) statusEl = h('span', { class: 'ho-status' });
       // Money is personal, so there has to be a way to hand it over.
-      const give = mine || !p.on ? null : h('button', {
+      const give = mine || !p.on || office || iAmOffice ? null : h('button', {
         type: 'button', class: 'give-btn', title: `Give ${p.name} $${GIVE} of your own money (hold Shift for $${GIVE * 10}).`,
         onclick: (e) => {
           const have = Math.floor(session.state.players[session.me]?.cash || 0);
@@ -196,14 +297,16 @@ export function createPlayersPanel(session) {
           },
         }, p.role)
         : h('span', { class: 'role' }, p.role);
-      return h('li', { class: `player${p.on ? '' : ' off'}${mine ? ' me' : ''}` },
+      return h('li', { class: `player${p.on ? '' : ' off'}${mine ? ' me' : ''}${office ? ' is-office' : ''}` },
         h('span', { class: 'chip', style: { background: safeColor(p.color) } }),
         h('span', { class: 'pname' }, p.name, mine ? h('em', null, ' (you)') : null, cashEl),
+        office ? h('span', { class: 'ho-line' }, tag, statusEl) : null,
         role,
         give,
+        sideButton(s, p),
         p.on ? null : h('span', { class: 'gone' }, 'clocked out'));
     }));
-    if (hadFocus) list.querySelector('.role-btn')?.focus();
+    if (hadFocus) list.querySelector(focusSide ? '.side-btn' : '.role-btn')?.focus();
   }
 
   return { el, update };

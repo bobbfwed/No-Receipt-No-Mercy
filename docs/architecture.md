@@ -133,6 +133,7 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `tools/tutorial-test.html` plays the first ten lessons of the training shift with simulated mouse and keyboard events (photograph it with `realshot.mjs`, about 70 seconds).
 - `tools/poke.html?u=<game options>&do=<actions>` opens the game and clicks, presses or holds keys, turns the wheel or hovers tiles, to reach screens a plain screenshot cannot (actions are listed in the file).
 - `tools/sound-test.html` measures every sound and has a play button for each.
+- `tools/office-test.html?view=join|host|both&step=...` plays a two-player game in which the joined player takes the Head Office job, buys a wave through the real buttons and plays it; the steps are listed in the file.
 - `tools/render-harness.html` shows the renderer alone; its options are listed at the top of the file (`?lineup=1` shows every shopper and its super in every state; `design=`, `size=`, `players=` and `cam=` choose the map and view).
 - The game sets `globalThis.__game = { session, renderer, input }` so these test pages can find where a tile is on screen.
 

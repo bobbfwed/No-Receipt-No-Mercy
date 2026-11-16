@@ -1,5 +1,5 @@
 // Full-screen overlays: the end of the game, losing the host, and the in-game "how to play".
-import { TUNE, SHOPPERS, SUPERS, BUILD, teamCash } from '../sim/index.js';
+import { TUNE, SHOPPERS, SUPERS, BUILD } from '../sim/index.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP } from '../content/help.js';
 import { h, money, safeColor } from './dom.js';
 import { debFace } from './icons.js';
@@ -58,32 +58,53 @@ function overlay(cls, ...children) {
  * Game over, one way or the other.
  * @param {Object} s the final state
  * @param {string|null} debLine DEB's last words
+ * @param {number} [me] this player's id. For the Head Office player the result is the other way
+ *   round: he wins when the store closes.
  */
-export function endScreen(s, debLine) {
-  const won = s.phase === 'won';
+export function endScreen(s, debLine, me = -1) {
+  const stored = s.phase === 'won';
+  const boss = s.office ? s.players[s.office.pid] : null;
+  const office = boss && boss.side === 'office' ? boss : null;
+  const iAmOffice = !!office && office.id === me;
+  // "won" is from this player's side: the store's result, flipped for Head Office.
+  const won = iAmOffice ? !stored : stored;
   const stat = (label, value) => h('div', { class: 'end-stat' }, h('small', null, label), h('b', null, value));
-  const players = s.players.map((p) => h('tr', null,
+  // Head Office stays in the table, marked, because the numbers are what he did before he left
+  // the store; the store's cash leaves his out.
+  let cashLeft = 0;
+  for (const p of s.players) if (p !== office) cashLeft += p.cash;
+  const players = s.players.map((p) => h('tr', { class: p === office ? 'end-office' : null },
     h('td', null, h('i', { class: 'chip', style: { background: safeColor(p.color) } }), ` ${p.name}`),
-    h('td', null, p.role),
+    h('td', null, p === office ? h('span', { class: 'ho-tag' }, 'HEAD OFFICE') : p.role),
     h('td', null, String(p.all.shipped)),
     h('td', null, String(p.all.stopped)),
     h('td', null, money(p.all.earned)),
     h('td', null, money(p.all.spent)),
     h('td', null, String(p.all.built))));
   const btn = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: () => location.reload() }, 'New game');
-  const el = overlay(`end ${won ? 'won' : 'lost'}`,
-    h('div', { class: 'end-stamp' }, won ? 'STORE SURVIVED' : 'STORE CLOSED'),
-    h('p', { class: 'end-sub' }, won
+  let sub;
+  if (iAmOffice) {
+    sub = stored
+      ? `You lose. The store lasted all ${TUNE.waves} sales events with ${s.refunds} of ${s.refundLimit} refunds.`
+      : `You win. Your shoppers took the store to its refund limit in sales event ${s.wave}.`;
+  } else {
+    sub = stored
       ? `All ${TUNE.waves} sales events. Nobody is more surprised than HR.`
-      : `Refund limit reached in sales event ${s.wave}. Hand in your lanyards.`),
+      : `Refund limit reached in sales event ${s.wave}. Hand in your lanyards.`;
+  }
+  const el = overlay(`end ${won ? 'won' : 'lost'}${iAmOffice ? ' as-office' : ''}`,
+    iAmOffice ? h('div', { class: 'end-role' }, won ? 'HEAD OFFICE WINS' : 'HEAD OFFICE LOSES') : null,
+    h('div', { class: 'end-stamp' }, stored ? 'STORE SURVIVED' : 'STORE CLOSED'),
+    h('p', { class: 'end-sub' }, sub),
+    office && !iAmOffice ? h('p', { class: 'end-office-note' }, h('span', { class: 'ho-tag' }, 'HEAD OFFICE'), ` ${office.name} ran the shoppers, and ${stored ? 'lost' : 'won'}.`) : null,
     h('div', { class: 'end-stats' },
       stat('Sales event reached', `${s.wave} / ${TUNE.waves}`),
       stat('Refunds', `${s.refunds} / ${s.refundLimit}`),
-      stat('Cash left', money(teamCash(s)))),
+      stat(office ? "Store's cash left" : 'Cash left', money(Math.floor(cashLeft + 1e-6)))),
     h('table', { class: 'end-table' },
       h('thead', null, h('tr', null, ['Employee', 'Role', 'Shipped', 'Stopped', 'Earned', 'Wasted', 'Built'].map((t) => h('th', null, t)))),
       h('tbody', null, players)),
-    debLine ? h('div', { class: 'end-deb' }, h('span', { class: 'end-deb-face', html: debFace(won ? 'smug' : 'angry') }), h('p', null, debLine)) : null,
+    debLine ? h('div', { class: 'end-deb' }, h('span', { class: 'end-deb-face', html: debFace(stored ? 'smug' : 'angry') }), h('p', null, debLine)) : null,
     btn);
   setTimeout(() => btn.focus(), 50);
   return el;

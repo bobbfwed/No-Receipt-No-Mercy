@@ -66,6 +66,7 @@ export function beginWave(state, ev) {
   if (state.training) state.wave = 1; else state.wave++;
   state.phase = 'wave';
   state.phaseT = 0;
+  state.waveAt = state.tick;
   resetWaveStats(state);
   const q = [];
   let dads = 0;
