@@ -11,15 +11,23 @@ export const MAX_PLAYERS = 6;
 export const PLAYER_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d8f', '#eab308', '#06b6d4'];
 export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater'];
 
-/**
- * Things that ride on belts. `value` is the cash paid when one reaches a shipping chute.
- * Goods sell for more the further they have ridden on belts: $1 extra for every `per` belts,
- * up to `bonus` extra. That is what makes a long production line worth building.
- */
+/** Things that ride on belts. `value` is the cash paid when one reaches a shipping chute. */
 export const ITEMS = {
-  box: { name: 'Mystery Box', value: 2, per: 10, bonus: 1 },
-  gadget: { name: 'Gadget', value: 6, per: 5, bonus: 3 },
-  giftset: { name: 'Gift Set', value: 13, per: 3, bonus: 6 },
+  box: { name: 'Mystery Box', value: 2 },
+  gadget: { name: 'Gadget', value: 7 },
+  giftset: { name: 'Gift Set', value: 16 },
+};
+
+/**
+ * Marked areas of the floor. Each of the four factory machines may only be built on its own
+ * kind of floor, and the areas are apart from each other, so goods have to travel between them
+ * by belt. Everything else can be built anywhere. Where the areas are is worked out in maps.js.
+ */
+export const ZONES = {
+  u: { name: 'Loading Bay', kind: 'unpacker', color: '#38bdf8' },
+  p: { name: 'Press Shop', kind: 'press', color: '#f97316' },
+  k: { name: 'Gift Wrap', kind: 'packer', color: '#e879f9' },
+  c: { name: 'Shipping', kind: 'chute', color: '#22c55e' },
 };
 
 /**
@@ -27,6 +35,7 @@ export const ITEMS = {
  * group: which half of the game it belongs to ('factory' or 'security').
  * blocks: shoppers cannot walk through it (this is what makes the factory a maze).
  * rot: it has a facing direction.
+ * zone: it may only be built on that kind of marked floor (a key of ZONES), where the map has them.
  * targets: an area tower hits at most this many shoppers at once (the ones nearest the tills).
  * up: it can be upgraded, and what each level adds. `dmg` and `secs` multiply the level before;
  *   `range` adds tiles; `slow` multiplies the speed of shoppers crossing it; `slip` adds to the
@@ -38,19 +47,19 @@ export const BUILD = {
     desc: 'Moves goods. Shoppers cannot cross it. Dads step right over.',
   },
   unpacker: {
-    name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: 2.5, makes: 'box',
+    name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: 2.5, makes: 'box', zone: 'u',
     desc: 'Opens pallets and spits out a Mystery Box every 2.5 seconds.',
   },
   press: {
-    name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: 2.5,
+    name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: 2.5, zone: 'p',
     desc: 'Crushes a Mystery Box into a Gadget.',
   },
   packer: {
-    name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: 3,
-    desc: 'Wraps a Gadget into a Gift Set, the same thing at twice the price.',
+    name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: 3, zone: 'k',
+    desc: 'Wraps a Gadget into a Gift Set, the same thing at more than twice the price.',
   },
   chute: {
-    name: 'Shipping Chute', cost: 40, group: 'factory', blocks: true,
+    name: 'Shipping Chute', cost: 40, group: 'factory', blocks: true, zone: 'c',
     desc: 'Sells whatever falls into it.',
   },
   crate: {

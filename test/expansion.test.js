@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
   waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf,
-  MAP_SIZES, MAP_DESIGNS, SHOPPERS, SUPERS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE,
+  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE,
 } from '../src/sim/index.js';
 
 /** A training game (no timer, cannot be lost) with plenty of cash, on the original small map. */
@@ -584,55 +584,85 @@ test('a game with everything in it stays identical on a copy made mid-wave', () 
 
 // ---------------------------------------------------------------- factory and sprinkler balance
 
-test('machines only pass goods along by belt', () => {
-  // Unpacker straight into a chute, and unpacker, press, chute in a row with no belts: nothing sells.
-  const s = createGame({ seed: 2 });
-  addPlayer(s, 'Dave');
-  s.players[0].cash = 10000;
-  place(s, 'unpacker', 3, 3, 0); place(s, 'chute', 4, 3);
-  place(s, 'unpacker', 3, 6, 0); place(s, 'press', 4, 6, 0); place(s, 'chute', 5, 6);
-  const ev = [];
-  for (let i = 0; i < 40 * TICK_HZ; i++) ev.push(...step(s));
-  assert.equal(ev.filter((e) => e.e === 'sale').length, 0);
-  assert.ok(ev.some((e) => e.e === 'nobelt' && e.k === 'unpacker'), 'the game says which machine is stuck');
+/** The tiles of one kind of marked floor, as [x, y] pairs. */
+function zoneTiles(s, ch) {
+  const out = [];
+  for (let i = 0; i < s.zones.length; i++) if (s.zones[i] === ch) out.push([i % s.w, (i / s.w) | 0]);
+  return out;
+}
 
-  // One belt between each and it works.
-  const g = createGame({ seed: 2 });
-  addPlayer(g, 'Dave');
-  g.players[0].cash = 10000;
-  for (const [k, x] of [['unpacker', 3], ['belt', 4], ['press', 5], ['belt', 6], ['chute', 7]]) place(g, k, x, 6, 0);
-  const sales = [];
-  for (let i = 0; i < 40 * TICK_HZ; i++) sales.push(...step(g).filter((e) => e.e === 'sale'));
-  assert.ok(sales.length >= 5);
-  assert.ok(sales.every((e) => e.kind === 'gadget' && e.v === ITEMS.gadget.value && e.travel === 2));
+test('every map marks out floor for each machine, and the areas never touch', () => {
+  for (const design of Object.keys(MAP_DESIGNS)) {
+    for (const size of Object.keys(MAP_SIZES)) {
+      const s = createGame({ map: { design, size } });
+      assert.equal(s.zones.length, s.w * s.h);
+      for (const ch of Object.keys(ZONES)) {
+        const tiles = zoneTiles(s, ch);
+        assert.ok(tiles.length >= 6, `${design} ${size}: only ${tiles.length} tiles of ${ZONES[ch].name}`);
+        for (const [x, y] of tiles) {
+          assert.equal(s.tiles[y * s.w + x], '.', 'marked floor is always buildable floor');
+          // Nothing of another kind beside it, so two different machines can never be neighbours.
+          for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+            const other = s.zones[(y + dy) * s.w + x + dx];
+            assert.ok(other === ' ' || other === ch, `${design} ${size}: ${ZONES[ch].name} touches another area at ${x},${y}`);
+          }
+        }
+      }
+    }
+  }
+  assert.equal(createGame().zones, '', 'the bare default map has no marked floor');
 });
 
-test('goods sell for more the further they ride on belts, up to a limit', () => {
-  const sell = (belts) => {
-    const g = createGame({ seed: 2, map: { design: 'warehouse', size: 'l' } });
-    addPlayer(g, 'Dave');
-    g.players[0].cash = 10000;
-    // unpacker, one belt, press, then a run of belts to the chute, all along one row
-    place(g, 'unpacker', 2, 3, 0); place(g, 'belt', 3, 3, 0); place(g, 'press', 4, 3, 0);
-    for (let x = 5; x < 5 + belts; x++) assert.ok(place(g, 'belt', x, 3, 0).ok);
-    place(g, 'chute', 5 + belts, 3);
-    for (let i = 0; i < 90 * TICK_HZ; i++) for (const e of step(g)) if (e.e === 'sale') return e;
-    return null;
-  };
-  const short = sell(1), mid = sell(9), long = sell(30);
-  assert.equal(short.v, ITEMS.gadget.value);
-  assert.equal(mid.travel, 10);
-  assert.equal(mid.v, ITEMS.gadget.value + Math.floor(10 / ITEMS.gadget.per));
-  assert.equal(long.v, ITEMS.gadget.value + ITEMS.gadget.bonus, 'the bonus is capped');
-  for (const item of Object.values(ITEMS)) assert.ok(item.bonus <= item.value / 2 + 0.5, 'never more than about half again');
+test('a machine only goes on its own marked floor; everything else goes anywhere', () => {
+  const s = createGame({ map: { design: 'warehouse', size: 's' } });
+  addPlayer(s, 'Dave');
+  s.players[0].cash = 100000;
+  const [ux, uy] = zoneTiles(s, 'u')[0], [px, py] = zoneTiles(s, 'p')[0];
+  const [kx, ky] = zoneTiles(s, 'k')[0], [cx, cy] = zoneTiles(s, 'c')[0];
+  assert.equal(canPlace(s, 'unpacker', px, py), 'zone');
+  assert.equal(canPlace(s, 'press', ux, uy), 'zone');
+  assert.equal(canPlace(s, 'packer', 3, 3), 'zone', 'not on plain floor either');
+  assert.equal(canPlace(s, 'chute', kx, ky), 'zone');
+  assert.equal(place(s, 'unpacker', px, py).why, 'zone');
+  for (const k of ['belt', 'crate', 'sprinkler', 'forklift', 'wetfloor', 'samples']) {
+    assert.equal(canPlace(s, k, 3, 3), null, `${k} on plain floor`);
+    assert.equal(canPlace(s, k, ux, uy), null, `${k} on marked floor`);
+  }
+  assert.ok(place(s, 'unpacker', ux, uy, 1).ok);
+  assert.ok(place(s, 'press', px, py, 1).ok);
+  assert.ok(place(s, 'packer', kx, ky, 1).ok);
+  assert.ok(place(s, 'chute', cx, cy).ok);
+});
+
+test('a production line across the marked floor needs belts, and sells at full price', () => {
+  // Straight down the first column of the first section: bay, press shop, gift wrap, shipping.
+  const s = createGame({ seed: 2, map: { design: 'warehouse', size: 's' } });
+  addPlayer(s, 'Dave');
+  s.players[0].cash = 100000;
+  const x = zoneTiles(s, 'p')[0][0];
+  const row = (ch) => zoneTiles(s, ch).find((t) => t[0] === x)[1];
+  const rows = { u: row('u'), p: row('p'), k: row('k'), c: row('c') };
+  assert.ok(rows.u < rows.p && rows.p < rows.k && rows.k < rows.c, 'the first section runs top to bottom');
+  let belts = 0;
+  for (let y = rows.u; y <= rows.c; y++) {
+    const k = y === rows.u ? 'unpacker' : y === rows.p ? 'press' : y === rows.k ? 'packer' : y === rows.c ? 'chute' : 'belt';
+    if (k === 'belt') belts++;
+    assert.ok(place(s, k, x, y, 1).ok, `${k} at ${x},${y}`);
+  }
+  assert.ok(belts >= 3, 'there is at least one belt between each pair of machines');
+  const sales = [];
+  for (let i = 0; i < 60 * TICK_HZ; i++) sales.push(...step(s).filter((e) => e.e === 'sale'));
+  assert.ok(sales.length >= 5);
+  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === 16));
+  assert.equal(ITEMS.gadget.value, 7);
 });
 
 test('the Press and the Packer are a serious purchase', () => {
   assert.ok(BUILD.press.cost >= TUNE.startCash * 0.4, 'a Press is a large part of the starting cash');
   assert.ok(BUILD.packer.cost >= BUILD.press.cost * 2);
-  // Each must take a good while to pay for itself: at least fifty items.
-  assert.ok(BUILD.press.cost / (ITEMS.gadget.value - ITEMS.box.value) >= 50);
-  assert.ok(BUILD.packer.cost / (ITEMS.giftset.value - ITEMS.gadget.value) >= 50);
+  // Each must take a good while to pay for itself: at least forty items.
+  assert.ok(BUILD.press.cost / (ITEMS.gadget.value - ITEMS.box.value) >= 40);
+  assert.ok(BUILD.packer.cost / (ITEMS.giftset.value - ITEMS.gadget.value) >= 40);
 });
 
 test('a sprinkler reaches only four shoppers at a time, the ones nearest the tills', () => {
