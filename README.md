@@ -13,7 +13,7 @@ Double-click `play.bat`. It starts a small local server and opens the game in yo
 
 Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chrome, Edge or Firefox.
 
-- **Training shift** teaches every building hands on, in about ten minutes. Start here.
+- **Training shift** teaches every building hands on in about ten minutes, then every awkward kind of shopper in about ten more ("Jump to part 2" skips straight to those). Start here.
 - **Painted floor:** Unpackers, Presses, Packers and Shipping Chutes each only go on their own named patch of floor (Loading Bay, Press Shop, Gift Wrap, Shipping). The patches are apart, so belts carry the goods between them, and those belts are your maze.
 - **The store** on the menu picks the map for Play solo and Host a game: a design (open warehouse, showroom of walled rooms, supermarket aisles) and a size. Each size says how many players it suits; every player gets his own shopper entrance.
 - **Play solo** starts a real game straight away.

@@ -2,7 +2,7 @@
 // to move through the lessons. The lessons themselves are in src/tutorial/lessons.js.
 import { worded } from '../content/touch.js';
 import { h, setText, setClass } from './dom.js';
-import { createTutorial, STEPS } from '../tutorial/lessons.js';
+import { createTutorial, STEPS, PART_TWO } from '../tutorial/lessons.js';
 
 const DONE_PAUSE_MS = 1300; // how long the "Done" tick shows before the next lesson appears
 
@@ -27,6 +27,26 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
   const btnNext = h('button', { type: 'button', class: 'tut-btn tut-primary', onclick: () => { cancelAdvance(); tut.next(); } }, 'Next');
   const btnPlay = h('button', { type: 'button', class: 'tut-btn tut-primary', onclick: () => onExit('solo') }, 'Play a real game');
   const btnMenu = h('button', { type: 'button', class: 'tut-btn', onclick: () => onExit('menu') }, 'Back to menu');
+  // For players who already know the buildings: plays the rest of part 1 by itself.
+  const btnPart2 = h('button', {
+    type: 'button', class: 'tut-btn tut-jump', title: 'Builds the part 1 layout for you and goes straight to the difficult customers',
+    onclick: () => {
+      cancelAdvance();
+      // The skipped lessons are history: keep DEB, the reviews and the refusals they would set
+      // off off the screen, and their noise and sparks out of the effects.
+      const own = Object.prototype.hasOwnProperty.call(session, 'emit');
+      const emit = session.emit;
+      session.emit = (type, msg) => { if (type !== 'say' && type !== 'review' && type !== 'nope') emit.call(session, type, msg); };
+      try {
+        tut.autoplay(PART_TWO);
+      } finally {
+        if (own) session.emit = emit; else delete session.emit;
+      }
+      session.drainFx();
+      const st = tut.step;
+      if (st.quip) session.emit('say', { t: 'say', who: 'DEB (HR)', mood: st.mood || 'flat', text: st.quip });
+    },
+  }, 'Jump to part 2');
   const btnMin = h('button', {
     type: 'button', class: 'tut-min', 'aria-label': 'Shrink or expand the training panel', title: 'Shrink or expand',
     onclick: () => { el.classList.toggle('min'); btnMin.textContent = el.classList.contains('min') ? '+' : '–'; },
@@ -36,10 +56,11 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
     h('header', { class: 'tut-head' }, h('b', null, 'TRAINING SHIFT'), count, btnMin),
     h('div', { class: 'tut-progress', role: 'presentation' }, fill),
     h('div', { class: 'tut-main' }, title, result, body, hint, tick),
-    h('footer', { class: 'tut-foot' }, btnBack, btnSkip, btnNext, btnMenu, btnPlay));
+    h('footer', { class: 'tut-foot' }, btnBack, btnSkip, btnPart2, btnNext, btnMenu, btnPlay));
 
   let advancing = null; // timer while the "Done" tick is showing
   let shownIndex = -1;
+  let shownTool; // the build-bar button lit up for this lesson (some lessons change it half way)
 
   function cancelAdvance() {
     if (advancing) { clearTimeout(advancing); advancing = null; }
@@ -73,10 +94,12 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
     setClass(btnNext, 'hidden', !st.manual || !!st.last);
     setClass(btnPlay, 'hidden', !st.last);
     setClass(btnMenu, 'hidden', !st.last);
+    setClass(btnPart2, 'hidden', !(PART_TWO > 0 && tut.index < PART_TWO));
     hint.classList.add('hidden');
     el.classList.remove('min');
     btnMin.textContent = '–';
-    highlight(st.tool || null);
+    shownTool = tut.tool();
+    highlight(shownTool);
   }
 
   const tut = createTutorial(session, { onChange: render });
@@ -106,6 +129,8 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
       const text = tut.hint() && worded(tut.hint());
       setClass(hint, 'hidden', !text);
       if (text) setText(hint, text);
+      const tool = tut.tool();
+      if (tool !== shownTool) { shownTool = tool; highlight(tool); }
     },
     destroy() { cancelAdvance(); tut.destroy(); },
   };
