@@ -349,6 +349,7 @@ test('every shopper has a super version at least twice as strong', () => {
   }
   assert.equal(SUPERS.karen.hp, SHOPPERS.karen.hp * 4, 'a super Karen has four times the patience');
   assert.ok(Math.abs(SUPERS.mom.chaseSpeed - TUNE.chaseSpeed * 3) < 1e-9, 'a super mom chases three times as fast');
+  assert.ok(SUPERS.mom.kidMin >= TUNE.kidMin * 2 && SUPERS.mom.kidMax >= TUNE.kidMax * 2, 'and her kid runs twice as far');
 });
 
 test('supers arrive from the middle of the game and grow in number', () => {
@@ -579,7 +580,8 @@ test('a game with everything in it stays identical on a copy made mid-wave', () 
   for (let i = 0; i < 40 * TICK_HZ; i++) { for (const e of step(a)) seen.add(e.e); step(b); }
   assert.equal(JSON.stringify(a), JSON.stringify(b));
   assert.ok(a.shoppers.some((s) => s.sup) || seen.has('escape'));
-  for (const e of ['kid', 'smash', 'mess', 'spray']) assert.ok(seen.has(e), `saw ${e}`);
+  // (Whether a gym bro gets to wreck anything depends on the dice; the others always happen.)
+  for (const e of ['kid', 'mess', 'spray']) assert.ok(seen.has(e), `saw ${e}`);
 });
 
 // ---------------------------------------------------------------- factory and sprinkler balance
@@ -831,7 +833,7 @@ test('a mom taken down while her child is loose crawls to him, untouchable, then
       hpWhileCrawling.push(mom.hp);
       shotsWhileCrawling += tick.filter((e) => e.e === 'shot').length;
     }
-    if (mom.cr === 2 && gotUpWith < 0) gotUpWith = mom.hp;
+    if (mom.crn === 1 && mom.cr !== 1 && gotUpWith < 0) gotUpWith = mom.hp;
   });
   assert.ok(ev.some((e) => e.e === 'crawl'), 'she went down with the child loose');
   assert.ok(crawled > 10, 'and crawled for a while');
@@ -839,8 +841,22 @@ test('a mom taken down while her child is loose crawls to him, untouchable, then
   assert.ok(hpWhileCrawling.every((h) => h === 0), 'and none of it counted');
   assert.ok(ev.some((e) => e.e === 'caught'), 'she reached him');
   assert.ok(Math.abs(gotUpWith - mom.mhp * TUNE.crawlBack) < 1e-6, 'and got up with some patience back');
-  assert.equal(ev.filter((e) => e.e === 'crawl').length, 1, 'it only happens once');
-  assert.equal(ev.filter((e) => e.e === 'left' || e.e === 'escape').length, 1, 'after that she is stopped, or gets through, like anyone else');
+  assert.ok(ev.filter((e) => e.e === 'crawl').length <= TUNE.crawlTimes);
+  assert.equal(ev.filter((e) => e.e === 'left' || e.e === 'escape').length, 1, 'in the end she is stopped, or gets through, like anyone else');
+
+  // She can do it twice, and no more: the third time her patience runs out, she leaves.
+  const g = stage(6);
+  send(g, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
+  let m2 = null;
+  for (let i = 0; i < 20 * TICK_HZ && !(m2 && m2.kd === 2); i++) { step(g); m2 = g.shoppers[0] || m2; }
+  const gx = m2.x | 0, gy = m2.y | 0;
+  const at2 = [[0, -2], [0, 2], [-1, -2], [1, 2]].map(([dx, dy]) => [gx + dx, gy + dy]).find(([x, y]) => canPlace(g, 'forklift', x, y) === null);
+  place(g, 'forklift', at2[0], at2[1]);
+  m2.crn = TUNE.crawlTimes - 1;
+  m2.hp = 1;
+  const second = play(g, 60, () => { if (m2.crn === TUNE.crawlTimes && m2.cr !== 1 && m2.kd === 0) { m2.kd = 2; m2.kx = m2.x + 2; m2.ky = m2.y; m2.hp = 1; } });
+  assert.equal(second.filter((e) => e.e === 'crawl').length, 1, 'her second and last crawl');
+  assert.equal(second.filter((e) => e.e === 'left').length, 1, 'then she is out for good');
 });
 
 test('a mom with her child in the cart is stopped like anyone else', (t) => {

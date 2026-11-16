@@ -44,8 +44,8 @@ import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
  * @property {number} [kvy]
  * @property {number} [kr]  mom: tiles the child will still run
  * @property {number} [kc]  mom: ticks before the child may escape again
- * @property {number} [cr]  mom: 1 while she is crawling to her child (nothing can hurt her), 2 once she
- *                         has done it (it only happens once)
+ * @property {number} [cr]  mom: 1 while she is crawling to her child (nothing can hurt her)
+ * @property {number} [crn] mom: how many times she has crawled to him and got up again
  */
 
 /**
