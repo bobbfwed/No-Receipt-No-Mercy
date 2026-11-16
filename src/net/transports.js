@@ -116,6 +116,22 @@ export function joinLocal(code, timeoutMs = 3000) {
 
 const peerId = (code) => `returns-dept-v1-${String(code).toUpperCase()}`;
 
+/**
+ * Helper servers two browsers use to find a way to each other.
+ * STUN servers tell a browser its public address; that is enough for most home routers.
+ * TURN servers relay the traffic when it is not (strict routers, some mobile and office
+ * networks). tools/net-check.html reports which of these answer from a given computer.
+ */
+export const ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  // The relays the PeerJS project runs for its users. Free, and not always up: when they are
+  // down, two players on the same wifi, or behind strict routers, cannot connect. A relay of
+  // our own (an account with a TURN provider) would go here.
+  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+];
+const PEER_OPTIONS = { config: { iceServers: ICE_SERVERS } };
+
 /** A five-letter room code without letters that are easy to confuse. */
 export function makeRoomCode() {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -147,7 +163,7 @@ function wrapPeerConn(dc) {
 export function hostOnline(code, onConnection) {
   const Peer = peerLibrary();
   return new Promise((resolve, reject) => {
-    const peer = new Peer(peerId(code));
+    const peer = new Peer(peerId(code), PEER_OPTIONS);
     let ready = false;
     peer.on('open', () => { ready = true; resolve({ close: () => peer.destroy() }); });
     peer.on('connection', (dc) => dc.on('open', () => onConnection(wrapPeerConn(dc))));
@@ -163,14 +179,19 @@ export function hostOnline(code, onConnection) {
  * Joins a friend's game.
  * @returns {Promise<Object>} the connection to the host
  */
-export function joinOnline(code, timeoutMs = 15000) {
+export function joinOnline(code, timeoutMs = 20000) {
   const Peer = peerLibrary();
   return new Promise((resolve, reject) => {
-    const peer = new Peer();
+    const peer = new Peer(PEER_OPTIONS);
     let done = false;
     const fail = (text) => { if (!done) { done = true; peer.destroy(); reject(new Error(text)); } };
-    const timer = setTimeout(() => fail('Timed out. Check the room code, and that the host still has the game open.'), timeoutMs);
+    // Two different failures look the same from outside, so say which it was.
+    let asked = false; // true once the broker has been asked to put us through to the host
+    const timer = setTimeout(() => fail(asked
+      ? 'Found the room, but your browser and the host\'s could not reach each other. This usually means you are both on the same wifi, or one of you is behind a strict firewall or VPN. Try from a different network (a phone on mobile data, for example).'
+      : 'Timed out reaching the matchmaking service. Check your internet connection and try again.'), timeoutMs);
     peer.on('open', () => {
+      asked = true;
       const dc = peer.connect(peerId(code), { reliable: true, serialization: 'json' });
       dc.on('open', () => {
         if (done) return;

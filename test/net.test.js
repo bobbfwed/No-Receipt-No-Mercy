@@ -222,3 +222,41 @@ test('a client can take the Head Office job, plan a wave over the wire, and DEB 
   assert.deepEqual(nopes, ['office']);
   assert.ok(NOPE.office && NOPE.taken && NOPE.lonely && NOPE.budget && NOPE.locked && NOPE.door);
 });
+
+test('a player who joins in the middle of a wave can build at once and gets his entrance and cash', () => {
+  const host = new HostSession({ name: 'Dave', seed: 9, map: { design: 'warehouse', size: 'm' } });
+  host.state.wave = 4;
+  host.send({ c: 'start' }); // wave 5 is under way
+  for (let n = 0; n < 60; n++) host.update(n * TICK_MS);
+  assert.equal(host.state.phase, 'wave');
+  const limit = host.state.refundLimit;
+
+  const [a, b] = memoryPair();
+  host.accept(a);
+  const client = new ClientSession(b, 'Steve');
+  assert.equal(client.state.phase, 'wave', 'he sees the wave in progress');
+  assert.equal(host.state.open, 2, 'his entrance opens straight away');
+  assert.equal(host.state.refundLimit, limit + TUNE.refundPerPlayer);
+  assert.equal(client.state.players[1].cash, TUNE.startCash + 5 * TUNE.joinCash, 'starting cash plus something for the waves he missed');
+
+  // He builds during the wave, with his own money.
+  client.send({ c: 'place', k: 'sprinkler', x: 4, y: 4 });
+  for (let n = 60; n < 75; n++) { host.update(n * TICK_MS); client.update(n * TICK_MS); }
+  const i = 4 * host.state.w + 4;
+  assert.equal(host.state.grid[i].k, 'sprinkler');
+  assert.equal(host.state.grid[i].o, 1);
+  assert.equal(client.state.grid[i].k, 'sprinkler');
+
+  // Shoppers use his entrance for the rest of this wave.
+  const used = new Set();
+  const seen = new Set(host.state.shoppers.map((s) => s.id));
+  for (let n = 75; n < 75 + 40 * TICK_HZ && host.state.phase === 'wave'; n++) {
+    host.update(n * TICK_MS);
+    for (const s of host.state.shoppers) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      used.add(host.state.doors.findIndex((d) => d.includes((s.y | 0) * host.state.w + (s.x | 0))));
+    }
+  }
+  assert.ok(used.has(1), 'some arrive through the new entrance');
+});

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Network check (test page)</title>
+<style>
+  body { margin: 1rem; background: #111; color: #d1fae5; font: 14px Consolas, monospace; }
+  h1 { font-size: 1.1rem; color: #facc15; }
+  .bad { color: #fca5a5; } .ok { color: #86efac; }
+  pre { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<!--
+  A test page: checks what this computer's network allows a browser-to-browser game to use.
+  Open it on each player's computer (it works from the published site too):
+    http://localhost:5173/tools/net-check.html
+  It asks each helper server the game uses for a way to be reached, and reports:
+    host   an address on your own network (only useful to players in the same house)
+    srflx  your public address, found through a STUN server (works unless your router or the
+           other player's is the strict kind)
+    relay  an address on a TURN relay server (works through almost anything, if the relay is up)
+  If a player gets no srflx and no relay, he cannot join or host online from that network.
+-->
+<h1>Network check for online play</h1>
+<pre id="out">Checking, about 8 seconds...</pre>
+<script type="module">
+  import { ICE_SERVERS } from '../src/net/transports.js';
+  const out = document.getElementById('out');
+  const lines = [];
+  const say = (t, cls = '') => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t); out.innerHTML = lines.join('\n'); };
+
+  async function probe(label, servers, relayOnly) {
+    const found = new Set();
+    try {
+      const pc = new RTCPeerConnection({ iceServers: servers, iceTransportPolicy: relayOnly ? 'relay' : 'all' });
+      pc.createDataChannel('probe');
+      pc.onicecandidate = (e) => { if (e.candidate && e.candidate.candidate) found.add(e.candidate.type || (/ typ (\w+)/.exec(e.candidate.candidate) || [])[1]); };
+      await pc.setLocalDescription(await pc.createOffer());
+      await new Promise((r) => { pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') r(); }; setTimeout(r, 7000); });
+      pc.close();
+    } catch (err) {
+      say(`${label}: error ${err.message}`, 'bad');
+      return found;
+    }
+    const list = [...found].join(', ') || 'nothing';
+    const good = relayOnly ? found.has('relay') : found.has('srflx') || found.has('relay');
+    say(`${label}: ${list}`, good ? 'ok' : 'bad');
+    return found;
+  }
+
+  lines.length = 0;
+  say(`Browser: ${navigator.userAgent}`);
+  say('');
+  const all = await probe('Everything the game uses', ICE_SERVERS, false);
+  for (const s of ICE_SERVERS) {
+    const urls = [].concat(s.urls);
+    const isTurn = urls.some((u) => u.startsWith('turn'));
+    await probe(`  ${isTurn ? 'relay' : 'stun '} ${urls.join(' , ')}`, [s], isTurn);
+  }
+  say('');
+  if (all.has('relay')) say('RESULT: this network can use a relay. Online play should work from here.', 'ok');
+  else if (all.has('srflx')) say('RESULT: no relay answered, but your public address was found. Online play works with most other players, not all.', 'ok');
+  else say('RESULT: nothing but local addresses. Online play will not work from this network (a firewall, VPN or browser setting is blocking it).', 'bad');
+</script>
+</body>
+</html>
