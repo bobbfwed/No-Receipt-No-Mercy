@@ -35,7 +35,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   const picked = map || loadMap() || { design: 'warehouse', size: 's' };
   const designIn = h('select', { id: 'map-design' }, Object.entries(MAP_DESIGNS).map(([k, d]) => h('option', { value: k }, d.name)));
   const sizeIn = h('select', { id: 'map-size' }, Object.entries(MAP_SIZES).map(([k, z]) => h('option', { value: k },
-    `${z.name} · ${z.w} x ${z.h} · ${z.players ? `best for ${z.players} player${z.players > 1 ? 's' : ''}` : z.note}`)));
+    `${z.name} (${z.w}x${z.h}): ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'original'}`)));
   designIn.value = picked.design;
   sizeIn.value = picked.size;
   const mapNote = h('p', { class: 'map-note' });

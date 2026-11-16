@@ -84,11 +84,22 @@ const renderer = createRenderer(canvas, session);
 renderer.resize();                 // after the canvas element changes size
 renderer.tileAt(clientX, clientY); // -> {x, y} tile under a mouse position, or null
 renderer.draw(view);               // once per animation frame
+
+// The camera belongs to the renderer. Maps can be much bigger than the screen.
+renderer.cam;                      // read-only { x, y, zoom }: view centre in tiles, CSS pixels per tile
+renderer.pan(dxTiles, dyTiles);
+renderer.centerOn(xTiles, yTiles);
+renderer.zoomBy(factor, clientX, clientY); // the tile under that point stays put
+renderer.fit();                    // show the whole map
+renderer.viewRect();               // -> { x0, y0, x1, y1 } tiles on screen
 ```
+The camera never zooms out past the whole map or in past 72 pixels a tile, and never leaves the map by more than a tile. It starts on the whole map if tiles would be at least 24 pixels, otherwise at 30 pixels a tile. `src/ui/input.js` drives it (WASD, wheel, middle-drag, F, H).
+
+`createMinimap(canvas, session, renderer)` in `src/render/minimap.js` returns `{ draw(), tileAt(clientX, clientY) }`: a small picture of the whole store with the visible part outlined. The game screen shows it when the store does not fit on screen.
 `view` is supplied by the UI each frame:
 ```js
 {
-  tool: 'belt',          // a key of BUILD, or 'remove', or null when nothing is selected
+  tool: 'belt',          // a key of BUILD, or 'remove' or 'upgrade', or null when nothing is selected
   dir: 0,                // facing for the placement preview, 0-3
   hover: { x, y },       // tile under the mouse, or null
   cursors: Map,          // player id -> { x, y } in tiles (decimals): other players' pointers
@@ -96,7 +107,7 @@ renderer.draw(view);               // once per animation frame
   marks: [{ x, y, label }], // tiles to highlight with a pulsing outline and arrow (tutorial)
 }
 ```
-The renderer draws the world, the placement preview (green or red using `canPlace`, plus the range circle for towers), effects from `session.drainFx()`, and other players' pointers. It does not handle input and does not touch the DOM outside its canvas. The world is 30 x 16 tiles; the renderer scales it to fit the canvas and keeps the aspect ratio.
+The renderer draws the world (any map size and design, only the part in view), the placement and upgrade previews (green or red using `canPlace` and `canUpgrade`, plus range circles), upgrade badges, rubble, effects from `session.drainFx()`, and other players' pointers. It does not handle input and does not touch the DOM outside its canvas.
 
 ## Content (`src/content`)
 - `lines.js` holds every line of dialogue. Add jokes there, not in code.
@@ -118,9 +129,10 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `tools/two-player.html` shows a host and a joined player side by side in one window (`?online=1` links them through the internet broker; `?autostart=1` opens the doors by itself).
 - `tools/input-test.html` plays a solo game with simulated mouse and keyboard events and logs each step.
 - `tools/tutorial-test.html` plays the first ten lessons of the training shift with simulated mouse and keyboard events (photograph it with `realshot.mjs`, about 70 seconds).
-- `tools/poke.html?u=<game options>&do=<actions>` opens the game and clicks, presses keys or hovers tiles, to reach screens a plain screenshot cannot (actions are listed in the file).
+- `tools/poke.html?u=<game options>&do=<actions>` opens the game and clicks, presses or holds keys, turns the wheel or hovers tiles, to reach screens a plain screenshot cannot (actions are listed in the file).
 - `tools/sound-test.html` measures every sound and has a play button for each.
-- `tools/render-harness.html` shows the renderer alone; its options are listed at the top of the file (`?lineup=1` shows every shopper in every state).
+- `tools/render-harness.html` shows the renderer alone; its options are listed at the top of the file (`?lineup=1` shows every shopper and its super in every state; `design=`, `size=`, `players=` and `cam=` choose the map and view).
+- The game sets `globalThis.__game = { session, renderer, input }` so these test pages can find where a tile is on screen.
 
 ## Page options for testing
 `index.html` accepts these in the URL:

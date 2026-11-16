@@ -20,7 +20,6 @@
 <iframe id="game" src="../index.html?solo=1&name=Tester&seed=3&size=xs" title="Game"></iframe>
 <div id="log"></div>
 <script>
-  const W = 30, H = 16, TILE = 40;
   const frame = document.getElementById('game');
   const log = (t) => { document.getElementById('log').textContent += t + '\n'; };
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -30,12 +29,11 @@
     await wait(600);
     const canvas = doc.querySelector('canvas');
     if (!canvas) { log('FAIL: no canvas'); return; }
-    // Where a tile is on screen: the world is scaled to fit the canvas and centred.
+    // Where a tile is on screen.
     const at = (tx, ty) => {
       const r = canvas.getBoundingClientRect();
-      const s = Math.min(r.width / (W * TILE), r.height / (H * TILE));
-      const ox = r.left + (r.width - W * TILE * s) / 2, oy = r.top + (r.height - H * TILE * s) / 2;
-      return { clientX: ox + (tx + 0.5) * TILE * s, clientY: oy + (ty + 0.5) * TILE * s };
+      const cam = win.__game.renderer.cam; // the game's own camera
+      return { clientX: r.left + r.width / 2 + (tx + 0.5 - cam.x) * cam.zoom, clientY: r.top + r.height / 2 + (ty + 0.5 - cam.y) * cam.zoom };
     };
     const mouse = (type, tx, ty, button = 0) => canvas.dispatchEvent(new win.PointerEvent(type, {
       ...at(tx, ty), button, buttons: type === 'pointerup' ? 0 : 1, pointerId: 1, bubbles: true, cancelable: true,

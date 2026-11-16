@@ -1,24 +1,40 @@
-// The canvas renderer: draws the warehouse, everything built in it, the shoppers, effects, the
-// placement preview and the other players' pointers. Interface (see docs/architecture.md):
-//   const renderer = createRenderer(canvas, session);
-//   renderer.resize();                  after the canvas element changes size
-//   renderer.tileAt(clientX, clientY);  -> {x, y} tile under a mouse position, or null
-//   renderer.draw(view);                once per animation frame
+// The canvas renderer: draws the store, everything built in it, the shoppers, effects, the
+// placement and upgrade previews and the other players' pointers, through a camera that the
+// interface moves around (maps run up to 99 x 55 tiles and do not fit the screen).
 //
-// The world is W x H tiles of TILE logical pixels (1200 x 640). It is scaled to fit the canvas,
-// keeping its aspect ratio, and centred; the letterbox around it is left transparent so the page
-// background shows through. The parts are split by layer:
-//   floor.js      walls, doors, tills (mostly cached in an offscreen layer)
-//   buildings.js  belts, machines, security
+//   const renderer = createRenderer(canvas, session);
+//   renderer.resize();                   after the canvas element changes size (also noticed by itself)
+//   renderer.tileAt(clientX, clientY);   -> {x, y} tile under a mouse position, or null
+//   renderer.draw(view);                 once per animation frame
+// Camera:
+//   renderer.cam                         read-only { x, y, zoom }: view centre in tiles, CSS pixels per tile
+//   renderer.pan(dxTiles, dyTiles)       move the view
+//   renderer.centerOn(xTiles, yTiles)    put a point in the middle of the view
+//   renderer.zoomBy(factor, clientX?, clientY?)  zoom, keeping the tile under that point still
+//                                        (no point: about the view centre)
+//   renderer.fit()                       zoom out to show the whole map
+//   renderer.viewRect()                  -> {x0, y0, x1, y1} visible area in tiles (fractional)
+// The camera never zooms out past the whole map or in past MAX_ZOOM, never lets the view leave
+// the map by more than a tile, and centres the map in a direction where it is smaller than the
+// view. A new map starts fully zoomed out if that gives at least START_MIN pixels per tile,
+// otherwise at START_ZOOM, centred.
+//
+// Everything is drawn in logical world pixels, TILE (40) per tile; the camera turns that into a
+// canvas transform. The parts are split by layer:
+//   floor.js      walls, shelving, entrances, tills (static parts cached in chunks)
+//   buildings.js  belts, machines, security, level badges, wreckage left by gym bros
 //   items.js      goods on belts (pre-rendered sprites)
 //   messes.js     slushie spills teenagers leave on the floor
-//   shoppers.js   the nine kinds of shopper (and a mom's runaway child)
-//   effects.js    floating cash, speech blips, shots, sprays and crate debris from session.drainFx()
-import { W, H, MAP, BUILD, TUNE, TICK_HZ, ST, canPlace } from '../sim/index.js';
+//   shoppers.js   the nine kinds of shopper, their super versions, and a mom's runaway child
+//   effects.js    floating cash, speech blips, shots, sprays, wreckage, upgrade sparkles
+//   guides.js     route guides and tutorial marks
+//   minimap.js    the whole map small, for the interface's corner (a separate canvas)
+import { BUILD, TUNE, TICK_HZ, ST, canPlace, canUpgrade, statsOf, levelOf, upgradeCost } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
-import { drawStatic, drawDynamic, findSpecial } from './floor.js';
+import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
 import {
   beltShape, drawBelt, drawBeltItems, drawBuilding, createBeltSprites, createBuildingSprites, SP,
+  drawBadge, drawRubble,
 } from './buildings.js';
 import { buildItemSprites } from './items.js';
 import { drawShopper, shadowPath, drawKid, kidShadowPath, createShopperSprites } from './shoppers.js';
@@ -27,11 +43,26 @@ import { createEffects } from './effects.js';
 import { drawRoutes, drawMarks } from './guides.js';
 
 const T = TILE;
-const WORLD_W = W * T, WORLD_H = H * T;
+/** Closest zoom, in CSS pixels per tile. */
+const MAX_ZOOM = 72;
+/** A new map starts zoomed right out if that gives at least this many pixels per tile... */
+const START_MIN = 24;
+/** ...and otherwise at this zoom. */
+const START_ZOOM = 30;
+/** How far (in tiles) the view may go past the edge of the map. */
+const EDGE = 1;
 const RANGE_DASH = [7, 5];
 const NO_DASH = [];
 
 const byY = (a, b) => a.y - b.y;
+
+/**
+ * Sprites and floor chunks are painted at a few fixed resolutions (steps of the square root of
+ * two), not at every zoom, so zooming smoothly does not repaint everything every frame.
+ * @returns {number} the step for a scale (device pixels per logical pixel)
+ */
+const resStep = (scale) => Math.ceil(Math.log2(Math.max(1e-3, scale)) * 2 - 1e-6) + 16;
+const stepScale = (step) => 2 ** ((step - 16) / 2);
 
 /**
  * @param {HTMLCanvasElement} canvas
@@ -39,80 +70,186 @@ const byY = (a, b) => a.y - b.y;
  */
 export function createRenderer(canvas, session) {
   const ctx = canvas.getContext('2d');
+  // Canvas size in CSS pixels, and device pixels per CSS pixel.
+  let cssW = 1, cssH = 1, dpr = 1;
+  let seenW = -1, seenH = -1, seenDpr = 0;
+  /** The camera: view centre in tiles, zoom in CSS pixels per tile. Read-only from outside. */
+  const cam = { x: 0, y: 0, zoom: START_ZOOM };
+  let mapW = 0, mapH = 0, mapKey = '';
+  let viewPending = false; // the starting view still has to be worked out once the canvas has a size
+  /** World-to-device transform: device pixels per logical pixel, and the offset. */
   let scale = 1, ox = 0, oy = 0;
-  let cssW = -1, cssH = -1, dprSeen = 0;
-  /** World-to-screen transform, handed to code that sets its own transforms. */
   const base = { s: 1, ox: 0, oy: 0 };
-  /** Cached floor/walls layer, at screen resolution. */
-  let floorLayer = null;
-  let floorTiles = '';
+  let step = -999;
   let sprites = buildItemSprites(1);
   const beltSprites = createBeltSprites();
   const buildingSprites = createBuildingSprites();
   const shopperSprites = createShopperSprites();
+  const messSprites = createMessSprites();
   const fx = createEffects();
-  const special = findSpecial(MAP.join(''));
+  const floor = createFloorCache();
+  let info = null;
   const order = []; // shoppers (and loose children) sorted for drawing, reused every frame
   const kids = []; // reusable stand-ins for loose children in `order`: { kid: true, y, m: mom }
-  const messSprites = createMessSprites();
   const facing = new Map(); // shopper id -> 1 or -1, so a stopped shopper keeps facing the same way
-  const shapes = new Int8Array(W * H); // belt bend per tile, worked out once per frame
+  let shapes = new Int8Array(0); // belt bend per tile, worked out for visible belts each frame
   let doorOpen = 0;
   let lastNow = 0;
+  let lastZoom = -1, zoomedAt = -1e9;
   let frames = 0;
   /** Everything a building or shopper drawing needs about the current frame. */
-  const F = { time: 0, now: 0, alpha: 0, sprites, fx: fx.timers };
+  const F = { time: 0, now: 0, alpha: 0, sprites, fx: fx.timers, w: 30 };
   /** A fake building used to draw the placement ghost. */
   const ghost = { k: '', o: 0, d: 0, it: [], t: 0, n: 0, out: 0, cd: 0, a: 0 };
   const nameWidths = new Map();
+  /** Visible tiles this frame, with a margin (exclusive end). */
+  const vis = { x0: 0, y0: 0, x1: 0, y1: 0 };
+
+  // --- camera ----------------------------------------------------------------------------------
+
+  function measure() {
+    const rect = canvas.getBoundingClientRect();
+    cssW = Math.max(1, rect.width || canvas.clientWidth || 1);
+    cssH = Math.max(1, rect.height || canvas.clientHeight || 1);
+    dpr = globalThis.devicePixelRatio || 1;
+    seenW = canvas.clientWidth; seenH = canvas.clientHeight; seenDpr = dpr;
+    return rect;
+  }
+
+  const fitZoom = () => (mapW ? Math.min(cssW / mapW, cssH / mapH) : START_ZOOM);
+  const maxZoom = () => Math.max(MAX_ZOOM, fitZoom());
+
+  function clampCam() {
+    if (!mapW) return;
+    cam.zoom = Math.min(maxZoom(), Math.max(fitZoom(), cam.zoom));
+    const hx = cssW / 2 / cam.zoom, hy = cssH / 2 / cam.zoom;
+    cam.x = 2 * hx >= mapW - 1e-6 ? mapW / 2 : Math.min(mapW - hx + EDGE, Math.max(hx - EDGE, cam.x));
+    cam.y = 2 * hy >= mapH - 1e-6 ? mapH / 2 : Math.min(mapH - hy + EDGE, Math.max(hy - EDGE, cam.y));
+  }
+
+  function startView() {
+    const fz = fitZoom();
+    cam.zoom = fz >= START_MIN ? fz : START_ZOOM;
+    cam.x = mapW / 2;
+    cam.y = mapH / 2;
+    clampCam();
+    // A canvas that is not laid out yet (hidden, size 0) gives a meaningless fit: try again later.
+    viewPending = cssW < 50 || cssH < 50;
+  }
+
+  /** Follows the state's map: a new map (or new game) gets the starting view. */
+  function sync() {
+    const s = session.state;
+    if (!s) return false;
+    const key = `${s.w}x${s.h}:${s.map ? s.map.design + '/' + s.map.size : ''}`;
+    if (key !== mapKey) {
+      mapKey = key;
+      mapW = s.w; mapH = s.h;
+      startView();
+    }
+    return true;
+  }
 
   function resize() {
-    const dpr = globalThis.devicePixelRatio || 1;
-    dprSeen = dpr;
-    const rect = canvas.getBoundingClientRect();
-    cssW = canvas.clientWidth;
-    cssH = canvas.clientHeight;
+    const wasFit = mapW && !viewPending && Math.abs(cam.zoom - fitZoom()) <= fitZoom() * 0.01;
+    const rect = measure();
     canvas.width = Math.max(1, Math.round(rect.width * dpr));
     canvas.height = Math.max(1, Math.round(rect.height * dpr));
-    scale = Math.min(canvas.width / WORLD_W, canvas.height / WORLD_H);
-    ox = Math.round((canvas.width - WORLD_W * scale) / 2);
-    oy = Math.round((canvas.height - WORLD_H * scale) / 2);
+    if (!mapW) return;
+    if (viewPending) startView();
+    else {
+      // Keep the centre; someone looking at the whole map keeps seeing the whole map.
+      if (wasFit) cam.zoom = fitZoom();
+      clampCam();
+    }
+  }
+
+  /** Works out the world-to-device transform from the camera. */
+  function place() {
+    const k = canvas.width / cssW; // device pixels per CSS pixel, as the canvas really is
+    scale = (cam.zoom * k) / T;
+    ox = Math.round(canvas.width / 2 - cam.x * T * scale);
+    oy = Math.round(canvas.height / 2 - cam.y * T * scale);
     base.s = scale; base.ox = ox; base.oy = oy;
-    floorLayer = null;
-    sprites = buildItemSprites(scale);
-    F.sprites = sprites;
-    beltSprites.setScale(scale);
-    buildingSprites.setScale(scale);
-    shopperSprites.setScale(scale);
-    messSprites.setScale(scale);
+  }
+
+  /** A mouse position as CSS pixels inside the canvas. */
+  function local(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (cssW / Math.max(1, rect.width)),
+      y: (clientY - rect.top) * (cssH / Math.max(1, rect.height)),
+    };
+  }
+
+  function pan(dx, dy) {
+    if (!sync()) return;
+    cam.x += Number(dx) || 0;
+    cam.y += Number(dy) || 0;
+    clampCam();
+  }
+
+  function centerOn(x, y) {
+    if (!sync()) return;
+    if (Number.isFinite(x)) cam.x = x;
+    if (Number.isFinite(y)) cam.y = y;
+    clampCam();
+  }
+
+  function zoomBy(factor, clientX, clientY) {
+    if (!sync() || !(factor > 0)) return;
+    let px = cssW / 2, py = cssH / 2;
+    if (Number.isFinite(clientX) && Number.isFinite(clientY)) ({ x: px, y: py } = local(clientX, clientY));
+    const z0 = cam.zoom;
+    const z1 = Math.min(maxZoom(), Math.max(fitZoom(), z0 * factor));
+    // The tile under the point stays under the point.
+    const tx = cam.x + (px - cssW / 2) / z0, ty = cam.y + (py - cssH / 2) / z0;
+    cam.zoom = z1;
+    cam.x = tx - (px - cssW / 2) / z1;
+    cam.y = ty - (py - cssH / 2) / z1;
+    clampCam();
+  }
+
+  function fit() {
+    if (!sync()) return;
+    cam.zoom = fitZoom();
+    cam.x = mapW / 2;
+    cam.y = mapH / 2;
+    clampCam();
+  }
+
+  function viewRect() {
+    sync();
+    const hx = cssW / 2 / cam.zoom, hy = cssH / 2 / cam.zoom;
+    return { x0: cam.x - hx, y0: cam.y - hy, x1: cam.x + hx, y1: cam.y + hy };
   }
 
   function tileAt(clientX, clientY) {
-    const rect = canvas.getBoundingClientRect();
-    const kx = canvas.width / Math.max(1, rect.width);
-    const ky = canvas.height / Math.max(1, rect.height);
-    const px = (clientX - rect.left) * kx - ox;
-    const py = (clientY - rect.top) * ky - oy;
-    const x = Math.floor(px / (T * scale));
-    const y = Math.floor(py / (T * scale));
-    return x >= 0 && y >= 0 && x < W && y < H ? { x, y } : null;
+    if (!sync()) return null;
+    const p = local(clientX, clientY);
+    const x = Math.floor(cam.x + (p.x - cssW / 2) / cam.zoom);
+    const y = Math.floor(cam.y + (p.y - cssH / 2) / cam.zoom);
+    return x >= 0 && y >= 0 && x < mapW && y < mapH ? { x, y } : null;
   }
 
-  /** Paints the floor, walls, doors mats and tills once into an offscreen canvas. */
-  function buildFloor(tiles) {
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(WORLD_W * scale));
-    c.height = Math.max(1, Math.round(WORLD_H * scale));
-    const g = c.getContext('2d');
-    g.setTransform(c.width / WORLD_W, 0, 0, c.height / WORLD_H, 0, 0);
-    drawStatic(g, tiles);
-    floorLayer = c;
-    floorTiles = tiles;
+  // --- drawing -----------------------------------------------------------------------------------
+
+  /** Repaints sprites when the zoom crosses a resolution step. */
+  function setStep(st) {
+    if (st === step) return;
+    step = st;
+    const r = stepScale(st);
+    sprites = buildItemSprites(r);
+    F.sprites = sprites;
+    beltSprites.setScale(r);
+    buildingSprites.setScale(r);
+    shopperSprites.setScale(r);
+    messSprites.setScale(r);
   }
 
   function draw(view = {}) {
     // Follow size changes even if the page forgets to call resize().
-    if (canvas.clientWidth !== cssW || canvas.clientHeight !== cssH || (globalThis.devicePixelRatio || 1) !== dprSeen) resize();
+    if (canvas.clientWidth !== seenW || canvas.clientHeight !== seenH || (globalThis.devicePixelRatio || 1) !== seenDpr) resize();
     const s = session.state;
     const events = session.drainFx();
     const now = performance.now();
@@ -121,55 +258,114 @@ export function createRenderer(canvas, session) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!s) return;
-    fx.handle(events, now);
+    sync();
+    if (mapChanged(info, s)) {
+      info = analyzeMap(s);
+      floor.reset(info);
+      if (shapes.length !== s.w * s.h) shapes = new Int8Array(s.w * s.h);
+    }
+    F.w = s.w;
+    fx.handle(events, now, s);
 
     const alpha = session.alpha();
     F.alpha = alpha;
     F.now = now;
     F.time = (s.tick + alpha) / TICK_HZ;
 
-    if (!floorLayer || floorTiles !== s.tiles) buildFloor(s.tiles);
-    ctx.drawImage(floorLayer, ox, oy);
+    place();
+    setStep(resStep(scale));
+    // While the zoom is changing, paint the floor at fixed steps; once it settles, at the exact zoom.
+    if (cam.zoom !== lastZoom) { if (lastZoom >= 0) zoomedAt = now; lastZoom = cam.zoom; }
+    const floorRes = now - zoomedAt > 250 ? scale : stepScale(step);
+    const vr = viewRect();
+    vis.x0 = Math.max(0, Math.floor(vr.x0) - 1);
+    vis.y0 = Math.max(0, Math.floor(vr.y0) - 1);
+    vis.x1 = Math.min(s.w, Math.ceil(vr.x1) + 1);
+    vis.y1 = Math.min(s.h, Math.ceil(vr.y1) + 2); // tall things on the row below reach up
+
+    floor.draw(ctx, scale, floorRes, ox, oy, vis);
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, 0, WORLD_W, WORLD_H);
+    ctx.rect(0, 0, s.w * T, s.h * T);
     ctx.clip();
 
     // Doors slide open while a wave is on.
     doorOpen += ((s.phase === 'wave' ? 1 : 0) - doorOpen) * Math.min(1, dt * 4);
-    drawDynamic(ctx, special, doorOpen, fx.timers.tillAt, now);
-    // Teenagers' slushie spills, on the floor under everything else.
-    if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites);
+    drawDynamic(ctx, info, s.players, doorOpen, fx.timers.tillAt, now);
+    // Teenagers' slushie spills and wrecked buildings, on the floor under everything else.
+    if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites, s.w);
+    if (s.rubble && s.rubble.length) drawWreckage(s);
 
-    const grid = s.grid;
-    // Belts first (flat on the floor), then the goods riding on them, then everything else.
-    const phase = (((F.time * TUNE.beltSpeed * T) % SP) + SP) % SP;
-    for (let i = 0; i < grid.length; i++) {
-      const b = grid[i];
-      if (!b || b.k !== 'belt') continue;
-      const x = i % W, y = (i / W) | 0;
-      const sh = beltShape(grid, x, y, b.d);
-      shapes[i] = sh;
-      drawBelt(ctx, grid, x, y, b.d, sh, phase, beltSprites, base);
-    }
-    for (let i = 0; i < grid.length; i++) {
-      const b = grid[i];
-      if (b && b.k === 'belt') drawBeltItems(ctx, b, i % W, (i / W) | 0, shapes[i], alpha, sprites);
-    }
-    for (let i = 0; i < grid.length; i++) {
-      const b = grid[i];
-      if (b && b.k !== 'belt') drawBuilding(ctx, b, i, F, buildingSprites);
-    }
+    drawBuildings(s, now);
 
     if (view.route) drawRoutes(ctx, s, now / 1000);
     fx.draw(ctx, now, 0, sprites);
     drawShoppers(s, alpha);
     fx.draw(ctx, now, 1, sprites);
     drawPreview(s, view);
-    if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now);
-    if (view.cursors) drawCursors(s, view.cursors);
+    if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now, s.w, s.h);
     ctx.restore();
+
+    // Labels that stay the same size on screen whatever the zoom.
+    const k = canvas.width / cssW;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    drawDoorTags(s);
+    if (view.cursors) drawCursors(s, view.cursors);
+  }
+
+  /** What gym bros have wrecked and nobody has rebuilt: a heap of bits where it stood. */
+  function drawWreckage(s) {
+    for (const r of s.rubble) {
+      const i = r[0];
+      if (s.grid[i]) continue; // rebuilt
+      const x = i % s.w, y = (i / s.w) | 0;
+      if (x < vis.x0 || x >= vis.x1 || y < vis.y0 || y >= vis.y1) continue;
+      drawRubble(ctx, i, r[1], s.w);
+    }
+  }
+
+  function drawBuildings(s, now) {
+    const grid = s.grid, w = s.w;
+    const { x0, y0, x1, y1 } = vis;
+    // Belts first (flat on the floor), then the goods riding on them, then everything else.
+    const phase = (((F.time * TUNE.beltSpeed * T) % SP) + SP) % SP;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
+        const b = grid[i];
+        if (!b || b.k !== 'belt') continue;
+        const sh = beltShape(s, x, y, b.d);
+        shapes[i] = sh;
+        drawBelt(ctx, s, x, y, b.d, sh, phase, beltSprites, base);
+      }
+    }
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
+        const b = grid[i];
+        if (b && b.k === 'belt') drawBeltItems(ctx, b, x, y, shapes[i], F.alpha, sprites);
+      }
+    }
+    // Level badges grow when zoomed out so the number stays readable (in steps, as they are cached).
+    const bk = Math.round(Math.max(1, Math.min(1.6, 34 / cam.zoom)) * 10) / 10;
+    const bres = stepScale(step);
+    const upAt = fx.timers.upAt;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
+        const b = grid[i];
+        if (!b) continue;
+        if (b.k !== 'belt') drawBuilding(ctx, b, i, F, buildingSprites);
+        const since = now - upAt[i];
+        if (since < 450) {
+          // A flash of light over a building that has just been upgraded.
+          ctx.globalAlpha = 0.75 * (1 - since / 450);
+          rr(ctx, x * T + 2, y * T + 2, T - 4, T - 4, 8);
+          ctx.fillStyle = '#fff3b0';
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        if (b.lv > 1) drawBadge(ctx, x * T + T / 2, y * T + T / 2, b.lv, bk, bres);
+      }
+    }
   }
 
   /** Which way a shopper faces, remembered so one who stops keeps facing the same way. */
@@ -182,10 +378,13 @@ export function createRenderer(canvas, session) {
   function drawShoppers(s, alpha) {
     order.length = 0;
     let nk = 0;
+    // Only the ones on screen (a margin of two tiles for trolleys, dogs and bubbles).
+    const ax = vis.x0 - 2, bx = vis.x1 + 2, ay = vis.y0 - 2, by = vis.y1 + 2;
     for (const sh of s.shoppers) {
-      order.push(sh);
+      if (sh.x >= ax && sh.x <= bx && sh.y >= ay && sh.y <= by) order.push(sh);
       // A mom's loose child is a figure of its own on the floor, sorted in with everyone else.
-      if (sh.kd > 0 && sh.st !== ST.LEAVE) {
+      // It runs straight through buildings, and like every shopper is drawn over them.
+      if (sh.kd > 0 && sh.st !== ST.LEAVE && sh.kx >= ax && sh.kx <= bx && sh.ky >= ay && sh.ky <= by) {
         let p = kids[nk];
         if (!p) { p = { kid: true, y: 0, m: null }; kids.push(p); }
         p.y = sh.ky; p.m = sh;
@@ -220,30 +419,54 @@ export function createRenderer(canvas, session) {
     }
     for (let k = 0; k < nk; k++) kids[k].m = null;
     // Forget shoppers who have gone, now and then.
-    if (++frames % 600 === 0 && facing.size > order.length + 20) {
+    if (++frames % 600 === 0 && facing.size > s.shoppers.length * 2 + 20) {
       const live = new Set();
       for (const sh of s.shoppers) { live.add(sh.id); live.add(-sh.id); }
       for (const id of facing.keys()) if (!live.has(id)) facing.delete(id);
     }
   }
 
-  function rangeCircle(cx, cy, range, ok) {
+  /**
+   * A range circle. style: 'ok' placement allowed, 'bad' not allowed, 'faint' a tower's range
+   * shown on hover, 'next' (dashed gold outline) the range after an upgrade.
+   */
+  function rangeCircle(cx, cy, range, style) {
+    if (!(range > 0)) return;
     ctx.beginPath();
     ctx.arc(cx, cy, range * T, 0, Math.PI * 2);
-    ctx.fillStyle = ok ? 'rgba(255,255,255,0.13)' : 'rgba(239,68,68,0.12)';
+    if (style === 'next') {
+      ctx.setLineDash(RANGE_DASH);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = INK;
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffd23f';
+      ctx.stroke();
+      ctx.setLineDash(NO_DASH);
+      return;
+    }
+    const faint = style === 'faint', ok = style !== 'bad';
+    ctx.fillStyle = faint ? 'rgba(255,255,255,0.07)' : ok ? 'rgba(255,255,255,0.13)' : 'rgba(239,68,68,0.12)';
     ctx.fill();
-    ctx.setLineDash(RANGE_DASH);
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = ok ? 'rgba(255,255,255,0.9)' : 'rgba(255,120,110,0.9)';
+    if (!faint) ctx.setLineDash(RANGE_DASH);
+    ctx.lineWidth = faint ? 1.5 : 2.5;
+    ctx.strokeStyle = faint ? 'rgba(255,255,255,0.45)' : ok ? 'rgba(255,255,255,0.9)' : 'rgba(255,120,110,0.9)';
     ctx.stroke();
     ctx.setLineDash(NO_DASH);
   }
 
-  /** Ghost of the selected building at the hovered tile, or the remove highlight. */
+  function tileOutline(px, py, color, width) {
+    rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  }
+
+  /** Ghost of the selected building at the hovered tile, the remove highlight, or the upgrade preview. */
   function drawPreview(s, view) {
     const h = view.hover;
-    if (!h || h.x < 0 || h.y < 0 || h.x >= W || h.y >= H) return;
-    const i = h.y * W + h.x;
+    if (!h || !(h.x >= 0 && h.y >= 0 && h.x < s.w && h.y < s.h)) return;
+    const i = h.y * s.w + h.x;
     const px = h.x * T, py = h.y * T, cx = px + T / 2, cy = py + T / 2;
     const here = s.grid[i];
     const tool = view.tool;
@@ -266,10 +489,36 @@ export function createRenderer(canvas, session) {
       return;
     }
 
+    if (tool === 'upgrade') {
+      if (!here) { tileOutline(px, py, 'rgba(255,255,255,0.5)', 2); return; }
+      const why = canUpgrade(s, h.x, h.y, session.me);
+      const ok = why === null;
+      const def = BUILD[here.k];
+      const lv = levelOf(here);
+      const range = statsOf(here).range;
+      if (range > 0) {
+        rangeCircle(cx, cy, range, ok ? 'ok' : 'faint');
+        if (def.up && lv < TUNE.maxLevel) rangeCircle(cx, cy, statsOf(here, lv + 1).range, 'next');
+      }
+      rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+      ctx.fillStyle = ok ? 'rgba(74,222,128,0.22)' : 'rgba(239,68,68,0.25)';
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
+      ctx.stroke();
+      // What the click would do: the next level and its price, or why not.
+      let txt;
+      if (!def.up) txt = 'NO UPGRADES';
+      else if (lv >= TUNE.maxLevel) txt = 'MAX LEVEL';
+      else txt = `LV ${lv + 1}  $${upgradeCost(here)}`;
+      label(ctx, txt, cx, py - 10, 12, ok ? '#86efac' : '#ff8a80', INK, 3.5);
+      return;
+    }
+
     const def = tool ? BUILD[tool] : null;
     if (def) {
-      const ok = canPlace(s, tool, h.x, h.y) === null;
-      if (def.range) rangeCircle(cx, cy, def.range, ok);
+      const ok = canPlace(s, tool, h.x, h.y, session.me) === null;
+      if (def.range) rangeCircle(cx, cy, def.range, ok ? 'ok' : 'bad');
       rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.35)' : 'rgba(239,68,68,0.4)';
       ctx.fill();
@@ -278,7 +527,7 @@ export function createRenderer(canvas, session) {
       ghost.o = session.me;
       ghost.a = ((view.dir | 0) & 3) * Math.PI / 2;
       ctx.globalAlpha = 0.7;
-      if (tool === 'belt') drawBelt(ctx, s.grid, h.x, h.y, ghost.d, beltShape(s.grid, h.x, h.y, ghost.d), 0, beltSprites, base);
+      if (tool === 'belt') drawBelt(ctx, s, h.x, h.y, ghost.d, beltShape(s, h.x, h.y, ghost.d), 0, beltSprites, base);
       else drawBuilding(ctx, ghost, i, F, buildingSprites);
       ctx.globalAlpha = 1;
       rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
@@ -290,12 +539,58 @@ export function createRenderer(canvas, session) {
       return;
     }
 
-    // No tool: show the range of a tower under the mouse, and a light hover outline.
-    if (here && BUILD[here.k] && BUILD[here.k].range) rangeCircle(cx, cy, BUILD[here.k].range, true);
-    rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.stroke();
+    // No tool: show the range of a tower under the mouse faintly, and a light hover outline.
+    if (here && BUILD[here.k]) rangeCircle(cx, cy, statsOf(here).range, 'faint');
+    tileOutline(px, py, 'rgba(255,255,255,0.7)', 2);
+  }
+
+  // --- screen-space labels (CSS pixel transform) -------------------------------------------------
+
+  const sx = (wx) => (ox + wx * scale) * (cssW / canvas.width);
+  const sy = (wy) => (oy + wy * scale) * (cssH / canvas.height);
+
+  function nameWidth(name) {
+    let w = nameWidths.get(name);
+    if (!w) { ctx.font = font(11); w = ctx.measureText(name).width + 12; nameWidths.set(name, w); }
+    return w;
+  }
+
+  /**
+   * A name tag in the owner's colour by each open entrance. It hangs outside the store beside its
+   * doorway when there is room on screen, and otherwise sits on the wall next to the doorway.
+   */
+  function drawDoorTags(s) {
+    const TH = 17;
+    for (const d of info.doors) {
+      if (!d.open) continue;
+      const p = s.players[d.n];
+      if (!p) continue;
+      const tw = nameWidth(p.name);
+      // The doorway on screen.
+      const a = { x: sx(d.x0 * T), y: sy(d.y0 * T) };
+      const vert = d.side === 'L' || d.side === 'R';
+      const b = { x: sx((d.x0 + (vert ? 1 : 2)) * T), y: sy((d.y0 + (vert ? 2 : 1)) * T) };
+      if (b.x < 0 || a.x > cssW || b.y < 0 || a.y > cssH) continue; // the doorway is off screen
+      let x, y; // top-left of the tag
+      if (d.side === 'L') {
+        const edge = a.x;
+        if (edge - 6 >= tw) { x = edge - 6 - tw; y = (a.y + b.y) / 2 - TH / 2; } else { x = (a.x + b.x) / 2 - tw / 2; y = sy(d.y0 * T - 14) - TH - 3; }
+      } else if (d.side === 'R') {
+        const edge = b.x;
+        if (cssW - edge - 6 >= tw) { x = edge + 6; y = (a.y + b.y) / 2 - TH / 2; } else { x = (a.x + b.x) / 2 - tw / 2; y = sy(d.y0 * T - 14) - TH - 3; }
+      } else if (d.side === 'T') {
+        const edge = a.y;
+        if (edge - 6 >= TH) { x = (a.x + b.x) / 2 - tw / 2; y = edge - 6 - TH; } else { x = sx(d.x0 * T - 14) - tw - 3; y = (a.y + b.y) / 2 - TH / 2; }
+      } else {
+        const edge = b.y;
+        if (cssH - edge - 6 >= TH) { x = (a.x + b.x) / 2 - tw / 2; y = edge + 6; } else { x = sx(d.x0 * T - 14) - tw - 3; y = (a.y + b.y) / 2 - TH / 2; }
+      }
+      x = Math.max(2, Math.min(cssW - tw - 2, x));
+      y = Math.max(2, Math.min(cssH - TH - 2, y));
+      rr(ctx, x, y, tw, TH, 5);
+      paint(ctx, p.color, 2);
+      label(ctx, p.name, x + tw / 2, y + TH / 2 + 0.5, 11, '#ffffff', INK, 2.5);
+    }
   }
 
   /** Other players' pointers: an arrow in the player's colour with the name beside it. */
@@ -304,7 +599,8 @@ export function createRenderer(canvas, session) {
       if (pid === session.me || !c) continue;
       const p = s.players[pid];
       if (!p || !Number.isFinite(c.x) || !Number.isFinite(c.y)) continue;
-      const x = c.x * T, y = c.y * T;
+      const x = sx(c.x * T), y = sy(c.y * T);
+      if (x < -40 || y < -40 || x > cssW + 10 || y > cssH + 10) continue;
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x, y + 18);
@@ -316,9 +612,7 @@ export function createRenderer(canvas, session) {
       ctx.closePath();
       ctx.lineJoin = 'round';
       paint(ctx, p.color, 2);
-      ctx.font = font(11);
-      let w = nameWidths.get(p.name);
-      if (!w) { w = ctx.measureText(p.name).width + 10; nameWidths.set(p.name, w); }
+      const w = nameWidth(p.name) - 2;
       rr(ctx, x + 12, y + 18, w, 16, 5);
       paint(ctx, p.color, 1.8);
       label(ctx, p.name, x + 12 + w / 2, y + 26.5, 11, '#ffffff', INK, 2.5);
@@ -326,5 +620,6 @@ export function createRenderer(canvas, session) {
   }
 
   resize();
-  return { resize, tileAt, draw };
+  sync();
+  return { resize, tileAt, draw, cam, pan, centerOn, zoomBy, fit, viewRect };
 }

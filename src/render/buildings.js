@@ -1,9 +1,9 @@
 // Everything players build. Belts are drawn flat in the belt's own rotated frame; machines and
 // security are drawn upright (three-quarter view, like the mock-up) with a separate spout and
 // arrow showing the side they output to, so they look the same whichever way they face.
-import { W, H, DIRS, TUNE, TICK_HZ } from '../sim/index.js';
+import { DIRS, TUNE, TICK_HZ } from '../sim/index.js';
 import {
-  TILE, INK, C, rr, paint, box, circle, line, text, label, hazard,
+  TILE, INK, C, rr, paint, box, circle, line, text, label, hazard, hash2,
 } from './paint.js';
 import { drawItem } from './items.js';
 
@@ -20,17 +20,19 @@ const PUSHES = { belt: true, unpacker: true, press: true, packer: true };
 // ---------------------------------------------------------------------------------------------
 // Belts
 
+// The belt functions take the game state (or anything with grid, w and h) for the map size.
+
 /** True if the building at (x, y) pushes items in direction `dir`. */
-function pushesInto(grid, x, y, dir) {
-  if (x < 0 || y < 0 || x >= W || y >= H) return false;
-  const b = grid[y * W + x];
+function pushesInto(s, x, y, dir) {
+  if (x < 0 || y < 0 || x >= s.w || y >= s.h) return false;
+  const b = s.grid[y * s.w + x];
   return !!b && PUSHES[b.k] === true && b.d === dir;
 }
 
 /** True if whatever is at (x, y) accepts items arriving in direction `dir`. */
-function accepts(grid, x, y, dir) {
-  if (x < 0 || y < 0 || x >= W || y >= H) return false;
-  const b = grid[y * W + x];
+function accepts(s, x, y, dir) {
+  if (x < 0 || y < 0 || x >= s.w || y >= s.h) return false;
+  const b = s.grid[y * s.w + x];
   if (!b) return false;
   if (b.k === 'belt') return b.d !== ((dir + 2) & 3);
   if (b.k === 'press' || b.k === 'packer') return b.d !== ((dir + 2) & 3);
@@ -41,11 +43,11 @@ function accepts(grid, x, y, dir) {
  * How a belt bends: 0 straight; 1 a corner fed from its right-hand side (local +y);
  * -1 a corner fed from its left-hand side. A belt fed from behind is always straight.
  */
-export function beltShape(grid, x, y, d) {
+export function beltShape(s, x, y, d) {
   const back = (d + 2) & 3, right = (d + 1) & 3, left = (d + 3) & 3;
-  if (pushesInto(grid, x + DIRS[back][0], y + DIRS[back][1], d)) return 0;
-  const r = pushesInto(grid, x + DIRS[right][0], y + DIRS[right][1], left);
-  const l = pushesInto(grid, x + DIRS[left][0], y + DIRS[left][1], right);
+  if (pushesInto(s, x + DIRS[back][0], y + DIRS[back][1], d)) return 0;
+  const r = pushesInto(s, x + DIRS[right][0], y + DIRS[right][1], left);
+  const l = pushesInto(s, x + DIRS[left][0], y + DIRS[left][1], right);
   if (r && !l) return 1;
   if (l && !r) return -1;
   return 0;
@@ -89,21 +91,21 @@ export function createBeltSprites() {
  * is placed with a single setTransform (rotated, and mirrored for left-hand corners), and the
  * world transform is restored afterwards.
  */
-export function drawBelt(ctx, grid, x, y, d, shape, phase, sprites, base) {
+export function drawBelt(ctx, s, x, y, d, shape, phase, sprites, base) {
   let type = 4;
   if (shape === 0) {
     const back = (d + 2) & 3;
-    const backOpen = pushesInto(grid, x + DIRS[back][0], y + DIRS[back][1], d);
-    const frontOpen = accepts(grid, x + DIRS[d][0], y + DIRS[d][1], d);
+    const backOpen = pushesInto(s, x + DIRS[back][0], y + DIRS[back][1], d);
+    const frontOpen = accepts(s, x + DIRS[d][0], y + DIRS[d][1], d);
     type = (backOpen ? 0 : 1) | (frontOpen ? 0 : 2);
   }
   const step = Math.min(PHASES - 1, ((phase / SP) * PHASES) | 0);
   const img = sprites.get(type, step);
-  const s = base.s, m = shape === -1 ? -1 : 1;
+  const k = base.s, m = shape === -1 ? -1 : 1;
   const cx = x * T + HALF, cy = y * T + HALF;
-  ctx.setTransform(s * COS[d], s * SIN[d], -s * SIN[d] * m, s * COS[d] * m, s * cx + base.ox, s * cy + base.oy);
+  ctx.setTransform(k * COS[d], k * SIN[d], -k * SIN[d] * m, k * COS[d] * m, k * cx + base.ox, k * cy + base.oy);
   ctx.drawImage(img, -HALF, -HALF, T, T);
-  ctx.setTransform(s, 0, 0, s, base.ox, base.oy);
+  ctx.setTransform(k, 0, 0, k, base.ox, base.oy);
 }
 
 function straightBelt(ctx, phase, backOpen, frontOpen) {
@@ -625,11 +627,11 @@ export function createBuildingSprites() {
   };
 }
 
-/** Draws a non-belt building at tile index i. */
+/** Draws a non-belt building at tile index i (F.w is the map width). */
 export function drawBuilding(ctx, b, i, F, sprites) {
   const K = KINDS[b.k];
   if (!K) return;
-  const cx = (i % W) * T + HALF, cy = ((i / W) | 0) * T + HALF;
+  const cx = (i % F.w) * T + HALF, cy = ((i / F.w) | 0) * T + HALF;
   const h = BOX / 2;
   if (b.k === 'forklift') {
     P.step = 0;
@@ -648,4 +650,94 @@ export function drawBuilding(ctx, b, i, F, sprites) {
   }
   const look = K.look(b, F, i);
   ctx.drawImage(sprites.get(b.k, look, F.sprites), cx - h, cy - h, BOX, BOX);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Upgrade badges, wreckage
+
+/** The main colours of each kind, for wreckage and debris: [body, trim, detail]. */
+export const KIND_COLOURS = {
+  belt: ['#34383d', C.steel, C.chevron],
+  unpacker: [C.wood, C.cardboard, C.woodDark],
+  press: ['#e8761a', '#9aa0a6', '#4b5058'],
+  packer: ['#d6eef8', '#6a6f75', '#ff5fa8'],
+  chute: [C.green, '#123d1c', '#ffffff'],
+  crate: ['#b57a3c', C.wood, '#7a4f22'],
+  sprinkler: [C.steel, C.red, '#7d848b'],
+  forklift: [C.yellow, '#2b2f34', '#9aa0a6'],
+  wetfloor: [C.yellow, C.yellowDark, C.blue],
+  samples: ['#ffffff', C.red, '#ff5fa8'],
+};
+
+/**
+ * A small badge with the building's level (2 and up) at the top right of its tile. `k` scales it
+ * up when zoomed out, so the number stays readable on small tiles.
+ */
+export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0) {
+  const str = String(lv);
+  const w = (str.length > 1 ? 21 : 16) * k, h = 13 * k;
+  const x = cx + HALF - w + 2 * k, y = cy - HALF - 2 * k;
+  if (res > 0) {
+    // Cached as a sprite at the sprite resolution `res` (device pixels per logical pixel): a
+    // floor full of upgraded towers would otherwise mean hundreds of text draws a frame.
+    const pad = 2 * k;
+    const key = lv * 1e6 + Math.round(k * 10) * 1e4 + Math.round(res * 1000);
+    let c = badgeCache.get(key);
+    if (!c) {
+      if (badgeCache.size > 300) badgeCache.clear();
+      c = document.createElement('canvas');
+      c.width = Math.max(1, Math.ceil((w + pad * 2) * res));
+      c.height = Math.max(1, Math.ceil((h + pad * 2) * res));
+      const g = c.getContext('2d');
+      g.setTransform(c.width / (w + pad * 2), 0, 0, c.height / (h + pad * 2), pad * c.width / (w + pad * 2), pad * c.height / (h + pad * 2));
+      paintBadge(g, 0, 0, w, h, k, lv);
+      badgeCache.set(key, c);
+    }
+    ctx.drawImage(c, x - pad, y - pad, w + pad * 2, h + pad * 2);
+    return;
+  }
+  paintBadge(ctx, x, y, w, h, k, lv);
+}
+const badgeCache = new Map();
+
+function paintBadge(ctx, x, y, w, h, k, lv) {
+  const top = lv >= TUNE.maxLevel;
+  const str = String(lv);
+  rr(ctx, x, y, w, h, 4 * k);
+  paint(ctx, top ? '#ff4fa3' : '#ffd23f', 1.6 * k);
+  // An up chevron, then the number.
+  ctx.beginPath();
+  ctx.moveTo(x + 2.5 * k, y + 8.5 * k);
+  ctx.lineTo(x + 5 * k, y + 5 * k);
+  ctx.lineTo(x + 7.5 * k, y + 8.5 * k);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.8 * k;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  text(ctx, str, x + w - (str.length > 1 ? 7 : 4.5) * k, y + h / 2 + 0.5 * k, 10 * k, INK, 900);
+}
+
+/**
+ * What is left of a building a gym bro wrecked: a low heap of broken bits in its colours, with a
+ * scorch of dust under it, so players can see the holes in their maze.
+ */
+export function drawRubble(ctx, i, kind, w) {
+  const col = KIND_COLOURS[kind] || KIND_COLOURS.crate;
+  const px = (i % w) * T, py = ((i / w) | 0) * T;
+  ctx.beginPath();
+  ctx.ellipse(px + HALF, py + HALF + 3, 16, 11, 0, 0, TAU);
+  ctx.fillStyle = 'rgba(70,60,48,0.28)';
+  ctx.fill();
+  for (let j = 0; j < 7; j++) {
+    const h1 = hash2(i, j + 3), h2 = hash2(j + 11, i);
+    const bx = px + 8 + h1 * 24, by = py + 10 + h2 * 20;
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.rotate(h1 * 6.3);
+    ctx.beginPath();
+    if (j % 3 === 2) { ctx.moveTo(-4, 1.5); ctx.lineTo(3, -2.5); ctx.lineTo(4, 2.5); ctx.closePath(); } else ctx.rect(-5, -1.8, 10, 3.6);
+    paint(ctx, col[j % 3], 1.2);
+    ctx.restore();
+  }
 }

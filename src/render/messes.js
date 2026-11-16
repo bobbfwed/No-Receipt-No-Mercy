@@ -2,7 +2,7 @@
 // left]). Each is a bright splat with the tipped-over cup, pre-rendered in a few variants and
 // stamped on its tile above the floor and under everything else. A new one splashes in; an old
 // one fades out over its last second.
-import { W, TUNE, TICK_HZ } from '../sim/index.js';
+import { TUNE, TICK_HZ } from '../sim/index.js';
 import { TILE, INK, paint, hash2, makeSprite } from './paint.js';
 
 const T = TILE;
@@ -93,15 +93,16 @@ function paintMess(g, v) {
  * Draws every mess on its tile. The caller has set the world transform.
  * @param {Array<[number, number]>} messes state.messes
  * @param {number} alpha fraction of the current tick (ticks left run down smoothly)
+ * @param {number} w the map's width in tiles
  */
-export function drawMesses(ctx, messes, alpha, sprites) {
+export function drawMesses(ctx, messes, alpha, sprites, w) {
   for (let n = 0; n < messes.length; n++) {
     const i = messes[n][0], left = messes[n][1] - alpha;
     const k = Math.min(1, left / FADE);
     if (k <= 0) continue;
     const age = LIFE - left;
     const grow = age < 5 ? 0.35 + 0.65 * Math.max(0, age) / 5 : 1;
-    const x = (i % W) * T + T / 2, y = ((i / W) | 0) * T + T / 2;
+    const x = (i % w) * T + T / 2, y = ((i / w) | 0) * T + T / 2;
     const sp = sprites.get((hash2(i, 91) * VARIANTS) | 0);
     const size = sp.size * grow;
     ctx.globalAlpha = k;
