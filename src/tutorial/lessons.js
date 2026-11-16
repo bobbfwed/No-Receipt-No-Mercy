@@ -11,11 +11,11 @@
 //   hint(s, f)    a one-line nudge for where the player is right now, or null
 //   solve(s)      the commands that complete the step (used by tests, Skip, and ?step= jumps)
 //   manual        the step is only an explanation; it ends when the player presses Next
-import { W, queueTrainingWave, setTrainingCash } from '../sim/index.js';
+import { queueTrainingWave, setTrainingCash } from '../sim/index.js';
 
 const S = 1; // facing south
 const X = 10; // the column the production line runs down
-const at = (s, x, y) => s.grid[y * W + x];
+const at = (s, x, y) => s.grid[y * s.w + x];
 const is = (s, x, y, k, d) => { const b = at(s, x, y); return !!b && b.k === k && (d === undefined || b.d === d); };
 const place = (k, x, y, d = 0) => ({ c: 'place', k, x, y, d });
 const remove = (x, y) => ({ c: 'remove', x, y });
@@ -306,7 +306,7 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
     facts.nopes.blocked = 0;
     const st = STEPS[index];
     const s = session.state;
-    setTrainingCash(s, Math.max(s.cash, 1500)); // money is free in training
+    setTrainingCash(s, Math.max(s.players[0].cash, 1500)); // money is free in training
     if (st.wave) queueTrainingWave(s, st.wave);
     if (st.quip) session.emit('say', { t: 'say', who: 'DEB (HR)', mood: st.mood || 'flat', text: st.quip });
     onChange();

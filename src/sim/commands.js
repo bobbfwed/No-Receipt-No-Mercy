@@ -1,47 +1,67 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
-import { W, BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
+import { BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
 import { inBounds, idxOf, bump } from './state.js';
 import { computeDist, modeOf, UNREACHABLE } from './path.js';
 import { beginWave } from './step.js';
+import { upgradeCost, spentOn, levelOf } from './upgrades.js';
 
 /** Seconds of build time before wave 1, counted from the first thing placed. */
 const FIRST_BUILD_SECS = 90;
 
-function tileOf(s) {
-  return ((s.y | 0) * W) + (s.x | 0);
+function tileOf(state, s) {
+  return ((s.y | 0) * state.w) + (s.x | 0);
 }
 
 /**
- * Checks whether a building may go on a tile.
+ * Checks whether a player may put a building on a tile.
+ * @param {number} [pid] the player who would pay for it
  * @returns {string|null} null if allowed, otherwise the reason:
  *   'over' game finished, 'kind' unknown building, 'bounds' not a floor tile, 'occupied',
- *   'cash' cannot afford it, 'shopper' someone is standing there, 'blocked' it would wall off the tills.
+ *   'cash' he cannot afford it, 'shopper' someone is standing there,
+ *   'blocked' it would wall off the tills from an entrance or from a shopper.
  */
-export function canPlace(state, k, x, y) {
+export function canPlace(state, k, x, y, pid = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
   const def = BUILD[k];
   if (!def) return 'kind';
-  if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(x, y)) return 'bounds';
-  const i = idxOf(x, y);
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
+  const i = idxOf(state, x, y);
   if (state.tiles[i] !== '.') return 'bounds';
   if (state.grid[i]) return 'occupied';
-  if (state.cash < def.cost) return 'cash';
+  const player = state.players[pid];
+  if (!player || player.cash < def.cost) return 'cash';
   if (def.blocks) {
-    for (const s of state.shoppers) if (s.st !== ST.LEAVE && tileOf(s) === i) return 'shopper';
+    for (const s of state.shoppers) if (s.st !== ST.LEAVE && tileOf(state, s) === i) return 'shopper';
     const dist = computeDist(state, i);
-    for (let t = 0; t < state.tiles.length; t++) {
-      if (state.tiles[t] === 'D' && dist[t] === UNREACHABLE) return 'blocked';
-    }
+    // Every entrance must keep a way to the tills, including the ones that are still shut.
+    for (const door of state.doors) for (const t of door) if (dist[t] === UNREACHABLE) return 'blocked';
     // Dads and gym bros get through things others cannot, so each is checked on his own map.
     const fields = [dist, null, null];
     for (const s of state.shoppers) {
       if (s.st === ST.LEAVE) continue;
       const mode = modeOf(s.k);
       const field = (fields[mode] ||= computeDist(state, i, mode));
-      if (field[tileOf(s)] === UNREACHABLE) return 'blocked';
+      if (field[tileOf(state, s)] === UNREACHABLE) return 'blocked';
     }
   }
+  return null;
+}
+
+/**
+ * Checks whether a player may upgrade the building on a tile.
+ * @returns {string|null} null if allowed, otherwise the reason: 'over', 'bounds', 'empty' nothing
+ *   there, 'noup' that kind cannot be upgraded, 'max' already at the top level, 'cash'.
+ */
+export function canUpgrade(state, x, y, pid = 0) {
+  if (state.phase === 'won' || state.phase === 'lost') return 'over';
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
+  const b = state.grid[idxOf(state, x, y)];
+  if (!b) return 'empty';
+  if (!BUILD[b.k].up) return 'noup';
+  if (levelOf(b) >= TUNE.maxLevel) return 'max';
+  const player = state.players[pid];
+  if (!player || player.cash < upgradeCost(b)) return 'cash';
   return null;
 }
 
@@ -61,8 +81,10 @@ function newBuilding(k, owner, d) {
  * Applies one command from a player.
  * Commands:
  *   { c: 'place', k, x, y, d }  build something (d = facing 0-3, only for things that rotate)
- *   { c: 'remove', x, y }       sell a building back
+ *   { c: 'remove', x, y }       sell a building back (the money goes to whoever paid for it)
  *   { c: 'rotate', x, y }       turn a building a quarter turn clockwise
+ *   { c: 'upgrade', x, y }      raise a security building one level
+ *   { c: 'give', to, n }        hand n of your cash to player `to`
  *   { c: 'start' }              open the doors now instead of waiting for the timer
  *   { c: 'role', role }         change your job title (cosmetic)
  *   { c: 'speed', n }           game speed 1, 2 or 3
@@ -74,12 +96,12 @@ export function applyCommand(state, pid, cmd, ev = []) {
   if (!player || !cmd || typeof cmd !== 'object') return { ok: false, why: 'bad' };
   switch (cmd.c) {
     case 'place': {
-      const why = canPlace(state, cmd.k, cmd.x, cmd.y);
+      const why = canPlace(state, cmd.k, cmd.x, cmd.y, pid);
       if (why) return { ok: false, why };
       const def = BUILD[cmd.k];
-      state.grid[idxOf(cmd.x, cmd.y)] = newBuilding(cmd.k, pid, cmd.d | 0);
+      state.grid[idxOf(state, cmd.x, cmd.y)] = newBuilding(cmd.k, pid, cmd.d | 0);
       state.gridVer++;
-      state.cash -= def.cost;
+      player.cash -= def.cost;
       bump(state, pid, 'spent', def.cost);
       bump(state, pid, 'built');
       if (state.phase === 'build' && state.phaseT === -1 && !state.training) state.phaseT = FIRST_BUILD_SECS * TICK_HZ;
@@ -88,23 +110,44 @@ export function applyCommand(state, pid, cmd, ev = []) {
     }
     case 'remove': {
       if (state.phase === 'won' || state.phase === 'lost') return { ok: false, why: 'over' };
-      if (!inBounds(cmd.x, cmd.y)) return { ok: false, why: 'bounds' };
-      const i = idxOf(cmd.x, cmd.y);
+      if (!inBounds(state, cmd.x, cmd.y)) return { ok: false, why: 'bounds' };
+      const i = idxOf(state, cmd.x, cmd.y);
       const b = state.grid[i];
       if (!b) return { ok: false, why: 'empty' };
-      const back = Math.floor(BUILD[b.k].cost * TUNE.sellBack);
+      const back = Math.floor(spentOn(b) * TUNE.sellBack);
       state.grid[i] = 0;
       state.gridVer++;
-      state.cash += back;
+      (state.players[b.o] || player).cash += back;
       bump(state, pid, 'sold');
       ev.push({ e: 'removed', k: b.k, x: cmd.x, y: cmd.y, by: pid, owner: b.o });
       return { ok: true };
     }
     case 'rotate': {
-      if (!inBounds(cmd.x, cmd.y)) return { ok: false, why: 'bounds' };
-      const b = state.grid[idxOf(cmd.x, cmd.y)];
+      if (!inBounds(state, cmd.x, cmd.y)) return { ok: false, why: 'bounds' };
+      const b = state.grid[idxOf(state, cmd.x, cmd.y)];
       if (!b || !BUILD[b.k].rot) return { ok: false, why: 'empty' };
       b.d = (b.d + 1) & 3;
+      return { ok: true };
+    }
+    case 'upgrade': {
+      const why = canUpgrade(state, cmd.x, cmd.y, pid);
+      if (why) return { ok: false, why };
+      const b = state.grid[idxOf(state, cmd.x, cmd.y)];
+      const cost = upgradeCost(b);
+      player.cash -= cost;
+      b.lv = levelOf(b) + 1;
+      bump(state, pid, 'spent', cost);
+      ev.push({ e: 'upgraded', k: b.k, x: cmd.x, y: cmd.y, by: pid, lv: b.lv });
+      return { ok: true };
+    }
+    case 'give': {
+      const to = state.players[cmd.to];
+      const n = Math.floor(cmd.n);
+      if (!to || to === player || !(n > 0)) return { ok: false, why: 'bad' };
+      if (player.cash < n) return { ok: false, why: 'cash' };
+      player.cash -= n;
+      to.cash += n;
+      ev.push({ e: 'gave', by: pid, to: to.id, n });
       return { ok: true };
     }
     case 'start': {

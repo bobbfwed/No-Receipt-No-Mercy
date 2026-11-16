@@ -1,7 +1,7 @@
 // The director turns simulation events into jokes: what DEB the HR chatbot says, which customer
 // reviews pop up, and the end-of-wave performance review. It runs on the host only, and its
 // output is sent to every player, so everyone sees the same insult at the same time.
-import { TICK_HZ, TUNE } from '../sim/index.js';
+import { TICK_HZ, TUNE, teamCash } from '../sim/index.js';
 import {
   LINES, INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, fill,
 } from './lines.js';
@@ -73,7 +73,7 @@ export function createDirector(random = Math.random) {
       t: 'report', wave: e.wave, bonus: e.bonus, rows,
       employee: pick(EMPLOYEES_OF_THE_WAVE),
       deb: fill(pick(bank), { p: who }),
-      totals: { ...state.ws, cash: state.cash, refunds: state.refunds, refundLimit: TUNE.refundLimit },
+      totals: { ...state.ws, cash: teamCash(state), refunds: state.refunds, refundLimit: state.refundLimit },
     });
   }
 

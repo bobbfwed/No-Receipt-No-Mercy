@@ -3,8 +3,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, canPlace, step, applyDemoLayout, waveSpec, getDist,
-  getHopDist, TICK_HZ, TUNE, BUILD, ITEMS, W, H, ST, UNREACHABLE, idxOf,
+  getHopDist, TICK_HZ, TUNE, BUILD, ITEMS, ST, UNREACHABLE,
 } from '../src/sim/index.js';
+
+// These tests use the original small map, 30 tiles by 16.
+const W = 30, H = 16;
+const at = (x, y) => y * W + x;
 
 function newGame(seed = 7) {
   const s = createGame({ seed });
@@ -22,14 +26,14 @@ test('a new game starts in an untimed build phase with starting cash', () => {
   const s = newGame();
   assert.equal(s.phase, 'build');
   assert.equal(s.phaseT, -1);
-  assert.equal(s.cash, TUNE.startCash);
+  assert.equal(s.players[0].cash, TUNE.startCash);
   assert.equal(s.grid.length, W * H);
 });
 
 test('placing costs cash and starts the first build timer', () => {
   const s = newGame();
   assert.deepEqual(place(s, 'crate', 5, 5), { ok: true });
-  assert.equal(s.cash, TUNE.startCash - BUILD.crate.cost);
+  assert.equal(s.players[0].cash, TUNE.startCash - BUILD.crate.cost);
   assert.ok(s.phaseT > 0);
   assert.equal(s.players[0].all.spent, BUILD.crate.cost);
 });
@@ -44,24 +48,24 @@ test('placement is refused on walls, doors, tills, occupied tiles and without ca
   assert.equal(place(s, 'nonsense', 3, 3).why, 'kind');
   place(s, 'crate', 3, 3);
   assert.equal(place(s, 'crate', 3, 3).why, 'occupied');
-  s.cash = 3;
+  s.players[0].cash = 3;
   assert.equal(place(s, 'belt', 4, 4).why, 'cash');
 });
 
 test('the tills can never be walled off', () => {
   const s = newGame();
-  s.cash = 10000;
+  s.players[0].cash = 10000;
   // Wall off column 10 from top to bottom; the last crate must be refused.
   let refused = 0;
   for (let y = 1; y <= 14; y++) if (!place(s, 'crate', 10, y).ok) refused++;
   assert.equal(refused, 1);
   const dist = getDist(s);
-  assert.notEqual(dist[idxOf(0, 7)], UNREACHABLE);
+  assert.notEqual(dist[at(0, 7)], UNREACHABLE);
 });
 
 test('wet floor signs do not block the path', () => {
   const s = newGame();
-  s.cash = 10000;
+  s.players[0].cash = 10000;
   for (let y = 1; y <= 13; y++) assert.ok(place(s, 'crate', 10, y).ok);
   assert.ok(place(s, 'wetfloor', 10, 14).ok, 'a sign in the only gap is allowed');
   assert.equal(canPlace(s, 'crate', 12, 12), null);
@@ -71,10 +75,10 @@ test('wet floor signs do not block the path', () => {
 test('removing a building refunds part of the price', () => {
   const s = newGame();
   place(s, 'forklift', 5, 5);
-  const before = s.cash;
+  const before = s.players[0].cash;
   assert.ok(applyCommand(s, 0, { c: 'remove', x: 5, y: 5 }).ok);
-  assert.equal(s.cash, before + Math.floor(BUILD.forklift.cost * TUNE.sellBack));
-  assert.equal(s.grid[idxOf(5, 5)], 0);
+  assert.equal(s.players[0].cash, before + Math.floor(BUILD.forklift.cost * TUNE.sellBack));
+  assert.equal(s.grid[at(5, 5)], 0);
   assert.equal(applyCommand(s, 0, { c: 'remove', x: 5, y: 5 }).why, 'empty');
 });
 
@@ -84,18 +88,18 @@ test('unpacker, belt and chute turn boxes into cash', () => {
   place(s, 'belt', 4, 3, 0);
   place(s, 'belt', 5, 3, 0);
   place(s, 'chute', 6, 3);
-  const cash = s.cash;
+  const cash = s.players[0].cash;
   const ev = run(s, 20);
   const sales = ev.filter((e) => e.e === 'sale');
   assert.ok(sales.length >= 5, `expected several sales, got ${sales.length}`);
   assert.ok(sales.every((e) => e.kind === 'box'));
-  assert.equal(s.cash, cash + sales.length * ITEMS.box.value);
+  assert.equal(s.players[0].cash, cash + sales.length * ITEMS.box.value);
   assert.equal(s.players[0].all.shipped, sales.length);
 });
 
 test('press and packer upgrade goods along the line', () => {
   const s = newGame();
-  s.cash = 5000;
+  s.players[0].cash = 5000;
   place(s, 'unpacker', 3, 3, 0);
   place(s, 'belt', 4, 3, 0);
   place(s, 'press', 5, 3, 0);
@@ -114,8 +118,8 @@ test('a belt that backs up holds at most two items per tile and loses nothing', 
   place(s, 'belt', 4, 3, 0);
   place(s, 'belt', 5, 3, 0); // dead end
   run(s, 60);
-  assert.equal(s.grid[idxOf(4, 3)].it.length, 2);
-  assert.equal(s.grid[idxOf(5, 3)].it.length, 2);
+  assert.equal(s.grid[at(4, 3)].it.length, 2);
+  assert.equal(s.grid[at(5, 3)].it.length, 2);
 });
 
 test('belts turn corners and refuse head-on belts', () => {
@@ -130,7 +134,7 @@ test('belts turn corners and refuse head-on belts', () => {
   place(t, 'unpacker', 3, 3, 0);
   place(t, 'belt', 4, 3, 2); // faces back at the unpacker
   run(t, 10);
-  assert.equal(t.grid[idxOf(4, 3)].it.length, 0);
+  assert.equal(t.grid[at(4, 3)].it.length, 0);
 });
 
 test('undefended shoppers reach the tills and take refunds', () => {
@@ -142,7 +146,7 @@ test('undefended shoppers reach the tills and take refunds', () => {
   const escapes = ev.filter((e) => e.e === 'escape').length;
   assert.equal(escapes, waveSpec(1)[0].n);
   assert.equal(s.refunds, escapes);
-  assert.ok(s.cash < TUNE.startCash + TUNE.waveBonus + TUNE.waveBonusStep);
+  assert.ok(s.players[0].cash < TUNE.startCash + TUNE.waveBonus + TUNE.waveBonusStep);
   assert.ok(ev.some((e) => e.e === 'waveEnd'));
   assert.equal(s.phase, 'build');
   assert.ok(s.phaseT > 0);
@@ -150,7 +154,7 @@ test('undefended shoppers reach the tills and take refunds', () => {
 
 test('towers wear down patience until shoppers storm out', () => {
   const s = newGame();
-  s.cash = 5000;
+  s.players[0].cash = 5000;
   // Sprinklers either side of the doors.
   for (const y of [6, 9]) for (const x of [1, 2, 3, 4]) place(s, 'sprinkler', x, y);
   applyCommand(s, 0, { c: 'start' });
@@ -163,13 +167,13 @@ test('towers wear down patience until shoppers storm out', () => {
 
 test('dads give up when the walk is long enough, with no towers at all', () => {
   const s = newGame();
-  s.cash = 100000;
+  s.players[0].cash = 100000;
   // A long snake of crate walls: alternate gaps at top and bottom.
   for (let x = 3; x <= 25; x += 2) {
     const gapTop = ((x - 3) / 2) % 2 === 0;
     for (let y = 1; y <= 14; y++) {
       if (gapTop ? y === 1 : y === 14) continue;
-      if (s.tiles[idxOf(x, y)] === '.') place(s, 'crate', x, y);
+      if (s.tiles[at(x, y)] === '.') place(s, 'crate', x, y);
     }
   }
   s.wave = 1; // next wave is 2, the first with a dad line
@@ -185,13 +189,13 @@ test('dads give up when the walk is long enough, with no towers at all', () => {
 
 test('dads step over conveyor belts; everyone else walks around', () => {
   const s = newGame();
-  s.cash = 100000;
+  s.players[0].cash = 100000;
   // A wall of belts down column 10 with one gap at the very bottom.
   for (let y = 1; y <= 13; y++) place(s, 'belt', 10, y, 1);
   const normal = getDist(s), hop = getHopDist(s);
-  assert.ok(hop[idxOf(0, 7)] < normal[idxOf(0, 7)], 'the dad route is shorter');
-  assert.equal(normal[idxOf(10, 7)], UNREACHABLE);
-  assert.notEqual(hop[idxOf(10, 7)], UNREACHABLE);
+  assert.ok(hop[at(0, 7)] < normal[at(0, 7)], 'the dad route is shorter');
+  assert.equal(normal[at(10, 7)], UNREACHABLE);
+  assert.notEqual(hop[at(10, 7)], UNREACHABLE);
 
   s.wave = 1; // next wave is 2, the first with a dad line
   applyCommand(s, 0, { c: 'start' });
@@ -200,7 +204,7 @@ test('dads step over conveyor belts; everyone else walks around', () => {
   for (let i = 0; i < 60 * TICK_HZ; i++) {
     ev.push(...step(s));
     for (const sh of s.shoppers) {
-      const b = s.grid[idxOf(sh.x | 0, sh.y | 0)];
+      const b = s.grid[at(sh.x | 0, sh.y | 0)];
       if (b && b.k === 'belt') { if (sh.k === 'dad') dadOnBelt = true; else otherOnBelt = true; }
     }
   }
@@ -212,13 +216,13 @@ test('dads step over conveyor belts; everyone else walks around', () => {
 
 test('crates and machines stop dads, and building near a dad on a belt is still allowed', () => {
   const s = newGame();
-  s.cash = 100000;
+  s.players[0].cash = 100000;
   for (let y = 1; y <= 13; y++) place(s, y % 2 ? 'crate' : 'press', 10, y, 1);
-  assert.equal(getHopDist(s)[idxOf(10, 7)], UNREACHABLE);
-  assert.equal(getHopDist(s)[idxOf(0, 7)], getDist(s)[idxOf(0, 7)], 'with no belts the two routes match');
+  assert.equal(getHopDist(s)[at(10, 7)], UNREACHABLE);
+  assert.equal(getHopDist(s)[at(0, 7)], getDist(s)[at(0, 7)], 'with no belts the two routes match');
 
   const t = newGame();
-  t.cash = 100000;
+  t.players[0].cash = 100000;
   for (let y = 1; y <= 13; y++) place(t, 'belt', 10, y, 1);
   t.wave = 1;
   applyCommand(t, 0, { c: 'start' });
@@ -237,7 +241,7 @@ test('crates and machines stop dads, and building near a dad on a belt is still 
 
 test('dads ignore free samples; bargain hunters stop for them', () => {
   const s = newGame();
-  s.cash = 5000;
+  s.players[0].cash = 5000;
   place(s, 'samples', 3, 6);
   s.wave = 1;
   applyCommand(s, 0, { c: 'start' });
@@ -271,9 +275,9 @@ test('the game is lost when too many shoppers get refunds', () => {
 test('the demo layout builds cleanly and makes money', () => {
   const s = newGame();
   assert.deepEqual(applyDemoLayout(s), []);
-  const cash = s.cash;
+  const cash = s.players[0].cash;
   run(s, 30);
-  assert.ok(s.cash > cash);
+  assert.ok(s.players[0].cash > cash);
 });
 
 test('the simulation is deterministic and survives a snapshot round trip', () => {

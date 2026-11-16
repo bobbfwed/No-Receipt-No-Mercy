@@ -1,13 +1,14 @@
 // Shopper pathfinding. One flood fill from the tills gives every tile its walking distance to
 // the nearest till; shoppers simply step to the neighbour with the smallest number.
-// There are three such maps, because some shoppers get through things others cannot:
+// There are four such maps, because some shoppers get through things others cannot:
 //   NORMAL  most shoppers: belts, machines and crates all block
 //   HOP     dads: they step over conveyor belts
 //   SMASH   gym bros: they walk through crate stacks (and wreck them)
-import { W, H, DIRS, BUILD, SHOPPERS } from './constants.js';
+//   GHOST   runaway children: only the store's own walls stop them
+import { DIRS, BUILD, SHOPPERS } from './constants.js';
 
 export const UNREACHABLE = 65535;
-export const NORMAL = 0, HOP = 1, SMASH = 2;
+export const NORMAL = 0, HOP = 1, SMASH = 2, GHOST = 3;
 
 const cache = new WeakMap();
 
@@ -19,27 +20,29 @@ export function modeOf(kind) {
 
 /**
  * True if a shopper can stand on this tile.
- * @param {number} [mode] NORMAL, HOP or SMASH
+ * @param {number} [mode] NORMAL, HOP, SMASH or GHOST
  */
 export function walkable(state, i, mode = NORMAL) {
+  // (A shut entrance counts as floor, so the check that the maze leaves every entrance a way
+  // to the tills covers the ones that have not opened yet.)
   if (state.tiles[i] === '#') return false;
+  if (mode === GHOST) return true;
   const b = state.grid[i];
   if (!b || !BUILD[b.k].blocks) return true;
   return (mode === HOP && b.k === 'belt') || (mode === SMASH && b.k === 'crate');
 }
 
 /**
- * Distance in tiles from every tile to the nearest till.
- * @param {number} extraBlocked a tile index to treat as blocked (to test a placement), or -1
- * @param {number} [mode] NORMAL, HOP or SMASH
- * @returns {Uint16Array}
+ * Flood fill: the walking distance from every tile to the nearest of some starting tiles.
+ * @param {(i: number) => boolean} isStart
  */
-export function computeDist(state, extraBlocked = -1, mode = NORMAL) {
-  const dist = new Uint16Array(W * H).fill(UNREACHABLE);
-  const queue = new Int32Array(W * H);
+function flood(state, isStart, extraBlocked, mode) {
+  const W = state.w, H = state.h, n = W * H;
+  const dist = new Uint16Array(n).fill(UNREACHABLE);
+  const queue = new Int32Array(n);
   let head = 0, tail = 0;
-  for (let i = 0; i < W * H; i++) {
-    if (state.tiles[i] === 'T') { dist[i] = 0; queue[tail++] = i; }
+  for (let i = 0; i < n; i++) {
+    if (isStart(i)) { dist[i] = 0; queue[tail++] = i; }
   }
   while (head < tail) {
     const i = queue[head++];
@@ -47,26 +50,56 @@ export function computeDist(state, extraBlocked = -1, mode = NORMAL) {
     for (let k = 0; k < 4; k++) {
       const nx = x + DIRS[k][0], ny = y + DIRS[k][1];
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-      const n = ny * W + nx;
-      if (dist[n] !== UNREACHABLE || n === extraBlocked || !walkable(state, n, mode)) continue;
-      dist[n] = d;
-      queue[tail++] = n;
+      const t = ny * W + nx;
+      if (dist[t] !== UNREACHABLE || t === extraBlocked || !walkable(state, t, mode)) continue;
+      dist[t] = d;
+      queue[tail++] = t;
     }
   }
   return dist;
 }
 
 /**
- * The distance map for the current layout, worked out only when the layout changes.
- * @param {number} [mode] NORMAL, HOP or SMASH
+ * Distance in tiles from every tile to the nearest till.
+ * @param {number} extraBlocked a tile index to treat as blocked (to test a placement), or -1
+ * @param {number} [mode] NORMAL, HOP, SMASH or GHOST
+ * @returns {Uint16Array}
  */
-export function getField(state, mode = NORMAL) {
+export function computeDist(state, extraBlocked = -1, mode = NORMAL) {
+  const tiles = state.tiles;
+  return flood(state, (i) => tiles[i] === 'T', extraBlocked, mode);
+}
+
+function cacheOf(state) {
   let hit = cache.get(state);
   if (!hit || hit.ver !== state.gridVer) {
-    hit = { ver: state.gridVer, fields: [null, null, null] };
+    hit = { ver: state.gridVer, fields: [null, null, null, null], to: new Map() };
     cache.set(state, hit);
   }
+  return hit;
+}
+
+/**
+ * The distance map for the current layout, worked out only when the layout changes.
+ * @param {number} [mode] NORMAL, HOP, SMASH or GHOST
+ */
+export function getField(state, mode = NORMAL) {
+  const hit = cacheOf(state);
   return (hit.fields[mode] ||= computeDist(state, -1, mode));
+}
+
+/**
+ * Walking distance (as most shoppers walk) from every tile to one tile. A mom uses it to run to
+ * where her child is waiting.
+ */
+export function getFieldTo(state, tile) {
+  const hit = cacheOf(state);
+  let f = hit.to.get(tile);
+  if (!f) {
+    f = flood(state, (i) => i === tile, -1, NORMAL);
+    hit.to.set(tile, f);
+  }
+  return f;
 }
 
 /** The map most shoppers walk by. */

@@ -1,12 +1,14 @@
-// Game state: creation, random numbers, players. The state is a plain JSON-safe object so the
-// host can send it to the other players as-is.
-import { W, H, MAP, TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.js';
+// Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
+// the host can send it to the other players as-is.
+import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.js';
+import { makeMap } from './maps.js';
 
 /**
  * @typedef {Object} Building
  * @property {string} k   kind, a key of BUILD
  * @property {number} o   owner player id
  * @property {number} [d] facing direction 0-3
+ * @property {number} [lv] upgrade level, 2 or more (absent means level 1)
  * @property {Array<[string, number]>} [it] belt only: items as [itemKind, progress 0..1], front item first
  * @property {number} [t]   machines: ticks left on the current job; unpacker: ticks until next box
  * @property {number} [n]   press/packer: inputs waiting
@@ -19,6 +21,7 @@ import { W, H, MAP, TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.
  * @typedef {Object} Shopper
  * @property {number} id
  * @property {string} k   kind, a key of SHOPPERS
+ * @property {number} [sup] 1 if this is the super version of its kind (see SUPERS in constants.js)
  * @property {number} x   position in tiles (tile centre is n + 0.5)
  * @property {number} y
  * @property {number} vx  movement during the last tick, in tiles (for smooth drawing)
@@ -33,6 +36,7 @@ import { W, H, MAP, TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.
  * @property {number} lt  index of the tile the shopper was on last tick
  * @property {number} [m]   teenager: ticks until the next mess
  * @property {number} [bt]  man with guide dog: ticks left of the dog bolting (he moves fast)
+ * @property {number} [sm]  gym bro: ticks until he next tries to wreck something beside him
  * @property {number} [kd]  mom: where the child is. 0 in the cart, 1 running away, 2 waiting to be caught
  * @property {number} [kx]  mom: the loose child's position in tiles (only meaningful when kd > 0)
  * @property {number} [ky]
@@ -40,6 +44,19 @@ import { W, H, MAP, TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.
  * @property {number} [kvy]
  * @property {number} [kr]  mom: tiles the child will still run
  * @property {number} [kc]  mom: ticks before the child may escape again
+ */
+
+/**
+ * @typedef {Object} Player
+ * @property {number} id     index into state.players
+ * @property {string} name
+ * @property {string} color
+ * @property {string} role   job title (cosmetic)
+ * @property {boolean} on    connected right now
+ * @property {number} cash   this player's own money. Everything the store earns or loses is
+ *                           split evenly between the connected players.
+ * @property {Object} w      statistics for this wave
+ * @property {Object} all    statistics for the whole game
  */
 
 function blankStats() {
@@ -52,29 +69,43 @@ function blankStats() {
  * @param {number} [o.seed]
  * @param {boolean} [o.training] training mode, used by the tutorial: the build phase never times
  *   out, the game cannot be lost, and waves are whatever queueTrainingWave() lines up.
+ * @param {{design?: string, size?: string, slots?: number}} [o.map] the floor plan (see maps.js).
+ *   Left out, it is the original small warehouse with a single entrance, which the tutorial and
+ *   most tests are written for.
  */
-export function createGame({ seed = 1, training = false } = {}) {
-  return {
-    v: 1,
+export function createGame({ seed = 1, training = false, map = null } = {}) {
+  const design = (map && map.design) || 'warehouse', size = (map && map.size) || 'xs';
+  const plan = makeMap(design, size, map ? map.slots ?? 6 : 1);
+  const state = {
+    v: 2,
     seed,
     training,
     /** Training mode only: the groups for the next wave, or null. */
     nextWave: null,
     rng: (seed >>> 0) || 1,
     tick: 0,
-    tiles: MAP.join(''),
+    /** The floor plan: which design and size, its width and height in tiles, and the tiles as
+     *  one string, row by row (the characters are explained in maps.js). */
+    map: { design, size },
+    w: plan.w,
+    h: plan.h,
+    tiles: plan.tiles,
+    /** Entrances in the order they open, each a list of tile indexes; `open` of them are open. */
+    doors: plan.doors,
+    open: 0,
     /** @type {Array<Building|0>} */
-    grid: new Array(W * H).fill(0),
+    grid: new Array(plan.w * plan.h).fill(0),
     gridVer: 0,
     /** @type {Shopper[]} */
     shoppers: [],
     /** Messes teenagers have left on the floor, as [tile index, ticks left]. */
     messes: [],
     nextId: 1,
-    /** Shoppers still to arrive this wave, as [tick, kind], soonest first. */
+    /** Shoppers still to arrive this wave, as [tick, kind, super 0|1], soonest first. */
     spawnQ: [],
-    cash: TUNE.startCash,
     refunds: 0,
+    /** Refunds that close the store. Grows with the number of players. */
+    refundLimit: TUNE.refundLimit,
     wave: 0,
     /** 'build' | 'wave' | 'won' | 'lost' */
     phase: 'build',
@@ -82,9 +113,12 @@ export function createGame({ seed = 1, training = false } = {}) {
     phaseT: -1,
     speed: 1,
     /** Totals for the current wave, shown in the performance review. */
-    ws: { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0 },
+    ws: { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0 },
+    /** @type {Player[]} */
     players: [],
   };
+  openDoors(state);
+  return state;
 }
 
 /** Deterministic random number in [0, 1). The generator's state lives in the game state. */
@@ -95,11 +129,28 @@ export function rand(state) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-export const idxOf = (x, y) => y * W + x;
-export const inBounds = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+export const idxOf = (state, x, y) => y * state.w + x;
+export const inBounds = (state, x, y) => x >= 0 && y >= 0 && x < state.w && y < state.h;
+
+/** Opens one entrance per player (always at least one). */
+function openDoors(state) {
+  const want = Math.max(1, Math.min(state.doors.length, state.players.length));
+  if (want <= state.open) return;
+  const t = state.tiles.split('');
+  for (let d = state.open; d < want; d++) for (const i of state.doors[d]) t[i] = 'D';
+  state.tiles = t.join('');
+  state.open = want;
+  state.gridVer++; // routes are drawn from the entrances
+}
+
+/** The entrance that belongs to a player: players beyond the last entrance share. */
+export function doorOf(state, pid) {
+  return state.doors[Math.min(Math.max(0, pid), state.open - 1)] || state.doors[0];
+}
 
 /**
  * Adds a player, or brings back a player of the same name who dropped out.
+ * A new player gets his own money and his own entrance.
  * @returns {number} the player's id, or -1 if the game is full
  */
 export function addPlayer(state, name) {
@@ -111,15 +162,58 @@ export function addPlayer(state, name) {
   state.players.push({
     id, name: clean, color: PLAYER_COLORS[id % PLAYER_COLORS.length],
     role: ROLES[Math.min(id, ROLES.length - 1)], on: true,
+    cash: TUNE.startCash + (id > 0 ? TUNE.joinCash * state.wave : 0),
     w: blankStats(), // this wave
     all: blankStats(), // whole game
   });
+  state.refundLimit = TUNE.refundLimit + TUNE.refundPerPlayer * (state.players.length - 1);
+  openDoors(state);
   return id;
 }
 
 export function setPlayerOnline(state, id, on) {
   const p = state.players[id];
   if (p) p.on = on;
+}
+
+/** The players who share income and losses: everyone connected (or everyone, if nobody is). */
+function sharers(state) {
+  const on = state.players.filter((p) => p.on);
+  return on.length ? on : state.players;
+}
+
+/** How many players are sharing right now (at least 1). */
+export const shareCount = (state) => Math.max(1, sharers(state).length);
+
+// Shares are rarely whole numbers; keep them to a thousandth so sums do not drift.
+const tidy = (n) => Math.round(n * 1000) / 1000;
+
+/** All the players' money added up. */
+export function teamCash(state) {
+  let sum = 0;
+  for (const p of state.players) sum += p.cash;
+  return Math.floor(sum + 1e-6);
+}
+
+/** Splits money the store earned evenly between the players. */
+export function earn(state, amount) {
+  const who = sharers(state);
+  for (const p of who) p.cash = tidy(p.cash + amount / who.length);
+}
+
+/**
+ * Splits a loss evenly between the players. Nobody goes below zero.
+ * @returns {number} how much was actually paid
+ */
+export function lose(state, amount) {
+  const who = sharers(state);
+  let paid = 0;
+  for (const p of who) {
+    const part = Math.min(p.cash, amount / who.length);
+    p.cash = tidy(p.cash - part);
+    paid += part;
+  }
+  return tidy(paid);
 }
 
 /** Adds to one of a player's statistics, both for this wave and for the whole game. */
@@ -132,5 +226,5 @@ export function bump(state, pid, key, amount = 1) {
 
 export function resetWaveStats(state) {
   for (const p of state.players) p.w = blankStats();
-  state.ws = { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0 };
+  state.ws = { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0 };
 }

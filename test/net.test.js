@@ -5,7 +5,9 @@ import { HostSession, ClientSession } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
 import { createDirector } from '../src/content/director.js';
 import { nopeLine, LINES, ESCAPE_REVIEWS, LEFT_REVIEWS, NOPE } from '../src/content/lines.js';
-import { applyDemoLayout, TICK_HZ, TUNE, SHOPPERS, BUILD, idxOf } from '../src/sim/index.js';
+import { applyDemoLayout, TICK_HZ, TUNE, SHOPPERS, BUILD } from '../src/sim/index.js';
+
+const at = (x, y) => y * 30 + x; // the original small map is 30 tiles wide
 
 const TICK_MS = 1000 / TICK_HZ;
 
@@ -42,10 +44,10 @@ test('client commands are applied by the host and come back in the state', () =>
   client.send({ c: 'place', k: 'crate', x: 5, y: 5 });
   host.update(0); client.update(0);
   host.update(TICK_MS); client.update(TICK_MS);
-  assert.equal(host.state.grid[idxOf(5, 5)].k, 'crate');
-  assert.equal(host.state.grid[idxOf(5, 5)].o, 1, 'owned by the client player');
-  assert.equal(client.state.grid[idxOf(5, 5)].k, 'crate');
-  assert.equal(client.state.cash, TUNE.startCash - BUILD.crate.cost);
+  assert.equal(host.state.grid[at(5, 5)].k, 'crate');
+  assert.equal(host.state.grid[at(5, 5)].o, 1, 'owned by the client player');
+  assert.equal(client.state.grid[at(5, 5)].k, 'crate');
+  assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.crate.cost);
 });
 
 test('a refused command is reported only to the player who sent it', () => {
