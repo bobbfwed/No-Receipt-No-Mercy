@@ -59,7 +59,8 @@ import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
  * @property {string} side   'store' (builds and defends) or 'office' (runs the shoppers; see office.js)
  * @property {number} cash   this player's own money. Everything the store earns or loses is
  *                           split evenly between the connected players.
- * @property {number} [gone] the tick he dropped out, while his grace period runs (see
+ * @property {number} [gone] how long he has been away, while his grace period runs, in ticks at
+ *                          normal speed (so it measures real time at any game speed; see
  *                           setPlayerOnline). Absent when he is here, or away with nothing pending.
  * @property {Object} w      statistics for this wave
  * @property {Object} all    statistics for the whole game
@@ -260,7 +261,7 @@ export function addPlayer(state, name) {
 /**
  * Marks a player as connected or not.
  * A player who drops out once the game is under way keeps his money for a grace period
- * (TUNE.graceSecs of game time), so a brief network blip costs him nothing. If he is still away
+ * (TUNE.graceSecs of real time), so a brief network blip costs him nothing. If he is still away
  * when it runs out, step() hands his money to those who stay (see expireAway). While away he
  * neither earns nor pays, like any absent player. In the lobby nothing is at stake.
  */
@@ -270,7 +271,7 @@ export function setPlayerOnline(state, id, on) {
   const was = p.on;
   p.on = on;
   if (on) delete p.gone;
-  else if (was && state.phase !== 'lobby') p.gone = state.tick;
+  else if (was && state.phase !== 'lobby') p.gone = 0;
   // If nobody is left running the store, the Head Office player has to come back and do it.
   const o = state.office;
   if (o && !state.players.some((q) => q.on && q.side === 'store')) {
@@ -288,8 +289,13 @@ export function setPlayerOnline(state, id, on) {
  */
 export function expireAway(state) {
   const limit = Math.max(1, Math.round(TUNE.graceSecs * TICK_HZ));
+  // At 2x and 3x speed the game runs two or three ticks in the time of one, so each tick counts
+  // for a half or a third: the grace period is the same length on the clock at any speed.
+  const passed = 1 / (state.speed || 1);
   for (const p of state.players) {
-    if (p.gone === undefined || p.on || state.tick - p.gone < limit) continue;
+    if (p.gone === undefined || p.on) continue;
+    p.gone += passed;
+    if (p.gone < limit - 1e-6) continue;
     const stay = state.players.filter((q) => q.on && q.side !== 'office');
     if (!stay.length) continue;
     if (p.cash > 0) {

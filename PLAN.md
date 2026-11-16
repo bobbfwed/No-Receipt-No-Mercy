@@ -106,8 +106,8 @@ Seven more lessons, "The difficult customers": teenagers, Karens, the shoppers w
 
 ## Less data, a grace period, a place for a relay (built overnight 2026-11-15)
 - The host no longer sends the whole game several times a second. It sends ten small messages a second (the commands players gave and a checksum); every player's browser replays them. Measured on a busy three-player game: about 130 KB a second per player before, about 2.8 KB after (47 times less). A full copy goes out only when someone joins or leaves, when a checksum does not match, or every ten seconds as a safety net. Large messages are split so they can never exceed what a connection carries; the old scheme probably dropped online players once the game state passed 16 KB.
-- Players now see the game about a quarter of a second behind the host.
-- A dropped player keeps his money for 90 seconds of game time (a minute and a half at normal speed, 30 seconds at 3x) before it is shared out.
+- Players other than the host see the game about a tenth of a second behind him (measured: 67 to 133 ms in one browser, plus the network's own delay online). It was about a quarter of a second in the first version; the owner asked for 100 to 150 ms, so the host now sends thirty small messages a second instead of ten, which costs about 3.4 KB a second per player instead of 2.8 (still about 38 times less than before the rework).
+- A dropped player keeps his money for 90 seconds of real time, the same at any game speed (owner's rule), before it is shared out.
 - `src/net/relay.js` is ready for a relay's address, username and password. Empty until the owner has an account.
 - Checked with a Firefox host and an Edge player through the real internet broker: 422 checksum comparisons over about 50 seconds with sprinklers and a forklift firing, no mismatches. Also checked Edge to Edge. Not checked: phones as players under the new scheme, and long games.
 

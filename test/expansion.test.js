@@ -997,3 +997,23 @@ test('seven players each get an entrance, a colour and their own money', () => {
   assert.equal(recommendedSize(7), 'titan');
   assert.equal(addPlayer(s, 'P7'), -1);
 });
+
+test('the grace period is the same length on the clock at any game speed', () => {
+  const awayFor = (speed) => {
+    const s = createGame({ seed: 3 });
+    addPlayer(s, 'Dave');
+    addPlayer(s, 'Steve');
+    applyCommand(s, 0, { c: 'place', k: 'crate', x: 5, y: 5 }); // the game is under way
+    applyCommand(s, 0, { c: 'speed', n: speed });
+    s.refundLimit = 1e9; // long enough that an undefended store does not close first
+    setPlayerOnline(s, 1, false);
+    let ticks = 0;
+    while (s.players[1].cash > 0 && ticks < 100000) { step(s); ticks++; }
+    return ticks;
+  };
+  const normal = awayFor(1), fast = awayFor(3);
+  assert.equal(normal, TUNE.graceSecs * TICK_HZ, '90 seconds of ticks at normal speed');
+  // At 3x the game runs three ticks in the time of one, so it takes three times as many ticks:
+  // the same 90 seconds on the clock.
+  assert.ok(Math.abs(fast - normal * 3) <= 2, `at 3x speed it took ${fast} ticks, at 1x ${normal}`);
+});

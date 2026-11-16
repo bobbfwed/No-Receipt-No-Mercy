@@ -78,3 +78,7 @@ I built saving, wired the pieces together, tested across browsers, and checked e
 1. Give me relay details, or tell me to drop the relay.
 2. Listen to the sounds and say which to change.
 3. Play a game with a friend on the new networking and say whether the quarter-second delay is noticeable.
+
+## Changed the next morning (release 0.1.15)
+- The delay for joined players is now about a tenth of a second (measured 67 to 133 ms in one browser, plus network delay online), down from a quarter of a second. The host sends thirty small messages a second instead of ten: about 3.4 KB a second per player, still about 38 times less than before the rework.
+- The grace period is 90 seconds of real time at any game speed.
