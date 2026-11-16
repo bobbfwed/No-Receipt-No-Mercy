@@ -376,8 +376,9 @@ const KINDS = {
       shadow(ctx);
       spout(ctx, P.d);
       // Glass case with the item inside.
+      // (Purple, to match the Gift Wrap floor it stands on.)
       rr(ctx, -17, -9, 34, 25, 8);
-      paint(ctx, '#d6eef8', 2.5);
+      paint(ctx, '#ead9ff', 2.5);
       if (P.inside) drawItem(ctx, S, ITEM_KINDS[P.inside], 0, 4, 20);
       if (P.step) {
         // A ribbon whirling round the gadget while it is being wrapped.
@@ -389,14 +390,14 @@ const KINDS = {
         ctx.fillRect(-1.5 + Math.sin(a * 2) * 8, -3, 3, 12);
       }
       rr(ctx, -17, -9, 34, 25, 8);
-      ctx.fillStyle = 'rgba(154,215,240,0.45)';
+      ctx.fillStyle = 'rgba(192,132,252,0.5)';
       ctx.fill();
       ctx.lineWidth = 2.5;
       ctx.strokeStyle = INK;
       ctx.stroke();
       line(ctx, -12, -4, -12, 8, 'rgba(255,255,255,0.8)', 2); // shine on the glass
       // Control unit on top with three lights that chase while working.
-      box(ctx, -15, -20, 30, 11, 3, '#6a6f75', 2.2);
+      box(ctx, -15, -20, 30, 11, 3, '#7e22ce', 2.2);
       for (let k = 0; k < 3; k++) circle(ctx, -8 + k * 8, -14.5, 2.6, k === P.light ? '#ff3b30' : '#8a2e28', 1.2);
       outItem(ctx, S);
     },
@@ -660,7 +661,7 @@ export const KIND_COLOURS = {
   belt: ['#34383d', C.steel, C.chevron],
   unpacker: [C.wood, C.cardboard, C.woodDark],
   press: ['#e8761a', '#9aa0a6', '#4b5058'],
-  packer: ['#d6eef8', '#6a6f75', '#ff5fa8'],
+  packer: ['#ead9ff', '#7e22ce', '#c084fc'],
   chute: [C.green, '#123d1c', '#ffffff'],
   crate: ['#b57a3c', C.wood, '#7a4f22'],
   sprinkler: [C.steel, C.red, '#7d848b'],

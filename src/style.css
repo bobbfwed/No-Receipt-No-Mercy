@@ -1592,3 +1592,28 @@ kbd {
 .menu-version small { align-self: center; margin-right: 0.4rem; font: 900 0.6rem var(--font-heavy); letter-spacing: 0.1em; color: var(--muted); }
 .menu-version b { font: 900 2.4rem var(--font-heavy); color: var(--yellow); }
 .menu-version span { font: 900 1rem var(--font-heavy); color: #c3cad3; }
+
+/* ---------------------------------------------------------------- machines wear their floor's colour */
+
+.bb-btn.zoned { border-color: var(--zone); box-shadow: inset 0 -0.3rem 0 var(--zone), 0 0.18rem 0 var(--line); }
+.bb-btn.zoned .bb-name { color: var(--zone); }
+.bb-btn.zoned.poor { box-shadow: inset 0 -0.3rem 0 var(--zone), 0 0.18rem 0 var(--line); }
+.zone-hint {
+  position: absolute;
+  z-index: 8;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: min(46rem, calc(100% - 28rem));
+  padding: 0.35rem 0.7rem;
+  background: var(--ink);
+  border: 0.18rem solid var(--yellow);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.2rem 0 rgba(0, 0, 0, 0.45);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+.zone-hint .btn-small { flex: none; }

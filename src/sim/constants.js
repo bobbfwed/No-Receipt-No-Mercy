@@ -22,11 +22,13 @@ export const ITEMS = {
  * Marked areas of the floor. Each of the four factory machines may only be built on its own
  * kind of floor, and the areas are apart from each other, so goods have to travel between them
  * by belt. Everything else can be built anywhere. Where the areas are is worked out in maps.js.
+ * `color` is the floor paint, and each machine is drawn in its floor's colour (blue Unpacker,
+ * orange Press, purple Packer, green Chute) so the build bar and the floor match.
  */
 export const ZONES = {
   u: { name: 'Loading Bay', kind: 'unpacker', color: '#38bdf8' },
   p: { name: 'Press Shop', kind: 'press', color: '#f97316' },
-  k: { name: 'Gift Wrap', kind: 'packer', color: '#e879f9' },
+  k: { name: 'Gift Wrap', kind: 'packer', color: '#c084fc' },
   c: { name: 'Shipping', kind: 'chute', color: '#22c55e' },
 };
 

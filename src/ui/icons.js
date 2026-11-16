@@ -16,9 +16,9 @@ const BUILDING = {
     <rect x="4" y="26" width="32" height="9" fill="#facc15" ${S}/>
     <path d="M8 35l5-9M16 35l5-9M24 35l5-9M32 35l4-7" stroke="#111" stroke-width="2.6"/>
     <circle cx="31" cy="18" r="2.2" fill="#dc2626"/>`,
-  packer: `<rect x="9" y="3" width="22" height="7" rx="2" fill="#374151"/>
+  packer: `<rect x="9" y="3" width="22" height="7" rx="2" fill="#7e22ce"/>
     <circle cx="14" cy="6.5" r="1.6" fill="#ef4444"/><circle cx="20" cy="6.5" r="1.6" fill="#ef4444"/><circle cx="26" cy="6.5" r="1.6" fill="#ef4444"/>
-    <rect x="4" y="10" width="32" height="25" rx="8" fill="#93c5e8" ${S}/>
+    <rect x="4" y="10" width="32" height="25" rx="8" fill="#c084fc" ${S}/>
     <rect x="12" y="16" width="16" height="12" rx="1" fill="#c8915a" stroke="#7c4a1e" stroke-width="1.6"/>
     <path d="M20 16v12M12 22h16" stroke="#dc2626" stroke-width="2"/>`,
   chute: `<path d="M4 7h32l-6 28H10z" fill="#16a34a" ${S} stroke-linejoin="round"/>

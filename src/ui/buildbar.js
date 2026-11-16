@@ -88,6 +88,11 @@ export function createBuildBar(input, session) {
     h('span', { class: 'bb-icon', html: buildingIcon(k) }),
     h('span', { class: 'bb-name' }, def ? SHORT[k] || def.name : t.name),
     h('span', { class: 'bb-price' }, def ? `$${def.cost}` : t.price));
+    // The four factory machines wear the colour of the painted floor they go on.
+    if (def && def.zone) {
+      btn.classList.add('zoned');
+      btn.style.setProperty('--zone', ZONES[def.zone].color);
+    }
     buttons.set(k, btn);
     return btn;
   }

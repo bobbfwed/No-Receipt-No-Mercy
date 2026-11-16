@@ -146,7 +146,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (!mode) return;
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch { /* not supported: drag still works inside */ }
-    const planner = startDrag({ mode, kind: tool, start: t, dir, hasBuilding });
+    // Dragging belt over belts that are already there turns them, so those tiles are not skipped.
+    const taken = mode === 'build' && tool === 'belt' ? (tile) => { const b = at(tile); return !!b && b.k !== 'belt'; } : hasBuilding;
+    const planner = startDrag({ mode, kind: tool, start: t, dir, hasBuilding: taken });
     drag = { planner, button: e.button, id: e.pointerId };
     send(planner.first);
   }
