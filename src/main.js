@@ -24,6 +24,12 @@ import { showMenu } from './ui/menu.js';
 import { startGame } from './ui/game.js';
 
 const app = document.getElementById('app');
+
+// Lets phones and tablets offer "Install app" / "Add to Home screen", which opens the game full
+// screen like an app. The worker stores nothing (see sw.js). Only on a real web address.
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 const q = new URLSearchParams(location.search);
 const flag = (k) => q.has(k) && q.get(k) !== '0' && q.get(k) !== 'false';
 const num = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : undefined);

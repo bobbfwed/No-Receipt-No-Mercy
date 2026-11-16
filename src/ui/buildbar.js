@@ -6,6 +6,7 @@ import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, HOTKEYS } from './input.js';
 import { longPress, touchedLast } from './touch.js';
 import { HOW, HOW_REMOVE, HOW_UPGRADE, HOW_REBUILD } from '../content/help.js';
+import { worded } from '../content/touch.js';
 
 // On a phone the info card is a sheet over the floor; the player can fold it down to one line,
 // and it stays folded for the next tool too.
@@ -57,8 +58,8 @@ export function createBuildBar(input, session) {
     if (def) {
       const how = HOW[k];
       lines.push(h('div', { class: 'tip-head' }, h('b', null, def.name), h('span', { class: 'tip-cost' }, `$${def.cost}`)));
-      lines.push(h('p', null, how ? how.does : def.desc));
-      if (how) lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), how.use));
+      lines.push(h('p', null, how ? worded(how.does) : def.desc));
+      if (how) lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), worded(how.use)));
       const facts = [];
       if (how && how.maze) facts.push(how.maze.replace(/\.$/, ''));
       if (def.zone) facts.push(`${ZONES[def.zone].name} floor only`);
@@ -68,8 +69,8 @@ export function createBuildBar(input, session) {
     } else {
       const t = TOOLS[k];
       lines.push(h('div', { class: 'tip-head' }, h('b', null, t.name)));
-      lines.push(h('p', null, t.how.does));
-      lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), t.how.use));
+      lines.push(h('p', null, worded(t.how.does)));
+      lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), worded(t.how.use)));
       lines.push(h('small', null, t.keys));
     }
     tip.replaceChildren(...lines);
@@ -158,8 +159,8 @@ export function createBuildBar(input, session) {
         def && def.zone ? h('span', { class: 'bbi-maze bbi-zone', style: { background: ZONES[def.zone].color } }, `${ZONES[def.zone].name} only`) : null,
         def ? h('span', { class: 'bbi-cost' }, `$${def.cost}`) : null,
         foldBtn()),
-      h('p', null, how.does),
-      h('p', null, h('b', null, 'How: '), how.use));
+      h('p', null, worded(how.does)),
+      h('p', null, h('b', null, 'How: '), worded(how.use)));
   }
 
   /** With the upgrade tool held: what upgrading the building under the mouse costs and gives. */

@@ -135,3 +135,33 @@ test('the training floor is marked, and every machine the lessons ask for is on 
   assert.equal(session.send({ c: 'place', k: 'press', x: 3, y: 3, d: 0 }).why, 'zone');
   assert.ok(nopeLine('zone', 'Dave').length > 10);
 });
+
+test('on a touch screen no lesson or help text mentions a key or the mouse', async () => {
+  const { forTouch } = await import('../src/content/touch.js');
+  const help = await import('../src/content/help.js');
+  const texts = [];
+  for (const st of STEPS) texts.push(...st.text);
+  for (const v of Object.values(help.HOW)) texts.push(v.does, v.use);
+  for (const v of [help.HOW_REMOVE, help.HOW_UPGRADE, help.HOW_REBUILD]) texts.push(v.does, v.use);
+  // The live hints too, at the moments a player is most likely to see them.
+  const session = trainingSession();
+  const tut = createTutorial(session);
+  tut.start();
+  for (let n = 0; n < STEPS.length - 1; n++) {
+    session.send({ c: 'place', k: 'crate', x: 10, y: 2 + n, d: 0 }); // something in the way
+    session.send({ c: 'place', k: 'belt', x: 10, y: 2 + n, d: 0 });
+    if (tut.hint()) texts.push(tut.hint());
+    for (const m of tut.marks()) if (m.label) texts.push(m.label);
+    tut.skip();
+  }
+  const keys = /\bpress(ing)? (the mouse|[0-9RUBFH]\b)|right-click|\bEsc\b|\bmouse\b|W, A, S|\bclick/i;
+  let changed = 0;
+  for (const t of texts) {
+    const out = forTouch(t);
+    if (out !== t) changed++;
+    assert.ok(!keys.test(out), `still keyboard or mouse wording after forTouch: "${out}"`);
+  }
+  assert.ok(changed >= 15, `forTouch changed ${changed} texts`);
+  // And it leaves desktop wording alone when there is nothing to change.
+  assert.equal(forTouch('A Wet Floor Sign halves the speed of shoppers.'), 'A Wet Floor Sign halves the speed of shoppers.');
+});

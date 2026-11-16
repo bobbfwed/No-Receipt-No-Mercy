@@ -2166,3 +2166,11 @@ html, body { overscroll-behavior: none; }
   .tc-icon { font-size: 1.2rem; }
   .bb-info { max-height: 55vh; }
 }
+
+/* ---------------------------------------------------------------- give money: amounts to tap */
+
+.player .give-row { grid-column: 2; display: flex; align-items: center; gap: 0.25rem; margin-top: 0.1rem; }
+.player .give-row small { font-size: 0.68rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.player .give-row .give-btn { grid-column: auto; margin-top: 0; }
+@media (pointer: coarse) { .player .give-row .give-btn { padding: 0.3rem 0.6rem; font-size: 0.85rem; } }
+.btn-full { font-size: 1rem; }

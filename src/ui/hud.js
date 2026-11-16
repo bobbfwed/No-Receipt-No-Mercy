@@ -66,11 +66,22 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
 
   const help = h('button', { type: 'button', class: 'btn-help', 'aria-label': 'How to play', title: 'How to play', onclick: () => { setMore(false); onHelp(); } }, '?');
   const audio = sound ? createSoundMenu(sound) : null;
+  // Full screen, where the browser allows a page to ask for it (not on iPhones: there, add the
+  // game to the Home Screen instead and it opens without the browser's bars).
+  const root = document.documentElement;
+  const canFull = !!(root.requestFullscreen && document.fullscreenEnabled !== false);
+  const full = canFull ? h('button', {
+    type: 'button', class: 'btn-help btn-full', 'aria-label': 'Full screen', title: 'Full screen on or off',
+    onclick: () => {
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      else root.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+    },
+  }, '⛶') : null;
 
   // On a narrow screen the things a player needs less often (speed, room code, sound, help) fold
   // away behind one button. On a wide screen the wrapper takes no part in the layout
   // (display: contents) and the button is hidden, so the bar looks as it always has.
-  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, speed, room, audio, help);
+  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, speed, room, audio, full, help);
   const moreBtn = h('button', {
     type: 'button', class: 'btn-more', 'aria-label': 'More: speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
     onclick: () => setMore(!more.classList.contains('open')),
@@ -238,7 +249,7 @@ export function createPlayersPanel(session, { playSound = () => {} } = {}) {
   let sig = '';
   const cashEls = new Map(); // player id -> the element showing his cash
   let statusEl = null; // what Head Office is doing, on his row
-  const GIVE = 100;
+  const GIVE_AMOUNTS = [50, 200, 1000];
 
   /** Whether this player may be offered the Head Office job right now. */
   function canTakeJob(s, p) {
@@ -306,14 +317,16 @@ export function createPlayersPanel(session, { playSound = () => {} } = {}) {
       const tag = office ? h('span', { class: 'ho-tag', title: 'Head Office: runs the shoppers instead of the store, and wins if the store closes.' }, 'HEAD OFFICE') : null;
       if (office && p.on) statusEl = h('span', { class: 'ho-status' });
       // Money is personal, so there has to be a way to hand it over.
-      const give = mine || !p.on || office || iAmOffice ? null : h('button', {
-        type: 'button', class: 'give-btn', title: `Give ${p.name} $${GIVE} of your own money (hold Shift for $${GIVE * 10}).`,
-        onclick: (e) => {
+      const giveBtn = (amount) => h('button', {
+        type: 'button', class: 'give-btn', title: `Give ${p.name} $${amount.toLocaleString('en-US')} of your own money (or all you have, if that is less).`,
+        onclick: () => {
           const have = Math.floor(session.state.players[session.me]?.cash || 0);
-          const n = Math.min(have, e.shiftKey ? GIVE * 10 : GIVE);
+          const n = Math.min(have, amount);
           if (n > 0) session.send({ c: 'give', to: p.id, n });
         },
-      }, `Give $${GIVE}`);
+      }, `$${amount.toLocaleString('en-US')}`);
+      const give = mine || !p.on || office || iAmOffice ? null
+        : h('span', { class: 'give-row' }, h('small', null, 'Give'), GIVE_AMOUNTS.map(giveBtn));
       const role = mine
         ? h('button', {
           type: 'button', class: 'role role-btn', title: 'Change your job title. It changes nothing else.',

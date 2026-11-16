@@ -114,7 +114,12 @@ export class HostSession extends Session {
     super();
     this.isHost = true;
     this.state = state || createGame({ seed, map, lobby });
-    if (takeOver) for (const p of this.state.players) p.on = false;
+    if (takeOver) {
+      // The host who left hands his money to those who stay, like any player who leaves...
+      setPlayerOnline(this.state, this.state.host | 0, false);
+      // ...and everyone else is only away for the moment it takes his browser to reconnect.
+      for (const p of this.state.players) p.on = false;
+    }
     this.me = addPlayer(this.state, name);
     this.state.host = this.me;
     this.director = director;

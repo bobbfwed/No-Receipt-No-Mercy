@@ -94,8 +94,16 @@ One player stops defending and plays the other side: each wave he gets a budget,
 ## Phones, tablets and chat (owner's request, built; not tried on a real phone)
 - Every screen has a phone and tablet layout and the floor is fully usable by touch (see README.md for the gestures). Checked in an emulator at five screen sizes with a page of simulated finger touches; desktop screens were compared before and after and did not change.
 - Needs a real phone to confirm: the chat box staying above the keyboard on iPhones, page zoom and pull-to-refresh staying blocked, notches and home bars, how the pinch feels, and sound starting on the first tap.
-- Known rough edges: the tutorial and help text still speak of keys and right-click; a phone held sideways leaves only about a third of the screen height for the floor; the Head Office planner is cramped on a phone.
+- Known rough edges: a phone held sideways leaves only about a third of the screen height for the floor; the Head Office planner is cramped on a phone.
 - Chat: Enter or the Chat button; one line of up to 200 characters; floods are cut off.
+
+## Money when players come and go (owner's rules)
+- A player who leaves once the game is under way hands his money to the players who stay, split evenly. If he comes back he has none and earns his share from then on. (This also covers a host who leaves: his money is shared out when the next player takes over.) Leaving in the lobby changes nothing.
+- A brand-new player joining mid-game gets $500 plus $60 for each sales event already played.
+- Players can give each other $50, $200 or $1,000 at a time from the players list.
+
+## Moms who will not stay down (owner's rule)
+A mom whose patience runs out while her child is loose does not leave. She drops and crawls to him at about half walking speed; nothing can hurt her, and security keeps shooting at her and wastes it. When she reaches him she stands up with 35% of her patience back. It happens once per mom; with the child in the cart she is stopped like anyone else.
 
 ## Leaving and host hand-over (owner's request, built)
 - Once a game has started, or anyone else is in it, the browser asks for confirmation before the page is closed, refreshed or left.
@@ -125,5 +133,4 @@ Also not done: the host sends the whole game state in one message; on the larges
 - An endless mode after wave 20.
 - Teaching the newer shoppers in the training shift (it covers dads and one super shopper; the others are explained by DEB and the ? screen).
 - Saving a game in the host's browser so a session can be resumed.
-- Wording for touch screens in the tutorial and help text (they still say "press 5" and "right-click").
 - Role restrictions as an optional hard mode.
