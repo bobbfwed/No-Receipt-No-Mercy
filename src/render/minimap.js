@@ -1,5 +1,6 @@
 // The minimap: the whole store drawn small on its own canvas, for a corner of the interface.
-// Walls, floor, tills, entrances in their owner's colour, buildings as dots coloured by group
+// Walls, floor, the machines' marked floor tinted in each kind's colour, tills, entrances in their
+// owner's colour, buildings as dots coloured by group
 // (factory orange, security blue), shoppers as dots (dads light blue, supers bigger and gold),
 // wreckage, and a white frame showing what the main view shows.
 //
@@ -7,7 +8,7 @@
 //   mini.draw();                  a few times a second
 //   mini.tileAt(clientX, clientY) -> {x, y} tile under a click on the minimap, or null
 //                                 (then renderer.centerOn(x + 0.5, y + 0.5))
-import { BUILD } from '../sim/index.js';
+import { BUILD, ZONES } from '../sim/index.js';
 import { INK } from './paint.js';
 
 const COL = {
@@ -20,6 +21,11 @@ const rgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
+/** Marked floor for the machines: the floor grey well mixed with each kind's colour. */
+const ZONE_COL = {};
+for (const [ch, z] of Object.entries(ZONES)) {
+  ZONE_COL[ch] = rgb(z.color).map((v, j) => Math.round(v * 0.6 + COL.floor[j] * 0.4));
+}
 
 /**
  * @param {HTMLCanvasElement} canvas the minimap's own canvas (sized by the page with CSS)
@@ -63,9 +69,11 @@ export function createMinimap(canvas, session, renderer) {
       const c = d < s.open ? (p ? rgb(p.color) : [255, 255, 255]) : COL.shut;
       for (const i of door) doorCol.set(i, c);
     });
+    const zones = s.zones && s.zones.length === n ? s.zones : '';
     for (let i = 0; i < n; i++) {
       const ch = tiles[i];
       let c = ch === '#' ? COL.wall : ch === 'T' ? COL.till : ch === 'D' || ch === 'd' ? (doorCol.get(i) || COL.shut) : COL.floor;
+      if (zones && c === COL.floor && ZONE_COL[zones[i]]) c = ZONE_COL[zones[i]];
       const b = grid[i];
       if (b && BUILD[b.k]) c = BUILD[b.k].group === 'security' ? COL.security : COL.factory;
       const o = i * 4;

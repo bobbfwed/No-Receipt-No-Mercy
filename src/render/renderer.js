@@ -21,7 +21,8 @@
 //
 // Everything is drawn in logical world pixels, TILE (40) per tile; the camera turns that into a
 // canvas transform. The parts are split by layer:
-//   floor.js      walls, shelving, entrances, tills (static parts cached in chunks)
+//   floor.js      walls, shelving, entrances, tills, the machines' marked floor (static parts
+//                 cached in chunks)
 //   buildings.js  belts, machines, security, level badges, wreckage left by gym bros
 //   items.js      goods on belts (pre-rendered sprites)
 //   messes.js     slushie spills teenagers leave on the floor
@@ -29,7 +30,7 @@
 //   effects.js    floating cash, speech blips, shots, sprays, wreckage, upgrade sparkles
 //   guides.js     route guides and tutorial marks
 //   minimap.js    the whole map small, for the interface's corner (a separate canvas)
-import { BUILD, TUNE, TICK_HZ, ST, canPlace, canUpgrade, statsOf, levelOf, upgradeCost } from '../sim/index.js';
+import { BUILD, ZONES, TUNE, TICK_HZ, ST, canPlace, canUpgrade, statsOf, levelOf, upgradeCost } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
 import {
@@ -293,6 +294,9 @@ export function createRenderer(canvas, session) {
     // Doors slide open while a wave is on.
     doorOpen += ((s.phase === 'wave' ? 1 : 0) - doorOpen) * Math.min(1, dt * 4);
     drawDynamic(ctx, info, s.players, doorOpen, fx.timers.tillAt, now);
+    // Holding a machine: light up the marked floor it may go on.
+    const zch = view.tool && BUILD[view.tool] && BUILD[view.tool].zone;
+    if (zch && info.patches.length) drawZoneGlow(zch, now);
     // Teenagers' slushie spills and wrecked buildings, on the floor under everything else.
     if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites, s.w);
     if (s.rubble && s.rubble.length) drawWreckage(s);
@@ -312,6 +316,54 @@ export function createRenderer(canvas, session) {
     ctx.setTransform(k, 0, 0, k, 0, 0);
     drawDoorTags(s);
     if (view.cursors) drawCursors(s, view.cursors);
+  }
+
+  /**
+   * The patches of marked floor a held machine may be built on, pulsing: a soft wash over them and
+   * a glowing outline in their colour with a white line through it. Nothing else is dimmed.
+   */
+  function drawZoneGlow(ch, now) {
+    const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * Math.PI * 1.8);
+    // Line widths are given in screen pixels, so the glow looks the same at any zoom.
+    const thick = T / cam.zoom;
+    const { x0, y0, x1, y1 } = vis;
+    ctx.beginPath();
+    let any = false;
+    for (const p of info.patches) {
+      if (p.ch !== ch || p.x1 < x0 || p.x0 > x1 || p.y1 < y0 || p.y0 > y1) continue;
+      for (const i of p.cells) ctx.rect((i % p.width) * T, ((i / p.width) | 0) * T, T, T);
+      any = true;
+    }
+    if (!any) return;
+    const rgb = zoneRgb(ch);
+    ctx.fillStyle = `rgba(${rgb},${0.1 + 0.14 * pulse})`;
+    ctx.fill();
+    ctx.beginPath();
+    for (const p of info.patches) {
+      if (p.ch !== ch || p.x1 < x0 || p.x0 > x1 || p.y1 < y0 || p.y0 > y1) continue;
+      const e = p.edges;
+      for (let k = 0; k < e.length; k += 4) { ctx.moveTo(e[k] * T, e[k + 1] * T); ctx.lineTo(e[k + 2] * T, e[k + 3] * T); }
+    }
+    ctx.lineCap = 'square';
+    ctx.strokeStyle = `rgba(${rgb},${0.45 + 0.35 * pulse})`;
+    ctx.lineWidth = (8 + 6 * pulse) * thick;
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${0.75 + 0.25 * pulse})`;
+    ctx.lineWidth = 2.5 * thick;
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+
+  const zoneRgbs = new Map();
+  /** A zone's colour as "r,g,b" for building rgba() strings. */
+  function zoneRgb(ch) {
+    let v = zoneRgbs.get(ch);
+    if (!v) {
+      const n = parseInt(ZONES[ch].color.slice(1), 16);
+      v = `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+      zoneRgbs.set(ch, v);
+    }
+    return v;
   }
 
   /** What gym bros have wrecked and nobody has rebuilt: a heap of bits where it stood. */
@@ -517,7 +569,8 @@ export function createRenderer(canvas, session) {
 
     const def = tool ? BUILD[tool] : null;
     if (def) {
-      const ok = canPlace(s, tool, h.x, h.y, session.me) === null;
+      const why = canPlace(s, tool, h.x, h.y, session.me);
+      const ok = why === null;
       if (def.range) rangeCircle(cx, cy, def.range, ok ? 'ok' : 'bad');
       rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.35)' : 'rgba(239,68,68,0.4)';
@@ -536,6 +589,18 @@ export function createRenderer(canvas, session) {
       ctx.lineWidth = 3;
       ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
       ctx.stroke();
+      // Off its marked floor: say where it does go, in that floor's colour. Grows when zoomed out
+      // so it stays readable (about 11 screen pixels at least).
+      if (why === 'zone' && ZONES[def.zone]) {
+        const k = Math.max(1, 36 / cam.zoom);
+        const name = ZONES[def.zone].name.toUpperCase() + ' ONLY';
+        const ly = h.y > 1 ? py - 10 * k : py + T + 10 * k;
+        // Kept inside the map at the side walls.
+        ctx.font = font(12 * k);
+        const half = ctx.measureText(name).width / 2 + 4 * k;
+        const lx = Math.max(half, Math.min(s.w * T - half, cx));
+        label(ctx, name, lx, ly, 12 * k, ZONES[def.zone].color, INK, 3.5 * k);
+      }
       return;
     }
 

@@ -20,6 +20,10 @@
                    map with six entrances, as a real game does; without either it is the original
                    30 x 16 warehouse with one entrance, which the demo layout is made for)
     &size=m        map size: xs, s, m, l, xl, xxl, huge
+    &zones=1       mark out the floor the factory machines must go on (loading bay, press shop,
+                   gift wrap, shipping). Maps chosen with design or size have it already; zones=0
+                   takes it away. On the small default map the demo layout's machines will mostly
+                   not fit it (use demo=0 to see the bare markings)
     &players=3     that many players in all (so that many entrances open)
     &cam=40,20,30  camera: centre on tile 40,20 at 30 CSS pixels per tile (any part may be empty)
     &fitview=1     start fully zoomed out
@@ -73,7 +77,7 @@
 <script type="module">
 import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
-import { applyDemoLayout, applyCommand, addPlayer, BUILD, TUNE, TICK_HZ } from '../src/sim/index.js';
+import { applyDemoLayout, applyCommand, addPlayer, createGame, BUILD, TUNE, TICK_HZ } from '../src/sim/index.js';
 import { createRenderer } from '../src/render/renderer.js';
 import { createMinimap } from '../src/render/minimap.js';
 
@@ -86,7 +90,11 @@ if (q.get('null') === '1') {
   session = { state: null, me: 0, drainFx: () => [], alpha: () => 0, start() {} };
 } else {
   const map = q.has('design') || q.has('size') ? { design: q.get('design') || 'warehouse', size: q.get('size') || 'xs' } : null;
-  session = new HostSession({ name: 'Dave', seed: num('seed', 7), director: createDirector(), map });
+  // &zones=1 / &zones=0 turn the machines' marked floor on or off; by default a game has it
+  // exactly when it has a chosen map, as in the real game.
+  const zones = q.has('zones') ? q.get('zones') === '1' : !!map;
+  const state = createGame({ seed: num('seed', 7), map, zones });
+  session = new HostSession({ name: 'Dave', director: createDirector(), state });
   const s = session.state;
   const me = s.players[0];
   const names = ['Steve', 'Kev', 'Big Gaz', 'Tommo', 'Dazza'];
