@@ -13,6 +13,11 @@ const RULES = [
   [/Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance\./g, 'Drag the floor with nothing picked to move the view, pinch with two fingers to zoom, tap MAP to see the whole floor and HOME to go back to your entrance.'],
   [/point at each of the two Sprinklers beside the gap and press U three times, until both are level (\d+)\. \(Or pick Upgrade in the build bar and click them\.\)/g, 'tap each of the two Sprinklers beside the gap and tap its Level button three times, until both are level $1. (Or pick Upgrade in the bar and tap them.)'],
   [/Point at the highlighted Sprinkler and press U\./g, 'Tap the highlighted Sprinkler and tap its Level button.'],
+  // Part 2 of the training: the forklift upgrade and the Rebuild button.
+  [/point at the Forklift you just built past the gap and press U twice, to level (\d+)\. \(Or pick Upgrade in the build bar and click it\.\)/g, 'tap the Forklift you just built past the gap and tap its Level button twice, to level $1. (Or pick Upgrade in the bar and tap it.)'],
+  [/Point at the highlighted Forklift and press U\./g, 'Tap the highlighted Forklift and tap its Level button.'],
+  [/Press B \(or the Rebuild button in the build bar\)/g, 'Tap the Rebuild button in the bar'],
+  [/press B \(or the Rebuild button in the build bar\)/g, 'tap the Rebuild button in the bar'],
   [/Click one, or point at it and press U\./g, 'Pick Upgrade and tap one, or tap one with nothing picked and use its Level button.'],
   [/drag belt over it again in the new direction, or point at it and press R\./g, 'drag belt over it again in the new direction, or tap it and choose Rotate.'],
   [/Press the mouse button on the first highlighted tile, drag straight down to the last one, and let go\./g, 'Put your finger on the first highlighted tile, drag straight down to the last one, and lift it.'],

@@ -10,7 +10,15 @@
 //   done(s, f)    true once the player has done what was asked (f = facts gathered this step)
 //   hint(s, f)    a one-line nudge for where the player is right now, or null
 //   solve(s)      the commands that complete the step (used by tests, Skip, and ?step= jumps)
+//   after(s)      commands that finish the step once its wave is over (tests and jumps send them)
 //   manual        the step is only an explanation; it ends when the player presses Next
+//   part2         the first step of part 2, "The difficult customers" (the panel can jump to it)
+// `tool` may also be a function (s, f) => tool, for a step whose second half needs another button.
+//
+// Facts gathered during a step (f): sales, nopes (refusals by reason), waveStarts, waveEnds, and
+// counts of what the shoppers did: kid (a child escaped), crawl (a mom crawled), mess (a teenager
+// spilled), bolt (a guide dog bolted), slip (a dad slipped), smashed (a gym bro wrecked something;
+// smashedCrate for crate stacks), rebuilt (the Rebuild button put something back).
 import { queueTrainingWave, setTrainingCash, levelOf } from '../sim/index.js';
 
 const S = 1; // facing south
@@ -25,6 +33,16 @@ const CRATES = [[X, 1], [X, 12], [X, 13]];
 const GAP = [X, 14];
 const SPRINKLERS = [[9, 13], [11, 13]]; // the two beside the gap
 const UP_TO = 4; // the level the upgrade lesson asks for
+
+// Part 2. Where things go was chosen by playing each lesson across many random seeds (see
+// test/tutorial.test.js): the claims in each lesson's text hold whatever the seed.
+const KAREN_FORK = [16, 13]; // past the gap: it covers the way out of the gap from 5 tiles off
+const FORK_UP = 3; // the level the guide dog and scooter lesson asks for
+const MOM_FORK = [3, 5]; // reaches the entrance, so it hits a mom the moment she walks in
+// By the entrance: shoppers coming in must walk round these, a gym bro walks through one. (This
+// lesson comes after the moms: with these crates in place, every mom would walk past the forklift
+// on the dad short cut, which can finish her before her child has had time to get out.)
+const DOOR_CRATES = [[2, 7], [2, 8], [1, 9]];
 
 /** Marks for a list of [x, y, kind, label] wanted buildings that are not correctly in place yet. */
 function wanted(s, list) {
@@ -47,6 +65,18 @@ function tileHint(s, x, y, k, d, name) {
 const openDoorsHint = (s, f) => (f.waveEnds ? null
   : s.phase === 'wave' ? 'The doors are open. Watch what happens at the gap.'
     : 'Now press OPEN THE DOORS at the top of the screen.');
+
+/** The same, with what to watch for while the wave is on. */
+const watchHint = (watch) => (s, f) => (f.waveEnds ? null
+  : s.phase === 'wave' ? watch : 'Press OPEN THE DOORS at the top of the screen.');
+
+/** Commands that bring the building on (x, y) up to level `lv`, placing it first if missing. */
+function upTo(s, k, x, y, lv) {
+  const cmds = [];
+  if (!is(s, x, y, k)) cmds.push(place(k, x, y));
+  for (let n = is(s, x, y, k) ? levelOf(at(s, x, y)) : 1; n < lv; n++) cmds.push({ c: 'upgrade', x, y });
+  return cmds;
+}
 
 export const STEPS = [
   {
@@ -291,15 +321,153 @@ export const STEPS = [
       return cmds;
     },
   },
+
+  // ---- Part 2: the difficult customers --------------------------------------------------------
+  {
+    title: 'Part 2: The difficult customers',
+    manual: true,
+    part2: true,
+    text: [
+      'Part 1 was the buildings. Part 2 is the shoppers who cheat. Each one has a trick that gets past an ordinary defence, and each trick has an answer.',
+      'One lesson each: Teenagers, Karens, the Man with a Guide Dog and the Mobility Scooter, Mom and Kid, and Gym Bros. Your layout from part 1 stays, and some lessons ask you to add to it.',
+      'Each lesson tells you what the trick is, shows it to you, and has you build the answer.',
+    ],
+    quip: "Part 2: the difficult customers. They cheat, they scream, and they never finish what they start. You'll feel right at home. So will your ex-wife.",
+    mood: 'smug',
+    done: () => false,
+    solve: () => [],
+  },
+  {
+    title: 'Teenagers',
+    wave: [{ k: 'teen', n: 2, gap: 2, at: 0 }, { k: 'hunter', n: 6, gap: 1, at: 3 }],
+    text: [
+      'A Teenager walks slowly and has about as much patience as a Bargain Hunter, so your security deals with him like anyone else. His trick: every few seconds he spills a slushie, and the puddle stays on the floor for about 12 seconds.',
+      'The puddle is a Wet Floor Sign you did not pay for. Every other shopper who walks through it goes at half speed, and dads slip on it. So his mess works for you: the longer he spends in your store, the more of it there is. Do not rush to get rid of him.',
+      'Do this: press OPEN THE DOORS. Two Teenagers come in first, with six Bargain Hunters right behind them. Watch the hunters wade through the puddles.',
+    ],
+    quip: "Teenagers. Slow, sticky, and they leave puddles wherever they stand. I've seen your bathroom floor. You'll feel right at home.",
+    mood: 'smug',
+    done: (s, f) => f.waveEnds >= 1,
+    hint: watchHint('Watch the puddles the teenagers leave, and the hunters slowing down in them.'),
+    solve: () => [{ c: 'start' }],
+  },
+  {
+    title: 'Karens',
+    tool: 'forklift',
+    wave: [{ k: 'karen', n: 3, gap: 1, at: 0 }],
+    text: [
+      'A Karen has four times the patience of a Bargain Hunter and walks slowly. Her trick: while she demands the manager, every Sprinkler and Forklift within 2½ tiles of her works at half speed. Your cluster at the gap is exactly where she spends longest.',
+      'What works: Forklifts. One reaches more than 5 tiles, twice as far as she does, so it can hit her at full speed before she gets close. And a long route, so security all along the way gets a turn, instead of everything hanging on one cluster.',
+      'Do this: put a Forklift (press 8) on the highlighted tile, past the gap. Then OPEN THE DOORS for three Karens.',
+    ],
+    quip: "Three Karens. Each one has the haircut, the sunglasses on her head, and a husband in the car who stopped listening in 2009. Same as yours.",
+    mood: 'angry',
+    marks: (s) => wanted(s, [[KAREN_FORK[0], KAREN_FORK[1], 'forklift', undefined, 'Forklift']]),
+    done: (s, f) => is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') && f.waveEnds >= 1,
+    hint: (s, f) => tileHint(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift', undefined, 'Forklift')
+      || (is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift')
+        ? watchHint('Watch the sprinklers by the gap slow down while a Karen stands next to them.')(s, f) : null),
+    solve: () => [place('forklift', KAREN_FORK[0], KAREN_FORK[1]), { c: 'start' }],
+  },
+  {
+    title: 'Shoppers you cannot slow down',
+    tool: 'upgrade',
+    // The second scooter is a super one (see the spreading of supers in beginWave).
+    wave: [{ k: 'blind', n: 2, gap: 3, at: 0 }, { k: 'scooter', n: 2, gap: 3, at: 1.5, sup: 1 }],
+    text: [
+      'The Man with a Guide Dog is not slowed by Wet Floor Signs or puddles, and cannot see Free Samples. Pepper spray makes his dog bolt, dragging him along at more than twice the speed: Sprinklers make him faster.',
+      'The Mobility Scooter: nothing slows it at all. The second one today is a Turbo Scooter, a super one with more patience and nearly twice the speed. Your Sprinklers alone cannot stop it.',
+      'What works on both: plain damage from a Forklift. It hits hard from far away, and it does not spray, so the dog stays calm.',
+      `Do this: point at the Forklift you just built past the gap and press U twice, to level ${FORK_UP}. (Or pick Upgrade in the build bar and click it.) Then OPEN THE DOORS for two of each.`,
+    ],
+    quip: "Two blind men and two mobility scooters. Don't feel bad about pepper-spraying them. The dog has already pissed on your sign, and the scooter has more horsepower than your sex life.",
+    mood: 'smug',
+    marks: (s) => (is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') && levelOf(at(s, KAREN_FORK[0], KAREN_FORK[1])) >= FORK_UP ? []
+      : [{ x: KAREN_FORK[0], y: KAREN_FORK[1], label: is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') ? 'Upgrade' : 'Forklift' }]),
+    done: (s, f) => is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') && levelOf(at(s, KAREN_FORK[0], KAREN_FORK[1])) >= FORK_UP && f.waveEnds >= 1,
+    hint: (s, f) => {
+      const [x, y] = KAREN_FORK;
+      if (!is(s, x, y, 'forklift')) return tileHint(s, x, y, 'forklift', undefined, 'Forklift') || 'The Forklift past the gap is missing. Put it back on the highlighted tile first (press 8).';
+      if (levelOf(at(s, x, y)) < FORK_UP) return `Point at the highlighted Forklift and press U. It is level ${levelOf(at(s, x, y))}; it needs to be level ${FORK_UP}.`;
+      return watchHint('Watch the dogs bolt when the sprinklers spray them, and the Forklift catch the Turbo Scooter past the gap.')(s, f);
+    },
+    solve: (s) => [...upTo(s, 'forklift', KAREN_FORK[0], KAREN_FORK[1], FORK_UP), { c: 'start' }],
+  },
+  {
+    title: 'Mom and Kid',
+    wave: [{ k: 'mom', n: 3, gap: 3, at: 0 }],
+    text: [
+      'A Mom and Kid has a child in her cart, and he is the trick. Every few seconds he may escape and run ahead, straight through belts, machines and crates, then wait further along the route. She sprints round the maze to fetch him, ignoring Free Samples.',
+      'If her patience runs out while he is loose, she does not leave. She crawls to him on her hands and knees, and nothing can hurt her on the way: your security wastes its shots. When she reaches him she gets up with a third of her patience back. She can do that twice.',
+      'Do this: press OPEN THE DOORS for three moms. Watch for a kid getting loose and running on ahead (usually straight through your production line), and a mom crawling after him.',
+    ],
+    quip: "Moms. She grew a whole human being and she can't keep him in a shopping cart. Don't judge her. Yours left you at a petrol station on purpose.",
+    mood: 'smug',
+    done: (s, f) => f.waveEnds >= 1 && f.kid >= 1 && f.crawl >= 1,
+    hint: (s, f) => (s.phase === 'wave' ? 'Watch for a kid running on ahead, and a mom crawling after him.'
+      : f.waveEnds ? 'No mom crawled that time. Press OPEN THE DOORS to send them in again.'
+        : 'Press OPEN THE DOORS at the top of the screen.'),
+    solve: () => [{ c: 'start' }],
+  },
+  {
+    title: 'Finish her while the kid is in the cart',
+    tool: 'forklift',
+    wave: [{ k: 'mom', n: 3, gap: 4, at: 0 }],
+    text: [
+      'So finish a mom before her child gets out. He stays in the cart for about 2 seconds after she walks in; after that he can go at any moment.',
+      'Here, two Forklift hits finish a mom, and they come 1.6 seconds apart, so a Forklift that reaches the entrance finishes her before the kid can get out. In a real game shoppers get more patient every sales event: put your hardest-hitting security where she walks in.',
+      'Do this: put a Forklift (press 8) on the highlighted tile by the entrance. Then OPEN THE DOORS for three more moms.',
+    ],
+    quip: "Finish her before the kid gets out. Two seconds, start to finish. That's your personal best anyway, so I know you can do it.",
+    mood: 'smug',
+    marks: (s) => wanted(s, [[MOM_FORK[0], MOM_FORK[1], 'forklift', undefined, 'Forklift']]),
+    done: (s, f) => is(s, MOM_FORK[0], MOM_FORK[1], 'forklift') && f.waveEnds >= 1,
+    hint: (s, f) => tileHint(s, MOM_FORK[0], MOM_FORK[1], 'forklift', undefined, 'Forklift')
+      || (is(s, MOM_FORK[0], MOM_FORK[1], 'forklift') ? watchHint('Watch the Forklift finish each mom at the door.')(s, f) : null),
+    solve: () => [place('forklift', MOM_FORK[0], MOM_FORK[1]), { c: 'start' }],
+  },
+  {
+    title: 'Gym Bros',
+    tool: (s, f) => (f.waveEnds && s.rubble.length ? 'rebuild' : 'crate'),
+    wave: [{ k: 'gymbro', n: 1, gap: 1, at: 0 }],
+    text: [
+      'A Gym Bro does not go round Crate Stacks. He walks straight through them, and wrecks the ones beside him as he passes. Now and then he wrecks something else he passes, too: a belt, a machine, a sign. Upgraded security is tougher: it only loses a level.',
+      'Do this: put Crates (press 6) on the three highlighted tiles by the entrance, so shoppers have to walk round. Then OPEN THE DOORS for one Gym Bro.',
+      'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, at the normal price.',
+    ],
+    quip: "Gym bro. Skips leg day, never skips your crates. He grunts like that in bed, too. Ask your wife.",
+    mood: 'angry',
+    marks: (s) => {
+      if (s.phase === 'wave') return [];
+      // The tiles are next to each other, so only the first of each gets a caption.
+      const out = s.rubble.map(([i], n) => ({ x: i % s.w, y: (i / s.w) | 0, label: n ? '' : 'Wrecked' }));
+      const wrecks = out.length;
+      for (const [x, y] of DOOR_CRATES) {
+        if (!is(s, x, y, 'crate') && !out.some((m) => m.x === x && m.y === y)) out.push({ x, y, label: out.length > wrecks ? '' : 'Crates' });
+      }
+      return out;
+    },
+    done: (s, f) => f.waveEnds >= 1 && f.smashedCrate >= 1 && !s.rubble.length && DOOR_CRATES.every(([x, y]) => is(s, x, y, 'crate')),
+    hint: (s, f) => {
+      if (s.phase === 'wave') return 'Watch him walk straight through the crates.';
+      if (f.waveEnds && s.rubble.length) return 'Press B (or the Rebuild button in the build bar) to put back what he wrecked.';
+      for (const [x, y] of DOOR_CRATES) { const h = tileHint(s, x, y, 'crate', undefined, 'Crate'); if (h) return h; }
+      if (!DOOR_CRATES.every(([x, y]) => is(s, x, y, 'crate'))) return f.waveEnds ? 'Put Crates on the highlighted tiles (press 6).' : null;
+      if (f.waveEnds && !f.smashedCrate) return 'He never reached a crate. Press OPEN THE DOORS to send him in again.';
+      return f.waveEnds ? null : 'Now press OPEN THE DOORS at the top of the screen.';
+    },
+    solve: () => [...DOOR_CRATES.map(([x, y]) => place('crate', x, y)), { c: 'start' }],
+    after: () => [{ c: 'rebuild' }],
+  },
   {
     title: 'Training complete',
     manual: true,
     last: true,
     text: [
-      'That is every building. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
-      'New kinds of shopper turn up as the game goes on: moms chasing runaway kids, teenagers spilling slushies, Karens, a man whose guide dog bolts when sprayed, gym bros who wreck what you built (press B to rebuild it). DEB explains each one the first time it appears, and the ? at the top right has the full list.',
+      'That is every building and every kind of shopper. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
+      'The shoppers from part 2 arrive a few events in, one kind at a time, and DEB reminds you of each one the first time it turns up. Later still come SUPER versions of every shopper. The ? at the top right lists them all, with each trick and what beats it.',
       'A real store is bigger than this one. Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. With friends, each of you gets your own entrance to look after.',
-      'A good opening: one production line built as a wall, one gap, sprinklers and a wet floor sign at the gap, and something covering the dad short cut.',
+      'A good opening: one production line built as a wall, one gap, sprinklers and a wet floor sign at the gap, and something covering the dad short cut. Then forklifts along the rest of the route, before the Karens and moms arrive.',
       'Pick any button in the build bar to see what it does and how to use it. You can stay here and practise for as long as you like.',
     ],
     quip: "Training complete. You've met the minimum standard. Briefly, and from below.",
@@ -309,7 +477,15 @@ export const STEPS = [
   },
 ];
 
-const freshFacts = () => ({ sales: { total: 0, box: 0, gadget: 0, giftset: 0 }, nopes: {}, waveEnds: 0 });
+/** Where part 2, "The difficult customers", starts. */
+export const PART_TWO = STEPS.findIndex((st) => st.part2);
+
+const freshFacts = () => ({
+  sales: { total: 0, box: 0, gadget: 0, giftset: 0 }, nopes: {}, waveStarts: 0, waveEnds: 0,
+  kid: 0, crawl: 0, mess: 0, bolt: 0, slip: 0, smashed: 0, smashedCrate: 0, rebuilt: 0,
+});
+/** Simulation events that are simply counted into the facts of the same name. */
+const COUNTED = new Set(['kid', 'crawl', 'mess', 'bolt', 'slip']);
 
 /**
  * Runs the training shift on a host session whose game was created with { training: true }.
@@ -326,24 +502,56 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
   const offFx = session.on('fx', (events) => {
     for (const e of events) {
       if (e.e === 'sale') { facts.sales.total++; facts.sales[e.kind]++; }
+      if (COUNTED.has(e.e)) facts[e.e]++;
+      if (e.e === 'smash') { facts.smashed++; if (e.k === 'crate') facts.smashedCrate++; }
+      if (e.e === 'rebuilt') facts.rebuilt += e.n;
+      if (e.e === 'waveStart') facts.waveStarts++;
       if (e.e === 'waveEnd') {
         facts.waveEnds++;
         lastWave = { stopped: session.state.ws.stopped, escaped: session.state.ws.escaped };
+        // The doors were opened before the lesson was ready (or the shoppers did not show what
+        // the lesson is about): line the same shoppers up again so the player can have another go.
+        const st = STEPS[index];
+        if (st && st.wave && !st.done(session.state, facts) && !(st.after && session.state.rubble.length)) {
+          queueTrainingWave(session.state, st.wave);
+        }
       }
     }
   });
   const offNope = session.on('nope', (m) => { facts.nopes[m.why] = (facts.nopes[m.why] || 0) + 1; });
 
-  function enter(i) {
+  function enter(i, quiet = false) {
     index = Math.max(0, Math.min(STEPS.length - 1, i));
     facts = freshFacts();
     facts.nopes.blocked = 0;
     const st = STEPS[index];
     const s = session.state;
     setTrainingCash(s, Math.max(s.players[0].cash, 1500)); // money is free in training
-    if (st.wave) queueTrainingWave(s, st.wave);
-    if (st.quip) session.emit('say', { t: 'say', who: 'DEB (HR)', mood: st.mood || 'flat', text: st.quip });
+    // Only this lesson's shoppers are waiting outside (none, if it has no wave).
+    queueTrainingWave(s, st.wave || null);
+    if (st.quip && !quiet) session.emit('say', { t: 'say', who: 'DEB (HR)', mood: st.mood || 'flat', text: st.quip });
     onChange();
+  }
+
+  /**
+   * Sends a command for autoplay. A refusal normally reaches the facts as a 'nope' message; when
+   * the screen has kept those quiet (jumping ahead from the panel), it is counted from the answer.
+   */
+  function sendCounted(cmd) {
+    const before = Object.values(facts.nopes).reduce((a, b) => a + b, 0);
+    const r = session.send(cmd);
+    if (r && r.ok === false && Object.values(facts.nopes).reduce((a, b) => a + b, 0) === before) {
+      facts.nopes[r.why] = (facts.nopes[r.why] || 0) + 1;
+    }
+  }
+
+  /** Sends a step's `after` commands once its wave is over, a single time. */
+  function finish(st, sent) {
+    if (!sent && st.after && facts.waveEnds && session.state.phase === 'build') {
+      for (const cmd of st.after(session.state)) session.send(cmd);
+      return true;
+    }
+    return sent;
   }
 
   const api = {
@@ -351,6 +559,14 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
     get total() { return STEPS.length; },
     get step() { return STEPS[index]; },
     get lastWave() { return lastWave; },
+    /** What has happened during the current step (see the list at the top of this file). */
+    get facts() { return facts; },
+    /** The build-bar button the current step points at, or null. */
+    tool() {
+      const st = STEPS[index];
+      if (!st || !st.tool) return null;
+      return typeof st.tool === 'function' ? st.tool(session.state, facts) : st.tool;
+    },
     /** True once the current step's task is done (never for explanation-only steps). */
     check() {
       const st = STEPS[index];
@@ -380,18 +596,29 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
      */
     autoplay(target = STEPS.length - 1) {
       const stuck = [];
-      if (index < 0) enter(0);
+      if (index < 0) enter(0, index + 1 < target);
       while (index < target) {
         const st = STEPS[index];
-        for (const cmd of st.solve(session.state)) session.send(cmd);
+        for (const cmd of st.solve(session.state)) sendCounted(cmd);
         if (!st.manual) {
-          for (let n = 0; n < 240 && !st.done(session.state, facts); n++) session.fastForward(15); // up to 2 minutes
+          let sent = false;
+          for (let n = 0; n < 240 && !st.done(session.state, facts); n++) { // up to 2 minutes
+            sent = finish(st, sent);
+            session.fastForward(15);
+          }
+          finish(st, sent);
           if (!st.done(session.state, facts)) stuck.push(index);
         }
-        enter(index + 1);
+        // Only the lesson it stops at gets DEB's line: the others are history.
+        enter(index + 1, index + 1 < target);
       }
       return stuck;
     },
+    /**
+     * For tests: runs the current step's `after` commands if its wave is over and they have not
+     * been sent yet. Call it between fast-forwards. Returns true once they have been sent.
+     */
+    finish(sent = false) { return finish(STEPS[index], sent); },
     destroy() { offFx(); offNope(); },
   };
   return api;

@@ -81,7 +81,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   const status = h('p', { class: 'menu-status', role: 'status', 'aria-live': 'polite' });
 
   const btnTrain = h('button', { type: 'button', class: 'btn-big btn-train' },
-    'Training shift', h('small', null, 'Start here: learn every building, hands on. About 10 minutes.'));
+    'Training shift', h('small', null, 'Start here: every building, then every awkward customer, hands on. About 20 minutes, or 10 for the first half.'));
   const btnSolo = h('button', { type: 'button', class: 'btn-big btn-yellow' }, 'Play solo');
   const btnHost = h('button', { type: 'button', class: 'btn-big btn-orange' }, 'Host a game');
   const btnJoin = h('button', { type: 'submit', class: 'btn-big btn-red' }, 'Join a game');

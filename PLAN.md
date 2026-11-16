@@ -98,6 +98,9 @@ One player stops defending and plays the other side: each wave he gets a budget,
 - Known rough edges: a phone held sideways leaves only about a third of the screen height for the floor; the Head Office planner is cramped on a phone.
 - Chat: Enter or the Chat button; one line of up to 200 characters; floods are cut off.
 
+## Training shift, part 2 (built overnight 2026-11-15)
+Seven more lessons, "The difficult customers": teenagers, Karens, the shoppers who cannot be slowed (guide dog and scooter), mom and kid (first watching her crawl, then finishing her before the kid gets out), and gym bros with the Rebuild button. 23 lessons in all, about 20 minutes; a "Jump to part 2" button skips the buildings. Every claim a lesson makes is checked by test on eight random seeds, and the helper who wrote them checked 150. Weak spots it reported: the teenager lesson is watch-only; the scooter lesson needs a super scooter to make its point; the gym bro is finished at the door, so the player does not see him wreck much.
+
 ## Less data, a grace period, a place for a relay (built overnight 2026-11-15)
 - The host no longer sends the whole game several times a second. It sends ten small messages a second (the commands players gave and a checksum); every player's browser replays them. Measured on a busy three-player game: about 130 KB a second per player before, about 2.8 KB after (47 times less). A full copy goes out only when someone joins or leaves, when a checksum does not match, or every ten seconds as a safety net. Large messages are split so they can never exceed what a connection carries; the old scheme probably dropped online players once the game state passed 16 KB.
 - Players now see the game about a quarter of a second behind the host.
@@ -147,5 +150,4 @@ Also not done: the host sends the whole game state in one message; on the larges
 - More map designs (a food court, a car park), and maps with tills on more than one wall.
 - Upgrades for factory machines, if the late game needs more income.
 - An endless mode after wave 20.
-- Teaching the newer shoppers in the training shift (it covers dads and one super shopper; the others are explained by DEB and the ? screen).
 - Role restrictions as an optional hard mode.
