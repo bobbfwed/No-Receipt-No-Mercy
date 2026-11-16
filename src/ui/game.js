@@ -13,6 +13,7 @@ import { createToasts } from './toasts.js';
 import { createReview } from './review.js';
 import { endScreen, closedScreen, helpScreen } from './overlays.js';
 import { createTutorialPanel } from './tutorial.js';
+import { createLobby } from './lobby.js';
 
 /**
  * Shows the game for a session that is ready (a host, or a client after 'ready').
@@ -75,6 +76,10 @@ export function startGame(session, {
   };
   mapBox.addEventListener('pointerdown', (e) => { e.preventDefault(); mapBox.setPointerCapture(e.pointerId); jump(e); });
   mapBox.addEventListener('pointermove', (e) => { if (e.buttons & 1) jump(e); });
+
+  // Before the game starts: pick the store and press Ready. It sits where the players list goes.
+  const lobby = createLobby(session, { renderer, playSound });
+  stage.append(lobby.el);
 
   // In training the lesson panel sits where the players list normally is.
   stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox);
@@ -146,7 +151,7 @@ export function startGame(session, {
   session.start();
 
   // ---- Drawing loop --------------------------------------------------------------------------------
-  let mapShown = false, mapDrawn = 0, office = false;
+  let mapShown = false, mapDrawn = 0, office = false, wasLobby = false;
   function frame(now) {
     requestAnimationFrame(frame);
     const s = session.state;
@@ -171,6 +176,15 @@ export function startGame(session, {
     deb.tick(now);
     toasts.tick(now);
     if (training) training.tick();
+    // In the lobby the floor is drawn to the right of the panel, whole, so the store can be seen.
+    const inLobby = lobby.update(s);
+    if (inLobby !== wasLobby) {
+      wasLobby = inLobby;
+      root.classList.toggle('in-lobby', inLobby);
+      renderer.resize();
+      if (inLobby) renderer.fit(); else input.goHome();
+      if (inLobby) input.setTool(null);
+    }
     // The small map only earns its space when the whole store does not fit on screen.
     const r = renderer.viewRect();
     const partial = r.x1 - r.x0 < s.w - 0.5 || r.y1 - r.y0 < s.h - 0.5;
@@ -188,7 +202,7 @@ export function startGame(session, {
     // Show where shoppers will walk whenever the player is planning: between waves, while
     // holding something to build, and all through training. Head Office always sees them: the
     // routes are what he is planning against.
-    view.route = office || !!training || s.phase === 'build' || !!input.tool;
+    view.route = office || !!training || s.phase === 'build' || s.phase === 'lobby' || !!input.tool;
     // Nor does he get the tile outline under the mouse that says "you could build here".
     if (office) view.hover = null;
     view.marks = training ? training.marks() : null;

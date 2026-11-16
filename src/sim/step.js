@@ -565,6 +565,7 @@ function stepShoppers(state, fields, stands, ev) {
 /**
  * Advances the game by one tick.
  * @returns {Array<Object>} events that happened this tick, each with an `e` type:
+ *   begun the lobby is over, everyone was ready · map {design,size} the host changed the store
  *   waveStart {wave,total,dads,kinds,supers} · waveEnd {wave,bonus} · won · lost
  *   escape {k,sup,x,y,refund} a shopper reached the tills · left {k,sup,x,y,by,why} one gave up
  *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind}
@@ -577,6 +578,16 @@ function stepShoppers(state, fields, stands, ev) {
 export function step(state) {
   const ev = [];
   if (state.phase === 'won' || state.phase === 'lost') return ev;
+  if (state.phase === 'lobby') {
+    // Nothing runs in the lobby. The game starts when every connected player is ready.
+    const here = state.players.filter((p) => p.on);
+    if (here.length && here.every((p) => p.ready)) {
+      state.phase = 'build';
+      state.phaseT = -1;
+      ev.push({ e: 'begun' });
+    }
+    return ev;
+  }
   state.tick++;
   // Nothing runs before the first build. (In training the factory always runs.)
   const waiting = !state.training && state.phase === 'build' && state.phaseT === -1;

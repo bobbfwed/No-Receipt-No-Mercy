@@ -27,7 +27,7 @@
 <script>
   const q = new URLSearchParams(location.search);
   const code = 'T' + Math.random().toString(36).slice(2, 6).toUpperCase();
-  const extra = ['autostart', 'ff', 'seed', 'map', 'size'].filter((k) => q.has(k)).map((k) => `&${k}=${encodeURIComponent(q.get(k))}`).join('');
+  const extra = ['autostart', 'ff', 'seed', 'map', 'size', 'lobby'].filter((k) => q.has(k)).map((k) => `&${k}=${encodeURIComponent(q.get(k))}`).join('');
   // ?online=1 links the two through the internet broker instead, exactly as two houses would.
   const how = q.has('online') ? 'online' : 'local';
   const room = how === 'online' ? ('Q' + code).slice(0, 5).replace(/[^A-Z]/g, 'X') : code;

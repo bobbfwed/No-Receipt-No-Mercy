@@ -1,7 +1,7 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
 import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.js';
-import { makeMap, makeZones } from './maps.js';
+import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
 
 /**
  * @typedef {Object} Building
@@ -53,6 +53,7 @@ import { makeMap, makeZones } from './maps.js';
  * @property {string} color
  * @property {string} role   job title (cosmetic)
  * @property {boolean} on    connected right now
+ * @property {boolean} ready  lobby only: he has pressed Ready
  * @property {string} side   'store' (builds and defends) or 'office' (runs the shoppers; see office.js)
  * @property {number} cash   this player's own money. Everything the store earns or loses is
  *                           split evenly between the connected players.
@@ -75,8 +76,10 @@ function blankStats() {
  *   most tests are written for.
  * @param {boolean} [o.zones] mark out the floor areas the factory machines must be built on.
  *   On by default when a map is given; off for the bare default map.
+ * @param {boolean} [o.lobby] start in the lobby: nothing runs and nothing can be built until
+ *   every connected player has said he is ready. The host may change the map there.
  */
-export function createGame({ seed = 1, training = false, map = null, zones = !!map } = {}) {
+export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false } = {}) {
   const design = (map && map.design) || 'warehouse', size = (map && map.size) || 'xs';
   const plan = makeMap(design, size, map ? map.slots ?? 6 : 1);
   const state = {
@@ -119,8 +122,8 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     wave: 0,
     /** The tick the doors last opened. */
     waveAt: 0,
-    /** 'build' | 'wave' | 'won' | 'lost' */
-    phase: 'build',
+    /** 'lobby' | 'build' | 'wave' | 'won' | 'lost' */
+    phase: lobby ? 'lobby' : 'build',
     /** Ticks left in the build phase; -1 means wait until a player starts the wave. */
     phaseT: -1,
     speed: 1,
@@ -159,6 +162,28 @@ function openDoors(state) {
   state.gridVer++; // routes are drawn from the entrances
 }
 
+/**
+ * Lobby only: swaps the store for another design and size. The floor is empty in the lobby, so
+ * nothing is lost. Everyone has to press Ready again, since it is not the map they agreed to.
+ * @returns {boolean} false if the design or size is unknown, or the game has started
+ */
+export function setMap(state, design, size) {
+  if (state.phase !== 'lobby' || !MAP_DESIGNS[design] || !MAP_SIZES[size]) return false;
+  const plan = makeMap(design, size, state.doors.length);
+  state.map = { design, size };
+  state.w = plan.w;
+  state.h = plan.h;
+  state.tiles = plan.tiles;
+  state.doors = plan.doors;
+  state.open = 0;
+  if (state.zones) state.zones = makeZones(plan.w, plan.h, plan.tiles, plan.doors);
+  state.grid = new Array(plan.w * plan.h).fill(0);
+  state.gridVer++;
+  for (const p of state.players) p.ready = false;
+  openDoors(state);
+  return true;
+}
+
 /** The entrance that belongs to a player: players beyond the last entrance share. */
 export function doorOf(state, pid) {
   return state.doors[Math.min(Math.max(0, pid), state.open - 1)] || state.doors[0];
@@ -177,7 +202,7 @@ export function addPlayer(state, name) {
   const id = state.players.length;
   state.players.push({
     id, name: clean, color: PLAYER_COLORS[id % PLAYER_COLORS.length],
-    role: ROLES[Math.min(id, ROLES.length - 1)], on: true, side: 'store',
+    role: ROLES[Math.min(id, ROLES.length - 1)], on: true, side: 'store', ready: false,
     cash: TUNE.startCash + (id > 0 ? TUNE.joinCash * state.wave : 0),
     w: blankStats(), // this wave
     all: blankStats(), // whole game

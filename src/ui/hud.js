@@ -94,6 +94,9 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     if (s.training) {
       setText(evTitle, 'TRAINING SHIFT');
       setText(evSub, s.phase === 'wave' ? 'doors open' : 'you cannot lose here');
+    } else if (s.phase === 'lobby') {
+      setText(evTitle, 'NOT OPEN YET');
+      setText(evSub, 'waiting for everyone to be ready');
     } else if (s.phase === 'wave') {
       setText(evTitle, `SALES EVENT ${s.wave} / ${total}`);
       setText(evSub, '');
@@ -104,7 +107,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
       setText(evTitle, s.phase === 'won' ? 'STORE SURVIVED' : 'STORE CLOSED');
       setText(evSub, `sales event ${s.wave} / ${total}`);
     }
-    setClass(event, 'is-build', s.phase === 'build');
+    setClass(event, 'is-build', s.phase === 'build' || s.phase === 'lobby');
     setClass(event, 'is-over', s.phase === 'won' || s.phase === 'lost');
 
     const build = s.phase === 'build';

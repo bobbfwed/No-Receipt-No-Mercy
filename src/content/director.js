@@ -135,6 +135,9 @@ export function createDirector(random = Math.random) {
           case 'rebuilt':
             if (e.n >= 3) say(out, state, LINES.rebuilt, { p: nameOf(state, e.by), n: e.n }, { gap: 25, mood: 'smug' });
             break;
+          case 'begun':
+            say(out, state, LINES.begun, {}, { must: true });
+            break;
           case 'side':
             say(out, state, e.side === 'office' ? LINES.officeTaken : LINES.officeLeft, { p: nameOf(state, e.by) }, { must: true, mood: 'smug' });
             break;

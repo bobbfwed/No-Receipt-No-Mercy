@@ -100,8 +100,8 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   }
 
   btnTrain.addEventListener('click', () => run(() => actions.tutorial(playerName()), 'Starting your training...'));
-  btnSolo.addEventListener('click', () => run(() => actions.solo(playerName(), chosenMap()), 'Clocking in...'));
-  btnHost.addEventListener('click', () => run(() => actions.host(playerName(), null, chosenMap()),
+  btnSolo.addEventListener('click', () => run(() => actions.solo(playerName(), chosenMap(), true), 'Clocking in...'));
+  btnHost.addEventListener('click', () => run(() => actions.host(playerName(), null, chosenMap(), true),
     'Opening a room on the internet. Please hold, like a real customer...'));
   const joinForm = h('form', { class: 'join-row' }, codeIn, btnJoin);
   joinForm.addEventListener('submit', (e) => {
@@ -115,7 +115,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
     run(() => actions.join(playerName(), code), `Knocking on room ${code}. Connecting...`);
   });
   const localCode = () => localIn.value.trim() || 'TEST';
-  btnLHost.addEventListener('click', () => run(() => actions.hostLocal(playerName(), localCode(), chosenMap()), 'Opening a test room...'));
+  btnLHost.addEventListener('click', () => run(() => actions.hostLocal(playerName(), localCode(), chosenMap(), true), 'Opening a test room...'));
   btnLJoin.addEventListener('click', () => run(() => actions.joinLocal(playerName(), localCode()), 'Looking for the other tab...'));
 
   const card = h('div', { class: 'menu-card' },
@@ -126,7 +126,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
       h('p', { class: 'menu-pitch' }, 'Build a factory, wall in the returns desk, and stop a horde of refund-hungry shoppers before they bankrupt the store. Co-op, for 1 to 6 disappointments.'),
       h('label', { class: 'field', for: 'name' }, h('span', null, 'Your name (for the disciplinary file)'), nameIn),
       h('fieldset', { class: 'map-pick' },
-        h('legend', null, 'The store (for Play solo and Host a game)'),
+        h('legend', null, 'The store (you can look at them all and change it before the game starts)'),
         h('label', { for: 'map-design' }, h('span', null, 'Design'), designIn),
         h('label', { for: 'map-size' }, h('span', null, 'Size'), sizeIn),
         mapNote),

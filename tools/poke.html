@@ -16,6 +16,7 @@
     tools/poke.html?u=<game options>&do=<actions separated by ;>
   Actions:  click:<css selector>   key:<key>   tile:<x>,<y>   hover:<x>,<y>   wait:<ms>   text:<button text>
             hold:<key>,<ms> (hold a key down, e.g. hold:d,800 to move the view)   wheel:<x>,<y>,<deltaY>
+            set:<css selector>=<value> (choose an option in a drop-down)
   Example:  tools/poke.html?u=solo%3D1&do=key:7;hover:8,10;click:.btn-help
   Photograph it with:  node tools/realshot.mjs "<url>" out.png 4000
 -->
@@ -45,6 +46,7 @@
       if (verb === 'wait') await wait(Number(arg) || 300);
       else if (verb === 'click') { const el = doc.querySelector(arg); if (el) el.click(); else log('no element ' + arg); }
       else if (verb === 'text') { const el = [...doc.querySelectorAll('button')].find((b) => b.textContent.trim().toLowerCase().startsWith(arg.toLowerCase())); if (el) el.click(); else log('no button ' + arg); }
+      else if (verb === 'set') { const [sel, val] = arg.split('='); const el = doc.querySelector(sel); if (el) { el.value = val; el.dispatchEvent(new win.Event('change', { bubbles: true })); } else log('no element ' + sel); }
       else if (verb === 'key') keyEvent('keydown', arg);
       else if (verb === 'hold') { const [k, ms] = arg.split(','); keyEvent('keydown', k); await wait(Number(ms) || 500); keyEvent('keyup', k); }
       else if (verb === 'wheel') { const [x, y, d] = arg.split(',').map(Number); canvas().dispatchEvent(new win.WheelEvent('wheel', { ...at(x, y), deltaY: d, bubbles: true, cancelable: true })); }
