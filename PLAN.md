@@ -91,6 +91,11 @@ One player stops defending and plays the other side: each wave he gets a budget,
 9. Pepper Spray and Pray
 10. Store Credit Only, Dickhead
 
+## Known problem: two players on the same wifi may not connect online
+Found by the owner on 2026-11-15: joining failed from the host's own wifi and worked from another network. Two browsers on one network have to reach each other by their local addresses (which browsers hide, and some networks do not pass) or through a relay server. The game only has the free relays the PeerJS project runs, and on the day they did not answer (`tools/net-check.html` shows this). Players in different houses are not affected unless one is behind a strict router, VPN or office firewall. The fix is a relay of our own: an account with a TURN provider (several have a free allowance), with its address and password added to `ICE_SERVERS` in `src/net/transports.js`. The password would be readable by anyone, as the game is a public static site.
+
+Also not done: the host sends the whole game state in one message; on the largest maps with very big crowds that could exceed what a browser connection carries in one message. Splitting large updates would remove the risk.
+
 ## Ideas for later (not started)
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
 - More shopper types and a boss every fifth wave (the Regional Manager).
