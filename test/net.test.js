@@ -314,3 +314,32 @@ test('when the host leaves, another player takes the game over and the others ge
   assert.ok(taken.send({ c: 'map', design: 'aisles', size: 'm' }).ok);
   assert.equal(taken.state.map.design, 'aisles');
 });
+
+test('chat: a line from any player reaches everyone, tidied, and a flood is cut off', () => {
+  const host = new HostSession({ name: 'Dave', seed: 3 });
+  const link = (name) => { const [a, b] = memoryPair(); host.accept(a); return new ClientSession(b, name); };
+  const steve = link('Steve'), gaz = link('Gaz');
+  const heard = { host: [], steve: [], gaz: [] };
+  host.on('chat', (m) => heard.host.push(m));
+  steve.on('chat', (m) => heard.steve.push(m));
+  gaz.on('chat', (m) => heard.gaz.push(m));
+
+  steve.chat('  where   is the\nloading bay  ');
+  host.chat('top of the map, genius');
+  for (const who of ['host', 'steve', 'gaz']) {
+    assert.deepEqual(heard[who].map((m) => [m.pid, m.name, m.text]), [
+      [1, 'Steve', 'where is the loading bay'],
+      [0, 'Dave', 'top of the map, genius'],
+    ], who);
+    assert.equal(heard[who][0].color, host.state.players[1].color);
+  }
+  // Empty lines are dropped, long ones are cut, and nobody can send more than a few at once.
+  gaz.chat('   ');
+  gaz.chat('x'.repeat(1000));
+  assert.equal(heard.host.length, 3);
+  assert.equal(heard.host[2].text.length, 200);
+  for (let i = 0; i < 20; i++) gaz.chat(`spam ${i}`);
+  assert.ok(heard.steve.length <= 3 + 5, `the flood was cut off after ${heard.steve.length - 3} lines`);
+  // Chat is not part of the game state.
+  assert.ok(!JSON.stringify(host.state).includes('loading bay'));
+});
