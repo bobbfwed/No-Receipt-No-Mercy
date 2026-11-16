@@ -138,7 +138,7 @@ export const SHOPPERS = {
   // a child who escapes twice as often and runs twice as far.
   mom: {
     name: 'Mom and Kid', hp: 55, speed: 1.3, refund: 20, browses: true, kid: true,
-    sup: { name: 'Soccer Mom', from: 9, hp: 2, chaseSpeed: 5.7, kidChance: 0.45, kidSpeed: 9, kidMin: 6, kidMax: 18, kidRest: 2 },
+    sup: { name: 'Soccer Mom', from: 9, hp: 2, chaseSpeed: 7.125, kidChance: 0.45, kidSpeed: 9, kidMin: 10, kidMax: 28, kidRest: 2 },
   },
   // bolts: pepper spray makes the guide dog bolt, dragging him along fast for a moment. The dog
   // also steers him around puddles and messes (steady), and he cannot see free samples.
@@ -235,16 +235,17 @@ export const TUNE = {
   messSecs: 12, // how long a mess stays on the floor
   kidChance: 0.22, // chance per second that a child in the cart escapes
   kidSpeed: 4.2, // tiles per second: children are very fast
-  kidMin: 3, // a runaway child runs between this many...
-  kidMax: 9, // ...and this many tiles before stopping to wait
+  kidMin: 5, // a runaway child runs between this many...
+  kidMax: 14, // ...and this many tiles before stopping to wait
   kidRest: 4, // seconds after being caught before the child can escape again
   kidCatch: 0.67, // how close (in tiles) the mom must get to grab him
   // A mom whose patience runs out while her child is loose does not leave: she drops and crawls
   // to him, and nothing can touch her on the way (security still shoots at her, and wastes it).
   crawlSpeed: 0.55, // how fast she crawls, as a share of her walking speed
   crawlBack: 0.35, // the share of her patience she gets back when she reaches him
+  crawlTimes: 2, // how many times one mom can do it
 
-  chaseSpeed: 1.9, // a mom chasing her child moves this many times faster
+  chaseSpeed: 2.375, // a mom chasing her child moves this many times faster
   boltSecs: 1.6, // how long a sprayed guide dog bolts
   boltSpeed: 2.3, // speed multiplier while it does
   smashEvery: 1.5, // seconds between a gym bro's attempts to wreck something next to him

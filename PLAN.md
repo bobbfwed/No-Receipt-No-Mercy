@@ -103,7 +103,7 @@ One player stops defending and plays the other side: each wave he gets a budget,
 - Players can give each other $50, $200 or $1,000 at a time from the players list.
 
 ## Moms who will not stay down (owner's rule)
-A mom whose patience runs out while her child is loose does not leave. She drops and crawls to him at about half walking speed; nothing can hurt her, and security keeps shooting at her and wastes it. When she reaches him she stands up with 35% of her patience back. It happens once per mom; with the child in the cart she is stopped like anyone else.
+A mom whose patience runs out while her child is loose does not leave. She drops and crawls to him at about half walking speed; nothing can hurt her, and security keeps shooting at her and wastes it. When she reaches him she stands up with 35% of her patience back. It can happen twice per mom; with the child in the cart she is stopped like anyone else. The child runs 5 to 14 tiles (was 3 to 9), and she chases at 2.375 times walking speed (was 1.9).
 
 ## Leaving and host hand-over (owner's request, built)
 - Once a game has started, or anyone else is in it, the browser asks for confirmation before the page is closed, refreshed or left.

@@ -203,8 +203,8 @@ function hurt(state, s, dmg, by, ev) {
   s.hp -= dmg;
   if (by >= 0) bump(state, by, 'annoy', dmg);
   if (s.hp > 0) return;
-  // Out of patience with her child loose: she is not going anywhere without him. Once.
-  if (s.kd > 0 && !s.cr) {
+  // Out of patience with her child loose: she is not going anywhere without him (a couple of times).
+  if (s.kd > 0 && (s.crn | 0) < TUNE.crawlTimes) {
     s.cr = 1;
     s.hp = 0;
     s.st = ST.WALK;
@@ -403,7 +403,7 @@ function stepKid(state, s, def, dist, ev) {
     s.kd = 0;
     s.kc = secs(tv(def, 'kidRest'));
     // Reaching him on her hands and knees puts her back on her feet, with some patience restored.
-    if (s.cr === 1) { s.cr = 2; s.hp = s.mhp * TUNE.crawlBack; }
+    if (s.cr === 1) { s.cr = 0; s.crn = (s.crn | 0) + 1; s.hp = s.mhp * TUNE.crawlBack; }
     ev.push({ e: 'caught', x: s.x, y: s.y });
   }
 }
