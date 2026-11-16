@@ -76,6 +76,32 @@ export const LINES = {
     '{p} rebuilt {n} things a man in a vest knocked over. Paying twice for the same wall. Just like his wedding.',
     '{p} put {n} things back up. If only that worked at home.',
   ],
+  // Head Office: a player has gone over to the shoppers' side. {p} is him.
+  officeTaken: [
+    "{p} has been promoted to Head Office. He now sends the shoppers. He always wanted to screw the rest of you and get paid for it.",
+    "{p} has gone over to Head Office. Same incompetence, bigger budget. He'll fit right in.",
+  ],
+  officeLeft: [
+    '{p} is back on the shop floor. Head Office found someone who could count.',
+    "{p} has given up the Head Office job. Turns out being the villain takes effort.",
+  ],
+  // He bought this wave himself. {n} is how many shoppers.
+  officeWave: [
+    "This crowd was hand-picked by {p}. {n} of them. If they get through, a man you know personally did this to you.",
+    '{p} is sending in {n} shoppers he chose himself. He had a budget and a grudge. Mostly the grudge.',
+    "{n} shoppers, courtesy of {p}. He's spent longer planning this than his own wedding.",
+  ],
+  // He planned nothing, so the usual wave came.
+  officeNoPlan: [
+    "{p} bought nothing, so here's the usual crowd. Head Office: where doing nothing is called 'strategy'.",
+  ],
+  // One side has asked for the doors to open and is waiting for the other.
+  officeWaiting: [
+    "The store is ready. {p}, we're all waiting on you to finish. Not for the first time.",
+  ],
+  storeWaiting: [
+    '{p} is ready to send them in. The store is still fiddling with itself.',
+  ],
   cramped: [
     'This store was built for {n}. There are now {m} of you in it. Try not to touch. Some of you will enjoy that too much.',
   ],
@@ -279,6 +305,12 @@ export const NOPE = {
   phase: ['The doors are already open, {p}. Do keep up.'],
   notyet: ["Not yet, {p}. Do the thing I asked first. It's called foreplay."],
   empty: ["There's nothing there, {p}. Like your Friday nights."],
+  office: ["You're Head Office now, {p}. You don't touch the store. You just ruin it from a distance."],
+  taken: ["Someone already has the Head Office job, {p}. One villain at a time. HR policy."],
+  lonely: ["Somebody has to run the store, {p}. You can't play with yourself. Not here, anyway."],
+  budget: ["You can't afford that crowd, {p}. Even imaginary people are out of your price range."],
+  locked: ["They haven't turned up yet, {p}. You can't order what isn't on the menu. Ask your wife."],
+  door: ["That entrance isn't open, {p}. Find one that is. You've had practice."],
   noup: ["That can't be upgraded, {p}. Only security can. Some things just stay the size they are. You'd know."],
   max: ["It's at the top level, {p}. It will not get any bigger. I know you've heard that before."],
 };

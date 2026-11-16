@@ -191,3 +191,34 @@ test('on a chosen map, a joining player gets his own entrance and money, and upg
   assert.equal(client.state.players[0].cash, TUNE.startCash);
   assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.sprinkler.cost * 2);
 });
+
+test('a client can take the Head Office job, plan a wave over the wire, and DEB announces it', () => {
+  const { host, client } = hostAndClient({ director: createDirector(), map: { design: 'warehouse', size: 'm' } });
+  const said = [];
+  host.on('say', (m) => said.push(m.text));
+  const run = (from, ticks) => { for (let n = 0; n < ticks; n++) { host.update((from + n) * TICK_MS); client.update((from + n) * TICK_MS); } };
+  client.send({ c: 'side', side: 'office' });
+  run(0, 10);
+  assert.equal(host.state.players[1].side, 'office');
+  assert.equal(client.state.office.pid, 1);
+  assert.ok(said.some((t) => t.includes('Steve') && t.includes('Head Office')), 'DEB says who took the job');
+
+  client.send({ c: 'plan', groups: [{ k: 'hunter', n: 3, sup: 0, door: 1, at: 0 }] });
+  client.send({ c: 'start' });
+  run(10, 10);
+  assert.equal(host.state.phase, 'build', 'the store has not asked yet');
+  assert.equal(client.state.office.ready, true);
+  host.send({ c: 'start' });
+  run(20, 10);
+  assert.equal(host.state.phase, 'wave');
+  assert.equal(host.state.spawnQ.length + host.state.shoppers.length, 3);
+  assert.ok(said.some((t) => LINES.officeWave.some((l) => t === l.replace('{p}', 'Steve').replace('{n}', '3'))), 'DEB blames him for the wave');
+
+  // His building is refused, and he is told why.
+  const nopes = [];
+  client.on('nope', (m) => nopes.push(m.why));
+  client.send({ c: 'place', k: 'crate', x: 5, y: 5 });
+  run(30, 10);
+  assert.deepEqual(nopes, ['office']);
+  assert.ok(NOPE.office && NOPE.taken && NOPE.lonely && NOPE.budget && NOPE.locked && NOPE.door);
+});

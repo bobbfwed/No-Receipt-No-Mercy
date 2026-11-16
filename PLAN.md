@@ -44,7 +44,17 @@ A discount warehouse on Black Friday. Shoppers come in through the entrances (on
 
 11. **Bigger game** - done, not yet played by a person. Map sizes and designs, WASD camera and a small overview map, an entrance and a bank account per player, upgrades, super shoppers, harder late waves, gym bros that wreck things, kids that run through everything. See the decisions table above.
 
-## To do: a player who runs the shoppers (owner's idea, not started)
+## Head Office: a player who runs the shoppers (owner's idea; first version built, not yet played by people)
+The plan below is as written before building. What was built, and where it differs:
+- A player takes the job from the players list between waves (not from the menu), and can hand it back. One player at a time.
+- Prices come from patience x speed x a weight for the kind's trick (`OFFICE` in `src/sim/constants.js`). A kind can be bought from the wave the automatic waves first include it; supers likewise.
+- Budget each wave: 85% of what the automatic wave is worth, plus half of what he left unspent, plus $5 per shopper who got a refund last wave.
+- A group is a kind, a number, super or not, an entrance and a start time. The gap between arrivals is fixed per kind.
+- Decided without asking (the three open questions): he sees the whole store all the time; planning uses the normal build countdown, and the doors open early only when both sides ask; he wins when the store hits the refund limit, with no separate score.
+- His entrance stays open after he changes sides (entrances never close), so he has one more door to use.
+- Not built: one-off abilities, two organisers, hiding his plan from the builders (it is in the shared game state, though the interface does not show it to them).
+
+### The plan as first written
 One player stops defending and plays the other side: each wave he gets a budget, buys shoppers with it and sends them in. At least one other player must be building the factory and security. The aim is a completely different way to play the same game.
 
 **How it would work**
