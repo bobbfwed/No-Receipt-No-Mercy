@@ -111,7 +111,7 @@ The camera never zooms out past the whole map or in past 72 pixels a tile, and n
   marks: [{ x, y, label }], // tiles to highlight with a pulsing outline and arrow (tutorial)
 }
 ```
-The renderer draws the world (any map size and design, only the part in view), the placement and upgrade previews (green or red using `canPlace` and `canUpgrade`, plus range circles), upgrade badges, rubble, effects from `session.drainFx()`, and other players' pointers. It does not handle input and does not touch the DOM outside its canvas.
+The renderer draws the world (any map size and design, only the part in view), the marked floor from `state.zones` (painted into the cached floor; holding a machine makes its patches glow, and a preview off its floor carries a caption such as "PRESS SHOP ONLY"), the placement and upgrade previews (green or red using `canPlace` and `canUpgrade`, plus range circles), upgrade badges, rubble, effects from `session.drainFx()`, and other players' pointers. It does not handle input and does not touch the DOM outside its canvas.
 
 ## Content (`src/content`)
 - `lines.js` holds every line of dialogue. Add jokes there, not in code.
