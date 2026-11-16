@@ -4,7 +4,7 @@
 
 **Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
 
-A co-op browser game for 1 to 6 players, set in the returns department of a discount warehouse. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
+A co-op browser game for 1 to 7 players, set in the returns department of a discount warehouse. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
 
 ## Play on this computer without the internet
 The link above is the easy way. To run your own copy instead (for example to try changes), you need Node.js (any recent version) to serve the files.
@@ -21,12 +21,12 @@ Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chro
 - To try multiplayer alone, open http://localhost:5173/tools/two-player.html : a host and a second player side by side.
 
 ## Play online with friends
-The game is online multiplayer for up to six players, wherever they are. Nobody runs a server: one player hosts in his browser and the others connect to him directly over the internet.
+The game is online multiplayer for up to seven players, wherever they are. Nobody runs a server: one player hosts in his browser and the others connect to him directly over the internet.
 
 1. Everyone opens https://bobbfwed.github.io/No-Receipt-No-Mercy/ . (The site is this repository published with GitHub Pages from the `main` branch; every push to `main` updates it within a minute or two.)
 2. The host enters a name and presses **Host a game**. A five-letter room code appears at the top.
 3. The host presses **Copy link** and sends it to his friends (or reads them the code). They open the link, enter a name and press **Join a game**.
-4. Everyone lands in the lobby, with the store drawn whole on the right. The host can change its design and size there and everyone sees it change. Each player presses **READY**; the game starts when all of them have.
+4. Everyone lands in the lobby, with the store drawn whole on the right. The host can change its design and size there, and the game's settings (how many sales events, the difficulty, and each player's starting cash), and everyone sees it change. The same settings can be chosen on the menu before hosting. Each player presses **READY**; the game starts when all of them have.
 5. Friends can also join after the game has started, even mid-wave, and play at once. If someone drops out he can rejoin with the same name and gets his place back.
 6. If the host leaves, the game carries on: another player's browser takes over as host within a few seconds (up to a minute), and everyone else reconnects by themselves. The player who left can come back with the same link and gets his place back. Only when the last player leaves is the game gone.
 7. Once a game is under way, the browser asks before the page is closed, refreshed or left, so a stray Back button does not end it.

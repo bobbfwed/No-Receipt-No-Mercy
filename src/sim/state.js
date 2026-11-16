@@ -1,6 +1,6 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
-import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.js';
+import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS } from './constants.js';
 import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
 
 /**
@@ -78,12 +78,15 @@ function blankStats() {
  *   most tests are written for.
  * @param {boolean} [o.zones] mark out the floor areas the factory machines must be built on.
  *   On by default when a map is given; off for the bare default map.
+ * @param {{waves?: number, startCash?: number, difficulty?: string}} [o.settings] the host's
+ *   choices (see SETTINGS in constants.js); anything left out or not on the list is the default.
  * @param {boolean} [o.lobby] start in the lobby: nothing runs and nothing can be built until
  *   every connected player has said he is ready. The host may change the map there.
  */
-export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false } = {}) {
+export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false, settings = null } = {}) {
   const design = (map && map.design) || 'warehouse', size = (map && map.size) || 'xs';
-  const plan = makeMap(design, size, map ? map.slots ?? 6 : 1);
+  const plan = makeMap(design, size, map ? map.slots ?? MAX_PLAYERS : 1);
+  const set = cleanSettings(settings);
   const state = {
     v: 2,
     seed,
@@ -122,6 +125,11 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     /** Refunds that close the store. Grows with the number of players. */
     refundLimit: TUNE.refundLimit,
     wave: 0,
+    /** The host's settings: how many waves, each player's starting cash, and the difficulty
+     *  (a key of SETTINGS.difficulty). */
+    waves: set.waves,
+    startCash: set.startCash,
+    difficulty: set.difficulty,
     /** The tick the doors last opened. */
     waveAt: 0,
     /** 'lobby' | 'build' | 'wave' | 'won' | 'lost' */
@@ -166,6 +174,37 @@ function openDoors(state) {
   state.gridVer++; // routes are drawn from the entrances
 }
 
+/** Settings with anything missing or not on the list replaced by the default. */
+export function cleanSettings(o) {
+  const d = SETTINGS.defaults, s = o || {};
+  return {
+    waves: SETTINGS.waves.includes(s.waves) ? s.waves : d.waves,
+    startCash: SETTINGS.startCash.includes(s.startCash) ? s.startCash : d.startCash,
+    difficulty: SETTINGS.difficulty[s.difficulty] ? s.difficulty : d.difficulty,
+  };
+}
+
+/**
+ * Lobby only: changes the host's settings. Nothing has been spent yet, so every player's cash
+ * becomes the new starting cash, and everyone has to press Ready again.
+ * @returns {boolean} false if the game has started
+ */
+export function setSettings(state, o) {
+  if (state.phase !== 'lobby') return false;
+  // Anything not mentioned keeps the value it has.
+  const now = { waves: state.waves, startCash: state.startCash, difficulty: state.difficulty };
+  for (const k of Object.keys(now)) if (o && o[k] !== undefined) now[k] = o[k];
+  const set = cleanSettings(now);
+  state.waves = set.waves;
+  state.startCash = set.startCash;
+  state.difficulty = set.difficulty;
+  for (const p of state.players) { p.cash = set.startCash; p.ready = false; }
+  return true;
+}
+
+/** The difficulty the game is played at: { hp, pay } multipliers. */
+export const difficultyOf = (state) => SETTINGS.difficulty[state.difficulty] || SETTINGS.difficulty.normal;
+
 /**
  * Lobby only: swaps the store for another design and size. The floor is empty in the lobby, so
  * nothing is lost. Everyone has to press Ready again, since it is not the map they agreed to.
@@ -207,7 +246,7 @@ export function addPlayer(state, name) {
   state.players.push({
     id, name: clean, color: PLAYER_COLORS[id % PLAYER_COLORS.length],
     role: ROLES[Math.min(id, ROLES.length - 1)], on: true, side: 'store', ready: false,
-    cash: TUNE.startCash + (id > 0 ? TUNE.joinCash * state.wave : 0),
+    cash: state.startCash + (id > 0 ? TUNE.joinCash * state.wave : 0),
     w: blankStats(), // this wave
     all: blankStats(), // whole game
   });

@@ -3,7 +3,7 @@
 ## What this is
 A browser game the owner and his friends play together, each from his own house.
 - **No permanent server.** One player acts as a temporary host for the session; the others join him from their browsers.
-- **Players:** must work well for 1 to 6. Most sessions will be 1 to 3, so balance for that first.
+- **Players:** must work well for 1 to 7. Most sessions will be 1 to 3, so balance for that first.
 - **Name:** "No Receipt, No Mercy", tagline "The customer is always a prick." (chosen by the owner). It is set in a store's returns department, and older files and comments call the game "Returns Department".
 - **The game:** a tower defense where players run a factory (belts and machines that make goods) while security stops waves of shoppers reaching the tills. The factory is the maze the shoppers walk through.
 - **Money:** each player has his own cash and pays for what he builds. Everything the store earns or loses is split evenly between the connected players.

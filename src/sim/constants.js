@@ -7,8 +7,25 @@ export const DT = 1 / TICK_HZ;
 /** Directions: 0 = east, 1 = south, 2 = west, 3 = north. */
 export const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
-export const MAX_PLAYERS = 6;
-export const PLAYER_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d8f', '#eab308', '#06b6d4'];
+export const MAX_PLAYERS = 7;
+export const PLAYER_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d8f', '#eab308', '#06b6d4', '#8b5cf6'];
+
+/**
+ * What the host can set before a game starts (in the menu, and again in the lobby).
+ * difficulty: `hp` multiplies every shopper's patience, `pay` multiplies what goods sell for
+ *   and the end-of-wave bonus.
+ */
+export const SETTINGS = {
+  waves: [10, 15, 20, 30],
+  startCash: [300, 500, 800, 1200],
+  difficulty: {
+    easy: { name: 'Easy', hp: 0.75, pay: 1.25, note: 'Shoppers give up sooner and goods sell for more.' },
+    normal: { name: 'Normal', hp: 1, pay: 1, note: 'As designed.' },
+    hard: { name: 'Hard', hp: 1.3, pay: 0.85, note: 'More patient shoppers, less money.' },
+    brutal: { name: 'Brutal', hp: 1.65, pay: 0.7, note: 'For people who enjoy being told off.' },
+  },
+  defaults: { waves: 20, startCash: 500, difficulty: 'normal' },
+};
 export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater'];
 
 /** Things that ride on belts. `value` is the cash paid when one reaches a shipping chute. */

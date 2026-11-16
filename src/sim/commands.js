@@ -1,7 +1,7 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
 import { BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
-import { inBounds, idxOf, bump, setMap } from './state.js';
+import { inBounds, idxOf, bump, setMap, setSettings } from './state.js';
 import { computeDist, modeOf, UNREACHABLE } from './path.js';
 import { beginWave } from './step.js';
 import { upgradeCost, spentOn, levelOf } from './upgrades.js';
@@ -99,6 +99,8 @@ function newBuilding(k, owner, d) {
  *   { c: 'rebuild' }            put back what gym bros wrecked of yours, as far as your cash goes
  *                               (with all: true, everybody's)
  *   { c: 'map', design, size }  lobby only, host only (state.host): change the store
+ *   { c: 'settings', waves, startCash, difficulty }  lobby only, host only: the game's
+ *                               settings (see SETTINGS); anything left out keeps its value
  *   { c: 'ready', on }          lobby only: say you are ready (or not). The game starts when
  *                               every connected player is
  *   { c: 'side', side }         take the Head Office job ('office': run the shoppers) or go back
@@ -123,6 +125,11 @@ export function applyCommand(state, pid, cmd, ev = []) {
       if (pid !== (state.host | 0)) return { ok: false, why: 'host' };
       if (!setMap(state, cmd.design, cmd.size)) return { ok: false, why: 'bad' };
       ev.push({ e: 'map', design: cmd.design, size: cmd.size });
+      return { ok: true };
+    }
+    if (cmd.c === 'settings') {
+      if (pid !== (state.host | 0)) return { ok: false, why: 'host' };
+      setSettings(state, { waves: cmd.waves, startCash: cmd.startCash, difficulty: cmd.difficulty });
       return { ok: true };
     }
     if (cmd.c === 'ready') {

@@ -1,7 +1,7 @@
 // One tick of the simulation. Deterministic: the same state always produces the same next state,
 // which lets every player's browser predict the game between updates from the host.
 import { DIRS, BUILD, ITEMS, SHOPPERS, SUPERS, defOf, ST, TUNE, TICK_HZ, DT } from './constants.js';
-import { rand, bump, resetWaveStats, earn, lose, shareCount } from './state.js';
+import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf } from './state.js';
 import { getField, getFieldTo, modeOf, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
@@ -103,10 +103,10 @@ function endWave(state, ev) {
     return;
   }
   // Every player gets the whole bonus.
-  const bonus = TUNE.waveBonus + TUNE.waveBonusStep * state.wave;
+  const bonus = Math.round((TUNE.waveBonus + TUNE.waveBonusStep * state.wave) * difficultyOf(state).pay);
   earn(state, bonus * shareCount(state));
   ev.push({ e: 'waveEnd', wave: state.wave, bonus });
-  if (state.wave >= TUNE.waves) {
+  if (state.wave >= state.waves) {
     state.phase = 'won';
     ev.push({ e: 'won' });
   } else {
@@ -131,7 +131,7 @@ function spawn(state) {
     // same way every time.
     const single = k === 'dad' || state.training;
     const n = state.wave - 1;
-    const hp = def.hp * (1 + TUNE.hpGrowth * n + TUNE.hpGrowth2 * n * n);
+    const hp = def.hp * (1 + TUNE.hpGrowth * n + TUNE.hpGrowth2 * n * n) * (state.training ? 1 : difficultyOf(state).hp);
     const s = {
       id: state.nextId++, k,
       x: (door % W) + 0.5, y: ((door / W) | 0) + 0.5, vx: 0, vy: 0,
@@ -176,7 +176,8 @@ function offer(state, ti, kind, d, ev) {
     return true;
   }
   if (b.k === 'chute') {
-    const v = ITEMS[kind].value;
+    // Whole dollars, and never nothing, whatever the difficulty does to the price.
+    const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay));
     earn(state, v);
     state.ws.earned += v;
     bump(state, b.o, 'shipped');

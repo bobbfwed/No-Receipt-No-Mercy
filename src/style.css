@@ -2175,3 +2175,27 @@ html, body { overscroll-behavior: none; }
 .player .give-row .give-btn { grid-column: auto; margin-top: 0; }
 @media (pointer: coarse) { .player .give-row .give-btn { padding: 0.3rem 0.6rem; font-size: 0.85rem; } }
 .btn-full { font-size: 1rem; }
+
+/* ---------------------------------------------------------------- game settings (menu and lobby) */
+
+.set-pick { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem 0.6rem; }
+.set-pick label span { display: block; margin-bottom: 0.15rem; font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.set-pick select {
+  width: 100%;
+  padding: 0.4rem 0.45rem;
+  border: 0.15rem solid #6b7280;
+  border-radius: 0.4rem;
+  background: var(--ink);
+  color: var(--white);
+  font: inherit;
+  font-weight: 700;
+}
+.set-pick select:disabled { opacity: 0.75; }
+.set-pick select:focus { border-color: var(--yellow); outline: none; }
+.set-note { grid-column: 1 / -1; margin: 0.1rem 0 0; font-size: 0.82rem; line-height: 1.35; color: #c3cad3; }
+.lobby .set-pick { grid-template-columns: 1fr; }
+@media (max-width: 520px) { .set-pick { grid-template-columns: 1fr; } }
+
+/* The lobby panel is long now: keep READY in reach at the bottom, and the floor key compact. */
+.lobby .btn-ready { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -0.5rem 0.6rem rgba(31, 37, 44, 0.95); }
+.lobby-legend { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.5rem; font-size: 0.8rem; }

@@ -116,7 +116,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
       // With company, also show what the whole team has.
       setText(teamVal, s.players.length > 1 ? `team ${money(storeCash(s))}` : '');
     }
-    const total = TUNE.waves;
+    const total = s.waves;
     if (s.training) {
       setText(evTitle, 'TRAINING SHIFT');
       setText(evSub, s.phase === 'wave' ? 'doors open' : 'you cannot lose here');

@@ -104,16 +104,17 @@ export class HostSession extends Session {
    * @param {number} [o.seed]
    * @param {{design: string, size: string}} [o.map] the floor plan; left out, the original small warehouse
    * @param {boolean} [o.lobby] start in the lobby (players press Ready; the host may change the map)
+   * @param {Object} [o.settings] waves, starting cash and difficulty (see SETTINGS in constants.js)
    * @param {Object} [o.director] turns simulation events into jokes; see src/content/director.js
    * @param {Object} [o.state]   continue an existing game instead of starting a new one
    * @param {boolean} [o.takeOver] `state` is a player's copy of a game whose host has left, and
    *   this player (found by `name`) is now its host. Everyone else counts as gone until his
    *   browser reconnects, which gives him his place back by name.
    */
-  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false }) {
+  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false, settings = null }) {
     super();
     this.isHost = true;
-    this.state = state || createGame({ seed, map, lobby });
+    this.state = state || createGame({ seed, map, lobby, settings });
     if (takeOver) {
       // The host who left hands his money to those who stay, like any player who leaves...
       setPlayerOnline(this.state, this.state.host | 0, false);

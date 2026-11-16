@@ -126,10 +126,10 @@ test('a player who drops out is marked offline and can come back to the same slo
   assert.equal(host.state.players[1].on, true);
 });
 
-test('a seventh player is turned away', () => {
+test('an eighth player is turned away', () => {
   const host = new HostSession({ name: 'Dave', seed: 1 });
   const clients = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 7; i++) {
     const [a, b] = memoryPair();
     host.accept(a);
     const c = new ClientSession(b, `P${i}`);
@@ -137,8 +137,8 @@ test('a seventh player is turned away', () => {
     c.on('closed', (m) => { closed = m.why; });
     clients.push({ c, closed: () => closed });
   }
-  assert.equal(host.state.players.length, 6);
-  assert.equal(clients[5].c.me, -1);
+  assert.equal(host.state.players.length, 7);
+  assert.equal(clients[6].c.me, -1);
 });
 
 test('cursor positions are relayed to the other players only', () => {

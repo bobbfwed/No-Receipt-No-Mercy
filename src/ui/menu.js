@@ -2,6 +2,7 @@
 import { MAP_DESIGNS, MAP_SIZES } from '../sim/index.js';
 import { VERSION, RELEASE, versionText } from '../version.js';
 import { h, loadName, saveName } from './dom.js';
+import { createSettings } from './settings.js';
 import { howToPlay } from './overlays.js';
 
 /**
@@ -29,7 +30,7 @@ function saveMap(m) {
   try { localStorage.setItem(MAP_KEY, JSON.stringify(m)); } catch { /* not remembered, no harm */ }
 }
 
-export function showMenu(mount, actions, { error = '', name = '', code = '', map = null } = {}) {
+export function showMenu(mount, actions, { error = '', name = '', code = '', map = null, ...opts } = {}) {
   document.body.classList.remove('in-game');
 
   // ---- The store: a design and a size --------------------------------------------------------
@@ -51,6 +52,15 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   designIn.addEventListener('change', describeMap);
   sizeIn.addEventListener('change', describeMap);
   describeMap();
+
+  // ---- The game's settings: length, difficulty, starting cash ----------------------------------
+  const SET_KEY = 'returns-dept.settings';
+  let savedSet = null;
+  try { savedSet = JSON.parse(localStorage.getItem(SET_KEY) || 'null'); } catch { /* use the defaults */ }
+  const settings = createSettings({
+    idPrefix: 'menu', value: { ...(savedSet || {}), ...(opts.settings || {}) },
+    onChange: (v) => { try { localStorage.setItem(SET_KEY, JSON.stringify(v)); } catch { /* not remembered */ } },
+  });
 
   const nameIn = h('input', {
     id: 'name', type: 'text', maxlength: '14', autocomplete: 'nickname', spellcheck: 'false',
@@ -76,7 +86,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   const btnJoin = h('button', { type: 'submit', class: 'btn-big btn-red' }, 'Join a game');
   const btnLHost = h('button', { type: 'button', class: 'btn-small' }, 'Host in this tab');
   const btnLJoin = h('button', { type: 'button', class: 'btn-small' }, 'Join from this tab');
-  const all = [btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn, designIn, sizeIn];
+  const all = [btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn, designIn, sizeIn, ...settings.inputs];
 
   function playerName() {
     const n = nameIn.value.trim().slice(0, 14);
@@ -101,8 +111,8 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   }
 
   btnTrain.addEventListener('click', () => run(() => actions.tutorial(playerName()), 'Starting your training...'));
-  btnSolo.addEventListener('click', () => run(() => actions.solo(playerName(), chosenMap(), true), 'Clocking in...'));
-  btnHost.addEventListener('click', () => run(() => actions.host(playerName(), null, chosenMap(), true),
+  btnSolo.addEventListener('click', () => run(() => actions.solo(playerName(), chosenMap(), true, settings.get()), 'Clocking in...'));
+  btnHost.addEventListener('click', () => run(() => actions.host(playerName(), null, chosenMap(), true, settings.get()),
     'Opening a room on the internet. Please hold, like a real customer...'));
   const joinForm = h('form', { class: 'join-row' }, codeIn, btnJoin);
   joinForm.addEventListener('submit', (e) => {
@@ -116,7 +126,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
     run(() => actions.join(playerName(), code), `Knocking on room ${code}. Connecting...`);
   });
   const localCode = () => localIn.value.trim() || 'TEST';
-  btnLHost.addEventListener('click', () => run(() => actions.hostLocal(playerName(), localCode(), chosenMap(), true), 'Opening a test room...'));
+  btnLHost.addEventListener('click', () => run(() => actions.hostLocal(playerName(), localCode(), chosenMap(), true, settings.get()), 'Opening a test room...'));
   btnLJoin.addEventListener('click', () => run(() => actions.joinLocal(playerName(), localCode()), 'Looking for the other tab...'));
 
   const card = h('div', { class: 'menu-card' },
@@ -127,13 +137,16 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
       h('div', { class: 'menu-sign' }, 'RETURNS DEPARTMENT'),
       h('h1', { class: 'menu-title' }, 'NO RECEIPT,', h('br'), 'NO MERCY'),
       h('p', { class: 'menu-tagline' }, 'The customer is always a prick.'),
-      h('p', { class: 'menu-pitch' }, 'Build a factory, wall in the returns desk, and stop a horde of refund-hungry shoppers before they bankrupt the store. Co-op, for 1 to 6 disappointments.'),
+      h('p', { class: 'menu-pitch' }, 'Build a factory, wall in the returns desk, and stop a horde of refund-hungry shoppers before they bankrupt the store. Co-op, for 1 to 7 disappointments.'),
       h('label', { class: 'field', for: 'name' }, h('span', null, 'Your name (for the disciplinary file)'), nameIn),
       h('fieldset', { class: 'map-pick' },
         h('legend', null, 'The store (you can look at them all and change it before the game starts)'),
         h('label', { for: 'map-design' }, h('span', null, 'Design'), designIn),
         h('label', { for: 'map-size' }, h('span', null, 'Size'), sizeIn),
         mapNote),
+      h('fieldset', { class: 'map-pick set-box' },
+        h('legend', null, 'The game (can also be changed before it starts)'),
+        settings.el),
       h('div', { class: 'menu-actions' },
         btnTrain,
         btnSolo,

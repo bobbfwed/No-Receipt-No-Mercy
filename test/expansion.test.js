@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
   waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf,
-  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE,
+  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
 /** A training game (no timer, cannot be lost) with plenty of cash, on the original small map. */
@@ -67,7 +67,7 @@ test('the default map is the original warehouse, unchanged', () => {
   assert.equal(s.doors.length, 1);
 });
 
-test('every design in every size has six entrances that all reach the tills', () => {
+test('every design in every size has seven entrances that all reach the tills', () => {
   for (const design of Object.keys(MAP_DESIGNS)) {
     for (const size of Object.keys(MAP_SIZES)) {
       const s = createGame({ map: { design, size } });
@@ -76,7 +76,7 @@ test('every design in every size has six entrances that all reach the tills', ()
       assert.equal(s.h, h);
       assert.equal(s.tiles.length, w * h);
       assert.equal(s.grid.length, w * h);
-      assert.equal(s.doors.length, 6, `${design} ${size}`);
+      assert.equal(s.doors.length, 7, `${design} ${size}`);
       const dist = getDist(s);
       const seen = new Set();
       for (const door of s.doors) {
@@ -93,6 +93,10 @@ test('every design in every size has six entrances that all reach the tills', ()
       // Most entrances are on the left wall; a few are on the top and bottom.
       const left = s.doors.filter((d) => d[0] % w === 0).length;
       assert.equal(left, 3);
+      // The ones in the top and bottom walls are in the left half: about a fifth and two fifths along.
+      const along = s.doors.filter((d) => d[0] % w !== 0).map((d) => (d[0] % w) / w).sort();
+      assert.equal(along.length, 4);
+      assert.ok(along[0] > 0.15 && along[1] < 0.27 && along[2] > 0.35 && along[3] < 0.47, `${design} ${size}: top and bottom entrances at ${along.map((v) => v.toFixed(2))}`);
       // Plenty of floor left to build on.
       const floor = [...s.tiles].filter((c) => c === '.').length;
       assert.ok(floor > w * h * 0.55, `${design} ${size}: only ${floor} floor tiles`);
@@ -103,7 +107,7 @@ test('every design in every size has six entrances that all reach the tills', ()
 test('map sizes step up by about half each time, and one is recommended per player count', () => {
   const area = (k) => MAP_SIZES[k].w * MAP_SIZES[k].h;
   let last = area('xs');
-  for (let n = 1; n <= 6; n++) {
+  for (let n = 1; n <= 7; n++) {
     const k = recommendedSize(n);
     assert.equal(MAP_SIZES[k].players, n);
     const ratio = area(k) / last;
@@ -125,7 +129,7 @@ test('each player who joins opens another entrance', () => {
   addPlayer(s, 'Dave');
   assert.equal(s.open, 1);
   assert.equal(count('D'), 2);
-  assert.equal(count('d'), 10);
+  assert.equal(count('d'), 12);
   addPlayer(s, 'Steve');
   addPlayer(s, 'Gaz');
   assert.equal(s.open, 3);
@@ -896,4 +900,72 @@ test('a player who leaves mid-game hands his money to the others and comes back 
   addPlayer(lobby, 'Steve');
   setPlayerOnline(lobby, 1, false);
   assert.equal(lobby.players[1].cash, TUNE.startCash);
+});
+
+// ---------------------------------------------------------------- the host's settings
+
+test('the host sets the number of waves, the starting cash and the difficulty', () => {
+  // Defaults, and nonsense falls back to them.
+  const plain = createGame();
+  assert.deepEqual([plain.waves, plain.startCash, plain.difficulty], [20, 500, 'normal']);
+  const odd = createGame({ settings: { waves: 7, startCash: -5, difficulty: 'godlike' } });
+  assert.deepEqual([odd.waves, odd.startCash, odd.difficulty], [20, 500, 'normal']);
+
+  const s = createGame({ seed: 2, settings: { waves: 10, startCash: 1200, difficulty: 'hard' } });
+  addPlayer(s, 'Dave');
+  assert.equal(s.players[0].cash, 1200);
+  // Hard: more patient shoppers, and goods sell for less.
+  place(s, 'unpacker', 3, 3, 0); place(s, 'belt', 4, 3, 0); place(s, 'chute', 5, 3);
+  applyCommand(s, 0, { c: 'start' });
+  let sale = null;
+  for (let i = 0; i < 20 * TICK_HZ && !(sale && s.shoppers.length); i++) for (const e of step(s)) if (e.e === 'sale') sale = e;
+  assert.equal(sale.v, Math.round(ITEMS.box.value * SETTINGS.difficulty.hard.pay));
+  assert.ok(Math.abs(s.shoppers[0].mhp - SHOPPERS[s.shoppers[0].k].hp * SETTINGS.difficulty.hard.hp) < 1e-9);
+
+  // Ten waves means the game is won after the tenth.
+  const short = createGame({ seed: 3, settings: { waves: 10 } });
+  addPlayer(short, 'Dave');
+  short.wave = 9;
+  short.refundLimit = 1e9;
+  applyCommand(short, 0, { c: 'start' });
+  let won = false;
+  for (let i = 0; i < 400 * TICK_HZ && !won; i++) won = step(short).some((e) => e.e === 'won');
+  assert.ok(won);
+  assert.equal(short.wave, 10);
+  for (const d of Object.values(SETTINGS.difficulty)) assert.ok(d.hp > 0 && d.pay > 0 && d.name);
+  assert.ok(SETTINGS.difficulty.easy.hp < 1 && SETTINGS.difficulty.easy.pay > 1);
+  assert.ok(SETTINGS.difficulty.brutal.hp > SETTINGS.difficulty.hard.hp && SETTINGS.difficulty.brutal.pay < SETTINGS.difficulty.hard.pay);
+});
+
+test('in the lobby the host can change the settings, which resets cash and Ready', () => {
+  const s = createGame({ lobby: true, map: { design: 'warehouse', size: 's' } });
+  addPlayer(s, 'Dave');
+  addPlayer(s, 'Steve');
+  applyCommand(s, 1, { c: 'ready' });
+  assert.equal(applyCommand(s, 1, { c: 'settings', waves: 30 }).why, 'host');
+  assert.ok(applyCommand(s, 0, { c: 'settings', waves: 30, startCash: 800 }).ok);
+  assert.deepEqual([s.waves, s.startCash, s.difficulty], [30, 800, 'normal'], 'what is not mentioned keeps its value');
+  assert.deepEqual(s.players.map((p) => p.cash), [800, 800]);
+  assert.equal(s.players[1].ready, false);
+  assert.ok(applyCommand(s, 0, { c: 'settings', difficulty: 'brutal' }).ok);
+  assert.equal(s.difficulty, 'brutal');
+  assert.equal(s.waves, 30);
+  // Not once the game has started.
+  applyCommand(s, 0, { c: 'ready' });
+  applyCommand(s, 1, { c: 'ready' });
+  step(s);
+  assert.equal(s.phase, 'build');
+  assert.equal(applyCommand(s, 0, { c: 'settings', waves: 10 }).ok, false);
+  assert.equal(s.waves, 30);
+});
+
+test('seven players each get an entrance, a colour and their own money', () => {
+  const s = createGame({ map: { design: 'warehouse', size: 'titan' } });
+  for (let i = 0; i < 7; i++) assert.equal(addPlayer(s, `P${i}`), i);
+  assert.equal(s.open, 7);
+  assert.equal(new Set(s.players.map((p) => p.color)).size, 7);
+  assert.equal(s.refundLimit, TUNE.refundLimit + 6 * TUNE.refundPerPlayer);
+  assert.equal(MAP_SIZES.titan.players, 7);
+  assert.equal(recommendedSize(7), 'titan');
+  assert.equal(addPlayer(s, 'P7'), -1);
 });

@@ -506,7 +506,7 @@ export function createPlanner(session, { playSound = () => {} } = {}) {
       setStyle(liveFill, 'width', `${(share * 100).toFixed(1)}%`);
       setStyle(liveFill, 'background', `hsl(${Math.round(48 - 48 * share)} 90% ${Math.round(52 - 6 * share)}%)`);
       const auto = wavePlan && !wavePlan.length;
-      setText(liveNote, auto ? 'You bought nothing, so this is the usual crowd.' : s.phase === 'wave' ? `${TUNE.waves - s.wave} sales events after this one.` : '');
+      setText(liveNote, auto ? 'You bought nothing, so this is the usual crowd.' : s.phase === 'wave' ? `${s.waves - s.wave} sales events after this one.` : '');
     }
 
     render(s);
