@@ -299,7 +299,8 @@ test('player slots: names, rejoining and the player limit', () => {
   assert.equal(addPlayer(s, 'Steve'), 1);
   s.players[1].on = false;
   assert.equal(addPlayer(s, 'Steve'), 1, 'a returning player gets his slot back');
-  for (const n of ['a', 'b', 'c', 'd']) addPlayer(s, n);
-  assert.equal(addPlayer(s, 'seventh'), -1);
+  for (const n of ['a', 'b', 'c', 'd', 'e']) addPlayer(s, n);
+  assert.equal(s.players.length, 7);
+  assert.equal(addPlayer(s, 'eighth'), -1);
   assert.equal(applyCommand(s, 9, { c: 'start' }).ok, false);
 });

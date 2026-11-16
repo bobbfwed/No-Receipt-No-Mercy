@@ -1,0 +1,38 @@
+// The three game settings a host chooses: how many sales events, how hard, and how much cash each
+// player starts with. Used by the menu (before hosting) and the lobby (before starting).
+import { SETTINGS } from '../sim/index.js';
+import { h } from './dom.js';
+
+/**
+ * @param {Object} o
+ * @param {string} o.idPrefix  so the menu's and the lobby's controls have different ids
+ * @param {{waves: number, startCash: number, difficulty: string}} o.value what to show first
+ * @param {(settings) => void} [o.onChange] called with all three whenever one is changed
+ * @param {boolean} [o.disabled] show them but do not let this player change them
+ * @returns {{el: HTMLElement, inputs: HTMLElement[], get: () => Object, set: (v) => void}}
+ */
+export function createSettings({ idPrefix, value, onChange = () => {}, disabled = false }) {
+  const pick = (id, options) => h('select', { id: `${idPrefix}-${id}`, disabled, onchange: () => { describe(); onChange(get()); } },
+    options.map(([v, text]) => h('option', { value: String(v) }, text)));
+  const wavesIn = pick('waves', SETTINGS.waves.map((n) => [n, `${n} events`]));
+  const diffIn = pick('difficulty', Object.entries(SETTINGS.difficulty).map(([k, d]) => [k, d.name]));
+  const cashIn = pick('cash', SETTINGS.startCash.map((n) => [n, `$${n.toLocaleString('en-US')} each`]));
+  const note = h('p', { class: 'set-note' });
+  const get = () => ({ waves: Number(wavesIn.value), difficulty: diffIn.value, startCash: Number(cashIn.value) });
+  function describe() {
+    const d = SETTINGS.difficulty[diffIn.value];
+    const pct = (m) => `${m > 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`;
+    note.textContent = d.hp === 1 && d.pay === 1 ? `${d.name}: ${d.note}`
+      : `${d.name}: shopper patience ${pct(d.hp)}, income ${pct(d.pay)}. ${d.note}`;
+  }
+  function set(v) {
+    wavesIn.value = String(v.waves);
+    diffIn.value = v.difficulty;
+    cashIn.value = String(v.startCash);
+    describe();
+  }
+  set({ ...SETTINGS.defaults, ...value });
+  const field = (label, input) => h('label', { for: input.id }, h('span', null, label), input);
+  const el = h('div', { class: 'set-pick' }, field('Length', wavesIn), field('Difficulty', diffIn), field('Starting cash', cashIn), note);
+  return { el, inputs: [wavesIn, diffIn, cashIn], get, set };
+}

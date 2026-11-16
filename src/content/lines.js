@@ -162,7 +162,7 @@ export const LINES = {
     '{p} walked out. The team is now smarter on average.',
   ],
   won: [
-    'Twenty sales events survived. Corporate is thrilled. Your bonus is a pizza party. You are bringing the pizza.',
+    'Every sales event survived. Corporate is thrilled. Your bonus is a pizza party. You are bringing the pizza.',
     "You did it. I've checked the footage twice for cheating. Found other things. We'll talk Monday.",
   ],
   lost: [

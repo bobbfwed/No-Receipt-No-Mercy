@@ -8,6 +8,7 @@
 //   &seed=7                       fixed random seed
 //   &map=showroom&size=m          the store: a design and a size (keys of MAP_DESIGNS and MAP_SIZES)
 //   &lobby=1                      start in the lobby, as games started from the menu do
+//   &waves=10&difficulty=hard&cash=800   the game's settings (see SETTINGS in src/sim/constants.js)
 //   ?local=host&code=TEST         host between tabs of this browser
 //   ?local=join&code=TEST         join a tab of this browser
 //   ?join=ABCDE                   an invite link: opens the menu with the room code filled in
@@ -62,8 +63,14 @@ function urlMap() {
  * @param {{design: string, size: string}|null} [map] the store chosen in the menu. `null` means
  *   the original small warehouse with one entrance (which the ready-made demo layout is for).
  */
-function newHost(name, map = urlMap() || DEFAULT_MAP, lobby = flag('lobby')) {
-  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: lobby && !!map });
+function newHost(name, map = urlMap() || DEFAULT_MAP, lobby = flag('lobby'), settings = urlSettings()) {
+  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: lobby && !!map, settings });
+}
+
+/** Game settings named in the address, if any (anything not on the list falls back to the default). */
+function urlSettings() {
+  if (!q.has('waves') && !q.has('difficulty') && !q.has('cash')) return null;
+  return { waves: num('waves'), difficulty: q.get('difficulty') || undefined, startCash: num('cash') };
 }
 
 // Sound is optional: if the module fails to load, the game still runs, silently.
@@ -150,15 +157,15 @@ function whenReady(session, timeoutMs = 12000) {
     const offClosed = session.on('closed', (m) => {
       stop();
       reject(new Error(m.why === 'full'
-        ? 'The game is full. Six people already work there, which is five too many.'
+        ? 'The game is full. Seven people already work there, which is six too many.'
         : 'The host hung up on you before you got in. Rude, but fair.'));
     });
   });
 }
 
 const actions = {
-  async solo(name, map, lobby) {
-    show(newHost(name, map, lobby), { ff: opts.ff, autostart: opts.autostart });
+  async solo(name, map, lobby, settings) {
+    show(newHost(name, map, lobby, settings), { ff: opts.ff, autostart: opts.autostart });
   },
   /** The training shift: a guided game that cannot be lost. `step` jumps ahead (for screenshots). */
   async tutorial(name, step = 0) {
@@ -167,9 +174,9 @@ const actions = {
     });
     show(session, { tutorial: true, tutorialStep: step, onExit: leaveTo });
   },
-  async host(name, fixedCode, map, lobby) {
+  async host(name, fixedCode, map, lobby, settings) {
     const code = fixedCode || makeRoomCode();
-    const session = newHost(name, map, lobby);
+    const session = newHost(name, map, lobby, settings);
     const room = await hostOnline(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
     show(session, { roomCode: code, roomKind: 'online', ff: opts.ff, autostart: opts.autostart });
@@ -185,8 +192,8 @@ const actions = {
     }
     show(session, { roomCode: code.toUpperCase(), roomKind: 'online', onHostLost: hostLost('online', code.toUpperCase()) });
   },
-  async hostLocal(name, code, map, lobby) {
-    const session = newHost(name, map, lobby);
+  async hostLocal(name, code, map, lobby, settings) {
+    const session = newHost(name, map, lobby, settings);
     const room = hostLocal(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
     show(session, { roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });
@@ -208,7 +215,7 @@ const actions = {
 const inviteCode = (q.get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 
 function menu(error = '') {
-  showMenu(app, actions, { error, name: opts.name, code: inviteCode, map: urlMap() });
+  showMenu(app, actions, { error, name: opts.name, code: inviteCode, map: urlMap(), settings: urlSettings() });
 }
 
 async function boot() {

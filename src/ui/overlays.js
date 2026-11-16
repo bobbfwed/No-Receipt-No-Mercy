@@ -8,7 +8,7 @@ import { debFace } from './icons.js';
 export function howToPlay() {
   return h('div', { class: 'howto' },
     h('h3', null, 'The job'),
-    h('p', null, `Shoppers come in through the entrances (one per player, mostly on the left) and head for the tills on the right. Every one who gets there takes a refund. ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more per extra player) and corporate shuts the store. Survive ${TUNE.waves} sales events.`),
+    h('p', null, `Shoppers come in through the entrances (one per player, mostly on the left) and head for the tills on the right. Every one who gets there takes a refund. ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more per extra player) and corporate shuts the store. Survive every sales event (${TUNE.waves} unless the host changes it).`),
     h('h3', null, 'Two halves'),
     h('ul', null,
       h('li', null, h('b', null, 'Factory makes cash. '), 'Unpackers spit out boxes, belts carry them, the Press and the Packer turn them into pricier goods, and a Shipping Chute sells whatever lands in it. Each of those four only goes on its own painted floor (Loading Bay, Press Shop, Gift Wrap, Shipping), so the belts between them are the factory.'),
@@ -95,11 +95,11 @@ export function endScreen(s, debLine, me = -1) {
   let sub;
   if (iAmOffice) {
     sub = stored
-      ? `You lose. The store lasted all ${TUNE.waves} sales events with ${s.refunds} of ${s.refundLimit} refunds.`
+      ? `You lose. The store lasted all ${s.waves} sales events with ${s.refunds} of ${s.refundLimit} refunds.`
       : `You win. Your shoppers took the store to its refund limit in sales event ${s.wave}.`;
   } else {
     sub = stored
-      ? `All ${TUNE.waves} sales events. Nobody is more surprised than HR.`
+      ? `All ${s.waves} sales events. Nobody is more surprised than HR.`
       : `Refund limit reached in sales event ${s.wave}. Hand in your lanyards.`;
   }
   const el = overlay(`end ${won ? 'won' : 'lost'}${iAmOffice ? ' as-office' : ''}`,
@@ -108,7 +108,7 @@ export function endScreen(s, debLine, me = -1) {
     h('p', { class: 'end-sub' }, sub),
     office && !iAmOffice ? h('p', { class: 'end-office-note' }, h('span', { class: 'ho-tag' }, 'HEAD OFFICE'), ` ${office.name} ran the shoppers, and ${stored ? 'lost' : 'won'}.`) : null,
     h('div', { class: 'end-stats' },
-      stat('Sales event reached', `${s.wave} / ${TUNE.waves}`),
+      stat('Sales event reached', `${s.wave} / ${s.waves}`),
       stat('Refunds', `${s.refunds} / ${s.refundLimit}`),
       stat(office ? "Store's cash left" : 'Cash left', money(Math.floor(cashLeft + 1e-6)))),
     h('table', { class: 'end-table' },
@@ -139,7 +139,7 @@ export function closedScreen(why) {
   return overlay('closed',
     h('div', { class: 'end-stamp' }, full ? 'THE GAME IS FULL' : 'THE HOST HAS LEFT'),
     h('p', { class: 'end-sub' }, full
-      ? 'Six people already work here. HR will not approve a seventh disappointment.'
+      ? 'Seven people already work here. HR will not approve an eighth disappointment.'
       : 'The store closed when your host did. Probably rage-quit. Possibly his mum needed the computer.'),
     btn);
 }

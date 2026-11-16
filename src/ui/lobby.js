@@ -3,6 +3,7 @@
 // player presses Ready. The game starts when every connected player is ready.
 import { MAP_DESIGNS, MAP_SIZES, ZONES } from '../sim/index.js';
 import { h, setText, setClass, safeColor } from './dom.js';
+import { createSettings } from './settings.js';
 
 /**
  * @param {Object} session
@@ -21,6 +22,12 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
     Object.entries(MAP_SIZES).map(([k, z]) => h('option', { value: k },
       `${z.name} (${z.w}x${z.h}): ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'original'}`)));
   const about = h('p', { class: 'lobby-about' });
+  // Length, difficulty and starting cash: the host's to change, everyone's to see.
+  const settings = createSettings({
+    idPrefix: 'lobby', disabled: !host, value: session.state || {},
+    onChange: (v) => session.send({ c: 'settings', ...v }),
+  });
+  let setSig = '';
   const fit = h('p', { class: 'lobby-fit' });
   const list = h('ul', { class: 'lobby-players' });
   const status = h('p', { class: 'lobby-status' });
@@ -45,6 +52,7 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
       h('label', { for: 'lobby-design' }, h('span', null, 'Design'), designIn),
       h('label', { for: 'lobby-size' }, h('span', null, 'Size'), sizeIn)),
     about, fit,
+    h('h4', null, 'THE GAME'), settings.el,
     h('h4', null, 'PAINTED FLOOR'), legend,
     h('h4', null, 'PLAYERS'), list,
     readyBtn, status);
@@ -62,6 +70,8 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
     }
     if (!on) return false;
 
+    const ss = `${s.waves},${s.startCash},${s.difficulty}`;
+    if (ss !== setSig) { setSig = ss; settings.set(s); }
     const sig = `${s.map.design},${s.map.size},${s.players.filter((p) => p.on).length}`;
     if (sig !== mapSig) {
       const mapChanged = sig.split(',').slice(0, 2).join() !== mapSig.split(',').slice(0, 2).join();

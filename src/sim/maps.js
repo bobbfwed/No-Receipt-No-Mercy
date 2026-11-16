@@ -6,7 +6,7 @@
 //   '.' floor (the only tiles that can be built on)
 //   'T' till (shoppers want to reach one)
 //   'D' open entrance (shoppers appear here)   'd' entrance that is still shut
-// There is one entrance per player. All six possible entrances exist from the start, shut, so the
+// There is one entrance per player. All seven possible entrances exist from the start, shut, so the
 // maze can never be built across one; they open as players join.
 
 /**
@@ -21,6 +21,7 @@ export const MAP_SIZES = {
   xl: { name: 'Hypermarket', w: 66, h: 37, players: 4 },
   xxl: { name: 'Distribution Centre', w: 81, h: 45, players: 5 },
   huge: { name: 'Regional Hub', w: 99, h: 55, players: 6 },
+  titan: { name: 'Mega Mall', w: 121, h: 67, players: 7 },
 };
 
 export const MAP_DESIGNS = {
@@ -40,7 +41,7 @@ export const MAP_DESIGNS = {
 
 /** The size that suits a number of players. */
 export function recommendedSize(players) {
-  const n = Math.max(1, Math.min(6, players | 0));
+  const n = Math.max(1, Math.min(7, players | 0));
   return Object.keys(MAP_SIZES).find((k) => MAP_SIZES[k].players === n);
 }
 
@@ -48,11 +49,11 @@ export function recommendedSize(players) {
  * Builds a floor plan.
  * @param {string} design a key of MAP_DESIGNS
  * @param {string} size a key of MAP_SIZES
- * @param {number} [slots] how many entrances the map has (they start shut)
+ * @param {number} [slots] how many entrances the map has, up to seven (they start shut)
  * @returns {{w: number, h: number, tiles: string, doors: number[][]}} `doors` lists each
  *   entrance's tile indexes, in the order the entrances open
  */
-export function makeMap(design = 'warehouse', size = 'xs', slots = 6) {
+export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
   const { w, h } = MAP_SIZES[size] || MAP_SIZES.xs;
   const g = [];
   for (let y = 0; y < h; y++) {
@@ -75,9 +76,10 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 6) {
     set(w - 3, y, '.');
   }
 
-  // Entrances, in the order they open: the first on the left wall, then top and bottom (toward
-  // the left), then two more on the left wall, then a second one on top.
-  const cx = Math.round(w * 0.3), cx2 = Math.round(w * 0.55), ry = Math.round(h * 0.22);
+  // Entrances, in the order they open: the first on the left wall, then top and bottom (a fifth
+  // of the way along), then two more on the left wall, then a second one on top and on the
+  // bottom (two fifths of the way along).
+  const cx = Math.round(w * 0.2), cx2 = Math.round(w * 0.4), ry = Math.round(h * 0.22);
   const spots = [
     { side: 'L', at: mid - 1 },
     { side: 'T', at: cx },
@@ -85,6 +87,7 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 6) {
     { side: 'L', at: ry - 1 },
     { side: 'L', at: h - 1 - ry },
     { side: 'T', at: cx2 },
+    { side: 'B', at: cx2 },
   ];
   const doors = [];
   for (const sp of spots.slice(0, Math.max(1, slots))) {

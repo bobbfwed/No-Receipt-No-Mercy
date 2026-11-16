@@ -98,6 +98,11 @@ One player stops defending and plays the other side: each wave he gets a budget,
 - Known rough edges: a phone held sideways leaves only about a third of the screen height for the floor; the Head Office planner is cramped on a phone.
 - Chat: Enter or the Chat button; one line of up to 200 characters; floods are cut off.
 
+## Settings, seven players, entrances (owner's requests, built)
+- The host chooses, on the menu and again in the lobby: 10, 15, 20 or 30 sales events; Easy, Normal, Hard or Brutal (shopper patience x0.75 / 1 / 1.3 / 1.65 and income x1.25 / 1 / 0.85 / 0.7); and starting cash of $300, $500, $800 or $1,200 each. The multipliers are my guess and untested. Waves past 20 use the same growth formulas, which have not been looked at that far out.
+- Up to seven players. The seventh entrance is on the bottom wall, and there is a seventh map size (121 x 67) following the same half-as-big-again rule.
+- Entrances in the top and bottom walls are now a fifth and two fifths of the way along (were about 30% and 55%).
+
 ## Money when players come and go (owner's rules)
 - A player who leaves once the game is under way hands his money to the players who stay, split evenly. If he comes back he has none and earns his share from then on. (This also covers a host who leaves: his money is shared out when the next player takes over.) Leaving in the lobby changes nothing.
 - A brand-new player joining mid-game gets $500 plus $60 for each sales event already played.
