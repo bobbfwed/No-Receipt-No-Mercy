@@ -115,7 +115,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
       const top = lv >= TUNE.maxLevel;
       btns.push(h('button', {
         type: 'button', class: `ts-btn ts-up${why === 'cash' ? ' poor' : ''}`, disabled: top || why !== null,
-        onclick: () => act({ c: 'upgrade', x: t.x, y: t.y }, 'place'),
+        onclick: () => act({ c: 'upgrade', x: t.x, y: t.y }, 'upgrade'),
       }, h('b', null, top ? 'Max level' : `⇧ Level ${lv + 1}`), h('small', null, top ? 'peaked, like you' : money(cost))));
     }
     btns.push(h('button', { type: 'button', class: 'ts-btn ts-remove', onclick: () => { act({ c: 'remove', x: t.x, y: t.y }, 'remove'); input.select(null); } },

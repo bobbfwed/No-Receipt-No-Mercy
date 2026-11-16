@@ -13,12 +13,17 @@
     too long  rings (above -60 dB) longer than the table's `max`
     click     first or last rendered sample away from zero, a jump at the very start of the sound
               (more than half the peak within 0.5 ms), or a hard cut at its end
+  Sounds that vary on every play (a `shapes` entry in the table) are rendered with six seeds, which
+  covers every version of them, and the worst of the six is shown.
   Also: 8 bars of the music loop (with a check that the loop seam joins without a jump or gap),
   a stress test (40 effects within one second through the full master chain must stay under 1.0),
-  and a few loudness relations (frequent sounds quieter and shorter than rare ones, music under
-  the effects).
-  Buttons at the bottom play everything live, and drive the real sound module with a fake session
-  (DEB speaks there).
+  a few loudness relations (frequent sounds quieter and shorter than rare ones, music under
+  the effects), variety (two plays of the same sound differ; the nine shoppers differ from each
+  other), and crowds: thirty of one sound in two seconds, run through the same crowd gate the
+  game uses (src/audio/crowd.js) and the master chain, must not clip, must not be much louder
+  than one on its own, must not keep getting louder, and must not build too many audio nodes.
+  Buttons at the bottom play everything live (including a crowd of thirty of any sound), and
+  drive the real sound module with a fake session (DEB speaks there).
 -->
 <style>
   :root { color-scheme: dark; }
@@ -51,9 +56,14 @@
 <h1>No Receipt, No Mercy: sound test</h1>
 <div id="summary">rendering...</div>
 <div class="checks" id="checks"></div>
-<h2>Effects (rendered offline, 44100 Hz, level 1, no master chain; peak and duration are the worst of 3 start times)</h2>
+<h2>Effects (rendered offline, 44100 Hz, level 1, no master chain; peak, duration and nodes are the worst of 3 start times, or of 6 seeds for sounds that vary)</h2>
 <table id="tbl">
-  <thead><tr><th>sound</th><th>what it should be</th><th>max s</th><th>dur s (-60 dB)</th><th>peak</th><th>RMS</th><th>result</th><th>waveform</th><th></th></tr></thead>
+  <thead><tr><th>sound</th><th>what it should be</th><th>max s</th><th>dur s (-60 dB)</th><th>peak</th><th>RMS</th><th>nodes</th><th>variety</th><th>result</th><th>waveform</th><th></th></tr></thead>
+  <tbody></tbody>
+</table>
+<h2>Crowds (through the crowd gate and the master chain, after 1.5 s of silence; "loud" is the loudest 100 ms, RMS)</h2>
+<table id="tbl3">
+  <thead><tr><th>case</th><th>notes</th><th>played</th><th>peak</th><th>loud</th><th>result</th><th>waveform</th></tr></thead>
   <tbody></tbody>
 </table>
 <h2>Music and master chain</h2>
@@ -64,6 +74,12 @@
 <h2>Live (for listening)</h2>
 <div class="live" id="live">
   <button id="musicBtn">Music loop on/off</button>
+</div>
+<div class="live" id="crowdBox">
+  <label>crowd of 30 in 2 s: <select id="crowdPick"></select></label>
+  <button id="crowdBtn">play crowd (as the game does it)</button>
+  <button id="crowdRawBtn">play 30 without crowd control (the old wall of noise)</button>
+  <button id="crowdMixBtn">play 30 shoppers of mixed kinds leaving</button>
 </div>
 <h2>Through the real sound module (fake session)</h2>
 <div class="live" id="mod"></div>
@@ -80,8 +96,12 @@ import { SOUNDS } from '../src/audio/effects.js';
 import { musicBar, BAR, LOOP_BARS } from '../src/audio/music.js';
 import { createChain } from '../src/audio/mix.js';
 import { createSound } from '../src/audio/sound.js';
+import { createGate } from '../src/audio/crowd.js';
+import { built } from '../src/audio/synth.js';
 
 const SR = 44100;
+/** Sounds that can happen many times in a few seconds: each must vary from play to play. */
+const OFTEN = ['sale', 'spray', 'shot', 'escape', 'left', 'slip', 'grab', 'sample', 'mess', 'kid', 'caught', 'bolt', 'smash', 'place', 'remove', 'upgraded'];
 const FREQUENT = ['sale', 'spray', 'shot', 'mess'];
 const RARE = ['waveStart', 'won', 'lost'];
 let failures = 0;
@@ -92,15 +112,103 @@ window.__results = results;
 const cases = [];
 for (const [name, s] of Object.entries(SOUNDS)) {
   const vs = s.variants || [{ label: '', opts: {} }];
-  for (const vr of vs) cases.push({ name, label: vr.label ? `${name} (${vr.label})` : name, opts: vr.opts || {}, max: vr.max ?? s.max, about: s.about });
+  for (const vr of vs) cases.push({ name, label: vr.label ? `${name} (${vr.label})` : name, opts: vr.opts || {}, max: vr.max ?? s.max, about: vr.about ?? s.about });
 }
+
+/** Audio nodes built so far by each rendering context (how much work a sound is for a phone). */
+let nodeCount = 0;
+const NODE_MAKERS = ['createOscillator', 'createGain', 'createBiquadFilter', 'createBufferSource', 'createWaveShaper', 'createDynamicsCompressor'];
 
 async function render(secs, build) {
   const ctx = new OfflineAudioContext(1, Math.ceil(secs * SR), SR);
+  nodeCount = 0;
+  for (const m of NODE_MAKERS) {
+    const f = ctx[m].bind(ctx);
+    ctx[m] = (...a) => { nodeCount++; return f(...a); };
+  }
   build(ctx);
   const buf = await ctx.startRendering();
   return buf.getChannelData(0);
 }
+
+// ------------------------------------------------------------------ comparing two sounds
+/** In-place radix-2 FFT of a real signal (length a power of two); returns the magnitudes. */
+function fftMag(re) {
+  const N = re.length;
+  const im = new Float64Array(N);
+  for (let i = 1, j = 0; i < N; i++) {
+    let bit = N >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { const tmp = re[i]; re[i] = re[j]; re[j] = tmp; }
+  }
+  for (let len = 2; len <= N; len <<= 1) {
+    const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang), half = len >> 1;
+    for (let i = 0; i < N; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < half; k++) {
+        const a = i + k, b = a + half;
+        const xr = re[b] * cr - im[b] * ci, xi = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+        const n = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = n;
+      }
+    }
+  }
+  const m = new Float64Array(N / 2);
+  for (let i = 0; i < N / 2; i++) m[i] = Math.hypot(re[i], im[i]);
+  return m;
+}
+
+const BANDS = 32, FFT = 2048;
+const bandOf = new Int16Array(FFT / 2).map((_, i) => {
+  const f = i * SR / FFT;
+  if (f < 60) return -1;
+  return Math.min(BANDS - 1, Math.floor(Math.log(f / 60) / Math.log(16000 / 60) * BANDS));
+});
+/**
+ * What a sound is like, for comparing two of them: its average spectrum in 32 bands (dB), its
+ * loudness over time (RMS per 10 ms) and its length.
+ */
+function features(x, from, dur) {
+  const to = Math.min(x.length, from + Math.max(FFT, Math.round(dur * SR)));
+  const pow = new Float64Array(BANDS);
+  const win = new Float64Array(FFT);
+  for (let s = from; s + FFT <= to + FFT / 2 && s < x.length; s += FFT) {
+    for (let i = 0; i < FFT; i++) win[i] = (x[s + i] || 0) * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / FFT));
+    const m = fftMag(win);
+    for (let i = 0; i < m.length; i++) if (bandOf[i] >= 0) pow[bandOf[i]] += m[i] * m[i];
+  }
+  const spec = Array.from(pow, (p) => 10 * Math.log10(p + 1e-12));
+  const env = [];
+  for (let s = from; s < to; s += 441) {
+    let e = 0;
+    for (let i = s; i < Math.min(to, s + 441); i++) e += x[i] * x[i];
+    env.push(Math.sqrt(e / 441));
+  }
+  return { spec, env, dur };
+}
+/**
+ * How different two sounds are: spec = average difference of the spectra in dB (over the bands
+ * that matter), env = 1 - correlation of the loudness over time, dur = difference of lengths.
+ */
+function difference(a, b) {
+  const top = Math.max(...a.spec, ...b.spec);
+  let sum = 0, n = 0;
+  for (let i = 0; i < BANDS; i++) {
+    if (Math.max(a.spec[i], b.spec[i]) < top - 30) continue;
+    sum += Math.abs(a.spec[i] - b.spec[i]); n++;
+  }
+  const L = Math.max(a.env.length, b.env.length);
+  const ea = Array.from({ length: L }, (_, i) => a.env[i] || 0), eb = Array.from({ length: L }, (_, i) => b.env[i] || 0);
+  const mean = (v) => v.reduce((p, q) => p + q, 0) / L;
+  const ma = mean(ea), mb = mean(eb);
+  let sab = 0, saa = 0, sbb = 0;
+  for (let i = 0; i < L; i++) { sab += (ea[i] - ma) * (eb[i] - mb); saa += (ea[i] - ma) ** 2; sbb += (eb[i] - mb) ** 2; }
+  const corr = saa && sbb ? sab / Math.sqrt(saa * sbb) : 1;
+  return { spec: n ? sum / n : 0, env: 1 - corr, dur: Math.abs(a.dur - b.dur) };
+}
+/** Audibly different: the spectrum moved by 1.5 dB on average, or the shape over time changed. */
+const differs = (d) => d.spec >= 1.5 || d.env >= 0.08 || d.dur >= 0.04;
 
 /** Level numbers and click checks for one rendered signal. */
 function analyse(x, from = 0, to = x.length) {
@@ -165,30 +273,46 @@ function addRow(tbody, cells, problems, warnings = []) {
 // three different times and the table shows the worst case: highest peak, longest duration, and
 // a click found in any of them. RMS and the waveform are from the first render.
 const STARTS = [0, 0.37, 1.13];
+/** Seeds for sounds that vary: seed % shapes picks the version, so 0..5 covers up to six. */
+const SEEDS = [0, 1, 2, 3, 4, 5];
 const tbody = document.querySelector('#tbl tbody');
 const t0 = performance.now();
 for (const c of cases) {
-  const secs = Math.max(2, c.max + 0.6);
+  const secs = Math.max(0.8, c.max + 0.4);
   const problems = [];
-  let m = null, x = null;
-  for (const st of STARTS) {
-    const y = await render(secs + st, (ctx) => SOUNDS[c.name].play(ctx, ctx.destination, st, c.opts));
+  const varies = SOUNDS[c.name].shapes != null;
+  const runs = varies ? SEEDS.map((sd, i) => [sd, STARTS[i % STARTS.length]]) : STARTS.map((st) => [null, st]);
+  let m = null, x = null, nodes = 0;
+  const feats = [];
+  for (const [sd, st] of runs) {
+    const opts = sd == null ? c.opts : { ...c.opts, seed: sd };
+    const y = await render(secs + st, (ctx) => SOUNDS[c.name].play(ctx, ctx.destination, st, opts));
+    nodes = Math.max(nodes, nodeCount);
     const a = analyse(y, Math.round(st * SR));
     if (!m) { m = a; x = y; } else { m.peak = Math.max(m.peak, a.peak); m.dur = Math.max(m.dur, a.dur); }
+    if (varies) feats.push(features(y, Math.round(st * SR), a.dur));
     if ((a.x0 > 0.01 || a.onset > Math.max(0.05, 0.5 * a.peak)) && !problems.includes('click at start')) problems.push('click at start');
     if ((a.x1 > 0.01 || a.tail > 0.02) && !problems.includes('click at end')) problems.push('click at end');
   }
   if (m.peak < 0.01) problems.push('silent');
   if (m.peak > 0.99) problems.push('clips');
   if (m.dur > c.max) problems.push('too long');
+  // Variety: each seed against the next (what two plays in a row sound like).
+  let variety = '', same = 0;
+  if (varies) {
+    const ds = feats.slice(1).map((f, i) => difference(feats[i], f));
+    same = ds.filter((d) => !differs(d)).length;
+    variety = `${ds.length - same}/${ds.length} differ; spec ${Math.min(...ds.map((d) => d.spec)).toFixed(1)}-${Math.max(...ds.map((d) => d.spec)).toFixed(1)} dB`;
+    if (OFTEN.includes(c.name) && same) problems.push('plays sound the same');
+  }
   const warnings = [];
   if (m.peak < 0.1 || m.peak > 0.75) warnings.push('level');
-  results.push({ name: c.label, base: c.name, ...m, max: c.max, problems });
+  results.push({ name: c.label, base: c.name, opts: c.opts, ...m, max: c.max, nodes, variety, feats, problems });
   const tr = addRow(tbody, [
     td(c.label), td(c.about, 'about'), td(c.max.toFixed(2), 'num'), td(m.dur.toFixed(3), 'num'),
-    td(m.peak.toFixed(3), 'num'), td(m.rms.toFixed(3), 'num'),
+    td(m.peak.toFixed(3), 'num'), td(m.rms.toFixed(3), 'num'), td(String(nodes), 'num'), td(variety, 'about'),
     td(problems.length ? 'FAIL: ' + problems.join(', ') : warnings.length ? 'WARN: level' : 'pass', 'res'),
-    td(drawWave(x, 360, 30, 0, Math.ceil(Math.max(1, c.max + 0.1) * SR))),
+    td(drawWave(x, 300, 30, 0, Math.ceil(Math.max(1, c.max + 0.1) * SR))),
   ], problems, warnings);
   const b = document.createElement('button');
   b.textContent = 'play';
@@ -197,10 +321,147 @@ for (const c of cases) {
   tbody.appendChild(tr);
 }
 
-// ------------------------------------------------------------------ music and chain
-const tb2 = document.querySelector('#tbl2 tbody');
 const checks = [];
 const check = (ok, text) => { checks.push({ ok, text }); if (!ok) failures++; };
+const tEffects = performance.now();
+
+// ------------------------------------------------------------------ variety between shoppers
+{
+  const kinds = results.filter((r) => r.base === 'left' && !r.opts.sup);
+  let worst = null;
+  for (let i = 0; i < kinds.length; i++) {
+    for (let j = i + 1; j < kinds.length; j++) {
+      // Compare every version of one kind with every version of the other; keep the closest.
+      for (const fa of kinds[i].feats) for (const fb of kinds[j].feats) {
+        const d = difference(fa, fb);
+        const score = d.spec + 20 * d.env;
+        if (!worst || score < worst.score) worst = { score, d, a: kinds[i].name, b: kinds[j].name };
+      }
+    }
+  }
+  check(worst && differs(worst.d), `the nine shoppers do not sound alike: closest pair of any versions ${worst.a} / ${worst.b}: spectrum ${worst.d.spec.toFixed(1)} dB apart, shape over time ${worst.d.env.toFixed(2)}`);
+}
+
+// ------------------------------------------------------------------ crowds
+const WARM = 1.5;
+/**
+ * Plays a list of requests [{ name, opts, t }] the way sound.js does: each through the crowd gate,
+ * started where the gate says, at the level it says, plus the merged crowd sound when it says so.
+ * `raw` skips the gate (every request at full level), to hear what it used to be like.
+ */
+function runCrowd(ctx, dest, list, { raw = false, seed = 7, offset = 0 } = {}) {
+  const gate = createGate(seed);
+  let played = 0, merged = 0;
+  const byName = {};
+  const fire = (name, opts, t, sub) => {
+    const s = SOUNDS[name];
+    if (raw) { s.play(ctx, dest, offset + t + 0.01, { ...opts, seed: played * 7919 }); played++; return; }
+    const g = gate.admit(name, t, { sub, shapes: s.shapes });
+    if (!g) return;
+    const before = built.nodes;
+    const end = s.play(ctx, dest, offset + g.at + 0.01, { seed: g.seed, ...opts, level: g.level });
+    gate.started(name, end - offset, built.nodes - before);
+    if (opts.merged) merged++; else played++;
+    byName[name] = (byName[name] || 0) + 1;
+    if (g.merge) fire(g.merge, { merged: true }, t);
+  };
+  for (const r of list) fire(r.name, r.opts || {}, r.t, r.opts && (r.opts.k ?? r.opts.kind));
+  return { played, merged, byName };
+}
+/** Thirty requests spread at random over two seconds (or all at one instant). */
+function crowdTimes(n = 30, secs = 2, seed = 3) {
+  const r = (() => { let a = seed; return () => ((a = (a * 1103515245 + 12345) >>> 0) / 4294967296); })();
+  return Array.from({ length: n }, () => r() * secs).sort((p, q) => p - q);
+}
+const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro'];
+const CROWDS = [
+  { label: 'left (hunter) x30 in 2 s', list: crowdTimes().map((t) => ({ name: 'left', opts: { k: 'hunter' }, t })) },
+  { label: 'left (dad) x30 in 2 s', list: crowdTimes(30, 2, 11).map((t) => ({ name: 'left', opts: { k: 'dad' }, t })) },
+  { label: 'left (mixed kinds) x30 in 2 s', list: crowdTimes(30, 2, 5).map((t, i) => ({ name: 'left', opts: { k: KINDS[(i * 7) % 9], sup: i % 5 === 0 ? 1 : 0 }, t })) },
+  { label: 'left (gymbro) x20 in one tick', list: Array.from({ length: 20 }, () => ({ name: 'left', opts: { k: 'gymbro' }, t: 0 })) },
+  { label: 'escape (hunter) x30 in 2 s', list: crowdTimes(30, 2, 13).map((t) => ({ name: 'escape', opts: { k: 'hunter' }, t })) },
+  { label: 'sale (box) x30 in 2 s', list: crowdTimes(30, 2, 17).map((t) => ({ name: 'sale', opts: { kind: 'box' }, t })) },
+  ...['spray', 'shot', 'slip', 'grab', 'sample', 'mess', 'kid', 'smash', 'place', 'remove'].map((name, i) => (
+    { label: `${name} x30 in 2 s`, list: crowdTimes(30, 2, 19 + i).map((t) => ({ name, opts: {}, t })) })),
+];
+// A late-wave storm: every frequent event, 30 ticks a second for 3 s, all through one gate.
+{
+  const list = [];
+  for (let n = 0; n < 90; n++) {
+    const t = n / 30;
+    list.push({ name: 'sale', opts: { kind: ['box', 'gadget', 'giftset'][n % 3] }, t }, { name: 'spray', t }, { name: 'spray', t }, { name: 'shot', t });
+    if (n % 2 === 0) list.push({ name: 'left', opts: { k: KINDS[n % 9], sup: n % 10 === 0 ? 1 : 0 }, t });
+    if (n % 5 === 0) list.push({ name: 'escape', opts: { k: KINDS[(n * 4) % 9] }, t }, { name: 'mess', t }, { name: 'grab', t });
+    if (n % 9 === 0) list.push({ name: 'sample', t }, { name: 'slip', t }, { name: 'smash', opts: { k: ['crate', 'belt', 'press'][n % 3] }, t });
+  }
+  CROWDS.push({ label: 'late-wave storm: 3 s, ' + list.length + ' events', list, storm: true });
+}
+const tb3 = document.querySelector('#tbl3 tbody');
+/** The loudest 100 ms (RMS) between two times. */
+function loudest(y, from, to) {
+  let best = 0;
+  const w = Math.round(0.1 * SR);
+  for (let s = Math.round(from * SR); s + w <= Math.min(y.length, Math.round(to * SR)); s += Math.round(w / 2)) {
+    let e = 0;
+    for (let i = s; i < s + w; i++) e += y[i] * y[i];
+    best = Math.max(best, Math.sqrt(e / w));
+  }
+  return best;
+}
+const rmsBetween = (y, a, b) => { let e = 0; const s0 = Math.round(a * SR), s1 = Math.round(b * SR); for (let i = s0; i < s1; i++) e += y[i] * y[i]; return Math.sqrt(e / Math.max(1, s1 - s0)); };
+let worstNodesPerSec = 0;
+for (const cr of CROWDS) {
+  const first = cr.list[0];
+  const span = Math.max(...cr.list.map((r) => r.t));
+  const secs = WARM + span + 1.6;
+  // One play of the same sound on its own, through the chain: the yardstick.
+  const one = await render(WARM + 1.6, (ctx) => {
+    const ch = createChain(ctx, ctx.destination, 1);
+    SOUNDS[first.name].play(ctx, ch.sfx, WARM, { ...(first.opts || {}), seed: 0 });
+  });
+  const oneLoud = loudest(one, WARM, WARM + 1.6);
+  let stats = null;
+  const y = await render(secs, (ctx) => {
+    const ch = createChain(ctx, ctx.destination, 1);
+    stats = runCrowd(ctx, ch.sfx, cr.list, { offset: WARM });
+  });
+  const nodesPerSec = (nodeCount - 7) / Math.max(1, span);
+  worstNodesPerSec = Math.max(worstNodesPerSec, nodesPerSec);
+  const raw = await render(secs, (ctx) => {
+    const ch = createChain(ctx, ctx.destination, 1);
+    runCrowd(ctx, ch.sfx, cr.list, { raw: true, offset: WARM });
+  });
+  const m = analyse(y, Math.round(WARM * SR));
+  const loud = loudest(y, WARM, secs);
+  const rawLoud = loudest(raw, WARM, secs);
+  const half = span / 2;
+  const early = rmsBetween(y, WARM, WARM + half + 0.3), late = rmsBetween(y, WARM + half + 0.3, WARM + span + 0.3);
+  const problems = [];
+  if (m.peak >= 0.99) problems.push('clips');
+  // A crowd may be fuller than one sound, but not a wall: at most about +7 dB over a single one
+  // (a storm of every kind at once: +10 dB).
+  const limit = cr.storm ? 3.2 : 2.3;
+  if (loud > limit * oneLoud && !cr.storm) problems.push('too loud');
+  if (cr.storm && loud > 0.45) problems.push('too loud');
+  if (span > 1 && late > 1.3 * early) problems.push('builds up');
+  if (nodesPerSec > 200) problems.push('too many nodes');
+  results.push({ name: 'crowd: ' + cr.label, crowd: true, played: stats.played, merged: stats.merged, asked: cr.list.length, peak: m.peak, loud, oneLoud, rawLoud, early, late, nodesPerSec, problems });
+  tb3.appendChild(addRow(tb3, [
+    td(cr.label),
+    td(`one alone: loud ${oneLoud.toFixed(3)}; crowd ${(loud / oneLoud).toFixed(2)}x that` +
+      `; without crowd control ${rawLoud.toFixed(3)} (${(rawLoud / oneLoud).toFixed(2)}x). First half / second half RMS ${early.toFixed(3)} / ${late.toFixed(3)}. ` +
+      `${Math.round(nodesPerSec)} audio nodes a second.` + (cr.storm ? ' Played: ' + Object.entries(stats.byName).map(([k, n]) => `${k} ${n}`).join(', ') : ''), 'about'),
+    td(`${stats.played}/${cr.list.length}` + (stats.merged ? ` +${stats.merged} merged` : ''), 'num'),
+    td(m.peak.toFixed(3), 'num'), td(loud.toFixed(3), 'num'),
+    td(problems.length ? 'FAIL: ' + problems.join(', ') : 'pass', 'res'),
+    td(drawWave(y, 420, 34, Math.round(WARM * SR), y.length)),
+  ], problems));
+}
+check(worstNodesPerSec <= 200, `crowds stay cheap: at most ${Math.round(worstNodesPerSec)} audio nodes built a second (limit 200)`);
+const tCrowds = performance.now();
+
+// ------------------------------------------------------------------ music and chain
+const tb2 = document.querySelector('#tbl2 tbody');
 
 // 8 bars, plus the first bar of the next time round, plus tails, so the seam can be inspected.
 const seam = LOOP_BARS * BAR;
@@ -235,8 +496,8 @@ const mm = analyse(mx, 0, Math.round(seam * SR));
 }
 
 // The browser's compressor starts out part-way compressed and takes about a second to settle, so
-// every measurement through the chain starts after WARM seconds of silence (as in a running game).
-const WARM = 1.5;
+// every measurement through the chain starts after WARM seconds of silence (as in a running game;
+// WARM is set above, with the crowds).
 // Chain gain: what a plain tone at a few levels comes out at, through the full chain at volume 1.
 {
   const levels = [0.05, 0.2, 0.5, 1.0, 2.0];
@@ -330,7 +591,7 @@ const WARM = 1.5;
 
 {
   const d = document.createElement('div');
-  d.textContent = `info  rendered everything in ${((performance.now() - t0) / 1000).toFixed(1)} s`;
+  d.textContent = `info  rendered everything in ${((performance.now() - t0) / 1000).toFixed(1)} s (effects ${((tEffects - t0) / 1000).toFixed(1)} s, crowds ${((tCrowds - tEffects) / 1000).toFixed(1)} s)`;
   document.getElementById('checks').appendChild(d);
 }
 const sum = document.getElementById('summary');
@@ -376,9 +637,14 @@ async function liveSelfTest() {
       const n = Real.prototype[m].call(this);
       const start = n.start.bind(n);
       n.start = (...a) => { counts.started++; n.addEventListener('ended', () => counts.ended++); return start(...a); };
+      counts.nodes++;
       return n;
     };
   }
+  for (const m of ['createGain', 'createBiquadFilter', 'createWaveShaper']) {
+    TapContext.prototype[m] = function () { counts.nodes++; return Real.prototype[m].call(this); };
+  }
+  counts.nodes = 0;
   window.AudioContext = TapContext;
   let fakeHidden = false;
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => fakeHidden });
@@ -399,6 +665,7 @@ async function liveSelfTest() {
   };
   const hs = {};
   const ses = {
+    me: 0,
     on(type, fn) { (hs[type] ||= []).push(fn); return () => { hs[type] = hs[type].filter((f) => f !== fn); }; },
     emit(type, msg) { for (const fn of hs[type] || []) fn(msg); },
   };
@@ -407,7 +674,9 @@ async function liveSelfTest() {
     for (let n = 0; n * 33 < ms; n++) {
       ses.emit('fx', [{ e: 'sale', kind: kinds[n % 3] }, { e: 'spray' }, { e: 'spray' }, { e: 'shot' }, { e: 'grab' },
         { e: 'left', k: 'dad' }, { e: 'escape', k: 'hunter' }, { e: 'placed', k: 'belt' }, { e: 'nonsense' }, null,
-        { e: 'mess', i: 3 }, { e: 'kid' }, { e: 'caught' }, { e: 'bolt' }, { e: 'smash', i: 9 }, { e: 'left', k: 'gymbro' }]);
+        { e: 'mess', i: 3 }, { e: 'kid' }, { e: 'caught' }, { e: 'bolt' }, { e: 'smash', i: 9, k: 'belt' }, { e: 'left', k: 'gymbro', sup: 1 },
+        { e: 'left', k: 'karen' }, { e: 'left', k: 'teen' }, { e: 'upgraded', k: 'forklift', lv: 3, by: 1 },
+        { e: 'escape', k: 'dad', sup: 1 }, { e: 'sample' }, { e: 'slip' }]);
       await wait(33);
     }
   };
@@ -426,13 +695,19 @@ async function liveSelfTest() {
     const c = made[0];
     log(made.length === 1, `unlock() twice made exactly one context (state: ${c && c.state})`);
     if (!c || c.state !== 'running') { log(null, 'context not running here (autoplay blocked?): press the button to run the rest'); return; }
+    const nm0 = counts.nodes;
     const musicLvl = await level(2500);
-    log(musicLvl > 0.01 && musicLvl < 0.2, `music alone at the speakers: peak ${musicLvl.toFixed(3)} (volume ${s.get('volume')})`);
+    const musicNodes = (counts.nodes - nm0) / 2.5;
+    log(musicLvl > 0.01 && musicLvl < 0.2, `music alone at the speakers: peak ${musicLvl.toFixed(3)} (volume ${s.get('volume')}), ${Math.round(musicNodes)} audio nodes a second`);
     // 3. A late-wave storm: rate limited, nothing near clipping.
-    const st0 = counts.started;
+    const st0 = counts.started, nd0 = counts.nodes;
     const [stormLvl] = await Promise.all([level(2000), storm(2000)]);
     const perSec = (counts.started - st0) / 2;
-    log(stormLvl < 0.95, `2 s of 9 events per tick: peak ${stormLvl.toFixed(3)}, ${Math.round(perSec)} sources started per second`);
+    const nodesSec = (counts.nodes - nd0) / 2 - musicNodes;
+    log(stormLvl < 0.95, `2 s of 24 events per tick: peak ${stormLvl.toFixed(3)}, ${Math.round(perSec)} sources started per second (music included)`);
+    // The gate allows 120 nodes a second plus a saved-up burst of 80 (40 a second over these 2 s),
+    // and the merged crowd sounds borrow ahead; 230 leaves room for timing jitter.
+    log(nodesSec < 230, `storm effects build ${Math.round(nodesSec)} audio nodes a second over 2 s (music not counted; limit 230)`);
     // 4. Music off: silence once the effects ring out; effects still work.
     s.set('music', false);
     await wait(900);
@@ -523,9 +798,35 @@ function liveCtx() {
   if (live.ctx.state !== 'running') live.ctx.resume();
   return live;
 }
+let liveSeed = 1;
 function playLive(name, opts) {
   const L = liveCtx();
-  SOUNDS[name].play(L.ctx, L.chain.sfx, L.ctx.currentTime + 0.03, opts);
+  // A new seed on every press, as in the game, so pressing again plays another version.
+  SOUNDS[name].play(L.ctx, L.chain.sfx, L.ctx.currentTime + 0.03, { seed: liveSeed++, ...opts });
+}
+// Crowd of thirty: the picked sound, through the same gate as the game, live.
+{
+  const pick = document.getElementById('crowdPick');
+  for (const c of cases) {
+    const o = document.createElement('option');
+    o.value = cases.indexOf(c);
+    o.textContent = c.label;
+    if (c.label === 'left (hunter)') o.selected = true;
+    pick.appendChild(o);
+  }
+  const crowdNow = (raw, mixed) => {
+    const L = liveCtx();
+    const c = cases[Number(pick.value)];
+    const times = crowdTimes(30, 2, (Math.random() * 1e9) | 0);
+    const list = times.map((t, i) => mixed
+      ? { name: 'left', opts: { k: KINDS[(Math.random() * 9) | 0], sup: Math.random() < 0.15 ? 1 : 0 }, t }
+      : { name: c.name, opts: c.opts, t });
+    const st = runCrowd(L.ctx, L.chain.sfx, list, { raw, seed: (Math.random() * 1e9) | 0, offset: L.ctx.currentTime + 0.1 });
+    document.getElementById('crowdBtn').textContent = `play crowd (as the game does it) - last: ${st.played} of 30 played` + (st.merged ? `, ${st.merged} merged` : '');
+  };
+  document.getElementById('crowdBtn').onclick = () => crowdNow(false, false);
+  document.getElementById('crowdRawBtn').onclick = () => crowdNow(true, false);
+  document.getElementById('crowdMixBtn').onclick = () => crowdNow(false, true);
 }
 document.getElementById('musicBtn').onclick = () => {
   const L = liveCtx();
@@ -541,6 +842,7 @@ document.getElementById('musicBtn').onclick = () => {
 // The real module, attached to a fake session.
 const handlers = {};
 const fake = {
+  me: 0,
   on(type, fn) { (handlers[type] ||= []).push(fn); return () => { handlers[type] = handlers[type].filter((f) => f !== fn); }; },
   emit(type, msg) { for (const fn of handlers[type] || []) fn(msg); },
 };
@@ -571,8 +873,45 @@ btn(modBox, 'teen / mom / guide dog / gym bro', () => {
   setTimeout(() => fake.emit('fx', [{ e: 'kid' }]), 500);
   setTimeout(() => fake.emit('fx', [{ e: 'caught' }]), 1300);
   setTimeout(() => fake.emit('fx', [{ e: 'bolt' }]), 2000);
-  setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5 }]), 2800);
+  setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5, k: 'crate' }]), 2800);
+  setTimeout(() => fake.emit('fx', [{ e: 'kid' }]), 3800);
+  setTimeout(() => fake.emit('fx', [{ e: 'crawl' }]), 4500);
 });
+btn(modBox, 'nine shoppers storm out, then nine supers', () => {
+  ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro'].forEach((k, i) => {
+    setTimeout(() => fake.emit('fx', [{ e: 'left', k, sup: 0 }]), i * 900);
+    setTimeout(() => fake.emit('fx', [{ e: 'left', k, sup: 1 }]), 8600 + i * 1200);
+  });
+});
+btn(modBox, 'gym bro wrecks one of everything', () => {
+  ['crate', 'belt', 'press', 'sprinkler', 'forklift', 'wetfloor', 'samples'].forEach((k, i) => {
+    setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5, k }]), i * 1100);
+  });
+  setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5, k: 'forklift', down: 1 }]), 7 * 1100);
+});
+btn(modBox, 'upgrade levels 1 to 10 (another player)', () => {
+  for (let lv = 1; lv <= 10; lv++) setTimeout(() => fake.emit('fx', [{ e: 'upgraded', k: 'sprinkler', lv, by: 99 }]), (lv - 1) * 700);
+});
+btn(modBox, 'my own upgrade: event then button (plays once)', () => {
+  fake.emit('fx', [{ e: 'upgraded', k: 'forklift', lv: 4, by: fake.me }]);
+  sound.play('upgrade');
+});
+btn(modBox, 'rebuilt 1 / 4 / 9', () => {
+  [1, 4, 9].forEach((n, i) => setTimeout(() => fake.emit('fx', [{ e: 'rebuilt', n, by: 99 }]), i * 1300));
+});
+btn(modBox, 'gave 10 / 150 / 2000', () => {
+  [10, 150, 2000].forEach((n, i) => setTimeout(() => fake.emit('fx', [{ e: 'gave', n, by: 99, to: fake.me }]), i * 1100));
+});
+btn(modBox, 'lobby over (begun)', () => fake.emit('fx', [{ e: 'begun' }]));
+btn(modBox, 'ready: store, then office', () => {
+  fake.emit('fx', [{ e: 'ready', side: 'store', by: 1 }]);
+  setTimeout(() => fake.emit('fx', [{ e: 'ready', side: 'office', by: 2 }]), 1200);
+});
+btn(modBox, 'Head Office: taken, then quit', () => {
+  fake.emit('fx', [{ e: 'side', side: 'office', by: 1 }]);
+  setTimeout(() => fake.emit('fx', [{ e: 'side', side: 'store', by: 1 }]), 1800);
+});
+btn(modBox, '20 gym bros leave in one tick', () => fake.emit('fx', Array.from({ length: 20 }, () => ({ e: 'left', k: 'gymbro', sup: 0 }))));
 btn(modBox, 'late-wave storm (3 s)', () => {
   // Every tick: sales, sprays and shots, the odd escape, slip and grab. Tests the rate limiting.
   let n = 0;
@@ -591,7 +930,7 @@ btn(modBox, 'late-wave storm (3 s)', () => {
     if (++n >= 90) clearInterval(id);
   }, 33);
 });
-for (const name of ['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial']) btn(modBox, 'play ' + name, () => sound.play(name));
+for (const name of ['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']) btn(modBox, 'play ' + name, () => sound.play(name));
 
 const setBox = document.getElementById('settings');
 for (const key of ['sfx', 'music', 'voice']) {

@@ -72,7 +72,7 @@ export function createChat(session, { playSound = () => {} } = {}) {
     while (list.children.length > KEEP) list.firstChild.remove();
     list.scrollTop = list.scrollHeight;
     setTimeout(() => line.classList.add('old'), FADE_MS);
-    if (m.pid !== session.me) playSound('click');
+    if (m.pid !== session.me) playSound('chat');
   });
 
   /** Once per frame: chat appears once there is somebody to talk to. */
