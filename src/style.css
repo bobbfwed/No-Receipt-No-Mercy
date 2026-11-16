@@ -1571,3 +1571,24 @@ kbd {
 /* In the lobby the floor is drawn beside the panel, and the things for playing are put away. */
 .game.in-lobby .world { left: 23.2rem; width: calc(100% - 23.2rem); }
 .game.in-lobby .players, .game.in-lobby .buildbar, .game.in-lobby .minimap, .game.in-lobby .planner { display: none; }
+
+/* ---------------------------------------------------------------- version on the menu */
+
+.menu-main { position: relative; }
+.menu-version {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.1rem;
+  padding: 0.2rem 0.55rem 0.3rem;
+  border: 0.15rem solid var(--yellow);
+  border-radius: 0.5rem;
+  background: var(--ink);
+  line-height: 1;
+  cursor: default;
+}
+.menu-version small { align-self: center; margin-right: 0.4rem; font: 900 0.6rem var(--font-heavy); letter-spacing: 0.1em; color: var(--muted); }
+.menu-version b { font: 900 2.4rem var(--font-heavy); color: var(--yellow); }
+.menu-version span { font: 900 1rem var(--font-heavy); color: #c3cad3; }

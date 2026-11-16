@@ -1,5 +1,6 @@
 // The front door: name, play solo, host, join, and the same-computer test options.
 import { MAP_DESIGNS, MAP_SIZES } from '../sim/index.js';
+import { VERSION, RELEASE, versionText } from '../version.js';
 import { h, loadName, saveName } from './dom.js';
 import { howToPlay } from './overlays.js';
 
@@ -120,6 +121,9 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
 
   const card = h('div', { class: 'menu-card' },
     h('div', { class: 'menu-main' },
+      // The version: big, then the release number small, so it is easy to see when the site has updated.
+      h('div', { class: 'menu-version', title: `Version ${versionText()}. The small number goes up with every update.`, 'aria-label': `Version ${versionText()}` },
+        h('small', null, 'VERSION'), h('b', null, VERSION), h('span', null, `.${String(RELEASE).padStart(2, '0')}`)),
       h('div', { class: 'menu-sign' }, 'RETURNS DEPARTMENT'),
       h('h1', { class: 'menu-title' }, 'NO RECEIPT,', h('br'), 'NO MERCY'),
       h('p', { class: 'menu-tagline' }, 'The customer is always a prick.'),
