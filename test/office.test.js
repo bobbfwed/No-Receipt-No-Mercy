@@ -9,7 +9,7 @@ import {
 
 /** Dave runs the store, Steve has taken the Head Office job. */
 function withOffice(seed = 4, map = { design: 'warehouse', size: 'm' }) {
-  const s = createGame({ seed, map });
+  const s = createGame({ seed, map, zones: false }); // these tests are not about where machines go
   addPlayer(s, 'Dave');
   addPlayer(s, 'Steve');
   assert.ok(applyCommand(s, 1, { c: 'side', side: 'office' }).ok);

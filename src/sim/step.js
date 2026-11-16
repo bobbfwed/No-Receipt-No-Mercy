@@ -157,13 +157,8 @@ function neighbour(state, i, d) {
   return x < 0 || y < 0 || x >= W || y >= state.h ? -1 : y * W + x;
 }
 
-/**
- * Tries to hand an item travelling in direction d to the building on tile ti.
- * @param {number} travel how many belts the item has ridden so far
- * @param {boolean} fromBelt true if a belt is handing it over. Machines and chutes only take
- *   goods from a belt, and machines only hand them to one: no belts, no factory.
- */
-function offer(state, ti, kind, d, ev, travel, fromBelt) {
+/** Tries to hand an item travelling in direction d to the building on tile ti. */
+function offer(state, ti, kind, d, ev) {
   if (ti < 0) return false;
   const b = state.grid[ti];
   if (!b) return false;
@@ -171,40 +166,25 @@ function offer(state, ti, kind, d, ev, travel, fromBelt) {
     if (b.d === ((d + 2) & 3)) return false; // two belts facing each other
     const it = b.it;
     if (it.length >= 2 || (it.length && it[it.length - 1][1] < 0.5)) return false;
-    it.push([kind, 0, travel + 1]);
+    it.push([kind, 0]);
     return true;
   }
-  if (!fromBelt) return false;
   if (b.k === 'press' || b.k === 'packer') {
     // A machine takes its input from any side except the side it outputs to.
     if (kind !== BUILD[b.k].takes || b.n >= 2 || d === ((b.d + 2) & 3)) return false;
     b.n++;
-    (b.tq ||= []).push(travel);
     return true;
   }
   if (b.k === 'chute') {
-    // The further it rode on belts, the more it sells for.
-    const item = ITEMS[kind];
-    const v = item.value + Math.min(item.bonus, Math.floor(travel / item.per));
+    const v = ITEMS[kind].value;
     earn(state, v);
     state.ws.earned += v;
     bump(state, b.o, 'shipped');
     bump(state, b.o, 'earned', v);
-    ev.push({ e: 'sale', i: ti, v, kind, travel });
+    ev.push({ e: 'sale', i: ti, v, kind });
     return true;
   }
   return false;
-}
-
-/**
- * A machine with goods to hand over and something other than a belt in front of it: say so now
- * and then, so the interface can tell the player why nothing is moving.
- */
-function needsBelt(state, i, b, ev) {
-  if ((state.tick + i) % (5 * TICK_HZ) !== 0) return;
-  const ti = neighbour(state, i, b.d);
-  const front = ti < 0 ? 0 : state.grid[ti];
-  if (front && front.k !== 'belt') ev.push({ e: 'nobelt', i, k: b.k, owner: b.o });
 }
 
 function giveUp(state, s, by, why, ev) {
@@ -248,26 +228,21 @@ function stepBuildings(state, fields, ev) {
           const cap = j === 0 ? 1 : it[j - 1][1] - 0.5;
           if (it[j][1] < cap) it[j][1] = Math.min(cap, it[j][1] + beltAdv);
         }
-        if (it.length && it[0][1] >= 1 && offer(state, neighbour(state, i, b.d), it[0][0], b.d, ev, it[0][2] | 0, true)) it.shift();
+        if (it.length && it[0][1] >= 1 && offer(state, neighbour(state, i, b.d), it[0][0], b.d, ev)) it.shift();
         break;
       }
       case 'unpacker':
         if (b.t > 0) b.t--;
-        if (b.t <= 0) {
-          if (offer(state, neighbour(state, i, b.d), def.makes, b.d, ev, 0, false)) b.t = secs(def.period);
-          else needsBelt(state, i, b, ev);
-        }
+        if (b.t <= 0 && offer(state, neighbour(state, i, b.d), def.makes, b.d, ev)) b.t = secs(def.period);
         break;
       case 'press':
       case 'packer':
         if (b.out) {
-          if (offer(state, neighbour(state, i, b.d), b.out, b.d, ev, b.tr | 0, false)) b.out = 0;
-          else needsBelt(state, i, b, ev);
+          if (offer(state, neighbour(state, i, b.d), b.out, b.d, ev)) b.out = 0;
         } else if (b.t > 0) {
           if (--b.t === 0) b.out = def.makes;
         } else if (b.n > 0) {
           b.n--;
-          b.tr = (b.tq && b.tq.shift()) | 0; // the finished item keeps the distance its input rode
           b.t = secs(def.time);
         }
         break;
@@ -595,7 +570,6 @@ function stepShoppers(state, fields, stands, ev) {
  *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind}
  *   mess {i} a teenager dropped a mess on tile i · kid {x,y} a child escaped · caught {x,y}
  *   bolt {x,y} a guide dog bolted
- *   nobelt {i,k,owner} a machine on tile i has goods but no belt in front of it to put them on
  *   smash {i,x,y,k,owner,down} a gym bro wrecked the building of kind k on tile i; with
  *     down: 1 it was upgraded and only lost a level
  * (Commands add: placed, removed, upgraded {k,x,y,by,lv}, gave {by,to,n}, rebuilt {by,n}.)

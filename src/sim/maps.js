@@ -151,3 +151,40 @@ function shelves(w, h, mid, wall) {
     for (let y = mid + 2; y <= h - 4; y++) wall(x, y);
   }
 }
+
+/**
+ * Marks out the floor the factory machines must be built on (see ZONES in constants.js).
+ * The floor is divided into sections ten tiles apart. Each section has four patches, four tiles
+ * wide, one above the other: Loading Bay at the top, then Press Shop, Gift Wrap, and Shipping
+ * near the bottom. Every other section is upside down, so production lines run down one section
+ * and up the next, which is what makes them a zigzag for shoppers. Patches never touch, so
+ * goods always need a belt to get from one to the next.
+ * @returns {string} one character per tile: a key of ZONES, or a space
+ */
+export function makeZones(w, h, tiles, doors) {
+  const z = new Array(w * h).fill(' ');
+  const tall = h >= 30 ? 3 : 2, wide = 4;
+  const tops = { u: 1, p: Math.round(h * 0.25), k: Math.round(h * 0.5), c: Math.round(h * 0.7) };
+  for (let n = 0, x0 = 9; x0 + wide - 1 <= w - 4; n++, x0 += 10) {
+    for (const [ch, top] of Object.entries(tops)) {
+      for (let dy = 0; dy < tall; dy++) {
+        const y = n % 2 ? h - 1 - (top + dy) : top + dy;
+        for (let dx = 0; dx < wide; dx++) {
+          const i = y * w + x0 + dx;
+          if (tiles[i] === '.') z[i] = ch;
+        }
+      }
+    }
+  }
+  // Keep the floor right inside every entrance unmarked, so a machine is never the obvious
+  // thing to put in a doorway.
+  for (const door of doors) {
+    for (const t of door) {
+      const tx = t % w, ty = (t / w) | 0;
+      for (let y = ty - 1; y <= ty + 1; y++) {
+        for (let x = tx - 1; x <= tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) z[y * w + x] = ' ';
+      }
+    }
+  }
+  return z.join('');
+}

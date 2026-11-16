@@ -22,6 +22,7 @@ function tileOf(state, s) {
  * @param {number} [pid] the player who would pay for it
  * @returns {string|null} null if allowed, otherwise the reason:
  *   'over' game finished, 'kind' unknown building, 'bounds' not a floor tile, 'occupied',
+ *   'zone' that machine only goes on its own marked floor,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
  *   'blocked' it would wall off the tills from an entrance or from a shopper.
  */
@@ -32,6 +33,8 @@ export function canPlace(state, k, x, y, pid = 0) {
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
   const i = idxOf(state, x, y);
   if (state.tiles[i] !== '.') return 'bounds';
+  // The four factory machines only go on their own marked floor (on maps that have it).
+  if (def.zone && state.zones && state.zones[i] !== def.zone) return 'zone';
   if (state.grid[i]) return 'occupied';
   const player = state.players[pid];
   if (!player || player.cash < def.cost) return 'cash';
@@ -75,7 +78,7 @@ function newBuilding(k, owner, d) {
   if (def.rot) b.d = d & 3;
   if (k === 'belt') b.it = [];
   if (k === 'unpacker') b.t = Math.round(def.period * TICK_HZ);
-  if (k === 'press' || k === 'packer') { b.n = 0; b.t = 0; b.out = 0; b.tq = []; b.tr = 0; }
+  if (k === 'press' || k === 'packer') { b.n = 0; b.t = 0; b.out = 0; }
   if (def.tower) b.cd = 0;
   if (k === 'forklift') b.a = 0;
   return b;

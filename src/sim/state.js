@@ -1,7 +1,7 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
 import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES } from './constants.js';
-import { makeMap } from './maps.js';
+import { makeMap, makeZones } from './maps.js';
 
 /**
  * @typedef {Object} Building
@@ -9,12 +9,10 @@ import { makeMap } from './maps.js';
  * @property {number} o   owner player id
  * @property {number} [d] facing direction 0-3
  * @property {number} [lv] upgrade level, 2 or more (absent means level 1)
- * @property {Array<[string, number, number]>} [it] belt only: items as [itemKind, progress 0..1, belts ridden so far], front item first
+ * @property {Array<[string, number]>} [it] belt only: items as [itemKind, progress 0..1], front item first
  * @property {number} [t]   machines: ticks left on the current job; unpacker: ticks until next box
  * @property {number} [n]   press/packer: inputs waiting
  * @property {string|0} [out] press/packer: finished item waiting to leave
- * @property {number[]} [tq] press/packer: belts ridden by each input waiting (same length as n)
- * @property {number} [tr]  press/packer: belts ridden by the item being made or waiting to leave
  * @property {number} [cd]  towers: ticks until it can fire again
  * @property {number} [a]   forklift: aim angle in radians (for drawing)
  */
@@ -75,8 +73,10 @@ function blankStats() {
  * @param {{design?: string, size?: string, slots?: number}} [o.map] the floor plan (see maps.js).
  *   Left out, it is the original small warehouse with a single entrance, which the tutorial and
  *   most tests are written for.
+ * @param {boolean} [o.zones] mark out the floor areas the factory machines must be built on.
+ *   On by default when a map is given; off for the bare default map.
  */
-export function createGame({ seed = 1, training = false, map = null } = {}) {
+export function createGame({ seed = 1, training = false, map = null, zones = !!map } = {}) {
   const design = (map && map.design) || 'warehouse', size = (map && map.size) || 'xs';
   const plan = makeMap(design, size, map ? map.slots ?? 6 : 1);
   const state = {
@@ -93,6 +93,9 @@ export function createGame({ seed = 1, training = false, map = null } = {}) {
     w: plan.w,
     h: plan.h,
     tiles: plan.tiles,
+    /** Marked floor for the factory machines: one character per tile, a key of ZONES or a
+     *  space. An empty string means the map has no marked floor and machines go anywhere. */
+    zones: zones ? makeZones(plan.w, plan.h, plan.tiles, plan.doors) : '',
     /** Entrances in the order they open, each a list of tile indexes; `open` of them are open. */
     doors: plan.doors,
     open: 0,
