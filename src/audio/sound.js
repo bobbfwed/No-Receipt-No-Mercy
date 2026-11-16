@@ -5,42 +5,40 @@
 //   const sound = createSound();
 //   sound.attach(session)   listen to 'fx', 'say', 'review', 'report', 'players'; returns an unsubscribe
 //   sound.unlock()          call from a click or key press: browsers only allow audio after one
-//   sound.play(name)        interface sounds: select, place, remove, rotate, nope, click, tutorial
+//   sound.play(name)        interface sounds: select, place, remove, rotate, nope, click, tutorial,
+//                           upgrade, rebuild, chat
 //   sound.get(key) / sound.set(key, value)   'sfx', 'music', 'voice' (booleans), 'volume' (0..1)
 //   sound.destroy()
 //
 // Before unlock(), and in browsers without Web Audio or speech synthesis, every call is silent and
-// harmless. The effects themselves live in effects.js (one table), the music in music.js, the
-// master chain in mix.js and DEB's voice in speech.js.
+// harmless. The effects themselves live in effects.js (one table) and shoppers.js, how crowds of
+// the same sound are thinned out in crowd.js, the music in music.js, the master chain in mix.js
+// and DEB's voice in speech.js.
 import { SOUNDS } from './effects.js';
 import { musicBar, BAR, LOOP_BARS } from './music.js';
 import { createChain } from './mix.js';
 import { createDebVoice } from './speech.js';
-import { hashText } from './synth.js';
+import { hashText, built } from './synth.js';
+import { createGate } from './crowd.js';
 
 const STORE_KEY = 'returnsDept.sound';
 const DEFAULTS = { sfx: true, music: true, voice: true, volume: 0.7 };
 
 /** Interface sounds play() accepts. */
-const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial']);
-
-/**
- * Shortest gap between two plays of the same sound, in seconds. Anything sooner is dropped:
- * late waves fire dozens of sprays, shots and sales a second.
- */
-const MIN_GAP = {
-  sale: 0.07, spray: 0.09, shot: 0.09, grab: 0.08, sample: 0.08, left: 0.08, escape: 0.12, slip: 0.15,
-  deb: 0.15, review: 0.3, report: 0.5, players: 0.3, waveStart: 1, waveEnd: 1, won: 2, lost: 2,
-  mess: 0.07, kid: 0.25, caught: 0.2, bolt: 0.4, smash: 0.15,
-  rotate: 0.03, click: 0.03, select: 0.04, place: 0.04, remove: 0.04, nope: 0.15, tutorial: 0.2,
-};
+const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']);
 
 /** Big moments: never dropped for being busy, and DEB's blips step aside for them. */
-const BIG = new Set(['waveStart', 'waveEnd', 'won', 'lost', 'report']);
-/** At most this many effects ringing at once (big moments and interface sounds may exceed it). */
-const MAX_VOICES = 14;
-/** Plays of one sound within this window make each further play quieter. */
-const CROWD_WINDOW = 0.5;
+const BIG = new Set(['waveStart', 'waveEnd', 'won', 'lost', 'report', 'begun']);
+/** Never thinned out or dropped for being busy (rare, and they mean something). */
+const VIP = new Set([...BIG, ...UI_SOUNDS, 'ready', 'side', 'gave', 'crawl']);
+/** Someone else's upgrade, rebuild or gift: still heard, but quieter than your own. */
+const OTHERS = 0.6;
+/**
+ * The host hears his own upgrade and rebuild twice: the simulation event (which knows the new
+ * level or how many came back) arrives during the click, then the interface asks for its button
+ * sound. Whichever comes first plays; the other, within this many seconds, is skipped.
+ */
+const PAIR_SECS = 1.0;
 /** How far ahead the music is scheduled, and how often the scheduler wakes up (seconds). */
 const LOOKAHEAD = 0.6;
 const TICK_MS = 120;
@@ -78,11 +76,11 @@ export function createSound() {
   let talking = false;
   const unsubs = [];
 
-  // Rate limiting state.
-  const lastAt = {};        // sound name -> ctx time of the last play
-  const recent = {};        // sound name -> ctx times of plays in the last CROWD_WINDOW
-  let ringing = [];         // end times of effects still sounding
+  // Crowd control (see crowd.js). The seed only makes each game's variations differ.
+  const gate = createGate((Math.random() * 2147483646) | 0);
   let lastBigAt = -10;
+  let session = null;       // the last attached session, for session.me
+  const unpaired = { ui: { upgrade: [], rebuild: [] }, fx: { upgrade: [], rebuild: [] } };
 
   // Music state.
   let music = null;         // { out: GainNode, timer, nextAt, bar } while playing
@@ -92,29 +90,44 @@ export function createSound() {
 
   // ------------------------------------------------------------------ effects
 
-  /** Plays one effect from the table now, unless it is switched off, rate-limited or too crowded. */
-  function fire(name, opts = {}) {
+  /**
+   * Plays one effect from the table, unless it is switched off or the crowd gate says no (too
+   * soon, too many, too crowded). how.sub: a sub-kind (shopper kind...) the gate lets through if
+   * it has not been heard lately; how.gain: an extra level factor.
+   */
+  function fire(name, opts = {}, how = {}) {
     if (destroyed || !running() || !settings.sfx || hidden) return;
     const s = SOUNDS[name];
     if (!s) return;
     const now = ctx.currentTime;
-    if (now - (lastAt[name] ?? -10) < (MIN_GAP[name] ?? 0.05)) return;
-    ringing = ringing.filter((end) => end > now);
-    const vip = BIG.has(name) || UI_SOUNDS.has(name);
-    if (!vip && ringing.length >= MAX_VOICES) return;
     if (name === 'deb' && now - lastBigAt < 1) return; // let the chime / fanfare be heard
-    lastAt[name] = now;
+    const g = gate.admit(name, now, { vip: VIP.has(name), sub: how.sub, shapes: s.shapes });
+    if (!g) return;
     if (BIG.has(name)) lastBigAt = now;
-    // The more of the same sound in the last half second, the quieter each one.
-    const r = (recent[name] ||= []);
-    while (r.length && now - r[0] > CROWD_WINDOW) r.shift();
-    r.push(now);
-    const level = Math.max(0.35, 1 / Math.sqrt(r.length));
     try {
-      const end = s.play(ctx, chain.sfx, now + 0.01, { ...opts, level });
-      ringing.push(end);
+      const before = built.nodes;
+      const end = s.play(ctx, chain.sfx, g.at + 0.01, { seed: g.seed, ...opts, level: g.level * (how.gain ?? 1) });
+      gate.started(name, end, built.nodes - before);
     } catch { /* a sound must never break the game */ }
+    if (g.merge) fire(g.merge);
   }
+
+  /**
+   * Own upgrades and rebuilds arrive both as an event and as a button sound (see PAIR_SECS).
+   * Returns true if the other one was already heard, so this one should stay quiet.
+   */
+  function heardAlready(from, key) {
+    const now = (globalThis.performance ? performance.now() : Date.now()) / 1000;
+    const other = unpaired[from === 'ui' ? 'fx' : 'ui'][key];
+    while (other.length && now - other[0] > PAIR_SECS) other.shift();
+    if (other.length) { other.shift(); return true; }
+    const mine = unpaired[from][key];
+    mine.push(now);
+    if (mine.length > 8) mine.shift();
+    return false;
+  }
+
+  const mine = (id) => !!session && id === session.me;
 
   /** One tick of simulation events from the session. */
   function onFx(list) {
@@ -125,19 +138,32 @@ export function createSound() {
     for (const e of list) {
       if (!e || typeof e !== 'object') continue;
       switch (e.e) {
-        case 'sale': fire('sale', { kind: e.kind }); break;
+        case 'sale': fire('sale', { kind: e.kind }, { sub: e.kind }); break;
         case 'spray': fire('spray'); break;
         case 'shot': fire('shot'); break;
-        case 'escape': if (!lost) fire('escape', { k: e.k }); break;
-        case 'left': fire('left', { k: e.k }); break;
+        case 'escape': if (!lost) fire('escape', { k: e.k, sup: e.sup | 0 }, { sub: e.k }); break;
+        case 'left': fire('left', { k: e.k, sup: e.sup | 0 }, { sub: e.k }); break;
         case 'slip': fire('slip'); break;
         case 'grab': fire('grab'); break;
         case 'sample': fire('sample'); break;
         case 'mess': fire('mess'); break;
         case 'kid': fire('kid'); break;
         case 'caught': fire('caught'); break;
+        case 'crawl': fire('crawl'); break;
         case 'bolt': fire('bolt'); break;
-        case 'smash': fire('smash'); break;
+        case 'smash': fire('smash', { k: e.k, down: e.down | 0 }, { sub: e.down ? 'down' : e.k }); break;
+        case 'upgraded':
+          if (!mine(e.by)) fire('upgraded', { k: e.k, lv: e.lv }, { gain: OTHERS });
+          else if (!heardAlready('fx', 'upgrade')) fire('upgraded', { k: e.k, lv: e.lv });
+          break;
+        case 'rebuilt':
+          if (!mine(e.by)) fire('rebuilt', { n: e.n }, { gain: OTHERS });
+          else if (!heardAlready('fx', 'rebuild')) fire('rebuilt', { n: e.n });
+          break;
+        case 'gave': fire('gave', { n: e.n }, { gain: mine(e.by) || mine(e.to) ? 1 : OTHERS }); break;
+        case 'begun': fire('begun'); break;
+        case 'ready': fire('ready', { side: e.side }); break;
+        case 'side': fire('side', { side: e.side }); break;
         case 'waveStart': fire('waveStart', { dads: e.dads | 0 }); break;
         case 'waveEnd': if (!won) fire('waveEnd'); break;
         case 'won': fire('won'); break;
@@ -261,7 +287,9 @@ export function createSound() {
   }
 
   function play(name) {
-    if (UI_SOUNDS.has(name)) fire(name);
+    if (!UI_SOUNDS.has(name)) return;
+    if ((name === 'upgrade' || name === 'rebuild') && heardAlready('ui', name)) return;
+    fire(name);
   }
 
   function get(key) {
@@ -287,14 +315,15 @@ export function createSound() {
     }
   }
 
-  function attach(session) {
-    if (!session || typeof session.on !== 'function') return () => {};
+  function attach(ses) {
+    if (!ses || typeof ses.on !== 'function') return () => {};
+    session = ses; // for session.me: whose upgrade, rebuild or gift an event is
     const offs = [
-      session.on('fx', onFx),
-      session.on('say', onSay),
-      session.on('review', (m) => fire('review', { stars: m && m.stars, kind: m && m.kind })),
-      session.on('report', () => fire('report')),
-      session.on('players', () => fire('players')),
+      ses.on('fx', onFx),
+      ses.on('say', onSay),
+      ses.on('review', (m) => fire('review', { stars: m && m.stars, kind: m && m.kind })),
+      ses.on('report', () => fire('report')),
+      ses.on('players', () => fire('players')),
     ];
     const off = () => {
       for (const f of offs.splice(0)) {

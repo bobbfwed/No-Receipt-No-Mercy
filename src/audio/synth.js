@@ -22,6 +22,29 @@ export function rng(seed) {
   };
 }
 
+/**
+ * The small differences between two plays of the same sound. `seed` (a whole number, from
+ * opts.seed) picks one of `shapes` versions of the sound (seed % shapes, so seeds 0, 1, 2...
+ * go through every version in turn: the test page relies on that) and drives the jitter.
+ *   x.shape        which version to play
+ *   x.r()          a random number 0..1
+ *   x.j(amt)       a factor near 1: 1 +- amt
+ *   x.between(a,b) a number between a and b
+ *   x.pick(list)   one item of a list
+ */
+export function vary(seed, shapes = 1) {
+  const s = (seed ?? 0) >>> 0;
+  // Mixed up, so neighbouring seeds do not give neighbouring jitter.
+  const r = rng(Math.imul(s + 1, 2654435761) ^ 0x5bd1e995);
+  return {
+    shape: shapes > 1 ? s % shapes : 0,
+    r,
+    j: (amt) => 1 + (r() * 2 - 1) * amt,
+    between: (a, b) => a + (b - a) * r(),
+    pick: (list) => list[Math.floor(r() * list.length) % list.length],
+  };
+}
+
 /** A short whole number made from a string, used as a seed (so DEB's blips match her line). */
 export function hashText(s) {
   let h = 2166136261;
@@ -45,6 +68,12 @@ export function noiseBuffer(ctx) {
 }
 
 /**
+ * Audio nodes built by every voice so far. Read it before and after a sound to know what that
+ * sound cost; the crowd gate (crowd.js) budgets nodes a second with it.
+ */
+export const built = { nodes: 0 };
+
+/**
  * Starts a new voice: an output gain (at `level`, default 1) connected to `dest`.
  * v.node(n)            remember a node so it is disconnected when the voice ends
  * v.run(src, t0, t1)   start a source at t0 and stop it at t1 (the voice ends after the last one)
@@ -58,6 +87,7 @@ export function voice(ctx, dest, level = 1) {
   out.gain.value = level;
   out.connect(dest);
   nodes.push(out);
+  built.nodes++;
   const done = () => {
     if (--live > 0) return;
     for (const n of nodes) {
@@ -69,9 +99,10 @@ export function voice(ctx, dest, level = 1) {
     ctx,
     out,
     get end() { return end; },
-    node(n) { nodes.push(n); return n; },
+    node(n) { nodes.push(n); built.nodes++; return n; },
     run(src, t0, t1, offset = 0) {
       nodes.push(src);
+      built.nodes++;
       live++;
       src.onended = done;
       src.start(t0, offset);
@@ -249,5 +280,69 @@ export function formant(v, o) {
   if (o.breath) {
     noise(v, { t, peak: peak * o.breath, a, h, d, type: 'bandpass', f: formants[0][0] * 1.6, q: 0.8, to });
   }
+  return end;
+}
+
+/**
+ * Rough vowel shapes for formant() and babble(): [centre Hz, Q, level] for a man's voice. Scale the
+ * centres up (about 1.15 for a woman, 1.4 for a child) with `scale`. 'mm' is a closed-mouth hum.
+ */
+export const VOWELS = {
+  ah: [[750, 5, 1], [1200, 7, 0.5]],
+  eh: [[550, 5, 1], [1800, 8, 0.45]],
+  ee: [[300, 5, 1], [2300, 9, 0.4]],
+  ih: [[420, 5, 1], [2000, 8, 0.45]],
+  oh: [[500, 5, 1], [850, 7, 0.5]],
+  oo: [[330, 5, 1], [800, 7, 0.4]],
+  uh: [[640, 4, 1], [1150, 6, 0.5]],
+  er: [[480, 5, 1], [1350, 7, 0.5]],
+  mm: [[260, 1.5, 1], [2200, 8, 0.12]],
+};
+
+/** One voice-like syllable: formant() with a named vowel ({ vowel, scale, ...formant options }). */
+export function say(v, o) {
+  const scale = o.scale || 1;
+  const formants = (VOWELS[o.vowel] || VOWELS.uh).map(([f, q, l]) => [f * scale, q, l]);
+  return formant(v, { ...o, formants });
+}
+
+/**
+ * Muttering: several quick syllables from one buzzy source, the pitch and the vowel changing on
+ * each. Costs the same handful of nodes however many syllables there are, so crowds stay cheap.
+ * { sylls: [{ t, len, f, f1 (slide to), vowel, peak }...] in time order, not overlapping;
+ *   type, scale (formant shift), to }
+ */
+export function babble(v, { sylls, type = 'sawtooth', scale = 1, to = v.out }) {
+  const ctx = v.ctx;
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  const f1 = filter(v, 'bandpass', 700, 5);
+  const f2 = filter(v, 'bandpass', 1200, 7);
+  const g2 = gain(v, 0.5);
+  const g = gain(v, 0);
+  osc.connect(f1).connect(g);
+  osc.connect(f2).connect(g2).connect(g);
+  g.connect(to);
+  const p = g.gain;
+  const t0 = sylls[0].t;
+  p.setValueAtTime(0, t0);
+  let end = t0;
+  for (const s of sylls) {
+    const t = Math.max(s.t, end);
+    const len = Math.max(0.03, s.len);
+    const [[a], [b, , lb]] = VOWELS[s.vowel] || VOWELS.uh;
+    f1.frequency.setValueAtTime(a * scale, t);
+    f2.frequency.setValueAtTime(b * scale, t);
+    g2.gain.setValueAtTime(lb, t);
+    osc.frequency.setValueAtTime(s.f, t);
+    if (s.f1) osc.frequency.exponentialRampToValueAtTime(s.f1, t + len);
+    const pk = s.peak ?? 0.4;
+    p.setValueAtTime(0, t);
+    p.linearRampToValueAtTime(pk, t + Math.min(0.015, len * 0.3));
+    p.linearRampToValueAtTime(pk * 0.6, t + len * 0.6);
+    p.linearRampToValueAtTime(0, t + len);
+    end = t + len;
+  }
+  v.run(osc, t0, end + 0.01);
   return end;
 }

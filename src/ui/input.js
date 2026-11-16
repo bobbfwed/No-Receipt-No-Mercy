@@ -75,7 +75,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       if (!r || r.ok) did = c.c;
     }
     if (did === 'place' || did === 'remove') playSound(did);
-    if (did === 'upgrade' || did === 'rebuild') playSound('place');
+    if (did === 'upgrade' || did === 'rebuild') playSound(did);
   }
 
   /** Puts back everything of this player's that gym bros have wrecked, as far as his cash goes. */
