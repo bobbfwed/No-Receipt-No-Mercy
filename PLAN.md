@@ -103,7 +103,7 @@ One player stops defending and plays the other side: each wave he gets a budget,
 - Players now see the game about a quarter of a second behind the host.
 - A dropped player keeps his money for 90 seconds of game time (a minute and a half at normal speed, 30 seconds at 3x) before it is shared out.
 - `src/net/relay.js` is ready for a relay's address, username and password. Empty until the owner has an account.
-- Checked in one browser family (Edge) on one machine, plus the real internet broker. Not checked: two different browsers playing together, where tiny differences in arithmetic are expected and the checksum-and-resync is what covers them.
+- Checked with a Firefox host and an Edge player through the real internet broker: 422 checksum comparisons over about 50 seconds with sprinklers and a forklift firing, no mismatches. Also checked Edge to Edge. Not checked: phones as players under the new scheme, and long games.
 
 ## Save and resume (built)
 The host's browser saves the game every few seconds; the menu offers to resume it. One save per browser, kept on that device only. After a host hand-over the new host's browser holds the save. Resuming opens a new room; the others rejoin by name and get their places and money back, with no time limit. A save made by an older version of the rules is ignored if it does not look right, which is a blunt check: a rule change that keeps the same shape could still load a save that then behaves oddly.
