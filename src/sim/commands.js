@@ -5,6 +5,10 @@ import { inBounds, idxOf, bump } from './state.js';
 import { computeDist, modeOf, UNREACHABLE } from './path.js';
 import { beginWave } from './step.js';
 import { upgradeCost, spentOn, levelOf } from './upgrades.js';
+import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
+
+/** Commands a Head Office player may not use: he does not touch the store. */
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild']);
 
 /** Seconds of build time before wave 1, counted from the first thing placed. */
 const FIRST_BUILD_SECS = 90;
@@ -87,7 +91,13 @@ function newBuilding(k, owner, d) {
  *   { c: 'give', to, n }        hand n of your cash to player `to`
  *   { c: 'rebuild' }            put back what gym bros wrecked of yours, as far as your cash goes
  *                               (with all: true, everybody's)
- *   { c: 'start' }              open the doors now instead of waiting for the timer
+ *   { c: 'side', side }         take the Head Office job ('office': run the shoppers) or go back
+ *                               to the store ('store'). Only between waves, only one at a time,
+ *                               and only if somebody is left to run the store
+ *   { c: 'plan', groups }       Head Office only: the shoppers bought for the coming wave
+ *                               (see office.js for the shape); replaces the plan so far
+ *   { c: 'start' }              open the doors now instead of waiting for the timer. With a Head
+ *                               Office player, both sides must ask before they open early
  *   { c: 'role', role }         change your job title (cosmetic)
  *   { c: 'speed', n }           game speed 1, 2 or 3
  * @param {Array} ev events are appended here
@@ -96,6 +106,7 @@ function newBuilding(k, owner, d) {
 export function applyCommand(state, pid, cmd, ev = []) {
   const player = state.players[pid];
   if (!player || !cmd || typeof cmd !== 'object') return { ok: false, why: 'bad' };
+  if (player.side === 'office' && STORE_ONLY.has(cmd.c)) return { ok: false, why: 'office' };
   switch (cmd.c) {
     case 'place': {
       const why = canPlace(state, cmd.k, cmd.x, cmd.y, pid);
@@ -175,10 +186,49 @@ export function applyCommand(state, pid, cmd, ev = []) {
       ev.push({ e: 'rebuilt', by: pid, n });
       return { ok: true, n };
     }
+    case 'side': {
+      if (cmd.side !== 'office' && cmd.side !== 'store') return { ok: false, why: 'bad' };
+      if (state.training) return { ok: false, why: 'bad' };
+      if (state.phase !== 'build') return { ok: false, why: 'phase' };
+      if (player.side === cmd.side) return { ok: true };
+      if (cmd.side === 'office') {
+        const holder = officePlayer(state);
+        if (holder && holder !== player) return { ok: false, why: 'taken' };
+        // Somebody has to be left running the store.
+        if (!state.players.some((p) => p !== player && p.on && p.side === 'store')) return { ok: false, why: 'lonely' };
+        // A previous holder who dropped out loses the job.
+        if (state.office && state.players[state.office.pid]) state.players[state.office.pid].side = 'store';
+        player.side = 'office';
+        state.office = { pid, budget: 0, bank: 0, plan: [], ready: false };
+        refreshBudget(state);
+      } else {
+        player.side = 'store';
+        state.office = null;
+      }
+      state.storeReady = false;
+      ev.push({ e: 'side', by: pid, side: cmd.side });
+      return { ok: true };
+    }
+    case 'plan': {
+      if (player.side !== 'office' || !state.office || state.office.pid !== pid) return { ok: false, why: 'bad' };
+      if (state.phase !== 'build') return { ok: false, why: 'phase' };
+      const why = checkPlan(state, cmd.groups);
+      if (why) return { ok: false, why };
+      state.office.plan = tidyPlan(cmd.groups);
+      return { ok: true };
+    }
     case 'start': {
       if (state.phase !== 'build') return { ok: false, why: 'phase' };
       // In training the doors only open when the lesson has a wave lined up.
       if (state.training && !state.nextWave) return { ok: false, why: 'notyet' };
+      // With a Head Office player, the doors open early only when both sides have asked.
+      if (officePlayer(state)) {
+        if (player.side === 'office') state.office.ready = true; else state.storeReady = true;
+        if (!state.office.ready || !state.storeReady) {
+          ev.push({ e: 'ready', by: pid, side: player.side });
+          return { ok: true, waiting: true };
+        }
+      }
       beginWave(state, ev);
       return { ok: true };
     }

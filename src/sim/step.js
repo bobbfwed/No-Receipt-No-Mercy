@@ -4,6 +4,7 @@ import { DIRS, BUILD, ITEMS, SHOPPERS, SUPERS, defOf, ST, TUNE, TICK_HZ, DT } fr
 import { rand, bump, resetWaveStats, earn, lose, shareCount } from './state.js';
 import { getField, getFieldTo, modeOf, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf } from './upgrades.js';
+import { takeOfficeWave, refreshBudget } from './office.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
 
@@ -68,7 +69,10 @@ export function beginWave(state, ev) {
   resetWaveStats(state);
   const q = [];
   let dads = 0;
-  const groups = state.training ? state.nextWave || [] : waveSpec(state.wave, shareCount(state));
+  // A Head Office player's plan replaces the automatic wave, if he made one.
+  const bought = state.training ? null : takeOfficeWave(state);
+  state.storeReady = false;
+  const groups = state.training ? state.nextWave || [] : bought || waveSpec(state.wave, shareCount(state));
   state.nextWave = null;
   const supers = new Set();
   for (const g of groups) {
@@ -78,14 +82,14 @@ export function beginWave(state, ev) {
     for (let j = 0; j < g.n; j++) {
       // Spread the supers evenly through the group.
       const isSup = sup > 0 && ((j + 1) * sup) % g.n < sup ? 1 : 0;
-      q.push([state.tick + secs(g.at + j * g.gap), g.k, isSup]);
+      q.push([state.tick + secs(g.at + j * g.gap), g.k, isSup, g.door ?? -1]);
     }
   }
   q.sort((a, b) => a[0] - b[0]);
   state.spawnQ = q;
   ev.push({
     e: 'waveStart', wave: state.wave, total: q.length, dads,
-    kinds: [...new Set(groups.map((g) => g.k))], supers: [...supers],
+    kinds: [...new Set(groups.map((g) => g.k))], supers: [...supers], office: bought ? 1 : 0,
   });
 }
 
@@ -107,6 +111,7 @@ function endWave(state, ev) {
   } else {
     state.phase = 'build';
     state.phaseT = secs(TUNE.buildSecs);
+    refreshBudget(state);
   }
 }
 
@@ -114,10 +119,12 @@ function spawn(state) {
   const q = state.spawnQ;
   if (!q.length || q[0][0] > state.tick) return;
   const W = state.w;
-  const doors = state.doors.slice(0, state.open).flat();
+  const anyDoor = state.doors.slice(0, state.open).flat();
   while (q.length && q[0][0] <= state.tick) {
-    const [, k, sup] = q.shift();
+    const [, k, sup, at] = q.shift();
     const def = sup ? SUPERS[k] : SHOPPERS[k];
+    // Head Office picks the entrance for his groups; otherwise any open one.
+    const doors = at >= 0 && at < state.open ? state.doors[at] : anyDoor;
     const door = doors[(rand(state) * doors.length) | 0];
     // Dads walk in a strict single file. In training everyone does, so a lesson plays out the
     // same way every time.
