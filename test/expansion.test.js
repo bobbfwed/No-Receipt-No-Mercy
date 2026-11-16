@@ -874,11 +874,28 @@ test('a mom with her child in the cart is stopped like anyone else', (t) => {
   assert.equal(ev.filter((e) => e.e === 'left').length, 1);
 });
 
-test('a player who leaves mid-game hands his money to the others and comes back with none', () => {
+test('a player who drops out keeps his money through a short blip, and loses it to the others if he stays away', () => {
+  const grace = TUNE.graceSecs * TICK_HZ;
+  assert.equal(TUNE.graceSecs, 90);
   const s = createGame();
   for (const n of ['Dave', 'Steve', 'Gaz']) addPlayer(s, n);
   s.players[1].cash = 900;
+
+  // A blip: gone for most of the grace period, then back. Nothing changes hands.
   setPlayerOnline(s, 1, false);
+  assert.equal(s.players[1].cash, 900, 'his money is still his the moment he drops');
+  for (let i = 0; i < grace - 10; i++) step(s);
+  assert.equal(s.players[1].cash, 900);
+  assert.equal(addPlayer(s, 'Steve'), 1);
+  assert.equal(s.players[1].gone, undefined, 'his clock is stopped');
+  for (let i = 0; i < grace * 2; i++) step(s);
+  assert.deepEqual(s.players.map((p) => p.cash), [TUNE.startCash, 900, TUNE.startCash], 'and it never runs out later');
+
+  // Gone for good: once the grace period is over, his money is split between those who stay.
+  setPlayerOnline(s, 1, false);
+  for (let i = 0; i < grace - 1; i++) step(s);
+  assert.equal(s.players[1].cash, 900, 'not a tick early');
+  step(s);
   assert.equal(s.players[1].cash, 0);
   assert.equal(s.players[0].cash, TUNE.startCash + 450);
   assert.equal(s.players[2].cash, TUNE.startCash + 450);
@@ -887,18 +904,29 @@ test('a player who leaves mid-game hands his money to the others and comes back 
   assert.equal(addPlayer(s, 'Steve'), 1);
   assert.equal(s.players[1].cash, 0);
   assert.equal(s.players[addPlayer(s, 'Baz')].cash, TUNE.startCash);
-  // Going offline twice does nothing more, and the last player to leave keeps what he has.
+
+  // Going offline twice does not restart his clock.
+  s.players[1].cash = 300;
   setPlayerOnline(s, 1, false);
+  for (let i = 0; i < grace / 2; i++) step(s);
   setPlayerOnline(s, 1, false);
+  for (let i = 0; i < grace / 2; i++) step(s);
+  assert.equal(s.players[1].cash, 0, 'shared out on the original schedule');
+
+  // The last player to leave keeps what he has.
   const solo = createGame();
   addPlayer(solo, 'Dave');
   setPlayerOnline(solo, 0, false);
+  for (let i = 0; i < grace * 2; i++) step(solo);
   assert.equal(solo.players[0].cash, TUNE.startCash);
-  // In the lobby nothing has started, so nothing changes hands.
+  // In the lobby nothing has started, so nothing changes hands, however long he is away.
   const lobby = createGame({ lobby: true, map: { design: 'warehouse', size: 's' } });
   addPlayer(lobby, 'Dave');
   addPlayer(lobby, 'Steve');
   setPlayerOnline(lobby, 1, false);
+  assert.equal(lobby.players[1].gone, undefined);
+  lobby.phase = 'build'; // as if the game had started without him
+  for (let i = 0; i < grace * 2; i++) step(lobby);
   assert.equal(lobby.players[1].cash, TUNE.startCash);
 });
 

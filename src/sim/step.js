@@ -1,7 +1,7 @@
 // One tick of the simulation. Deterministic: the same state always produces the same next state,
 // which lets every player's browser predict the game between updates from the host.
 import { DIRS, BUILD, ITEMS, SHOPPERS, SUPERS, defOf, ST, TUNE, TICK_HZ, DT } from './constants.js';
-import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf } from './state.js';
+import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway } from './state.js';
 import { getField, getFieldTo, modeOf, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
@@ -605,6 +605,7 @@ export function step(state) {
     return ev;
   }
   state.tick++;
+  expireAway(state);
   // Nothing runs before the first build. (In training the factory always runs.)
   const waiting = !state.training && state.phase === 'build' && state.phaseT === -1;
   if (state.phase === 'build') {

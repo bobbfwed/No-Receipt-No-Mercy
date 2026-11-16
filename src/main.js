@@ -23,6 +23,7 @@ import { applyDemoLayout, createGame, MAP_DESIGNS, MAP_SIZES } from './sim/index
 import { loadName, saveName } from './ui/dom.js';
 import { showMenu } from './ui/menu.js';
 import { startGame } from './ui/game.js';
+import { keepSaved, readSave, clearSave } from './ui/save.js';
 
 const app = document.getElementById('app');
 
@@ -92,9 +93,15 @@ let game = null;
 /** Shows a game, replacing the one on screen (after a host hand-over or a reconnection). */
 function show(session, options) {
   if (game) game.destroy();
+  if (stopSaving) stopSaving();
   game = startGame(session, { mount: app, sound, ...options });
+  // Whoever hosts keeps the game saved in his browser, so it can be carried on another day.
+  // (Not the training shift, and not the test options that fast-forward or build by themselves.)
+  const real = session.isHost && !options.tutorial && !options.prepare && !options.ff && !options.autostart;
+  stopSaving = real ? keepSaved(session, { kind: options.roomKind || 'solo' }) : null;
   return game;
 }
+let stopSaving = null;
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -198,6 +205,31 @@ const actions = {
     addEventListener('pagehide', () => room.close());
     show(session, { roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });
   },
+  /**
+   * Carries on the game saved in this browser, with this browser as its host. A game that had
+   * other players in it reopens online under a new room code; they join with it and get their
+   * places and money back by name.
+   */
+  async resume() {
+    const save = readSave();
+    if (!save) throw new Error('The saved game could not be read. It may be from an older version.');
+    const session = new HostSession({ name: save.host, director: createDirector(), state: save.state, resume: true });
+    if (save.players.length > 1 && save.kind !== 'local') {
+      const code = makeRoomCode();
+      const room = await hostOnline(code, (conn) => session.accept(conn));
+      addEventListener('pagehide', () => room.close());
+      show(session, { roomCode: code, roomKind: 'online' });
+    } else if (save.kind === 'local') {
+      const code = makeRoomCode();
+      const room = hostLocal(code, (conn) => session.accept(conn));
+      addEventListener('pagehide', () => room.close());
+      show(session, { roomCode: code, roomKind: 'local' });
+    } else {
+      show(session, {});
+    }
+  },
+  /** Throws the saved game away. */
+  forget() { clearSave(); },
   async joinLocal(name, code) {
     const conn = await joinLocal(code);
     const session = new ClientSession(conn, name);
@@ -215,7 +247,7 @@ const actions = {
 const inviteCode = (q.get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 
 function menu(error = '') {
-  showMenu(app, actions, { error, name: opts.name, code: inviteCode, map: urlMap(), settings: urlSettings() });
+  showMenu(app, actions, { error, name: opts.name, code: inviteCode, map: urlMap(), settings: urlSettings(), save: readSave() });
 }
 
 async function boot() {

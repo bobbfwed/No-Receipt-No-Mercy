@@ -31,6 +31,19 @@ function runBoth(host, client, seconds, from = 0) {
   return now;
 }
 
+/**
+ * Clients run a moment behind the host. This has the host send what it has done so far and lets
+ * the clients play it, so their copies can be compared with the host's.
+ */
+function settle(host, clients, now) {
+  host._advance();
+  for (const c of clients) {
+    let t = now;
+    for (let i = 0; i < 2000 && c._n < host._n; i++) c.update(t += TICK_MS);
+  }
+  return now;
+}
+
 test('a client joins, gets a player slot and a copy of the state', () => {
   const { host, client } = hostAndClient();
   assert.equal(host.me, 0);
@@ -43,10 +56,10 @@ test('a client joins, gets a player slot and a copy of the state', () => {
 test('client commands are applied by the host and come back in the state', () => {
   const { host, client } = hostAndClient();
   client.send({ c: 'place', k: 'crate', x: 5, y: 5 });
-  host.update(0); client.update(0);
-  host.update(TICK_MS); client.update(TICK_MS);
   assert.equal(host.state.grid[at(5, 5)].k, 'crate');
   assert.equal(host.state.grid[at(5, 5)].o, 1, 'owned by the client player');
+  assert.equal(client.state.grid[at(5, 5)], 0, 'the client sees it only when the host says so');
+  for (let i = 0; i <= 4; i++) { host.update(i * TICK_MS); client.update(i * TICK_MS); }
   assert.equal(client.state.grid[at(5, 5)].k, 'crate');
   assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.crate.cost);
 });
@@ -65,17 +78,29 @@ test('a refused command is reported only to the player who sent it', () => {
 });
 
 test('host and client stay in step through a whole wave', () => {
-  const { host, client } = hostAndClient();
-  applyDemoLayout(host.state, 0);
+  const host = new HostSession({ name: 'Dave', seed: 5 });
+  applyDemoLayout(host.state, 0); // straight into the state, so before anyone joins
+  const [a, b] = memoryPair();
+  host.accept(a);
+  const client = new ClientSession(b, 'Steve');
   host.send({ c: 'start' });
-  const end = runBoth(host, client, 30);
+  let most = 0;
+  let now = 0;
+  for (let i = 0; i <= 30 * TICK_HZ; i++) {
+    now = i * TICK_MS;
+    host.update(now);
+    client.update(now);
+    assert.ok(client.state.tick <= host.state.tick, 'the client never runs ahead of the host');
+    most = Math.max(most, host.state.tick - client.state.tick);
+  }
   assert.ok(host.state.tick > 25 * TICK_HZ);
-  assert.ok(Math.abs(host.state.tick - client.state.tick) <= 6, 'client is never far behind');
-  // Right after an update from the host the two copies are identical.
+  assert.ok(most <= 12, `the client is never far behind (at most ${most} ticks)`);
+  // Once the client has played what the host has sent, the two copies are identical.
   host.send({ c: 'speed', n: 1 });
-  host.update(end + TICK_MS);
+  settle(host, [client], now);
   assert.equal(JSON.stringify(client.state), JSON.stringify(host.state));
-  assert.ok(client.drainFx().length > 0, 'the client produced effects from its own prediction');
+  assert.equal(client.stats.mismatches, 0);
+  assert.ok(client.drainFx().length > 0, 'the client produced effects as it played');
 });
 
 test('a client stops predicting when the host goes quiet', () => {
@@ -97,6 +122,7 @@ test('the director announces to everyone and the report lists every player', () 
   host.state.wave = 1; // next wave is 2, which has a dad line
   host.send({ c: 'start' });
   host.fastForward(120 * TICK_HZ);
+  client.update(0); // the client skips to the copy sent after the fast forward
   assert.deepEqual(seen.client, seen.host, 'clients receive exactly what the host shows');
   const says = seen.host.filter((m) => m.t === 'say');
   assert.ok(says.length >= 2, 'wave opening line and dad line warning');
@@ -289,22 +315,39 @@ test('when the host leaves, another player takes the game over and the others ge
   assert.deepEqual(next.state.players.map((p) => p.on), [false, true, false], 'the others count as gone until they reconnect');
   assert.equal(next.state.wave, 1);
   assert.equal(next.state.grid[4 * next.state.w + 4].k, 'sprinkler', 'what was built is still there');
-  // Dave left for good as far as the game knows, so his money was shared out between the other two.
-  assert.deepEqual(next.state.players.map((p) => p.cash), [0, cash[1] + cash[0] / 2, cash[2] + cash[0] / 2]);
+  // Dave may only have had a network blip, so for now his money is still his.
+  assert.deepEqual(next.state.players.map((p) => p.cash), cash);
 
-  // Gaz reconnects and gets his place back; so does Dave, later, as an ordinary player.
+  // Gaz reconnects and gets his place back; so does Dave, a little later, as an ordinary player.
   const relink = (name) => { const [a, b] = memoryPair(); next.accept(a); return new ClientSession(b, name); };
   const gaz2 = relink('Gaz');
   assert.equal(gaz2.me, 2);
   const before = next.state.tick;
   for (let i = 90; i < 150; i++) { next.update(i * TICK_MS); gaz2.update(i * TICK_MS); }
   assert.ok(next.state.tick > before + 30, 'the game carries on');
-  assert.ok(Math.abs(gaz2.state.tick - next.state.tick) <= 2, 'and the reconnected player follows it');
+  assert.ok(Math.abs(gaz2.state.tick - next.state.tick) <= 12, 'and the reconnected player follows it');
+  const daveCash = next.state.players[0].cash;
   const dave2 = relink('Dave');
   assert.equal(dave2.me, 0, 'the old host gets his place back by name');
   assert.equal(dave2.state.host, 1, 'but he is not the host any more');
+  assert.equal(dave2.state.players[0].cash, daveCash, 'and his money, since he was back within the grace period');
+  assert.ok(daveCash > 0);
   assert.deepEqual(next.state.players.map((p) => p.on), [true, true, true]);
   assert.equal(next.state.open, 3, 'nobody gained or lost an entrance');
+
+  // Had he stayed away past the grace period, his money would have gone to the other two.
+  const away = new HostSession({ name: 'Steve', state: JSON.parse(JSON.stringify(steve.state)), takeOver: true });
+  away.state.refundLimit = 1e9; // keep the store open for this
+  const relinkAway = (name) => { const [a, b] = memoryPair(); away.accept(a); return new ClientSession(b, name); };
+  relinkAway('Gaz');
+  away.fastForward(TUNE.graceSecs * TICK_HZ - 2);
+  const late = away.state.players.map((p) => p.cash);
+  assert.equal(late[0], cash[0], 'still his a moment before the end');
+  away.fastForward(2);
+  const after = away.state.players.map((p) => p.cash);
+  assert.equal(after[0], 0);
+  assert.ok(Math.abs(after[1] + after[2] - late[1] - late[2] - late[0]) < 60, 'shared between those who stayed');
+  assert.ok(Math.abs(after[1] - late[1] - (after[2] - late[2])) < 1e-6, 'evenly');
 
   // In a lobby, the new host is the one who may change the store.
   const lobby = new HostSession({ name: 'Dave', map: { design: 'warehouse', size: 's' }, lobby: true });

@@ -2199,3 +2199,18 @@ html, body { overscroll-behavior: none; }
 /* The lobby panel is long now: keep READY in reach at the bottom, and the floor key compact. */
 .lobby .btn-ready { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -0.5rem 0.6rem rgba(31, 37, 44, 0.95); }
 .lobby-legend { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.5rem; font-size: 0.8rem; }
+
+/* ---------------------------------------------------------------- resume a saved game (menu) */
+
+.resume-box { margin: 0 0 0.9rem; padding: 0.6rem 0.7rem; border: 0.15rem solid var(--green-2); border-radius: 0.5rem; background: rgba(22, 163, 74, 0.12); }
+.btn-resume { width: 100%; background: #16a34a; color: var(--white); text-align: left; }
+.btn-resume small { display: block; margin-top: 0.2rem; font: 600 0.8rem var(--font); letter-spacing: 0; text-transform: none; }
+.btn-forget { margin-top: 0.4rem; padding: 0; border: 0; background: none; color: #c3cad3; font-size: 0.78rem; text-decoration: underline; }
+.btn-forget:hover { color: var(--white); }
+.resume-note { margin: 0.35rem 0 0; font-size: 0.8rem; line-height: 1.35; color: #c3cad3; }
+
+/* ---------------------------------------------------------------- training shift, part 2 */
+
+/* "Jump to part 2": for players who know the buildings. Outlined in the training colour so it
+   does not look like Skip step, which only skips one lesson. */
+.tut-jump { border-color: #38e1ff; background: #1d3540; color: #a5f3fc; }
