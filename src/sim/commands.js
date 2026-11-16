@@ -36,6 +36,8 @@ export function canPlace(state, k, x, y, pid = 0) {
   if (state.tiles[i] !== '.') return 'bounds';
   // The four factory machines only go on their own marked floor (on maps that have it).
   if (def.zone && state.zones && state.zones[i] !== def.zone) return 'zone';
+  // Laying a belt over a belt just turns it, which is free and always allowed.
+  if (k === 'belt' && state.grid[i] && state.grid[i].k === 'belt') return null;
   if (state.grid[i]) return 'occupied';
   const player = state.players[pid];
   if (!player || player.cash < def.cost) return 'cash';
@@ -88,7 +90,8 @@ function newBuilding(k, owner, d) {
 /**
  * Applies one command from a player.
  * Commands:
- *   { c: 'place', k, x, y, d }  build something (d = facing 0-3, only for things that rotate)
+ *   { c: 'place', k, x, y, d }  build something (d = facing 0-3, only for things that rotate).
+ *                               A belt placed on a belt turns it to face d, free of charge
  *   { c: 'remove', x, y }       sell a building back (the money goes to whoever paid for it)
  *   { c: 'rotate', x, y }       turn a building a quarter turn clockwise
  *   { c: 'upgrade', x, y }      raise a security building one level
@@ -134,6 +137,12 @@ export function applyCommand(state, pid, cmd, ev = []) {
       if (why) return { ok: false, why };
       const def = BUILD[cmd.k];
       const i = idxOf(state, cmd.x, cmd.y);
+      if (state.grid[i]) {
+        // A belt laid over a belt: turn the one that is there. Nothing is charged, and the goods
+        // on it stay on it.
+        state.grid[i].d = cmd.d & 3;
+        return { ok: true, turned: true };
+      }
       state.grid[i] = newBuilding(cmd.k, pid, cmd.d | 0);
       state.gridVer++;
       if (state.rubble.length) state.rubble = state.rubble.filter((r) => r[0] !== i);
@@ -193,8 +202,10 @@ export function applyCommand(state, pid, cmd, ev = []) {
         const [i, k, d, owner] = r;
         if (owner !== pid && !cmd.all) continue;
         const x = i % state.w, y = (i / state.w) | 0;
+        // Something has been built there since: that hole is already patched.
+        if (state.grid[i]) { state.rubble.splice(state.rubble.indexOf(r), 1); continue; }
         const no = canPlace(state, k, x, y, pid);
-        if (no) { if (no === 'occupied') state.rubble.splice(state.rubble.indexOf(r), 1); else why = no; continue; }
+        if (no) { why = no; continue; }
         state.grid[i] = newBuilding(k, pid, d);
         state.gridVer++;
         state.rubble.splice(state.rubble.indexOf(r), 1);

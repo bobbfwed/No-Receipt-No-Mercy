@@ -6,7 +6,7 @@
 export const HOW = {
   belt: {
     does: 'Carries goods one way, in the direction of its arrows. Each machine only goes on its own marked floor, and the marked areas are apart, so belts are how goods get from one machine to the next.',
-    use: 'Drag to lay a line: the belts follow your drag. Goods wait on the belt if the next tile cannot take them. Point at a belt and press R to turn it.',
+    use: 'Drag to lay a line: the belts follow your drag. Goods wait on the belt if the next tile cannot take them. Turning a belt is free: drag belt over it again in the new direction, or point at it and press R.',
     maze: 'Blocks shoppers, except dads, who step over it.',
   },
   unpacker: {
@@ -21,7 +21,7 @@ export const HOW = {
   },
   packer: {
     does: 'Turns a Gadget ($7) into a Gift Set ($16).',
-    use: 'It only goes on GIFT WRAP floor (pink). It only accepts Gadgets, so it comes after a Press. Feed it from the back or either side; the Gift Set comes out of the side with the arrow.',
+    use: 'It only goes on GIFT WRAP floor (purple). It only accepts Gadgets, so it comes after a Press. Feed it from the back or either side; the Gift Set comes out of the side with the arrow.',
     maze: 'Blocks all shoppers.',
   },
   chute: {

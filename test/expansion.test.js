@@ -613,6 +613,31 @@ test('every map marks out floor for each machine, and the areas never touch', ()
   assert.equal(createGame().zones, '', 'the bare default map has no marked floor');
 });
 
+test('every tile of marked floor on every map accepts its machine', () => {
+  let tiles = 0;
+  for (const design of Object.keys(MAP_DESIGNS)) {
+    for (const size of Object.keys(MAP_SIZES)) {
+      const s = createGame({ map: { design, size } });
+      addPlayer(s, 'Dave');
+      s.players[0].cash = 1e9;
+      for (let i = 0; i < s.zones.length; i++) {
+        const ch = s.zones[i];
+        if (ch === ' ') continue;
+        tiles++;
+        const x = i % s.w, y = (i / s.w) | 0;
+        assert.equal(canPlace(s, ZONES[ch].kind, x, y), null, `${design} ${size}: a ${ZONES[ch].kind} is refused on its own floor at ${x},${y}`);
+      }
+      // And a whole section can actually be built on: fill one patch of each kind completely.
+      for (const ch of Object.keys(ZONES)) {
+        const [x0, y0] = zoneTiles(s, ch)[0];
+        const patch = zoneTiles(s, ch).filter(([x, y]) => Math.abs(x - x0) < 4 && Math.abs(y - y0) < 3);
+        for (const [x, y] of patch) assert.ok(place(s, ZONES[ch].kind, x, y).ok, `${design} ${size}: filling a ${ZONES[ch].name} patch failed at ${x},${y}`);
+      }
+    }
+  }
+  assert.ok(tiles > 3000);
+});
+
 test('a machine only goes on its own marked floor; everything else goes anywhere', () => {
   const s = createGame({ map: { design: 'warehouse', size: 's' } });
   addPlayer(s, 'Dave');
@@ -753,4 +778,32 @@ test('a player who has dropped out does not hold up the lobby; games without a l
   assert.deepEqual(step(s), [{ e: 'begun' }]);
   assert.equal(createGame().phase, 'build');
   assert.equal(createGame({ map: { design: 'warehouse', size: 's' } }).phase, 'build');
+});
+
+test('laying a belt over a belt turns it for free and keeps its goods', () => {
+  const s = createGame({ seed: 2 });
+  addPlayer(s, 'Dave');
+  place(s, 'unpacker', 3, 3, 0);
+  place(s, 'belt', 4, 3, 0);
+  place(s, 'belt', 5, 3, 0);
+  for (let i = 0; i < 6 * TICK_HZ; i++) step(s);
+  const belt = s.grid[at(5, 3)];
+  assert.ok(belt.it.length >= 1, 'there are goods on the belt');
+  const goods = belt.it.length, cash = s.players[0].cash;
+  assert.equal(canPlace(s, 'belt', 5, 3), null, 'the preview shows it is allowed');
+  const r = place(s, 'belt', 5, 3, 1);
+  assert.ok(r.ok && r.turned);
+  assert.equal(belt.d, 1);
+  assert.equal(s.grid[at(5, 3)], belt, 'it is the same belt');
+  assert.equal(belt.it.length, goods);
+  assert.equal(s.players[0].cash, cash, 'nothing was charged');
+  // It works with no money at all, and for a belt someone else laid.
+  addPlayer(s, 'Steve');
+  s.players[1].cash = 0;
+  assert.ok(place(s, 'belt', 5, 3, 2, 1).ok);
+  assert.equal(belt.d, 2);
+  assert.equal(belt.o, 0, 'it still belongs to Dave');
+  // Anything else on a belt, or a belt on anything else, is still refused.
+  assert.equal(place(s, 'crate', 5, 3).why, 'occupied');
+  assert.equal(place(s, 'belt', 3, 3, 0).why, 'occupied');
 });
