@@ -267,3 +267,50 @@ test('the version reads as a big number and a two-digit release', () => {
   assert.ok(Number.isInteger(RELEASE) && RELEASE >= 1);
   assert.match(versionText(), /^\d+\.\d+\.\d{2,}$/);
 });
+
+test('when the host leaves, another player takes the game over and the others get their places back', () => {
+  // Dave hosts; Steve and Gaz join; a wave is under way with things built.
+  const host = new HostSession({ name: 'Dave', seed: 3, map: { design: 'warehouse', size: 'm' } });
+  const link = (name) => { const [a, b] = memoryPair(); host.accept(a); return new ClientSession(b, name); };
+  const steve = link('Steve'), gaz = link('Gaz');
+  steve.send({ c: 'place', k: 'sprinkler', x: 4, y: 4 });
+  host.send({ c: 'start' });
+  for (let i = 0; i < 90; i++) { host.update(i * TICK_MS); steve.update(i * TICK_MS); gaz.update(i * TICK_MS); }
+  assert.equal(steve.state.phase, 'wave');
+  assert.equal(steve.state.host, 0);
+  const cash = steve.state.players.map((p) => p.cash);
+
+  // Dave's browser goes. Steve is first in the list of those left, so his browser takes over,
+  // from his own copy of the game.
+  const copy = JSON.parse(JSON.stringify(steve.state));
+  const next = new HostSession({ name: 'Steve', state: copy, takeOver: true, director: createDirector() });
+  assert.equal(next.me, 1, 'Steve keeps his own place');
+  assert.equal(next.state.host, 1);
+  assert.deepEqual(next.state.players.map((p) => p.on), [false, true, false], 'the others count as gone until they reconnect');
+  assert.equal(next.state.wave, 1);
+  assert.equal(next.state.grid[4 * next.state.w + 4].k, 'sprinkler', 'what was built is still there');
+  assert.deepEqual(next.state.players.map((p) => p.cash), cash);
+
+  // Gaz reconnects and gets his place back; so does Dave, later, as an ordinary player.
+  const relink = (name) => { const [a, b] = memoryPair(); next.accept(a); return new ClientSession(b, name); };
+  const gaz2 = relink('Gaz');
+  assert.equal(gaz2.me, 2);
+  const before = next.state.tick;
+  for (let i = 90; i < 150; i++) { next.update(i * TICK_MS); gaz2.update(i * TICK_MS); }
+  assert.ok(next.state.tick > before + 30, 'the game carries on');
+  assert.ok(Math.abs(gaz2.state.tick - next.state.tick) <= 2, 'and the reconnected player follows it');
+  const dave2 = relink('Dave');
+  assert.equal(dave2.me, 0, 'the old host gets his place back by name');
+  assert.equal(dave2.state.host, 1, 'but he is not the host any more');
+  assert.deepEqual(next.state.players.map((p) => p.on), [true, true, true]);
+  assert.equal(next.state.open, 3, 'nobody gained or lost an entrance');
+
+  // In a lobby, the new host is the one who may change the store.
+  const lobby = new HostSession({ name: 'Dave', map: { design: 'warehouse', size: 's' }, lobby: true });
+  const [a, b] = memoryPair();
+  lobby.accept(a);
+  const s2 = new ClientSession(b, 'Steve');
+  const taken = new HostSession({ name: 'Steve', state: JSON.parse(JSON.stringify(s2.state)), takeOver: true });
+  assert.ok(taken.send({ c: 'map', design: 'aisles', size: 'm' }).ok);
+  assert.equal(taken.state.map.design, 'aisles');
+});

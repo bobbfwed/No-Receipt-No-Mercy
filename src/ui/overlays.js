@@ -110,6 +110,14 @@ export function endScreen(s, debLine, me = -1) {
   return el;
 }
 
+/** The host has gone and another player's browser is taking the game over. */
+export function handoverScreen() {
+  return overlay('closed handover',
+    h('div', { class: 'end-stamp' }, 'THE HOST HAS LEFT'),
+    h('p', { class: 'end-sub' }, 'Somebody else is taking over as host. Reconnecting; this takes a few seconds, sometimes up to a minute.'),
+    h('p', { class: 'end-sub' }, 'Stay on this page.'));
+}
+
 /** A client lost the host, or was turned away. */
 export function closedScreen(why) {
   const full = why === 'full';

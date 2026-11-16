@@ -42,6 +42,8 @@ Upgrades: `src/sim/upgrades.js`. A building's level is `b.lv` (absent means 1); 
 
 Super shoppers: a shopper with `sup: 1` plays by `SUPERS[kind]` instead of `SHOPPERS[kind]`; always go through `defOf(shopper)`.
 
+Host hand-over: `state.host` is the player whose browser runs the game. When a joined player's connection to the host closes, `hostLost()` in `src/main.js` runs in every remaining browser. All of them pick the same successor (the first connected player in the list who is not the old host). The successor makes a `HostSession` from its own copy of the state with `takeOver: true` and opens the room again under the same code, retrying until the old host's code is released; the others retry joining it. Players are matched to their old places by name. The game screen is torn down and started again on the new session (`destroy()` on what `startGame` returns).
+
 Lobby: a game made with `createGame({ lobby: true })` starts in phase `'lobby'`. Nothing runs and nothing can be built; the host (player 0) may send `{ c: 'map', design, size }`, which swaps the store with `setMap()` and clears everyone's `ready`; each player sends `{ c: 'ready', on }`; `step()` moves to `'build'` when every connected player is ready. Games started from the menu use it; the URL test options do not unless `&lobby=1` is given. `src/ui/lobby.js` is the panel.
 
 Head Office: `src/sim/office.js`. One player may switch `side` to `'office'` and buy the coming wave from a budget instead of building (`state.office`, the `side` and `plan` commands). His plan is turned into the same list of groups `waveSpec()` produces, with an entrance per group. He is left out of everything that counts store players (`shareCount`, income, the review).

@@ -91,6 +91,11 @@ One player stops defending and plays the other side: each wave he gets a budget,
 9. Pepper Spray and Pray
 10. Store Credit Only, Dickhead
 
+## Leaving and host hand-over (owner's request, built)
+- Once a game has started, or anyone else is in it, the browser asks for confirmation before the page is closed, refreshed or left.
+- If the host leaves, the first remaining player in the list becomes the host, using his own copy of the game; the others reconnect to him under the same room code, and the old host can rejoin with the original link. Checked with three players in one browser (test rooms) and by test. Not yet checked over the internet, where the room code takes a few seconds to be released and the hand-over can take up to a minute.
+- Limits: the new host's copy can be a fraction of a second behind the old host's, so the last moment before the hand-over may be replayed. Two players with the same name cannot be told apart when they reconnect. If the new host also leaves during the hand-over, the game is lost.
+
 ## Showroom doorways (found by the owner, improved, not played)
 The owner suspected the showroom would clog: belts between the marked floor areas have to go through the doorways, belts cannot cross each other, and the rule against walling off the tills refuses the last tile of a doorway. `tools/line-check.mjs` lays lines by the shortest free route (it does not plan ahead, so a person can do better) and counts how many fit:
 - Open Warehouse and Supermarket Aisles: two lines in every section, on every size.

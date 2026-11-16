@@ -28,7 +28,8 @@ Nobody runs a server. One player hosts in his browser and the others connect to 
 3. The host presses **Copy link** and sends it to his friends (or reads them the code). They open the link, enter a name and press **Join a game**.
 4. Everyone lands in the lobby, with the store drawn whole on the right. The host can change its design and size there and everyone sees it change. Each player presses **READY**; the game starts when all of them have.
 5. Friends can also join after the game has started, even mid-wave, and play at once. If someone drops out he can rejoin with the same name and gets his place back.
-6. When the host closes the tab, the game ends for everyone.
+6. If the host leaves, the game carries on: another player's browser takes over as host within a few seconds (up to a minute), and everyone else reconnects by themselves. The player who left can come back with the same link and gets his place back. Only when the last player leaves is the game gone.
+7. Once a game is under way, the browser asks before the page is closed, refreshed or left, so a stray Back button does not end it.
 
 If a friend's join times out with "could not reach each other", he is most likely on the same wifi as the host or behind a strict firewall or VPN; trying from another network usually works. https://bobbfwed.github.io/No-Receipt-No-Mercy/tools/net-check.html shows what a given computer's network allows.
 

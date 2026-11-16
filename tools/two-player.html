@@ -19,10 +19,14 @@
   Add ?autostart=1 to have the host open the doors by itself, and ?ff=600 to skip ahead.
   Add ?online=1 to link them over the internet instead (needs the PeerJS broker to be reachable).
   &map=showroom&size=m picks the store (see MAP_DESIGNS and MAP_SIZES in src/sim/maps.js).
+  &third=1 adds a third player (Gaz). &drop=4000 closes the host's game after that many
+  milliseconds, to watch another player take over as host; &back=9000 then brings Dave back
+  through the same room code that long after the start.
 -->
 <div class="row">
   <div class="col"><p>Host (Dave)</p><iframe id="host" title="Host"></iframe></div>
   <div class="col"><p>Joined player (Steve)</p><iframe id="join" title="Joined player"></iframe></div>
+  <div class="col" id="third-col" hidden><p>Third player (Gaz)</p><iframe id="third" title="Third player"></iframe></div>
 </div>
 <script>
   const q = new URLSearchParams(location.search);
@@ -36,6 +40,14 @@
   setTimeout(() => {
     document.getElementById('join').src = `../index.html?${how}=join&code=${room}&name=Steve`;
   }, how === 'online' ? 5000 : 1200);
+  if (q.has('third')) {
+    document.getElementById('third-col').hidden = false;
+    setTimeout(() => { document.getElementById('third').src = `../index.html?${how}=join&code=${room}&name=Gaz`; }, how === 'online' ? 7000 : 2000);
+  }
+  // Close the host's game, as if Dave had shut his browser.
+  if (q.has('drop')) setTimeout(() => { document.getElementById('host').src = 'about:blank'; }, Number(q.get('drop')) || 4000);
+  // And bring him back as an ordinary player through the same room code.
+  if (q.has('back')) setTimeout(() => { document.getElementById('host').src = `../index.html?${how}=join&code=${room}&name=Dave`; }, Number(q.get('back')) || 9000);
 </script>
 </body>
 </html>

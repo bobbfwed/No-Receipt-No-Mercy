@@ -104,12 +104,17 @@ export class HostSession extends Session {
    * @param {boolean} [o.lobby] start in the lobby (players press Ready; the host may change the map)
    * @param {Object} [o.director] turns simulation events into jokes; see src/content/director.js
    * @param {Object} [o.state]   continue an existing game instead of starting a new one
+   * @param {boolean} [o.takeOver] `state` is a player's copy of a game whose host has left, and
+   *   this player (found by `name`) is now its host. Everyone else counts as gone until his
+   *   browser reconnects, which gives him his place back by name.
    */
-  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false }) {
+  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false }) {
     super();
     this.isHost = true;
     this.state = state || createGame({ seed, map, lobby });
+    if (takeOver) for (const p of this.state.players) p.on = false;
     this.me = addPlayer(this.state, name);
+    this.state.host = this.me;
     this.director = director;
     /** @type {Map<Object, number>} connection -> player id */
     this.conns = new Map();

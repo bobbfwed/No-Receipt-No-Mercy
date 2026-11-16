@@ -11,7 +11,7 @@ import { createInput } from './input.js';
 import { createDeb } from './deb.js';
 import { createToasts } from './toasts.js';
 import { createReview } from './review.js';
-import { endScreen, closedScreen, helpScreen } from './overlays.js';
+import { endScreen, closedScreen, handoverScreen, helpScreen } from './overlays.js';
 import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { BUILD, ZONES } from '../sim/index.js';
@@ -30,10 +30,13 @@ import { BUILD, ZONES } from '../sim/index.js';
  * @param {number} [o.tutorialStep] start the training at this step (for screenshots)
  * @param {(where: 'solo'|'menu') => void} [o.onExit] leave the training shift
  * @param {Object} [o.sound]       the sound module from src/audio/sound.js, if there is one
+ * @param {(session) => Promise} [o.onHostLost] a joined player's game lost its host: carry the
+ *   game on some other way (see main.js). It resolves once a new game screen has replaced
+ *   this one, or rejects if that could not be done, and then the usual "host has left" shows.
  */
 export function startGame(session, {
   roomCode = null, roomKind = null, prepare = null, ff = 0, autostart = false, mount,
-  tutorial = false, tutorialStep = 0, onExit = () => {}, sound = null,
+  tutorial = false, tutorialStep = 0, onExit = () => {}, sound = null, onHostLost = null,
 }) {
   const canvas = h('canvas', { class: 'world', 'aria-label': 'The warehouse floor. Use the mouse to build.' });
   const stage = h('main', { class: 'stage' }, canvas);
@@ -154,8 +157,29 @@ export function startGame(session, {
     if (closed || ended) return;
     closed = true;
     session.stop();
+    if (m.why !== 'full' && onHostLost && session.state) {
+      // The host has gone. Another player's browser takes the game over; say so while it does.
+      const note = handoverScreen();
+      root.append(note);
+      onHostLost(session).catch(() => { note.remove(); root.append(closedScreen(m.why)); });
+      return;
+    }
     root.append(closedScreen(m.why));
   });
+
+  // ---- Leaving by accident -----------------------------------------------------------------------
+  // Once the game is under way, or anyone else is in it, the browser asks before the page is
+  // left: a stray Back or Refresh should not end a game.
+  let leaving = false;
+  const onBeforeUnload = (e) => {
+    const s = session.state;
+    if (leaving || dead || closed || ended || !s) return;
+    if (s.phase === 'lobby' && s.players.filter((p) => p.on).length < 2) return;
+    e.preventDefault();
+    e.returnValue = '';
+  };
+  addEventListener('beforeunload', onBeforeUnload);
+  let dead = false;
 
   // ---- Start -------------------------------------------------------------------------------------
   if (prepare) prepare(session);
@@ -185,7 +209,8 @@ export function startGame(session, {
 
   const resize = () => renderer.resize();
   resize();
-  new ResizeObserver(resize).observe(stage);
+  const watcher = new ResizeObserver(resize);
+  watcher.observe(stage);
   // On a map too big for the screen, start by looking at this player's own entrance.
   input.goHome();
   session.start();
@@ -193,6 +218,7 @@ export function startGame(session, {
   // ---- Drawing loop --------------------------------------------------------------------------------
   let mapShown = false, mapDrawn = 0, office = false, wasLobby = false;
   function frame(now) {
+    if (dead) return;
     requestAnimationFrame(frame);
     const s = session.state;
     if (!s) return;
@@ -253,6 +279,16 @@ export function startGame(session, {
 
   // For the test pages in tools/, which drive the game with made-up mouse and key events and
   // need to know where a tile is on screen.
+  /** Shuts this game screen down, so another can take its place (a new host, a reconnection). */
+  function destroy() {
+    dead = true;
+    session.stop();
+    watcher.disconnect();
+    input.destroy();
+    removeEventListener('beforeunload', onBeforeUnload);
+  }
+  /** The player meant to leave (a button did it): do not ask. */
+  const allowLeave = () => { leaving = true; };
   globalThis.__game = { session, renderer, input };
-  return { session, renderer, input };
+  return { session, renderer, input, destroy, allowLeave };
 }

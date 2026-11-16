@@ -98,7 +98,7 @@ function newBuilding(k, owner, d) {
  *   { c: 'give', to, n }        hand n of your cash to player `to`
  *   { c: 'rebuild' }            put back what gym bros wrecked of yours, as far as your cash goes
  *                               (with all: true, everybody's)
- *   { c: 'map', design, size }  lobby only, host only (player 0): change the store
+ *   { c: 'map', design, size }  lobby only, host only (state.host): change the store
  *   { c: 'ready', on }          lobby only: say you are ready (or not). The game starts when
  *                               every connected player is
  *   { c: 'side', side }         take the Head Office job ('office': run the shoppers) or go back
@@ -120,7 +120,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
   if (state.phase === 'lobby') {
     // Before the game starts there are only two things to do: pick the store, and say you are ready.
     if (cmd.c === 'map') {
-      if (pid !== 0) return { ok: false, why: 'host' };
+      if (pid !== (state.host | 0)) return { ok: false, why: 'host' };
       if (!setMap(state, cmd.design, cmd.size)) return { ok: false, why: 'bad' };
       ev.push({ e: 'map', design: cmd.design, size: cmd.size });
       return { ok: true };
