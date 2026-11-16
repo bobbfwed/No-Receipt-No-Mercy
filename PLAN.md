@@ -65,6 +65,20 @@ One player stops defending and plays the other side: each wave he gets a budget,
 - DEB gets a second set of lines: she works for him, and insults both sides.
 - Open questions for the owner before building it: should he see the builders' layout while planning; should there be a time limit on planning; and is winning by refund limit enough, or should he also score points per shopper who gets through.
 
+## Name ideas (owner to choose; nothing is renamed yet)
+1. The Customer Is Always a Prick
+2. No Receipt, No Mercy
+3. Go Refund Yourself
+4. Shrinkage
+5. Belt Me, Daddy
+6. Black Friday, Brown Trousers
+7. Clean-Up on Aisle Your Mom
+8. Manager? I Barely Know Her
+9. Pepper Spray and Pray
+10. Store Credit Only, Dickhead
+
+Suggested: "No Receipt, No Mercy" as the title with "The customer is always a prick" as the tagline; "Shrinkage" if one word is wanted.
+
 ## Ideas for later (not started)
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
 - More shopper types and a boss every fifth wave (the Regional Manager).
