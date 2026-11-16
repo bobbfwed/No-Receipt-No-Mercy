@@ -581,3 +581,85 @@ test('a game with everything in it stays identical on a copy made mid-wave', () 
   assert.ok(a.shoppers.some((s) => s.sup) || seen.has('escape'));
   for (const e of ['kid', 'smash', 'mess', 'spray']) assert.ok(seen.has(e), `saw ${e}`);
 });
+
+// ---------------------------------------------------------------- factory and sprinkler balance
+
+test('machines only pass goods along by belt', () => {
+  // Unpacker straight into a chute, and unpacker, press, chute in a row with no belts: nothing sells.
+  const s = createGame({ seed: 2 });
+  addPlayer(s, 'Dave');
+  s.players[0].cash = 10000;
+  place(s, 'unpacker', 3, 3, 0); place(s, 'chute', 4, 3);
+  place(s, 'unpacker', 3, 6, 0); place(s, 'press', 4, 6, 0); place(s, 'chute', 5, 6);
+  const ev = [];
+  for (let i = 0; i < 40 * TICK_HZ; i++) ev.push(...step(s));
+  assert.equal(ev.filter((e) => e.e === 'sale').length, 0);
+  assert.ok(ev.some((e) => e.e === 'nobelt' && e.k === 'unpacker'), 'the game says which machine is stuck');
+
+  // One belt between each and it works.
+  const g = createGame({ seed: 2 });
+  addPlayer(g, 'Dave');
+  g.players[0].cash = 10000;
+  for (const [k, x] of [['unpacker', 3], ['belt', 4], ['press', 5], ['belt', 6], ['chute', 7]]) place(g, k, x, 6, 0);
+  const sales = [];
+  for (let i = 0; i < 40 * TICK_HZ; i++) sales.push(...step(g).filter((e) => e.e === 'sale'));
+  assert.ok(sales.length >= 5);
+  assert.ok(sales.every((e) => e.kind === 'gadget' && e.v === ITEMS.gadget.value && e.travel === 2));
+});
+
+test('goods sell for more the further they ride on belts, up to a limit', () => {
+  const sell = (belts) => {
+    const g = createGame({ seed: 2, map: { design: 'warehouse', size: 'l' } });
+    addPlayer(g, 'Dave');
+    g.players[0].cash = 10000;
+    // unpacker, one belt, press, then a run of belts to the chute, all along one row
+    place(g, 'unpacker', 2, 3, 0); place(g, 'belt', 3, 3, 0); place(g, 'press', 4, 3, 0);
+    for (let x = 5; x < 5 + belts; x++) assert.ok(place(g, 'belt', x, 3, 0).ok);
+    place(g, 'chute', 5 + belts, 3);
+    for (let i = 0; i < 90 * TICK_HZ; i++) for (const e of step(g)) if (e.e === 'sale') return e;
+    return null;
+  };
+  const short = sell(1), mid = sell(9), long = sell(30);
+  assert.equal(short.v, ITEMS.gadget.value);
+  assert.equal(mid.travel, 10);
+  assert.equal(mid.v, ITEMS.gadget.value + Math.floor(10 / ITEMS.gadget.per));
+  assert.equal(long.v, ITEMS.gadget.value + ITEMS.gadget.bonus, 'the bonus is capped');
+  for (const item of Object.values(ITEMS)) assert.ok(item.bonus <= item.value / 2 + 0.5, 'never more than about half again');
+});
+
+test('the Press and the Packer are a serious purchase', () => {
+  assert.ok(BUILD.press.cost >= TUNE.startCash * 0.4, 'a Press is a large part of the starting cash');
+  assert.ok(BUILD.packer.cost >= BUILD.press.cost * 2);
+  // Each must take a good while to pay for itself: at least fifty items.
+  assert.ok(BUILD.press.cost / (ITEMS.gadget.value - ITEMS.box.value) >= 50);
+  assert.ok(BUILD.packer.cost / (ITEMS.giftset.value - ITEMS.gadget.value) >= 50);
+});
+
+test('a sprinkler reaches only four shoppers at a time, the ones nearest the tills', () => {
+  const s = stage(3);
+  place(s, 'sprinkler', 3, 6);
+  send(s, [{ k: 'karen', n: 8, gap: 0.05, at: 0 }]);
+  let most = 0;
+  for (let i = 0; i < 6 * TICK_HZ; i++) {
+    const before = new Map(s.shoppers.map((sh) => [sh.id, sh.hp]));
+    const sprayed = step(s).some((e) => e.e === 'spray');
+    if (!sprayed) continue;
+    const hit = s.shoppers.filter((sh) => sh.hp < before.get(sh.id));
+    most = Math.max(most, hit.length);
+    assert.ok(hit.length <= BUILD.sprinkler.targets);
+    if (hit.length === BUILD.sprinkler.targets) {
+      const inRange = s.shoppers.filter((sh) => (sh.x - 3.5) ** 2 + (sh.y - 6.5) ** 2 <= BUILD.sprinkler.range ** 2);
+      const furthest = Math.min(...hit.map((sh) => sh.x));
+      for (const sh of inRange) if (!hit.includes(sh)) assert.ok(sh.x <= furthest + 0.6, 'the ones left out are behind');
+    }
+  }
+  assert.equal(most, BUILD.sprinkler.targets, 'with eight in reach it still hits only four');
+});
+
+test('shoppers get more patient every single wave, and upgrades do not outrun them cheaply', () => {
+  const hp = (n) => 1 + TUNE.hpGrowth * (n - 1) + TUNE.hpGrowth2 * (n - 1) ** 2;
+  for (let n = 2; n <= TUNE.waves; n++) assert.ok(hp(n) > hp(n - 1) * 1.05, `wave ${n} is at least 5% more patient than the one before`);
+  assert.ok(hp(10) >= 3.5 && hp(20) >= 9);
+  // A sprinkler upgrade costs 80% more for 25% more damage.
+  assert.ok(BUILD.sprinkler.up.dmg <= 1.3 && TUNE.upGrowth >= 1.8);
+});

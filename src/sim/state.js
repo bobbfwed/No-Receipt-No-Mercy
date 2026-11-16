@@ -9,10 +9,12 @@ import { makeMap } from './maps.js';
  * @property {number} o   owner player id
  * @property {number} [d] facing direction 0-3
  * @property {number} [lv] upgrade level, 2 or more (absent means level 1)
- * @property {Array<[string, number]>} [it] belt only: items as [itemKind, progress 0..1], front item first
+ * @property {Array<[string, number, number]>} [it] belt only: items as [itemKind, progress 0..1, belts ridden so far], front item first
  * @property {number} [t]   machines: ticks left on the current job; unpacker: ticks until next box
  * @property {number} [n]   press/packer: inputs waiting
  * @property {string|0} [out] press/packer: finished item waiting to leave
+ * @property {number[]} [tq] press/packer: belts ridden by each input waiting (same length as n)
+ * @property {number} [tr]  press/packer: belts ridden by the item being made or waiting to leave
  * @property {number} [cd]  towers: ticks until it can fire again
  * @property {number} [a]   forklift: aim angle in radians (for drawing)
  */

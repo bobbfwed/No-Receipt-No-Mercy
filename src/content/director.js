@@ -132,6 +132,9 @@ export function createDirector(random = Math.random) {
             else if (random() < 0.2) say(out, state, LINES.upgraded, vars, { gap: 15, mood: 'smug' });
             break;
           }
+          case 'nobelt':
+            say(out, state, LINES.noBelt, { p: nameOf(state, e.owner), k: BUILD[e.k].name }, { gap: 30, mood: 'angry' });
+            break;
           case 'rebuilt':
             if (e.n >= 3) say(out, state, LINES.rebuilt, { p: nameOf(state, e.by), n: e.n }, { gap: 25, mood: 'smug' });
             break;

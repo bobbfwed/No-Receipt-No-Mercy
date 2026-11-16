@@ -11,11 +11,15 @@ export const MAX_PLAYERS = 6;
 export const PLAYER_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d8f', '#eab308', '#06b6d4'];
 export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater'];
 
-/** Things that ride on belts. `value` is the cash paid when one reaches a shipping chute. */
+/**
+ * Things that ride on belts. `value` is the cash paid when one reaches a shipping chute.
+ * Goods sell for more the further they have ridden on belts: $1 extra for every `per` belts,
+ * up to `bonus` extra. That is what makes a long production line worth building.
+ */
 export const ITEMS = {
-  box: { name: 'Mystery Box', value: 2 },
-  gadget: { name: 'Gadget', value: 7 },
-  giftset: { name: 'Gift Set', value: 16 },
+  box: { name: 'Mystery Box', value: 2, per: 10, bonus: 1 },
+  gadget: { name: 'Gadget', value: 6, per: 5, bonus: 3 },
+  giftset: { name: 'Gift Set', value: 13, per: 3, bonus: 6 },
 };
 
 /**
@@ -23,6 +27,7 @@ export const ITEMS = {
  * group: which half of the game it belongs to ('factory' or 'security').
  * blocks: shoppers cannot walk through it (this is what makes the factory a maze).
  * rot: it has a facing direction.
+ * targets: an area tower hits at most this many shoppers at once (the ones nearest the tills).
  * up: it can be upgraded, and what each level adds. `dmg` and `secs` multiply the level before;
  *   `range` adds tiles; `slow` multiplies the speed of shoppers crossing it; `slip` adds to the
  *   chance a dad slips. The price of each level is in TUNE (upFirst, upGrowth).
@@ -37,12 +42,12 @@ export const BUILD = {
     desc: 'Opens pallets and spits out a Mystery Box every 2.5 seconds.',
   },
   press: {
-    name: 'Press', cost: 120, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: 2.5,
+    name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: 2.5,
     desc: 'Crushes a Mystery Box into a Gadget.',
   },
   packer: {
-    name: 'Packer', cost: 200, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: 3,
-    desc: 'Wraps a Gadget into a Gift Set, the same thing at triple the price.',
+    name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: 3,
+    desc: 'Wraps a Gadget into a Gift Set, the same thing at twice the price.',
   },
   chute: {
     name: 'Shipping Chute', cost: 40, group: 'factory', blocks: true,
@@ -54,8 +59,8 @@ export const BUILD = {
   },
   sprinkler: {
     name: 'Pepper Sprinkler', cost: 80, group: 'security', blocks: true, tower: true,
-    range: 1.75, dmg: 6, cd: 0.5, aoe: true, up: { dmg: 1.45, range: 0.12 },
-    desc: 'Sprays everyone nearby. Short range.',
+    range: 1.75, dmg: 6, cd: 0.5, aoe: true, targets: 4, up: { dmg: 1.25, range: 0.12 },
+    desc: 'Sprays up to four shoppers nearby. Short range.',
   },
   forklift: {
     name: 'Forklift Turret', cost: 200, group: 'security', blocks: true, tower: true,
@@ -201,7 +206,7 @@ export const TUNE = {
   // Patience in wave n is base * (1 + hpGrowth * (n - 1) + hpGrowth2 * (n - 1)^2):
   // gentle early, steep late.
   hpGrowth: 0.15,
-  hpGrowth2: 0.012,
+  hpGrowth2: 0.016,
   waveBonus: 80, // cash for finishing a wave...
   waveBonusStep: 15, // ...plus this much per wave number
   wetSlow: 0.5, // speed multiplier on a wet floor tile

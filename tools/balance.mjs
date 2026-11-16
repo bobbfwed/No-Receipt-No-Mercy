@@ -12,16 +12,22 @@
 //             bros wreck, and then stops spending
 //   keen      the same, then keeps buying forklifts on a loose grid, and when the floor is full
 //             spends everything on upgrades, cheapest first
+//   focus     like keen, but pours its upgrade money into the sprinklers nearest the entrance,
+//             one at a time, as far as each will go (how the owner plays)
 import {
   createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, BUILD, TICK_HZ, MAP_SIZES,
 } from '../src/sim/index.js';
 
 const S = 1, N = 3;
 
-/** The honest bot's plan for a map, in buying order: [kind, x, y, facing]. */
+/**
+ * The honest bot's plan for a map: `list` is what it buys in order, as [kind, x, y, facing];
+ * `machines` are the Presses and Packers to swap in later, as [kind, x, y, facing, how far down
+ * the list its line is finished].
+ */
 function plan(s) {
   const { w, h } = s, mid = h >> 1;
-  const list = [];
+  const list = [], machines = [];
   const cols = [];
   for (let x = 5; x <= w - 6; x += 7) cols.push(x);
   cols.forEach((x, k) => {
@@ -31,10 +37,16 @@ function plan(s) {
     for (let y = 1; y <= h - 3; y++) ys.push(down ? y : h - 1 - y);
     const d = down ? S : N, last = ys.length - 1;
     const press = Math.round(last / 3), packer = Math.round((2 * last) / 3);
+    // The line is laid with belts all the way first, so it earns at once. The Press and the
+    // Packer are expensive, so they are swapped in for a belt later, after the line's security.
+    const swaps = [];
     ys.forEach((y, j) => {
-      const kind = j === 0 ? 'unpacker' : j === last ? 'chute' : j === press ? 'press' : j === packer && k > 0 ? 'packer' : 'belt';
-      list.push([kind, x, y, d]);
+      list.push([j === 0 ? 'unpacker' : j === last ? 'chute' : 'belt', x, y, d]);
+      if (j === press) swaps.push(['press', x, y, d]);
+      if (j === packer) swaps.push(['packer', x, y, d]);
     });
+    // Where in the list this line's belts are all laid: its machines can be bought from then on.
+    const laid = list.length;
     // Security at the gap.
     const gy = down ? h - 2 : 1, inY = down ? gy - 1 : gy + 1;
     list.push(['sprinkler', x - 1, inY, 0], ['sprinkler', x + 1, inY, 0], ['wetfloor', x, gy, 0]);
@@ -42,8 +54,11 @@ function plan(s) {
     list.push(['wetfloor', x - 1, mid - 1, 0], ['wetfloor', x - 1, mid, 0],
       ['sprinkler', x - 1, mid - 2, 0], ['sprinkler', x - 1, mid + 1, 0], ['forklift', x + 2, mid - 2, 0]);
     if (k > 0) list.push(['samples', x - 2, inY, 0], ['forklift', x + 2, mid + 1, 0]);
+    for (const m of swaps) machines.push([m[0], m[1], m[2], m[3], laid]);
   });
-  return list;
+  // Presses before Packers: a Packer does nothing without a Press upstream.
+  machines.sort((a, b) => (a[0] === 'press' ? 0 : 1) - (b[0] === 'press' ? 0 : 1) || a[4] - b[4]);
+  return { list, machines };
 }
 
 /** The keen bot's extra shopping: forklifts on a loose grid over the whole floor. */
@@ -58,7 +73,11 @@ function play(bot, seed, map) {
   addPlayer(s, 'Bot');
   const me = s.players[0];
   const buyer = bot !== 'nothing';
-  const list = buyer ? plan(s).concat(bot === 'keen' ? extras(s) : []) : [];
+  const made = buyer ? plan(s) : { list: [], machines: [] };
+  const list = made.list.concat(bot === 'keen' || bot === 'focus' ? extras(s) : []);
+  const machines = made.machines;
+  const total = list.length + machines.length;
+  let fund = 0, lastCash = me.cash;
   let next = 0; // how far down the list it has got
   let bought = 0, upgrades = 0, rebuilt = 0, wrecked = 0;
   const rows = [];
@@ -71,13 +90,39 @@ function play(bot, seed, map) {
       const r = applyCommand(s, 0, { c: 'rebuild' });
       if (r.ok) rebuilt += r.n;
     }
+    // Half of everything it earns goes into a fund for the expensive machines; the rest pays
+    // for the plan in order. So it neither starves its factory nor leaves the doors unguarded.
+    if (me.cash > lastCash) fund += (me.cash - lastCash) * 0.5;
+    // It saves only for a machine it could place now, and no more than that machine costs.
+    const want = machines.length && machines[0][4] <= next ? BUILD[machines[0][0]].cost : 0;
+    fund = Math.min(fund, want, me.cash);
+    for (let j = 0; j < machines.length; j++) {
+      const [k, x, y, d, line] = machines[j];
+      if (line > next || fund < BUILD[k].cost) break; // its line is not laid yet, or not enough saved
+      const there = s.grid[y * s.w + x];
+      if (there && there.k === 'belt') applyCommand(s, 0, { c: 'remove', x, y });
+      if (applyCommand(s, 0, { c: 'place', k, x, y, d }).ok) { bought++; fund -= BUILD[k].cost; }
+      machines.splice(j--, 1);
+    }
     while (next < list.length) {
       const [k, x, y, d] = list[next];
-      if (me.cash < BUILD[k].cost) return;
+      if (me.cash - (machines.length ? fund : 0) < BUILD[k].cost) break;
       const why = canPlace(s, k, x, y, 0);
-      if (why === 'shopper') return; // try again shortly
+      if (why === 'shopper') break; // try again shortly
       if (!why && applyCommand(s, 0, { c: 'place', k, x, y, d }).ok) bought++;
       next++;
+    }
+    lastCash = me.cash;
+    if (next < list.length) return;
+    if (bot === 'focus') {
+      // The first sprinklers in the plan are the ones nearest the entrance.
+      for (const [k, x, y] of list) {
+        if (k !== 'sprinkler') continue;
+        while (canUpgrade(s, x, y, 0) === null && applyCommand(s, 0, { c: 'upgrade', x, y }).ok) upgrades++;
+        const b = s.grid[y * s.w + x];
+        if (b && upgradeCost(b)) return; // save up for this one before moving on
+      }
+      return;
     }
     if (bot !== 'keen') return;
     // Nothing left to build: upgrade, cheapest first. Sprinklers sit at the gaps everyone must
@@ -120,7 +165,7 @@ function play(bot, seed, map) {
   }
   return {
     bot, result: s.phase, wave: s.wave, refunds: s.refunds, limit: s.refundLimit, cash: Math.round(me.cash),
-    bought, of: list.length, upgrades, rebuilt, wrecked, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
+    bought, of: total, upgrades, rebuilt, wrecked, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
   };
 }
 
@@ -134,7 +179,7 @@ const design = designArg || 'warehouse';
 for (const size of sizes) {
   const z = MAP_SIZES[size];
   console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player`);
-  for (const bot of ['nothing', 'honest', 'keen']) {
+  for (const bot of ['nothing', 'honest', 'keen', 'focus']) {
     const r = play(bot, seed, { design, size });
     console.log(`== ${bot.padEnd(7)} ${r.result.toUpperCase().padEnd(5)} wave ${String(r.wave).padStart(2)}, `
       + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
