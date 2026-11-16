@@ -21,11 +21,13 @@
            other player's is the strict kind)
     relay  an address on a TURN relay server (works through almost anything, if the relay is up)
   If a player gets no srflx and no relay, he cannot join or host online from that network.
+  It also says whether the owner's own relay (src/net/relay.js) is filled in, and if it is,
+  whether it answers.
 -->
 <h1>Network check for online play</h1>
 <pre id="out">Checking, about 8 seconds...</pre>
 <script type="module">
-  import { ICE_SERVERS } from '../src/net/transports.js';
+  import { ICE_SERVERS, OWN_RELAY, OWN_RELAY_PROBLEM } from '../src/net/transports.js';
   const out = document.getElementById('out');
   const lines = [];
   const say = (t, cls = '') => { lines.push(cls ? `<span class="${cls}">${t}</span>` : t); out.innerHTML = lines.join('\n'); };
@@ -52,13 +54,24 @@
   lines.length = 0;
   say(`Browser: ${navigator.userAgent}`);
   say('');
+  if (OWN_RELAY) say(`Your own relay (src/net/relay.js): set up, ${OWN_RELAY.urls.length} address(es), user name "${OWN_RELAY.username}".`, 'ok');
+  else if (OWN_RELAY_PROBLEM === 'empty') say('Your own relay (src/net/relay.js): NOT SET UP. Only the free public relays below are tried. Instructions are at the top of src/net/relay.js.', 'bad');
+  else say(`Your own relay (src/net/relay.js): filled in, but NOT USED because something is wrong: ${OWN_RELAY_PROBLEM}`, 'bad');
+  say('');
   const all = await probe('Everything the game uses', ICE_SERVERS, false);
+  let own = null;
   for (const s of ICE_SERVERS) {
     const urls = [].concat(s.urls);
     const isTurn = urls.some((u) => u.startsWith('turn'));
-    await probe(`  ${isTurn ? 'relay' : 'stun '} ${urls.join(' , ')}`, [s], isTurn);
+    const label = s === OWN_RELAY ? 'your relay' : isTurn ? 'relay     ' : 'stun      ';
+    const found = await probe(`  ${label} ${urls.join(' , ')}`, [s], isTurn);
+    if (s === OWN_RELAY) own = found;
   }
   say('');
+  if (OWN_RELAY && own) {
+    if (own.has('relay')) say('YOUR RELAY: answered. Players who cannot reach each other directly will go through it.', 'ok');
+    else say('YOUR RELAY: did not answer. Check the addresses, user name and password in src/net/relay.js against the provider\'s dashboard.', 'bad');
+  }
   if (all.has('relay')) say('RESULT: this network can use a relay. Online play should work from here.', 'ok');
   else if (all.has('srflx')) say('RESULT: no relay answered, but your public address was found. Online play works with most other players, not all.', 'ok');
   else say('RESULT: nothing but local addresses. Online play will not work from this network (a firewall, VPN or browser setting is blocking it).', 'bad');

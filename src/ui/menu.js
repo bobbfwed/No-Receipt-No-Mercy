@@ -3,6 +3,7 @@ import { MAP_DESIGNS, MAP_SIZES } from '../sim/index.js';
 import { VERSION, RELEASE, versionText } from '../version.js';
 import { h, loadName, saveName } from './dom.js';
 import { createSettings } from './settings.js';
+import { whenSaved } from './save.js';
 import { howToPlay } from './overlays.js';
 
 /**
@@ -86,7 +87,15 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   const btnJoin = h('button', { type: 'submit', class: 'btn-big btn-red' }, 'Join a game');
   const btnLHost = h('button', { type: 'button', class: 'btn-small' }, 'Host in this tab');
   const btnLJoin = h('button', { type: 'button', class: 'btn-small' }, 'Join from this tab');
-  const all = [btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn, designIn, sizeIn, ...settings.inputs];
+  // A game saved in this browser can be carried on.
+  const save = opts.save || null;
+  const btnResume = save ? h('button', { type: 'button', class: 'btn-big btn-resume' },
+    'Resume saved game',
+    h('small', null, `Sales event ${save.wave} of ${save.waves} · ${save.store} · ${save.players.join(', ')} · saved ${whenSaved(save.at)}`)) : null;
+  const btnForget = save ? h('button', { type: 'button', class: 'btn-forget', title: 'Throw the saved game away' }, 'Delete this save') : null;
+  const resumeBox = save ? h('div', { class: 'resume-box' }, btnResume, btnForget,
+    save.players.length > 1 ? h('p', { class: 'resume-note' }, 'You will be the host. A new room code appears at the top: send it to the others, and each gets his place and money back by joining under the same name.') : null) : null;
+  const all = [btnResume, btnForget, btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn, designIn, sizeIn, ...settings.inputs].filter(Boolean);
 
   function playerName() {
     const n = nameIn.value.trim().slice(0, 14);
@@ -111,6 +120,10 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   }
 
   btnTrain.addEventListener('click', () => run(() => actions.tutorial(playerName()), 'Starting your training...'));
+  if (save) {
+    btnResume.addEventListener('click', () => run(() => actions.resume(), 'Reopening the store...'));
+    btnForget.addEventListener('click', () => { actions.forget(); resumeBox.remove(); setStatus('Saved game deleted.', 'busy'); });
+  }
   btnSolo.addEventListener('click', () => run(() => actions.solo(playerName(), chosenMap(), true, settings.get()), 'Clocking in...'));
   btnHost.addEventListener('click', () => run(() => actions.host(playerName(), null, chosenMap(), true, settings.get()),
     'Opening a room on the internet. Please hold, like a real customer...'));
@@ -147,6 +160,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
       h('fieldset', { class: 'map-pick set-box' },
         h('legend', null, 'The game (can also be changed before it starts)'),
         settings.el),
+      resumeBox,
       h('div', { class: 'menu-actions' },
         btnTrain,
         btnSolo,

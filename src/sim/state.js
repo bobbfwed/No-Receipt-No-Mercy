@@ -1,6 +1,6 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
-import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS } from './constants.js';
+import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ } from './constants.js';
 import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
 
 /**
@@ -59,6 +59,8 @@ import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
  * @property {string} side   'store' (builds and defends) or 'office' (runs the shoppers; see office.js)
  * @property {number} cash   this player's own money. Everything the store earns or loses is
  *                           split evenly between the connected players.
+ * @property {number} [gone] the tick he dropped out, while his grace period runs (see
+ *                           setPlayerOnline). Absent when he is here, or away with nothing pending.
  * @property {Object} w      statistics for this wave
  * @property {Object} all    statistics for the whole game
  */
@@ -240,7 +242,7 @@ export function doorOf(state, pid) {
 export function addPlayer(state, name) {
   const clean = String(name || 'Player').trim().slice(0, 14) || 'Player';
   const back = state.players.find((p) => !p.on && p.name === clean);
-  if (back) { back.on = true; return back.id; }
+  if (back) { back.on = true; delete back.gone; return back.id; }
   if (state.players.length >= MAX_PLAYERS) return -1;
   const id = state.players.length;
   state.players.push({
@@ -255,27 +257,46 @@ export function addPlayer(state, name) {
   return id;
 }
 
+/**
+ * Marks a player as connected or not.
+ * A player who drops out once the game is under way keeps his money for a grace period
+ * (TUNE.graceSecs of game time), so a brief network blip costs him nothing. If he is still away
+ * when it runs out, step() hands his money to those who stay (see expireAway). While away he
+ * neither earns nor pays, like any absent player. In the lobby nothing is at stake.
+ */
 export function setPlayerOnline(state, id, on) {
   const p = state.players[id];
   if (!p) return;
   const was = p.on;
   p.on = on;
-  // A player who leaves once the game is under way hands his money to those who stay, split
-  // evenly. If he comes back he starts from nothing and earns his share like everyone else.
-  // (Otherwise leaving and rejoining would be a way to keep money safe from refunds.)
-  if (was && !on && state.phase !== 'lobby' && p.cash > 0) {
-    const stay = state.players.filter((q) => q.on && q.side !== 'office');
-    if (stay.length) {
-      for (const q of stay) q.cash = tidy(q.cash + p.cash / stay.length);
-      p.cash = 0;
-    }
-  }
+  if (on) delete p.gone;
+  else if (was && state.phase !== 'lobby') p.gone = state.tick;
   // If nobody is left running the store, the Head Office player has to come back and do it.
   const o = state.office;
   if (o && !state.players.some((q) => q.on && q.side === 'store')) {
     if (state.players[o.pid]) state.players[o.pid].side = 'store';
     state.office = null;
     state.storeReady = false;
+  }
+}
+
+/**
+ * Called by step() every tick: anyone whose grace period has run out without his coming back
+ * hands his money to those who stay, split evenly, and returns (if ever) with none. Leaving and
+ * rejoining must not be a way to keep money safe from refunds. The last player left keeps his
+ * money; the clock keeps running for him in case someone else turns up.
+ */
+export function expireAway(state) {
+  const limit = Math.max(1, Math.round(TUNE.graceSecs * TICK_HZ));
+  for (const p of state.players) {
+    if (p.gone === undefined || p.on || state.tick - p.gone < limit) continue;
+    const stay = state.players.filter((q) => q.on && q.side !== 'office');
+    if (!stay.length) continue;
+    if (p.cash > 0) {
+      for (const q of stay) q.cash = tidy(q.cash + p.cash / stay.length);
+      p.cash = 0;
+    }
+    delete p.gone;
   }
 }
 

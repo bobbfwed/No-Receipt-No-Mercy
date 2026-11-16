@@ -98,6 +98,16 @@ One player stops defending and plays the other side: each wave he gets a budget,
 - Known rough edges: a phone held sideways leaves only about a third of the screen height for the floor; the Head Office planner is cramped on a phone.
 - Chat: Enter or the Chat button; one line of up to 200 characters; floods are cut off.
 
+## Less data, a grace period, a place for a relay (built overnight 2026-11-15)
+- The host no longer sends the whole game several times a second. It sends ten small messages a second (the commands players gave and a checksum); every player's browser replays them. Measured on a busy three-player game: about 130 KB a second per player before, about 2.8 KB after (47 times less). A full copy goes out only when someone joins or leaves, when a checksum does not match, or every ten seconds as a safety net. Large messages are split so they can never exceed what a connection carries; the old scheme probably dropped online players once the game state passed 16 KB.
+- Players now see the game about a quarter of a second behind the host.
+- A dropped player keeps his money for 90 seconds of game time (a minute and a half at normal speed, 30 seconds at 3x) before it is shared out.
+- `src/net/relay.js` is ready for a relay's address, username and password. Empty until the owner has an account.
+- Checked in one browser family (Edge) on one machine, plus the real internet broker. Not checked: two different browsers playing together, where tiny differences in arithmetic are expected and the checksum-and-resync is what covers them.
+
+## Save and resume (built)
+The host's browser saves the game every few seconds; the menu offers to resume it. One save per browser, kept on that device only. After a host hand-over the new host's browser holds the save. Resuming opens a new room; the others rejoin by name and get their places and money back, with no time limit. A save made by an older version of the rules is ignored if it does not look right, which is a blunt check: a rule change that keeps the same shape could still load a save that then behaves oddly.
+
 ## Settings, seven players, entrances (owner's requests, built)
 - The host chooses, on the menu and again in the lobby: 10, 15, 20 or 30 sales events; Easy, Normal, Hard or Brutal (shopper patience x0.75 / 1 / 1.3 / 1.65 and income x1.25 / 1 / 0.85 / 0.7); and starting cash of $300, $500, $800 or $1,200 each. The multipliers are my guess and untested. Waves past 20 use the same growth formulas, which have not been looked at that far out.
 - Up to seven players. The seventh entrance is on the bottom wall, and there is a seventh map size (121 x 67) following the same half-as-big-again rule.
@@ -113,7 +123,7 @@ A mom whose patience runs out while her child is loose does not leave. She drops
 
 ## Leaving and host hand-over (owner's request, built)
 - Once a game has started, or anyone else is in it, the browser asks for confirmation before the page is closed, refreshed or left.
-- If the host leaves, the first remaining player in the list becomes the host, using his own copy of the game; the others reconnect to him under the same room code, and the old host can rejoin with the original link. Checked with three players in one browser (test rooms) and by test. Not yet checked over the internet, where the room code takes a few seconds to be released and the hand-over can take up to a minute.
+- (Since 2026-11-15 a leaving host keeps his money for the same grace period as anyone else.) If the host leaves, the first remaining player in the list becomes the host, using his own copy of the game; the others reconnect to him under the same room code, and the old host can rejoin with the original link. Checked with three players in one browser (test rooms) and by test. Not yet checked over the internet, where the room code takes a few seconds to be released and the hand-over can take up to a minute.
 - Limits: the new host's copy can be a fraction of a second behind the old host's, so the last moment before the hand-over may be replayed. Two players with the same name cannot be told apart when they reconnect. If the new host also leaves during the hand-over, the game is lost.
 
 ## Showroom doorways (found by the owner, improved, not played)
@@ -138,5 +148,4 @@ Also not done: the host sends the whole game state in one message; on the larges
 - Upgrades for factory machines, if the late game needs more income.
 - An endless mode after wave 20.
 - Teaching the newer shoppers in the training shift (it covers dads and one super shopper; the others are explained by DEB and the ? screen).
-- Saving a game in the host's browser so a session can be resumed.
 - Role restrictions as an optional hard mode.

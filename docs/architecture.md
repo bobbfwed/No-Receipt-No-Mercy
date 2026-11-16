@@ -36,6 +36,8 @@ Maps: `src/sim/maps.js` builds the floor plan from a design and a size (`createG
 
 Marked floor: `state.zones` is a string like `state.tiles`, one character per tile: a key of `ZONES` (`u` Loading Bay, `p` Press Shop, `k` Gift Wrap, `c` Shipping) or a space. A building whose definition has a `zone` may only be placed on that kind of floor (`canPlace` returns `'zone'`). `makeZones()` in `maps.js` lays the patches out so that different kinds never touch, which is what makes belts necessary. An empty string means no marked floor: the bare default map used by most tests. The tutorial turns it on with `createGame({ training: true, zones: true })`.
 
+Players who drop out: a player who goes offline keeps his money for `TUNE.graceSecs` (90 seconds of game time; `player.gone` is the tick he left). If he is not back by then, `step()` shares it out between the players still connected, and he returns with none. A host who leaves gets the same grace. In the lobby nothing changes hands.
+
 Money: `state.players[i].cash`. There is no shared pot. `earn()` and `lose()` in `state.js` split income and refunds evenly between the connected players; `teamCash(state)` adds everyone's up for display.
 
 Upgrades: `src/sim/upgrades.js`. A building's level is `b.lv` (absent means 1); `statsOf(b)` gives its numbers at its level and is the only place the simulation or the interface should read a tower's damage or range from.
@@ -43,6 +45,8 @@ Upgrades: `src/sim/upgrades.js`. A building's level is `b.lv` (absent means 1); 
 Super shoppers: a shopper with `sup: 1` plays by `SUPERS[kind]` instead of `SHOPPERS[kind]`; always go through `defOf(shopper)`.
 
 Host hand-over: `state.host` is the player whose browser runs the game. When a joined player's connection to the host closes, `hostLost()` in `src/main.js` runs in every remaining browser. All of them pick the same successor (the first connected player in the list who is not the old host). The successor makes a `HostSession` from its own copy of the state with `takeOver: true` and opens the room again under the same code, retrying until the old host's code is released; the others retry joining it. Players are matched to their old places by name. The game screen is torn down and started again on the new session (`destroy()` on what `startGame` returns).
+
+Saving: `src/ui/save.js` keeps one save in the host browser's `localStorage` (`keepSaved(session)` writes the whole state every few seconds, at each wave's end and when the page closes; `readSave()` gives it back with a summary for the menu, or null if there is none or it does not look right). `actions.resume()` in `src/main.js` makes a `HostSession` from it with `resume: true`, which seats the host by name and treats everyone else as away, money intact, until he rejoins. Only real games are saved: not training, not the lobby, not finished games, not the URL test options.
 
 Touch wording: lessons and help are written once, for mouse and keyboard. `src/content/touch.js` rewords them for touch screens (`worded(text)`), and a test fails if any lesson or help text still names a key or the mouse afterwards. Add a rule there when a new lesson mentions a key.
 
@@ -63,7 +67,7 @@ Path maps: there are four (`NORMAL`, `HOP` for dads, `SMASH` for gym bros, `GHOS
 Coordinates: the grid is `state.w` x `state.h` tiles. A tile index is `y * state.w + x`. Shopper positions are in tiles as decimals; the centre of tile (3, 5) is (3.5, 5.5). Directions are 0 east, 1 south, 2 west, 3 north.
 
 ## Sessions (`src/net/session.js`)
-The host's browser owns the real state. Clients send commands, receive the whole state up to five times a second (less often when the crowd is large, to spare the host's connection), and run `step()` on their copy in between. The user interface talks to a session and never to the simulation's state-changing functions directly:
+The host's browser owns the real state. Clients send commands. The host sends ten small "advance" messages a second: its step count, the commands it applied (each with the step it took effect at and who gave it), and a checksum. Clients replay them on their own copy, running a fraction of a second behind the host, and ask for a fresh copy if the checksum differs. A full copy is sent only when a player joins or leaves, after `fastForward`, on a mismatch, when a client falls more than 3 seconds behind, and every 10 seconds as a safety net. Messages over 48 KB (15 KB over the internet, the limit of the PeerJS library) are split and rejoined in `transports.js`. 'say', 'review' and 'report' reach a client when his replay reaches that moment. Never change `session.state` on the host directly while players are connected: go through `send()`. The user interface talks to a session and never to the simulation's state-changing functions directly:
 
 | Member | Meaning |
 |---|---|
@@ -152,6 +156,7 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `tools/sound-test.html` measures every sound and has a play button for each.
 - `node tools/phone.mjs` runs the touch checks in Chrome on a real Android phone attached by USB (the three `adb` commands it needs are at the top of the file). The touches go through the phone's own Chrome.
 - `tools/touch-test.html` plays a game with simulated finger touches and lists 33 checks of the touch rules. Photograph it as a phone with `node tools/realshot.mjs <url> out.png 40000 390 844 --touch --dpr=2` (`--touch` and `--dpr=N` make `realshot.mjs` emulate a touch device).
+- `src/net/relay.js` is where the owner's own relay (TURN) server goes; instructions are in the file. It is empty until he has an account with a provider.
 - `tools/net-check.html` reports which of the helper servers for online play (`ICE_SERVERS` in `src/net/transports.js`) answer from the computer it is opened on. Use it when two players cannot connect.
 - `tools/office-test.html?view=join|host|both&step=...` plays a two-player game in which the joined player takes the Head Office job, buys a wave through the real buttons and plays it; the steps are listed in the file.
 - `tools/render-harness.html` shows the renderer alone; its options are listed at the top of the file (`?lineup=1` shows every shopper and its super in every state; `design=`, `size=`, `players=` and `cam=` choose the map and view).

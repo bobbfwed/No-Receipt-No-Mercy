@@ -214,6 +214,7 @@ export const ST = { WALK: 0, BROWSE: 1, STUN: 2, LEAVE: 3 };
 export const TUNE = {
   startCash: 500, // each player's own money at the start
   joinCash: 60, // a player who joins late also gets this much per wave already played
+  graceSecs: 90, // a player whose connection drops keeps his money this long (game time); then it is shared out
   refundLimit: 40, // game over when this many shoppers have reached the tills...
   refundPerPlayer: 10, // ...plus this many for each player after the first
   crowdPerPlayer: 0.5, // each player after the first adds this share of a solo game's shoppers
