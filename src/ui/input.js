@@ -41,9 +41,11 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   const grid = () => session.state?.grid;
   const at = (t) => grid()?.[t.y * session.state.w + t.x];
   const hasBuilding = (t) => !!at(t);
+  // Head Office cannot touch the store: no tools, no building, no removing. He keeps the camera.
+  const isOffice = () => session.state?.players[session.me]?.side === 'office';
 
   function setTool(k) {
-    const next = k && (BUILD[k] || TOOLS.includes(k)) ? k : null;
+    const next = k && !isOffice() && (BUILD[k] || TOOLS.includes(k)) ? k : null;
     if (next === tool) return;
     tool = next;
     canvas.dataset.tool = tool || '';
@@ -64,6 +66,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   /** Puts back everything of this player's that gym bros have wrecked, as far as his cash goes. */
   function rebuild() {
+    if (isOffice()) return;
     send([{ c: 'rebuild' }]);
   }
 
@@ -132,6 +135,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       return;
     }
     if (e.button !== 0 && e.button !== 2) return;
+    if (isOffice()) return;
     const t = renderer.tileAt(e.clientX, e.clientY);
     hover = t;
     if (!t || !session.state) return;
@@ -177,6 +181,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const key = e.key;
     const pk = panKey(e);
     if (pk) { held.add(pk); e.preventDefault(); return; }
+    const lower0 = key.length === 1 ? key.toLowerCase() : key;
+    // Head Office keeps only the camera keys (and Escape for dialogs).
+    if (isOffice() && !['f', 'h', 'Home', 'Escape'].includes(lower0)) return;
     let digit = /^[0-9]$/.test(key) ? key : null;
     if (!digit && /^(Digit|Numpad)[0-9]$/.test(e.code)) digit = e.code.slice(-1);
     if (digit !== null) {

@@ -215,6 +215,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       const why = checkPlan(state, cmd.groups);
       if (why) return { ok: false, why };
       state.office.plan = tidyPlan(cmd.groups);
+      // Changing the plan takes back his "ready": the doors must not open on a plan he is still editing.
+      state.office.ready = false;
       return { ok: true };
     }
     case 'start': {

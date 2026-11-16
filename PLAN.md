@@ -52,6 +52,7 @@ The plan below is as written before building. What was built, and where it diffe
 - A group is a kind, a number, super or not, an entrance and a start time. The gap between arrivals is fixed per kind.
 - Decided without asking (the three open questions): he sees the whole store all the time; planning uses the normal build countdown, and the doors open early only when both sides ask; he wins when the store hits the refund limit, with no separate score.
 - His entrance stays open after he changes sides (entrances never close), so he has one more door to use.
+- Changing the plan takes back his "ready". If the last store player drops out, he is put back in the store.
 - Not built: one-off abilities, two organisers, hiding his plan from the builders (it is in the shared game state, though the interface does not show it to them).
 
 ### The plan as first written

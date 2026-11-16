@@ -6,6 +6,7 @@ import { nopeLine } from '../content/lines.js';
 import { h } from './dom.js';
 import { createTopBar, createPlayersPanel } from './hud.js';
 import { createBuildBar } from './buildbar.js';
+import { createPlanner } from './planner.js';
 import { createInput } from './input.js';
 import { createDeb } from './deb.js';
 import { createToasts } from './toasts.js';
@@ -53,8 +54,10 @@ export function startGame(session, {
       return false;
     },
   });
-  const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, sound, playSound });
-  const players = createPlayersPanel(session);
+  // The Head Office player sees the planner instead of the build bar.
+  const planner = createPlanner(session, { playSound });
+  const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, sound, playSound, budgetLeft: planner.left });
+  const players = createPlayersPanel(session, { playSound });
   const bar = createBuildBar(input, session);
   const deb = createDeb();
   const toasts = createToasts();
@@ -75,7 +78,7 @@ export function startGame(session, {
 
   // In training the lesson panel sits where the players list normally is.
   stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox);
-  const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, bar.tip);
+  const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, planner.el, bar.tip, planner.tip);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');
   if (sound) sound.attach(session);
@@ -143,14 +146,26 @@ export function startGame(session, {
   session.start();
 
   // ---- Drawing loop --------------------------------------------------------------------------------
-  let mapShown = false, mapDrawn = 0;
+  let mapShown = false, mapDrawn = 0, office = false;
   function frame(now) {
     requestAnimationFrame(frame);
     const s = session.state;
     if (!s) return;
+    // Head Office does not build: swap the build bar for the planner, and drop any tool he held.
+    const isOffice = s.players[session.me]?.side === 'office';
+    if (isOffice !== office) {
+      office = isOffice;
+      root.classList.toggle('is-office', office);
+      bar.el.classList.toggle('hidden', office);
+      planner.el.classList.toggle('hidden', !office);
+      bar.tip.classList.add('hidden');
+      planner.hideTip();
+      if (office) input.setTool(null);
+    }
     top.update(s);
     players.update(s);
     bar.update(s);
+    planner.update(s);
     review.update(s);
     input.tick(now);
     deb.tick(now);
@@ -167,12 +182,15 @@ export function startGame(session, {
       review.close();
       input.setTool(null);
       // Give DEB's verdict a moment to arrive with the final update before the curtain drops.
-      setTimeout(() => root.append(endScreen(session.state, lastDeb)), session.isHost ? 600 : 1200);
+      setTimeout(() => root.append(endScreen(session.state, lastDeb, session.me)), session.isHost ? 600 : 1200);
     }
     const view = input.view();
     // Show where shoppers will walk whenever the player is planning: between waves, while
-    // holding something to build, and all through training.
-    view.route = !!training || s.phase === 'build' || !!input.tool;
+    // holding something to build, and all through training. Head Office always sees them: the
+    // routes are what he is planning against.
+    view.route = office || !!training || s.phase === 'build' || !!input.tool;
+    // Nor does he get the tile outline under the mouse that says "you could build here".
+    if (office) view.hover = null;
     view.marks = training ? training.marks() : null;
     renderer.draw(view);
   }
