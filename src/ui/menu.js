@@ -120,8 +120,9 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
 
   const card = h('div', { class: 'menu-card' },
     h('div', { class: 'menu-main' },
-      h('div', { class: 'menu-sign' }, 'NO RETURNS WITHOUT RECEIPT'),
-      h('h1', { class: 'menu-title' }, 'RETURNS', h('br'), 'DEPARTMENT'),
+      h('div', { class: 'menu-sign' }, 'RETURNS DEPARTMENT'),
+      h('h1', { class: 'menu-title' }, 'NO RECEIPT,', h('br'), 'NO MERCY'),
+      h('p', { class: 'menu-tagline' }, 'The customer is always a prick.'),
       h('p', { class: 'menu-pitch' }, 'Build a factory, wall in the returns desk, and stop a horde of refund-hungry shoppers before they bankrupt the store. Co-op, for 1 to 6 disappointments.'),
       h('label', { class: 'field', for: 'name' }, h('span', null, 'Your name (for the disciplinary file)'), nameIn),
       h('fieldset', { class: 'map-pick' },

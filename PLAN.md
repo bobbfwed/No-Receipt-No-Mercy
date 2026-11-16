@@ -1,6 +1,6 @@
-# Returns Department: plan
+# No Receipt, No Mercy: plan
 
-Chosen concept: 01 Returns Department (see `concepts/index.html`). This file records the plan, the decisions made without asking, and what is done. Keep it up to date as work lands.
+The game's name is "No Receipt, No Mercy", with the tagline "The customer is always a prick." (the owner's choice from the list further down). Chosen concept: 01 Returns Department (see `concepts/index.html`). This file records the plan, the decisions made without asking, and what is done. Keep it up to date as work lands.
 
 ## The game
 A discount warehouse on Black Friday. Shoppers come in through the entrances (one per player) and want a refund at the tills on the right. Each player has his own cash, the store's income and refunds are split evenly between them, and they split two jobs: the **factory** (belts and machines that make goods and sell them) and **security** (towers that annoy shoppers until they storm out). Belts and machines block shoppers, so the factory is the maze. Twenty waves; forty refunds (ten more per extra player) and the store closes. DEB, the HR chatbot, insults everyone throughout.
@@ -65,7 +65,7 @@ One player stops defending and plays the other side: each wave he gets a budget,
 - DEB gets a second set of lines: she works for him, and insults both sides.
 - Open questions for the owner before building it: should he see the builders' layout while planning; should there be a time limit on planning; and is winning by refund limit enough, or should he also score points per shopper who gets through.
 
-## Name ideas (owner to choose; nothing is renamed yet)
+## Name ideas (decided: number 2 as the title, number 1 as the tagline)
 1. The Customer Is Always a Prick
 2. No Receipt, No Mercy
 3. Go Refund Yourself
@@ -76,8 +76,6 @@ One player stops defending and plays the other side: each wave he gets a budget,
 8. Manager? I Barely Know Her
 9. Pepper Spray and Pray
 10. Store Credit Only, Dickhead
-
-Suggested: "No Receipt, No Mercy" as the title with "The customer is always a prick" as the tagline; "Shrinkage" if one word is wanted.
 
 ## Ideas for later (not started)
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
