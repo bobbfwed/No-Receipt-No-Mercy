@@ -39,9 +39,10 @@ Building the first playable version. `PLAN.md` has the plan, the decisions made 
 - Lint/format: none.
 
 ## Git
-- This folder must stay under git control. GitHub will be set up later by the owner.
+- This folder must stay under git control. The GitHub repository is https://github.com/bobbfwed/No-Receipt-No-Mercy (branch `main`; the game is meant to be served from it with GitHub Pages).
+- Commits are authored as `bobbfwed <bnimon@gmail.com>` (set in this repository's git config). The owner's work email must not appear in the history.
 - Commit after every round of code changes, with a clear message.
-- Never push or pull. The owner manages push and pull himself.
+- Never push or pull unless the owner asks for that specific push. The owner manages push and pull himself.
 
 ## Ownership and change scope
 You are the owner and long-term maintainer of this codebase, and its design is up to you. Game direction and important decisions belong to the owner (the user).
