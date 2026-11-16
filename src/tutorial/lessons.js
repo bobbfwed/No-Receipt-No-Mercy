@@ -114,7 +114,7 @@ export const STEPS = [
     title: 'Make goods worth more: the Press',
     tool: 'press',
     text: [
-      'A Press turns a Mystery Box ($2) into a Gadget ($7). Machines take goods in from the back or the sides, and push the result out of the side their arrow points to.',
+      'A Press turns a Mystery Box ($2) into a Gadget ($6). Machines take goods in from the back or the sides, and push the result out of the side their arrow points to.',
       'Do this: right-click the highlighted belt to remove it. Then pick Press (press 3), make sure its arrow points DOWN (press R to turn it), and click the same tile.',
       'Then wait for a Gadget to reach the chute.',
     ],
@@ -130,7 +130,7 @@ export const STEPS = [
     title: 'Worth even more: the Packer',
     tool: 'packer',
     text: [
-      'A Packer turns a Gadget ($7) into a Gift Set ($16). It only accepts Gadgets, so it has to come somewhere after the Press.',
+      'A Packer turns a Gadget ($6) into a Gift Set ($13). It only accepts Gadgets, so it has to come somewhere after the Press.',
       'Do this: right-click the highlighted belt, then put a Packer (press 4) there with its arrow pointing DOWN.',
       'That makes a complete production line: Unpacker, Press, Packer, Chute. In a real game you will want several.',
     ],

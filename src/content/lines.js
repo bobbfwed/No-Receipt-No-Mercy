@@ -72,6 +72,11 @@ export const LINES = {
     '{p} just handed {q} ${n}. Paying a man to do your job for you. Management material.',
     '{p} gave {q} ${n}. I assume this is for services rendered. I do not want details.',
   ],
+  // A machine has goods and nowhere to put them: there is no belt in front of it. {k} is the machine.
+  noBelt: [
+    "{p}, your {k} has nowhere to put its load. Machines only hand goods to a belt. Lay one in front of it. I'd draw you a picture, but you'd eat the crayon.",
+    "That {k} is backed up, {p}. No belt in front of it, no factory. Machines don't pass things hand to hand. Unlike you lot in the stockroom.",
+  ],
   rebuilt: [
     '{p} rebuilt {n} things a man in a vest knocked over. Paying twice for the same wall. Just like his wedding.',
     '{p} put {n} things back up. If only that worked at home.',
@@ -131,7 +136,7 @@ export const LINES = {
     samples: ['Free samples. {p} knows the way to slow anyone down is cheese on a stick.'],
     crate: ['{p}, crates are not a personality.', 'More crates. {p} is building a fort. He is forty.'],
     sprinkler: ['Another pepper sprinkler. HR would object, but HR is me, and I enjoy it.'],
-    packer: ['A Packer. Same Gadget, nicer box, triple the price. {p} finally understands retail. And dating.'],
+    packer: ['A Packer. Same Gadget, nicer box, twice the price. {p} finally understands retail. And dating.'],
     wetfloor: ["A wet floor sign. {p}'s most effective security measure is a piece of yellow plastic."],
     belt: ['{p} is laying belt. It\'s the most action that floor has seen in years.'],
   },

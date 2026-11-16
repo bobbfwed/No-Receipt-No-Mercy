@@ -75,7 +75,7 @@ function newBuilding(k, owner, d) {
   if (def.rot) b.d = d & 3;
   if (k === 'belt') b.it = [];
   if (k === 'unpacker') b.t = Math.round(def.period * TICK_HZ);
-  if (k === 'press' || k === 'packer') { b.n = 0; b.t = 0; b.out = 0; }
+  if (k === 'press' || k === 'packer') { b.n = 0; b.t = 0; b.out = 0; b.tq = []; b.tr = 0; }
   if (def.tower) b.cd = 0;
   if (k === 'forklift') b.a = 0;
   return b;
