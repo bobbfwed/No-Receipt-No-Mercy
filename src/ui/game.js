@@ -14,6 +14,7 @@ import { createReview } from './review.js';
 import { endScreen, closedScreen, handoverScreen, helpScreen } from './overlays.js';
 import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
+import { createChat } from './chat.js';
 import { BUILD, ZONES } from '../sim/index.js';
 
 /**
@@ -119,6 +120,9 @@ export function startGame(session, {
     }
     zoneHint.classList.toggle('hidden', !zoneSpot);
   }
+
+  const chat = createChat(session, { playSound });
+  stage.append(chat.el);
 
   // Before the game starts: pick the store and press Ready. It sits where the players list goes.
   const lobby = createLobby(session, { renderer, playSound });
@@ -255,7 +259,8 @@ export function startGame(session, {
     // The small map only earns its space when the whole store does not fit on screen.
     const r = renderer.viewRect();
     const partial = r.x1 - r.x0 < s.w - 0.5 || r.y1 - r.y0 < s.h - 0.5;
-    if (partial !== mapShown) { mapShown = partial; mapBox.classList.toggle('hidden', !partial); }
+    if (partial !== mapShown) { mapShown = partial; mapBox.classList.toggle('hidden', !partial); root.classList.toggle('has-minimap', partial); }
+    chat.update(s);
     if (partial && now - mapDrawn > 120) { mapDrawn = now; minimap.draw(); }
     if (!ended && (s.phase === 'won' || s.phase === 'lost')) {
       ended = true;
@@ -285,6 +290,7 @@ export function startGame(session, {
     session.stop();
     watcher.disconnect();
     input.destroy();
+    chat.destroy();
     removeEventListener('beforeunload', onBeforeUnload);
   }
   /** The player meant to leave (a button did it): do not ask. */

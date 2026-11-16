@@ -26,6 +26,7 @@ export function howToPlay() {
       h('li', null, h('kbd', null, 'Right-click'), ' or ', h('kbd', null, 'X'), ' remove (75% back) · ', h('kbd', null, 'Esc'), ' put it down'),
       h('li', null, h('kbd', null, 'U'), ' upgrade the security under the mouse, or pick the Upgrade tool · ', h('kbd', null, 'B'), ' rebuild what gym bros wrecked'),
       h('li', null, h('kbd', null, 'W'), h('kbd', null, 'A'), h('kbd', null, 'S'), h('kbd', null, 'D'), ' or arrows move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'F'), ' whole map · ', h('kbd', null, 'H'), ' your entrance · click the small map to jump'),
+      h('li', null, h('kbd', null, 'Enter'), ' chat with the other players'),
       h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early, for the impatient')));
 }
 

@@ -33,6 +33,8 @@ import { createGame, addPlayer, setPlayerOnline, applyCommand, step, TICK_HZ } f
 const TICK_MS = 1000 / TICK_HZ;
 /** Ticks between routine state updates sent to clients (5 a second at normal speed). */
 const SNAP_EVERY = 6;
+/** Chat: the longest line, and how many lines one player may send in a short while. */
+const CHAT_MAX = 200, CHAT_BURST = 6, CHAT_WINDOW_MS = 8000;
 /** A client stops predicting this many ticks after its last update, in case the host has stalled. */
 const MAX_AHEAD = 70;
 
@@ -120,6 +122,8 @@ export class HostSession extends Session {
     this.conns = new Map();
     this._dirty = false;
     this._sinceSnap = 0;
+    /** @type {Map<number, number[]>} player id -> when his recent chat lines were sent */
+    this._chatTimes = new Map();
   }
 
   /** Takes over a new connection from a transport. The client must send 'hello' next. */
@@ -136,6 +140,27 @@ export class HostSession extends Session {
   /** Where the local player is pointing, in tiles. */
   sendCursor(x, y) {
     this._broadcast({ t: 'cursor', pid: this.me, x, y });
+  }
+
+  /** Says something to everyone in the game. */
+  chat(text) {
+    this._chat(this.me, text);
+  }
+
+  /**
+   * A chat line from a player. The host tidies it (one line, at most 200 characters), drops it
+   * if that player is talking too fast, and sends it to everyone, the sender included.
+   */
+  _chat(pid, text) {
+    const p = this.state.players[pid];
+    const clean = String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX);
+    if (!p || !clean) return;
+    const now = Date.now();
+    const recent = (this._chatTimes.get(pid) || []).filter((t) => now - t < CHAT_WINDOW_MS);
+    if (recent.length >= CHAT_BURST) return;
+    recent.push(now);
+    this._chatTimes.set(pid, recent);
+    this._announce({ t: 'chat', pid, name: p.name, color: p.color, text: clean });
   }
 
   update(now) {
@@ -186,6 +211,8 @@ export class HostSession extends Session {
     if (m.t === 'cmd') {
       const r = this._apply(pid, m.c);
       if (!r.ok) conn.send({ t: 'nope', why: r.why, cmd: m.c });
+    } else if (m.t === 'chat') {
+      this._chat(pid, m.text);
     } else if (m.t === 'cursor' && Number.isFinite(m.x) && Number.isFinite(m.y)) {
       const msg = { t: 'cursor', pid, x: m.x, y: m.y };
       this.emit('cursor', msg);
@@ -262,6 +289,11 @@ export class ClientSession extends Session {
 
   sendCursor(x, y) {
     this.conn.send({ t: 'cursor', x, y });
+  }
+
+  /** Says something to everyone in the game (the host passes it on). */
+  chat(text) {
+    this.conn.send({ t: 'chat', text: String(text ?? '').slice(0, 400) });
   }
 
   update(now) {
