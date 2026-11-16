@@ -18,9 +18,10 @@ function storeCash(s) {
  * @param {string|null} o.roomCode
  * @param {string|null} o.roomKind 'online' | 'local' | null
  * @param {() => void} o.onHelp
+ * @param {() => void} [o.onHandbook] open the Employee Handbook
  * @param {(s) => number|null} [o.budgetLeft] Head Office's budget left, or null if this player is not Head Office
  */
-export function createTopBar(session, { roomCode = null, roomKind = null, onHelp, sound = null, playSound = () => {}, budgetLeft = () => null }) {
+export function createTopBar(session, { roomCode = null, roomKind = null, onHelp, onHandbook = null, sound = null, playSound = () => {}, budgetLeft = () => null }) {
   const cashVal = h('b', { class: 'val' });
   const teamVal = h('small', { class: 'team-cash' });
   const cashLbl = h('span', { class: 'lbl' }, 'YOUR CASH');
@@ -66,6 +67,10 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
 
   const help = h('button', { type: 'button', class: 'btn-help', 'aria-label': 'How to play', title: 'How to play', onclick: () => { setMore(false); onHelp(); } }, '?');
   const audio = sound ? createSoundMenu(sound) : null;
+  const book = onHandbook ? h('button', {
+    type: 'button', class: 'btn-help btn-book', 'aria-label': 'Employee Handbook', title: 'Employee Handbook: every shopper and building, with its numbers',
+    onclick: () => { setMore(false); onHandbook(); },
+  }, '📖') : null;
   // Full screen, where the browser allows a page to ask for it (not on iPhones: there, add the
   // game to the Home Screen instead and it opens without the browser's bars).
   const root = document.documentElement;
@@ -81,7 +86,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   // On a narrow screen the things a player needs less often (speed, room code, sound, help) fold
   // away behind one button. On a wide screen the wrapper takes no part in the layout
   // (display: contents) and the button is hidden, so the bar looks as it always has.
-  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, speed, room, audio, full, help);
+  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, speed, room, audio, full, book, help);
   const moreBtn = h('button', {
     type: 'button', class: 'btn-more', 'aria-label': 'More: speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
     onclick: () => setMore(!more.classList.contains('open')),

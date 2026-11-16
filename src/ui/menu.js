@@ -4,6 +4,7 @@ import { VERSION, RELEASE, versionText } from '../version.js';
 import { h, loadName, saveName } from './dom.js';
 import { createSettings } from './settings.js';
 import { whenSaved } from './save.js';
+import { openHandbook } from './handbook.js';
 import { howToPlay } from './overlays.js';
 
 /**
@@ -171,7 +172,10 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
         h('summary', null, 'Test on this computer'),
         h('p', null, 'Open this page in two tabs of the same browser. Host in one, join from the other. No internet needed. Playing with yourself, basically, which you are used to.'),
         h('div', { class: 'local-row' }, localIn, btnLHost, btnLJoin))),
-    h('aside', { class: 'menu-help' }, h('h2', null, 'HOW TO PLAY'), howToPlay()));
+    h('aside', { class: 'menu-help' }, h('h2', null, 'HOW TO PLAY'),
+      h('button', { type: 'button', class: 'btn-handbook', onclick: () => openHandbook(null) },
+        '📖 Employee Handbook', h('small', null, 'Every shopper, machine and piece of security, with its numbers')),
+      howToPlay()));
 
   mount.replaceChildren(h('div', { class: 'menu' }, h('div', { class: 'hazard top', 'aria-hidden': 'true' }), card,
     h('div', { class: 'hazard bottom', 'aria-hidden': 'true' })));

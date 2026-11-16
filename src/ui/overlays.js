@@ -145,11 +145,12 @@ export function closedScreen(why) {
 }
 
 /** The rules, over the game, closable. */
-export function helpScreen(onClose) {
+export function helpScreen(onClose, onHandbook = null) {
   const btn = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: onClose }, 'Got it');
   setTimeout(() => btn.focus(), 50);
   // The close button sits at the top, so opening the help shows the start of it, not the end.
-  const el = overlay('help', h('div', { class: 'help-head' }, h('h2', null, 'HOW THIS WORKS'), btn),
+  const el = overlay('help', h('div', { class: 'help-head' }, h('h2', null, 'HOW THIS WORKS'),
+    onHandbook ? h('button', { type: 'button', class: 'btn-small hb-open', onclick: onHandbook }, '📖 Employee Handbook: all the numbers') : null, btn),
     h('div', { class: 'help-cols' }, howToPlay(), h('div', { class: 'howto' }, buildingGuide()), h('div', { class: 'howto' }, shopperGuide())));
   el.addEventListener('click', (e) => { if (e.target === el) onClose(); });
   return el;

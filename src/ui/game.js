@@ -15,6 +15,7 @@ import { endScreen, closedScreen, handoverScreen, helpScreen } from './overlays.
 import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { createChat } from './chat.js';
+import { openHandbook } from './handbook.js';
 import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
 import { BUILD, ZONES } from '../sim/index.js';
@@ -52,7 +53,7 @@ export function startGame(session, {
   let help = null;
   const toggleHelp = () => {
     if (help) { help.remove(); help = null; return; }
-    help = helpScreen(() => { help?.remove(); help = null; });
+    help = helpScreen(() => { help?.remove(); help = null; }, () => { toggleHelp(); openHandbook(session.state); });
     root.append(help);
   };
 
@@ -67,7 +68,7 @@ export function startGame(session, {
   });
   // The Head Office player sees the planner instead of the build bar.
   const planner = createPlanner(session, { playSound });
-  const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, sound, playSound, budgetLeft: planner.left });
+  const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, onHandbook: () => openHandbook(session.state), sound, playSound, budgetLeft: planner.left });
   const players = createPlayersPanel(session, { playSound });
   const bar = createBuildBar(input, session);
   // Buttons for what the keyboard and the right mouse button do, for touch screens only.
