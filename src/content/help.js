@@ -91,7 +91,7 @@ export const SUPER_HELP = {
 /** What the Upgrade tool does, for the same info card. */
 export const HOW_UPGRADE = {
   does: 'Makes a piece of security stronger. Sprinklers, forklifts, wet floor signs and free samples can each be upgraded up to level 10.',
-  use: 'Click one, or point at it and press U. Each level costs nearly twice the one before, so this is where the money goes once the floor is full.',
+  use: 'Click one, or point at it and press U. Each level costs nearly twice the one before. An upgrade gets more out of the floor space a piece of security already stands on.',
   maze: '',
 };
 
