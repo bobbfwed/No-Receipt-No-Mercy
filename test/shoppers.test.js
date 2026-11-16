@@ -4,14 +4,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, canPlace, step, queueTrainingWave, waveSpec, getField,
-  SHOPPERS, TUNE, TICK_HZ, ST, SMASH, NORMAL, UNREACHABLE, idxOf, W,
+  SHOPPERS, TUNE, TICK_HZ, ST, SMASH, NORMAL, UNREACHABLE,
 } from '../src/sim/index.js';
+
+// These tests use the original small map, 30 tiles by 16.
+const W = 30;
+const at = (x, y) => y * W + x;
 
 /** A training game (no timer, cannot be lost) with plenty of cash, to stage one kind of shopper. */
 function stage(seed = 5) {
   const s = createGame({ seed, training: true });
   addPlayer(s, 'Dave');
-  s.cash = 100000;
+  s.players[0].cash = 100000;
   return s;
 }
 const place = (s, k, x, y, d = 0) => applyCommand(s, 0, { c: 'place', k, x, y, d });
@@ -42,7 +46,7 @@ test('a teenager leaves messes that slow other shoppers but not himself', () => 
   // Time a hunter across the same floor with and without a carpet of messes.
   const timeAcross = (withMess, kind) => {
     const g = stage(8);
-    if (withMess) for (let x = 2; x <= 27; x++) for (const y of [7, 8]) g.messes.push([idxOf(x, y), 100000]);
+    if (withMess) for (let x = 2; x <= 27; x++) for (const y of [7, 8]) g.messes.push([at(x, y), 100000]);
     send(g, [{ k: kind, n: 1, gap: 1, at: 0 }]);
     let ticks = 0;
     play(g, 120, () => { ticks++; });
@@ -56,7 +60,7 @@ test('a teenager leaves messes that slow other shoppers but not himself', () => 
 
 test('messes dry up', () => {
   const s = stage();
-  s.messes.push([idxOf(5, 5), 3]);
+  s.messes.push([at(5, 5), 3]);
   place(s, 'crate', 20, 2); // training: the factory clock runs
   step(s); step(s);
   assert.equal(s.messes.length, 1);
@@ -68,7 +72,7 @@ test('a dad can slip on a mess', () => {
   let slips = 0;
   for (let seed = 1; seed <= 6; seed++) {
     const s = stage(seed);
-    for (let x = 2; x <= 27; x++) for (const y of [7, 8]) s.messes.push([idxOf(x, y), 100000]);
+    for (let x = 2; x <= 27; x++) for (const y of [7, 8]) s.messes.push([at(x, y), 100000]);
     send(s, [{ k: 'dad', n: 3, gap: 0.4, at: 0 }]);
     slips += play(s, 90).filter((e) => e.e === 'slip').length;
   }
@@ -150,11 +154,11 @@ test('a gym bro walks through crate stacks and wrecks them; others go around', (
   };
   const s = stage(2);
   wall(s);
-  assert.ok(getField(s, SMASH)[idxOf(0, 7)] < getField(s, NORMAL)[idxOf(0, 7)], 'his route is shorter');
+  assert.ok(getField(s, SMASH)[at(0, 7)] < getField(s, NORMAL)[at(0, 7)], 'his route is shorter');
   send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   const ev = play(s, 120);
   const smashes = ev.filter((e) => e.e === 'smash');
-  assert.equal(smashes.length, 1, 'he goes through one crate stack');
+  assert.ok(smashes.length >= 1, 'he goes through the crate wall');
   assert.equal(s.grid[smashes[0].i], 0, 'which is gone afterwards');
   assert.equal(smashes[0].i % W, 12);
   assert.equal(ev.filter((e) => e.e === 'escape').length, 1);
@@ -164,13 +168,17 @@ test('a gym bro walks through crate stacks and wrecks them; others go around', (
   send(t, [{ k: 'hunter', n: 2, gap: 1, at: 0 }]);
   const ev2 = play(t, 200);
   assert.equal(ev2.filter((e) => e.e === 'smash').length, 0);
-  for (let y = 1; y <= 13; y++) assert.equal(t.grid[idxOf(12, y)].k, 'crate', 'the wall is intact after hunters');
+  for (let y = 1; y <= 13; y++) assert.equal(t.grid[at(12, y)].k, 'crate', 'the wall is intact after hunters');
 });
 
-test('machines and belts still stop a gym bro, and building stays possible while he is about', () => {
+test('machines and belts still stop a gym bro, and building stays possible while he is about', (t) => {
+  // (He also wrecks other things now and then; that is switched off here and tested in expansion.test.js.)
+  const chance = TUNE.smashOther;
+  TUNE.smashOther = 0;
+  t.after(() => { TUNE.smashOther = chance; });
   const s = stage(2);
   for (let y = 1; y <= 13; y++) place(s, y % 2 ? 'press' : 'belt', 12, y, 1);
-  assert.equal(getField(s, SMASH)[idxOf(12, 7)], UNREACHABLE);
+  assert.equal(getField(s, SMASH)[at(12, 7)], UNREACHABLE);
   send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   let checked = false;
   const ev = play(s, 200, () => {
@@ -191,7 +199,7 @@ test('later waves contain every kind, and stay deterministic through a snapshot'
   const make = () => {
     const g = createGame({ seed: 77 });
     addPlayer(g, 'Dave');
-    g.cash = 100000;
+    g.players[0].cash = 100000;
     for (let y = 1; y <= 12; y++) place(g, 'crate', 9, y);
     for (let x = 3; x <= 24; x += 5) { place(g, 'samples', x, 5); place(g, 'sprinkler', x + 1, 9); place(g, 'wetfloor', x + 2, 8); }
     g.wave = 8;

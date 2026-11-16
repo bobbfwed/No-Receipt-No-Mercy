@@ -33,6 +33,27 @@ A discount warehouse on Black Friday. Shoppers come in on the left and want a re
 9. **More shoppers** - done. Teenager (messes slow others), Mom and Kid (runaway child, she sprints after him), Man with Guide Dog (spray makes the dog bolt), Gym Bro (walks through crates). DEB introduces each kind when it first appears. With these in, the scripted player who keeps investing wins with 26 to 32 of 40 refunds (it was 10 to 18), so the late game is tighter.
 10. **Playtest with real people** - owner. Needs the files on a web address (see README.md), then two or more people on different networks. Things only a real session can show: whether every friend's home network lets the browsers connect directly, how it feels with real lag, and whether the difficulty is right.
 
+## To do: a player who runs the shoppers (owner's idea, not started)
+One player stops defending and plays the other side: each wave he gets a budget, buys shoppers with it and sends them in. At least one other player must be building the factory and security. The aim is a completely different way to play the same game.
+
+**How it would work**
+- In the menu or in the game, a player picks the job "Head Office". The game refuses if nobody would be left on the store's side.
+- Every shopper kind has a price, worked out from the numbers the game already has (patience, speed, refund, and its trick). Supers cost more. The budget for wave N is roughly what the automatic wave N is worth on that price list, so the automatic waves and a human organiser stay comparable. Early on it is set a little lower, because a person will aim at the weak spot and the computer does not.
+- During the build pause he fills a wave: which kinds, how many, which entrance each group uses, and when it arrives (seconds after the doors open). Unspent budget carries over in part. If he does nothing, the automatic wave is used.
+- He wins if the store reaches the refund limit; the builders win if they survive all 20 waves. Each refund he causes adds a little to his next budget, so success snowballs slowly, as the builders' factory does.
+- Later additions if the basic version is fun: one-off abilities bought from the same budget (a "flash sale" that speeds one group up, a power cut that stops belts for a few seconds), and two organisers splitting the budget.
+
+**What it might look like**
+- He sees the same floor as everyone else (these are friends in one voice call; hiding the map would mostly be annoying), with the shopper routes always drawn.
+- In place of the build bar he has a shopper bar: one card per kind with its price and trick. Clicking a card adds a group to a timeline at the bottom, one row per entrance, where groups can be dragged earlier or later and resized. A counter shows budget left.
+- The builders see only "Head Office is planning..." and, when the doors open, the usual announcement of what is coming.
+
+**How it fits the existing game**
+- The rules engine already takes a wave as a list of groups (kind, how many, gap, start time), which is exactly what the tutorial uses. This mode adds an entrance to each group and one new command ("plan this wave") that the host checks against the budget. Nothing else in the rules changes.
+- He has no bank account, takes no share of the store's income and does not count toward the number of entrances or the size of the automatic crowd.
+- DEB gets a second set of lines: she works for him, and insults both sides.
+- Open questions for the owner before building it: should he see the builders' layout while planning; should there be a time limit on planning; and is winning by refund limit enough, or should he also score points per shopper who gets through.
+
 ## Ideas for later (not started)
 - Tower upgrades, so late-game cash has somewhere to go.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.

@@ -26,17 +26,18 @@ export const DEMO_LAYOUT = [
 ];
 
 /**
- * Builds the demo layout for a player, giving the team enough cash to pay for it.
+ * Builds the demo layout for a player, giving him enough cash to pay for it.
  * @returns {string[]} problems, empty if everything was placed
  */
 export function applyDemoLayout(state, pid = 0) {
   const problems = [];
-  state.cash += 5000;
+  const p = state.players[pid];
+  p.cash += 5000;
   for (const [k, x, y, d] of DEMO_LAYOUT) {
     const r = applyCommand(state, pid, { c: 'place', k, x, y, d });
     if (!r.ok) problems.push(`${k} at ${x},${y}: ${r.why}`);
   }
-  state.cash = Math.max(0, state.cash - 5000) + 300;
+  p.cash = Math.max(0, p.cash - 5000) + 300;
   return problems;
 }
 
