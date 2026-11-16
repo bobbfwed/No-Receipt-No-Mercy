@@ -2,9 +2,63 @@
 
 *The customer is always a prick.*
 
+<!-- gen:version -->
+**Version 0.1.16** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
+<!-- /gen:version -->
+
 **Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
 
 A co-op browser game for 1 to 7 players, set in the returns department of a discount warehouse. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
+
+## The stores
+<!-- gen:maps -->
+The host picks a design and a size before the game starts. Each player gets his own shopper entrance, and the painted floor shows where each kind of machine may go.
+
+### Open Warehouse
+One big empty floor with a few pillars. Every wall in the maze is one you built.
+
+![Open Warehouse](docs/img/map-warehouse.png)
+
+### Flat-Pack Showroom
+Walled rooms joined by doorways that everyone, and every belt, has to go through. Good choke points, awkward factories.
+
+![Flat-Pack Showroom](docs/img/map-showroom.png)
+
+### Supermarket Aisles
+Rows of shelving with a wide main aisle down the middle. The shelves are free walls; the main aisle is your problem.
+
+![Supermarket Aisles](docs/img/map-aisles.png)
+
+| Size | Tiles | Suits |
+|---|---|---|
+| Corner Shop | 30 x 16 | the original; cramped |
+| Outlet | 36 x 20 | 1 player |
+| Superstore | 44 x 24 | 2 players |
+| Megastore | 54 x 30 | 3 players |
+| Hypermarket | 66 x 37 | 4 players |
+| Distribution Centre | 81 x 45 | 5 players |
+| Regional Hub | 99 x 55 | 6 players |
+| Mega Mall | 121 x 67 | 7 players |
+<!-- /gen:maps -->
+
+## The shoppers
+<!-- gen:shoppers -->
+Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund.
+
+| | Shopper |
+|---|---|
+| <img src="docs/img/shopper-hunter.png" alt="Bargain Hunter and Doorbuster" width="200"> | **Bargain Hunter** · from sales event 1 · patience 40, speed 1.4, refund $10<br>The ordinary shopper. Stops for free samples and grabs goods off belts.<br>**Beat it with:** Anything. Slow them at a gap and spray them.<br>**Super: Doorbuster** (from sales event 6). Three times the patience, and quicker. |
+| <img src="docs/img/shopper-dad.png" alt="Dad and Dad on a Mission" width="200"> | **Dad** · from sales event 2 · patience 34, speed 2.4, refund $25<br>Arrives in a single-file line, walks fast, ignores samples, and steps over conveyor belts.<br>**Beat it with:** Time: his patience drains by itself. Crates and machines block him. He slips on wet floor signs. Cover his short cut.<br>**Super: Dad on a Mission** (from sales event 7). Two and a half times the patience, faster, never slips, and his patience drains half as fast. |
+| <img src="docs/img/shopper-clipper.png" alt="Coupon Clipper and Extreme Couponer" width="200"> | **Coupon Clipper** · from sales event 3 · patience 16, speed 1.9, refund $5<br>Fast, weak, and there are a lot of them.<br>**Beat it with:** Sprinklers. Anything that hits a crowd.<br>**Super: Extreme Couponer** (from sales event 8). Two and a half times the patience and much faster. |
+| <img src="docs/img/shopper-mom.png" alt="Mom and Kid and Soccer Mom" width="200"> | **Mom and Kid** · from sales event 3 · patience 55, speed 1.3, refund $20<br>Her kid escapes the cart and runs ahead, straight through your belts, machines and crates, then waits further along the route. She sprints round the maze to reach him and ignores free samples on the way. If her patience runs out while he is loose, she does not leave: she crawls to him, nothing can hurt her, and security wastes its shots on her. When she reaches him she gets up with a third of her patience back. She can do that twice.<br>**Beat it with:** Finish her while the kid is in the cart. Forklifts and wet floor signs. Samples only work while the kid is in the cart.<br>**Super: Soccer Mom** (from sales event 9). Twice the patience. Sprints three times as fast after a kid who escapes twice as often and runs twice as far. |
+| <img src="docs/img/shopper-teen.png" alt="Teenager and Teen Influencer" width="200"> | **Teenager** · from sales event 4 · patience 45, speed 1.2, refund $12<br>Slow. Spills a slushie every few seconds; the mess slows every other shopper and dads slip on it.<br>**Beat it with:** Let him loiter in range. His messes work for you.<br>**Super: Teen Influencer** (from sales event 11). Twice the patience. Three times the mess, and it stays twice as long. |
+| <img src="docs/img/shopper-karen.png" alt="Karen and Karen Supreme" width="200"> | **Karen** · from sales event 5 · patience 170, speed 0.9, refund $40<br>Enormous patience. Security near her works at half speed while she asks for the manager.<br>**Beat it with:** Long routes and forklifts out of her reach. Do not rely on one cluster of towers.<br>**Super: Karen Supreme** (from sales event 10). Four times the patience. Slows security twice as far away, to a quarter speed. |
+| <img src="docs/img/shopper-blind.png" alt="Man with Guide Dog and Man with Two Guide Dogs" width="200"> | **Man with Guide Dog** · from sales event 6 · patience 70, speed 1.1, refund $20<br>The guide dog steers him around puddles and messes, and he cannot see free samples. Pepper spray makes the dog bolt, dragging him along fast.<br>**Beat it with:** Forklifts. Sprinklers make him faster.<br>**Super: Man with Two Guide Dogs** (from sales event 14). Two and a half times the patience. The dogs bolt from forklift hits too, further and faster. |
+| <img src="docs/img/shopper-gymbro.png" alt="Gym Bro and Roid Rager" width="200"> | **Gym Bro** · from sales event 6 · patience 85, speed 1.5, refund $30<br>Walks straight through crate stacks, wrecks every crate stack he passes, and now and then wrecks something else beside him: a belt, a machine, a tower.<br>**Beat it with:** Stop him early, before he reaches anything expensive. Upgraded security only loses a level. Press B to rebuild what he wrecked; nothing is refunded.<br>**Super: Roid Rager** (from sales event 12). Two and a half times the patience. Wrecks things much more often. |
+| <img src="docs/img/shopper-scooter.png" alt="Mobility Scooter and Turbo Scooter" width="200"> | **Mobility Scooter** · from sales event 7 · patience 95, speed 1.2, refund $20<br>Cannot be slowed by anything.<br>**Beat it with:** Raw damage over a long route.<br>**Super: Turbo Scooter** (from sales event 13). Two and a half times the patience and nearly twice the speed. |
+<!-- /gen:shoppers -->
+
+The game's own **Employee Handbook** (the book button, on the menu and in the game) has every shopper, machine and piece of security with its full numbers: patience event by event, how many turn up, and what each upgrade level costs and does.
 
 ## Play on this computer without the internet
 The link above is the easy way. To run your own copy instead (for example to try changes), you need Node.js (any recent version) to serve the files.

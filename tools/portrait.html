@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Shopper portrait (tool page)</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1f252c; }
+  body { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .portrait { border-radius: 14px; background: #8d9093; border: 3px solid #111827; }
+  .portrait.is-super { background: #5b4a1a; }
+</style>
+</head>
+<body>
+<!--
+  Draws one kind of shopper and its super version side by side, with the game's own drawing code.
+  The shopper pictures in README.md are photographs of this page, taken by: node tools/readme.mjs --shots
+    http://localhost:5173/tools/portrait.html?k=dad
+-->
+<script type="module">
+  import { shopperPortrait } from '../src/ui/portrait.js';
+  const k = new URLSearchParams(location.search).get('k') || 'hunter';
+  document.body.append(shopperPortrait(k, { size: 150 }), shopperPortrait(k, { sup: true, size: 150 }));
+</script>
+</body>
+</html>
