@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Poke the game (test page)</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; }
@@ -17,8 +18,13 @@
   Actions:  click:<css selector>   key:<key>   tile:<x>,<y>   hover:<x>,<y>   wait:<ms>   text:<button text>
             hold:<key>,<ms> (hold a key down, e.g. hold:d,800 to move the view)   wheel:<x>,<y>,<deltaY>
             set:<css selector>=<value> (choose an option in a drop-down)
+            tap:<x>,<y> (a finger tap on a tile)   swipe:<x>,<y>,<x2>,<y2> (a one-finger drag between tiles)
+            pick:<building or tool> (tap that build-bar button with a finger)
+            build:<kind>,<x>,<y>[,<dir>] (put a building straight into the game, to set a scene)
+            js:<code> (run a line of JavaScript in the game's page, e.g. js:__game.session.state.refunds=99)
   Example:  tools/poke.html?u=solo%3D1&do=key:7;hover:8,10;click:.btn-help
   Photograph it with:  node tools/realshot.mjs "<url>" out.png 4000
+  For a phone, add the size and --touch:  node tools/realshot.mjs "<url>" out.png 4000 390 844 --touch
 -->
 <iframe id="game" title="Game"></iframe>
 <div id="log"></div>
@@ -39,6 +45,7 @@
       return { clientX: r.left + r.width / 2 + (tx + 0.5 - cam.x) * cam.zoom, clientY: r.top + r.height / 2 + (ty + 0.5 - cam.y) * cam.zoom };
     };
     const keyEvent = (type, k) => win.dispatchEvent(new win.KeyboardEvent(type, { key: k, code: /^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`, bubbles: true }));
+    const finger = (type, p) => canvas().dispatchEvent(new win.PointerEvent(type, { ...p, pointerType: 'touch', pointerId: 7, isPrimary: true, button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
     const mouse = (type, x, y) => canvas().dispatchEvent(new win.PointerEvent(type, { ...at(x, y), button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerId: 1, bubbles: true, cancelable: true }));
     for (const step of (q.get('do') || '').split(';').filter(Boolean)) {
       const [verb, ...rest] = step.split(':');
@@ -50,6 +57,23 @@
       else if (verb === 'key') keyEvent('keydown', arg);
       else if (verb === 'hold') { const [k, ms] = arg.split(','); keyEvent('keydown', k); await wait(Number(ms) || 500); keyEvent('keyup', k); }
       else if (verb === 'wheel') { const [x, y, d] = arg.split(',').map(Number); canvas().dispatchEvent(new win.WheelEvent('wheel', { ...at(x, y), deltaY: d, bubbles: true, cancelable: true })); }
+      else if (verb === 'tap' || verb === 'swipe') {
+        const [x, y, x2 = x, y2 = y] = arg.split(',').map(Number);
+        finger('pointerdown', at(x, y));
+        const a = at(x, y), b = at(x2, y2), n = Math.max(1, Math.ceil(Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) / 8));
+        for (let k = 1; k <= n && verb === 'swipe'; k++) { finger('pointermove', { clientX: a.clientX + ((b.clientX - a.clientX) * k) / n, clientY: a.clientY + ((b.clientY - a.clientY) * k) / n }); await wait(4); }
+        finger('pointerup', verb === 'swipe' ? b : a);
+      } else if (verb === 'pick') {
+        const el = doc.querySelector(`.bb-btn[data-k="${arg}"]`);
+        if (el) { for (const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new win.PointerEvent(t, { pointerType: 'touch', bubbles: true })); el.click(); } else log('no button ' + arg);
+      } else if (verb === 'js') {
+        win.eval(arg);
+      } else if (verb === 'build') {
+        const [k, x, y, d = 0] = arg.split(',');
+        const s = win.__game.session;
+        s.state.players[s.me].cash += 1000;
+        s.send({ c: 'place', k, x: Number(x), y: Number(y), d: Number(d) });
+      }
       else if (verb === 'hover' || verb === 'tile') {
         const [x, y] = arg.split(',').map(Number);
         mouse('pointermove', x, y);

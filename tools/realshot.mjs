@@ -1,18 +1,32 @@
 // Takes a screenshot of a page after letting it run for real seconds, by driving headless Edge
 // over its debugging port. Unlike tools/shot.ps1 (which fast-forwards the page's clock), this
 // waits in real time, so it can check things that depend on the network, such as online play.
-// Usage: node tools/realshot.mjs <url> <out.png> [waitMs=8000] [width=1600] [height=900]
+// Usage: node tools/realshot.mjs <url> <out.png> [waitMs=8000] [width=1600] [height=900] [options]
+// Options (all optional; without them it behaves as it always has):
+//   --touch        pretend to be a phone or tablet: a touch screen with no mouse (so
+//                  `(pointer: coarse)` matches and the page gets touch-type pointer events), and
+//                  the page laid out the way a phone browser does it (the viewport meta tag counts)
+//   --dpr=N        device pixels per CSS pixel (default 1); the picture is N times the size
+//   --eval=<js>    after the wait, evaluate this expression in the page and print the result
+//                  (a test page can leave its findings in a global for this to read)
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const [url, out, waitArg, wArg, hArg] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const flags = args.filter((a) => a.startsWith('--'));
+const [url, out, waitArg, wArg, hArg] = args.filter((a) => !a.startsWith('--'));
+const flag = (name) => flags.find((f) => f === `--${name}` || f.startsWith(`--${name}=`));
+const flagValue = (name) => { const f = flag(name); return f && f.includes('=') ? f.slice(f.indexOf('=') + 1) : null; };
 if (!url || !out) {
-  console.error('Usage: node tools/realshot.mjs <url> <out.png> [waitMs] [width] [height]');
+  console.error('Usage: node tools/realshot.mjs <url> <out.png> [waitMs] [width] [height] [--touch] [--dpr=N] [--eval=<js>]');
   process.exit(2);
 }
 const waitMs = Number(waitArg) || 8000, width = Number(wArg) || 1600, height = Number(hArg) || 900;
+const touch = !!flag('touch');
+const dpr = Number(flagValue('dpr')) || 1;
+const evalExpr = flagValue('eval');
 const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const port = 9300 + Math.floor(Math.random() * 500);
 const profile = mkdtempSync(join(tmpdir(), 'edge-real-'));
@@ -55,9 +69,23 @@ try {
   });
   await send('Page.enable');
   await send('Runtime.enable');
-  await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  await send('Emulation.setDeviceMetricsOverride', {
+    width, height, deviceScaleFactor: dpr, mobile: touch,
+    // A phone in landscape reports a landscape screen.
+    ...(touch ? { screenOrientation: width > height ? { type: 'landscapePrimary', angle: 90 } : { type: 'portraitPrimary', angle: 0 } } : {}),
+  });
+  if (touch) {
+    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    // Some builds only switch the pointer and hover media features with the emitter on.
+    await send('Emulation.setEmitTouchEventsForMouse', { enabled: true, configuration: 'mobile' });
+  }
   await send('Page.navigate', { url });
   await sleep(waitMs);
+  if (evalExpr) {
+    const r = await send('Runtime.evaluate', { expression: evalExpr, returnByValue: true, awaitPromise: true });
+    const v = r.result?.result;
+    console.log(`EVAL ${r.result?.exceptionDetails ? `threw: ${r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text}` : JSON.stringify(v?.value ?? v?.description ?? null)}`);
+  }
   const shot = await send('Page.captureScreenshot', { format: 'png' });
   writeFileSync(out, Buffer.from(shot.result.data, 'base64'));
   console.log(`OK ${out}`);

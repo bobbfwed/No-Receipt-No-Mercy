@@ -15,7 +15,11 @@ import { endScreen, closedScreen, handoverScreen, helpScreen } from './overlays.
 import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { createChat } from './chat.js';
+import { createTouchControls, isCoarse } from './touch.js';
 import { BUILD, ZONES } from '../sim/index.js';
+
+/** A phone-sized screen (the same limits as the narrow layout in style.css). */
+const narrow = () => innerWidth < 1100 || innerHeight < 560;
 
 /**
  * Shows the game for a session that is ready (a host, or a client after 'ready').
@@ -65,6 +69,9 @@ export function startGame(session, {
   const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, sound, playSound, budgetLeft: planner.left });
   const players = createPlayersPanel(session, { playSound });
   const bar = createBuildBar(input, session);
+  // Buttons for what the keyboard and the right mouse button do, for touch screens only.
+  const touchUi = createTouchControls({ input, session, renderer, playSound });
+  bar.el.append(touchUi.bar);
   const deb = createDeb();
   const toasts = createToasts();
   const training = tutorial && session.isHost
@@ -129,11 +136,14 @@ export function startGame(session, {
   stage.append(lobby.el);
 
   // In training the lesson panel sits where the players list normally is.
-  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox);
+  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet);
   const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, planner.el, bar.tip, planner.tip);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');
   if (sound) sound.attach(session);
+  // Safari zooms the page with two fingers whatever CSS says; the floor has its own pinch.
+  const noPageZoom = (e) => e.preventDefault();
+  document.addEventListener('gesturestart', noPageZoom);
 
   // ---- Messages ----------------------------------------------------------------------------------
   let replaying = false; // true during a fast-forward: news is history, show only the latest
@@ -220,7 +230,7 @@ export function startGame(session, {
   session.start();
 
   // ---- Drawing loop --------------------------------------------------------------------------------
-  let mapShown = false, mapDrawn = 0, office = false, wasLobby = false;
+  let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false;
   function frame(now) {
     if (dead) return;
     requestAnimationFrame(frame);
@@ -241,6 +251,11 @@ export function startGame(session, {
     players.update(s);
     bar.update(s);
     planner.update(s);
+    touchUi.update(s);
+    // A sheet over the bottom of the floor (the held tool's card, or a tapped building's actions):
+    // on a phone DEB's bubble makes room for it.
+    const up = touchUi.sheetOpen || (!!input.tool && !office);
+    if (up !== sheetUp) { sheetUp = up; root.classList.toggle('sheet-up', up); }
     review.update(s);
     input.tick(now);
     deb.tick(now);
@@ -278,6 +293,22 @@ export function startGame(session, {
     // Nor does he get the tile outline under the mouse that says "you could build here".
     if (office) view.hover = null;
     view.marks = training ? training.marks() : null;
+    // On a phone the training floor does not fit on screen: when a lesson marks tiles that are
+    // out of view, bring them into view. (A big screen always shows the whole training floor.)
+    if (view.marks && view.marks.length && (isCoarse() || narrow())) {
+      const sig = view.marks.map((m) => `${m.x},${m.y}`).join(';');
+      if (sig !== marksSig) {
+        marksSig = sig;
+        // In view means clear of the edges, where the camera buttons, DEB and the small map sit.
+        const r = renderer.viewRect();
+        const z = renderer.cam.zoom || 30;
+        const side = 70 / z, low = 120 / z, edge = 0.5;
+        if (view.marks.some((m) => m.x < r.x0 + edge || m.x + 1 > r.x1 - side || m.y < r.y0 + edge || m.y + 1 > r.y1 - low)) {
+          const xs = view.marks.map((m) => m.x), ys = view.marks.map((m) => m.y);
+          renderer.centerOn((Math.min(...xs) + Math.max(...xs) + 1) / 2, (Math.min(...ys) + Math.max(...ys) + 1) / 2);
+        }
+      }
+    } else if (!view.marks || !view.marks.length) marksSig = '';
     renderer.draw(view);
   }
   requestAnimationFrame(frame);
@@ -292,6 +323,7 @@ export function startGame(session, {
     input.destroy();
     chat.destroy();
     removeEventListener('beforeunload', onBeforeUnload);
+    document.removeEventListener('gesturestart', noPageZoom);
   }
   /** The player meant to leave (a button did it): do not ask. */
   const allowLeave = () => { leaving = true; };

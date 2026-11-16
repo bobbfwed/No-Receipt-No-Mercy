@@ -56,6 +56,26 @@ With two or more players, one can stop defending and run the other side. Between
 | Click the small map | Jump there (it appears when the store does not fit on screen) |
 | Give $100 (players list) | Hand a colleague some of your cash; hold Shift for $1,000 |
 
+## On a phone or tablet
+The game works by touch, in either orientation (a tablet, or a phone held sideways, is more comfortable).
+
+| Touch | Does |
+|---|---|
+| Tap a button in the bar | Pick that building or tool; tap it again to put it down. Hold a button to read what it does |
+| Tap the floor with a building picked | Build |
+| Drag with a building picked | Build a line; belts follow your finger |
+| Drag with nothing picked | Move the view |
+| Two fingers | Move the view and pinch to zoom, whatever is picked |
+| Tap a building with nothing picked | Opens its actions: rotate, upgrade, remove |
+| Buttons at the end of the bar | Rotate, and put the tool down |
+| MAP and HOME on the floor | Show the whole store; go to your entrance |
+| The menu button at the top right | Speed, room code and link, sound, help |
+
+The tutorial and the help text still describe the keyboard ("press 5", "right-click"); on a phone use the buttons above instead.
+
+## Chat
+With more than one player in the game, press Enter (or the Chat button) to type a line to everyone. It works in the lobby too.
+
 ## For developers
 - `node --test` runs the tests.
 - `PLAN.md` has the plan and the decisions taken so far.

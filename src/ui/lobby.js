@@ -10,6 +10,8 @@ import { h, setText, setClass, safeColor } from './dom.js';
  * @param {Object} o.renderer  to show the whole store whenever it changes
  * @param {(name: string) => void} [o.playSound]
  */
+const where = () => [h('span', { class: 'wide-only' }, 'on the right'), h('span', { class: 'tall-only' }, 'above')];
+
 export function createLobby(session, { renderer, playSound = () => {} }) {
   const host = session.isHost;
   const pick = () => session.send({ c: 'map', design: designIn.value, size: sizeIn.value });
@@ -35,9 +37,10 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
 
   const el = h('section', { class: 'panel lobby hidden', 'aria-label': 'Before the game starts' },
     h('h3', null, 'BEFORE WE OPEN'),
+    // The store is drawn beside the panel, or above it on a phone held upright (style.css).
     h('p', { class: 'lobby-lead' }, host
-      ? 'Pick the store. Everyone can see it on the right as you change it. The game starts when every player is ready.'
-      : 'The host picks the store; you can see it on the right. The game starts when every player is ready.'),
+      ? ['Pick the store. Everyone can see it ', where(), ' as you change it. The game starts when every player is ready.']
+      : ['The host picks the store; you can see it ', where(), '. The game starts when every player is ready.']),
     h('div', { class: 'lobby-pick' },
       h('label', { for: 'lobby-design' }, h('span', null, 'Design'), designIn),
       h('label', { for: 'lobby-size' }, h('span', null, 'Size'), sizeIn)),

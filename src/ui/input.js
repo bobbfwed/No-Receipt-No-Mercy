@@ -1,5 +1,16 @@
-// Mouse and keyboard: picking tools, building, upgrading and removing on the canvas, rotating,
-// moving the view around the map, and telling the other players where this player is pointing.
+// Mouse, keyboard and touch: picking tools, building, upgrading and removing on the canvas,
+// rotating, moving the view around the map, and telling the other players where this player is
+// pointing.
+//
+// Fingers (pointer events with pointerType 'touch') follow their own rules, below the mouse code:
+//   - two fingers always move the view (drag) and zoom it (pinch), and never build
+//   - one finger with nothing held drags the view; a tap on a building selects it (touch.js then
+//     offers rotate, upgrade and remove for it)
+//   - one finger with a building held builds: a tap places, a drag lays a line, as the mouse does.
+//     With the Remove tool a tap or drag removes; with the Upgrade tool a tap upgrades and a drag
+//     moves the view.
+// Nothing is built until the finger has either lifted or moved a little, so a second finger that
+// lands a moment after the first turns the touch into a pinch before anything is placed.
 import { BUILD, doorOf } from '../sim/index.js';
 import { startDrag } from './drag.js';
 
@@ -16,6 +27,7 @@ const PAN_KEYS = {
   w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0],
   ArrowUp: [0, -1], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowRight: [1, 0],
 };
+const TAP_SLOP_PX = 10; // a finger that moves less than this is a tap, not a drag
 
 /**
  * @param {Object} o
@@ -35,6 +47,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   let cursorDirty = false;
   let lastCursorSent = 0;
   let lastTick = 0;
+  let selected = null; // the building a finger tapped with nothing held: { x, y }
   const held = new Set(); // view-moving keys that are down
   const cursors = new Map(); // player id -> { x, y, t }
 
@@ -48,6 +61,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const next = k && !isOffice() && (BUILD[k] || TOOLS.includes(k)) ? k : null;
     if (next === tool) return;
     tool = next;
+    if (tool) selected = null;
     canvas.dataset.tool = tool || '';
     if (tool) playSound('select');
     onChange();
@@ -112,6 +126,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   // ---- Pointer ---------------------------------------------------------------------------------
   function onPointerMove(e) {
+    if (e.pointerType === 'touch') { onTouchMove(e); return; }
     if (grab && e.pointerId === grab.id) {
       const z = renderer.cam.zoom || 1;
       renderer.pan((grab.x - e.clientX) / z, (grab.y - e.clientY) / z);
@@ -126,6 +141,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   }
 
   function onPointerDown(e) {
+    if (e.pointerType === 'touch') { onTouchDown(e); return; }
     if (drag || grab) return;
     if (e.button === 1 && renderer.pan) {
       // Middle button: drag the map.
@@ -154,6 +170,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   }
 
   function finishDrag(e) {
+    if (e && e.pointerType === 'touch') { onTouchUp(e); return; }
     if (grab && (!e || e.pointerId === undefined || e.pointerId === grab.id)) {
       try { canvas.releasePointerCapture(grab.id); } catch { /* already released */ }
       grab = null;
@@ -165,8 +182,128 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     try { canvas.releasePointerCapture(d.id); } catch { /* already released */ }
   }
 
-  function onPointerLeave() {
+  function onPointerLeave(e) {
+    // A finger "leaves" every time it lifts; what it last touched stays marked.
+    if (e && e.pointerType === 'touch') return;
     if (!drag) hover = null;
+  }
+
+  // ---- Touch -------------------------------------------------------------------------------------
+  const touches = new Map(); // pointer id -> { x, y } of each finger on the floor
+  // What the fingers are doing:
+  //   { kind: 'one', id, x0, y0, lx, ly, t0, mode: 'wait' | 'pan' | 'build' | 'idle' }
+  //   { kind: 'two', dist, mx, my }
+  let gesture = null;
+  let tdrag = null; // a line being built by one finger: the drag planner
+
+  const builds = () => !isOffice() && (tool === 'remove' || !!BUILD[tool]);
+
+  function notePointer(x, y, t) {
+    const p = exactTile(x, y, t);
+    if (p && (!pointer || p.x !== pointer.x || p.y !== pointer.y)) { pointer = p; cursorDirty = true; }
+  }
+
+  function startTouchBuild(t) {
+    const mode = tool === 'remove' ? 'remove' : 'build';
+    // As with the mouse: dragging belt over belts turns them, so those tiles are not skipped.
+    const taken = mode === 'build' && tool === 'belt' ? (tile) => { const b = at(tile); return !!b && b.k !== 'belt'; } : hasBuilding;
+    tdrag = startDrag({ mode, kind: tool, start: t, dir, hasBuilding: taken });
+    send(tdrag.first);
+  }
+
+  function endTouchBuild() {
+    if (!tdrag) return;
+    const d = tdrag;
+    tdrag = null;
+    send(d.end(dir));
+  }
+
+  /** One finger tapped a tile without moving. */
+  function touchTap(t) {
+    if (!t || !session.state || isOffice()) { selected = null; return; }
+    if (tool === 'upgrade') { hover = t; upgrade(t); return; }
+    if (builds()) { hover = t; startTouchBuild(t); endTouchBuild(); return; }
+    // Nothing held: select the building there (touch.js offers what can be done with it).
+    selected = at(t) ? { x: t.x, y: t.y } : null;
+    hover = selected;
+  }
+
+  function startPinch() {
+    const [a, b] = [...touches.values()];
+    gesture = { kind: 'two', dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  }
+
+  function onTouchDown(e) {
+    e.preventDefault();
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* fine without */ }
+    if (touches.size === 1) {
+      const t = renderer.tileAt(e.clientX, e.clientY);
+      gesture = { kind: 'one', id: e.pointerId, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, tile: t, mode: 'wait' };
+      // Show the ghost of what is held under the finger straight away.
+      if (builds() || tool === 'upgrade') hover = t;
+      notePointer(e.clientX, e.clientY, t);
+    } else if (touches.size === 2) {
+      // A second finger: whatever the first was doing becomes moving the view. A line already
+      // being laid is finished where it is.
+      endTouchBuild();
+      startPinch();
+    }
+  }
+
+  function onTouchMove(e) {
+    const f = touches.get(e.pointerId);
+    if (!f) return;
+    f.x = e.clientX; f.y = e.clientY;
+    const g = gesture;
+    if (!g) return;
+    const z = renderer.cam.zoom || 1;
+    if (g.kind === 'two') {
+      if (touches.size < 2) return;
+      const [a, b] = [...touches.values()];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+      renderer.pan((g.mx - mx) / z, (g.my - my) / z);
+      if (renderer.zoomBy) renderer.zoomBy(dist / g.dist, mx, my);
+      g.mx = mx; g.my = my; g.dist = dist;
+      return;
+    }
+    if (e.pointerId !== g.id) return;
+    if (g.mode === 'wait') {
+      if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < TAP_SLOP_PX) return;
+      // It is a drag. With a building or the Remove tool it lays a line from where it started;
+      // otherwise it moves the view.
+      if (builds() && g.tile) { g.mode = 'build'; startTouchBuild(g.tile); } else g.mode = 'pan';
+    }
+    if (g.mode === 'pan') {
+      renderer.pan((g.lx - e.clientX) / z, (g.ly - e.clientY) / z);
+    } else if (g.mode === 'build' && tdrag) {
+      const t = renderer.tileAt(e.clientX, e.clientY);
+      hover = t;
+      notePointer(e.clientX, e.clientY, t);
+      send(tdrag.moveTo(t, dir));
+    }
+    g.lx = e.clientX; g.ly = e.clientY;
+  }
+
+  function onTouchUp(e) {
+    if (!touches.has(e.pointerId)) return;
+    touches.delete(e.pointerId);
+    try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    const g = gesture;
+    if (!g) return;
+    if (g.kind === 'two') {
+      // One finger left of a pinch carries on moving the view, and never builds.
+      if (touches.size === 1) {
+        const [id, f] = [...touches.entries()][0];
+        gesture = { kind: 'one', id, x0: f.x, y0: f.y, lx: f.x, ly: f.y, tile: null, mode: 'pan' };
+      } else if (!touches.size) gesture = null;
+      return;
+    }
+    if (e.pointerId !== g.id) return;
+    gesture = null;
+    if (g.mode === 'build') endTouchBuild();
+    else if (g.mode === 'wait' && e.type === 'pointerup') touchTap(g.tile);
   }
 
   // ---- Keyboard --------------------------------------------------------------------------------
@@ -259,6 +396,34 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     }
   }
 
+  // ---- The on-screen buttons of a touch screen (touch.js) -------------------------------------------
+  /** What the rotate button would turn: the held building's facing, or the selected building. */
+  function canRotate() {
+    if (isOffice()) return false;
+    if (tool) return !!BUILD[tool];
+    const b = selected && at(selected);
+    return !!(b && BUILD[b.k]?.rot);
+  }
+
+  /** The rotate button: as the R key, with the tapped building in place of the one under the mouse. */
+  function rotate() {
+    if (!canRotate()) return false;
+    if (tool) {
+      dir = (dir + 1) & 3;
+      onChange();
+    } else {
+      session.send({ c: 'rotate', x: selected.x, y: selected.y });
+    }
+    playSound('rotate');
+    return true;
+  }
+
+  /** Selects a tile's building (as a finger tap does), or clears the selection with null. */
+  function select(t) {
+    selected = t && at(t) ? { x: t.x, y: t.y } : null;
+    if (!tool) hover = selected;
+  }
+
   const view = { tool: null, dir: 0, hover: null, cursors };
   function getView() {
     view.tool = tool;
@@ -268,7 +433,14 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   }
 
   const onContext = (e) => e.preventDefault();
-  const onBlur = () => { held.clear(); finishDrag(); };
+  const onBlur = () => {
+    held.clear();
+    finishDrag();
+    // Fingers lifted while the page was in the background never report it.
+    touches.clear();
+    gesture = null;
+    endTouchBuild();
+  };
   // Stop the middle button turning the pointer into the browser's scroll compass.
   const onMouseDown = (e) => { if (e.button === 1) e.preventDefault(); };
   canvas.addEventListener('pointermove', onPointerMove);
@@ -287,9 +459,14 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     get tool() { return tool; },
     get dir() { return dir; },
     get hover() { return hover; },
+    /** The building a finger tapped with nothing held, or null. */
+    get selected() { return selected; },
     setTool,
     rebuild,
     goHome,
+    rotate,
+    canRotate,
+    select,
     tick,
     view: getView,
     destroy() {

@@ -26,7 +26,20 @@ export function createChat(session, { playSound = () => {} } = {}) {
     active = on;
     el.classList.toggle('is-open', on);
     if (on) { input.focus(); list.scrollTop = list.scrollHeight; } else input.blur();
+    fitKeyboard();
   }
+
+  // A phone's keyboard covers the bottom of the page. Most Android browsers shrink the page for it
+  // (the viewport tag asks them to); Safari does not, and only the visual viewport shrinks. Lift
+  // the chat by however much of the page the keyboard is hiding, so the box stays in sight.
+  const vv = globalThis.visualViewport;
+  function fitKeyboard() {
+    const hidden = active && vv ? Math.max(0, Math.round(innerHeight - (vv.offsetTop + vv.height))) : 0;
+    el.style.setProperty('--kb', `${hidden}px`);
+    document.body.classList.toggle('chatting', active);
+  }
+  vv?.addEventListener('resize', fitKeyboard);
+  vv?.addEventListener('scroll', fitKeyboard);
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -35,6 +48,7 @@ export function createChat(session, { playSound = () => {} } = {}) {
     input.value = '';
     // On a phone keep the keyboard up for the next line; with a real keyboard, get out of the way.
     if (!matchMedia('(pointer: coarse)').matches) setActive(false);
+    else if (document.activeElement !== input) input.focus(); // the Send button took the focus
   });
   open.addEventListener('click', () => setActive(!active));
   input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setActive(false); } });
@@ -70,6 +84,9 @@ export function createChat(session, { playSound = () => {} } = {}) {
   function destroy() {
     off();
     removeEventListener('keydown', onKey);
+    vv?.removeEventListener('resize', fitKeyboard);
+    vv?.removeEventListener('scroll', fitKeyboard);
+    document.body.classList.remove('chatting');
   }
 
   return { el, update, destroy };
