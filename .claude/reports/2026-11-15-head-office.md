@@ -8,7 +8,7 @@ Date: 2026-11-15
 - **The budget is a guess:** 85% of what the automatic wave would cost at the price list, plus half of what he left unspent, plus $5 for every shopper who got a refund in the last wave. A person will aim at the weak spot, so this may still be too generous. The numbers are in `OFFICE` in `src/sim/constants.js`.
 - **I answered your three open questions with defaults:** he sees the whole store all the time; planning uses the normal build countdown, and the doors open early only when both sides ask; he wins when the store reaches the refund limit, with no separate score. Say if you want any of them changed.
 - **His plan is not hidden from a determined builder:** the interface never shows it to store players, but it travels in the shared game state.
-- **Not pushed.** These commits are local; `main` on GitHub is still the bigger-game version.
+- **Partly on GitHub.** GitHub's `main` has the Head Office rules, tests and dialogue (a push I did not make brought it up to that point). The interface, the three fixes and this report are in local commits that are not pushed.
 
 ## Outline
 
