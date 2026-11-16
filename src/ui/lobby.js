@@ -77,12 +77,12 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
       if (mapChanged) { renderer.resize(); renderer.fit(); }
     }
 
-    const ls = JSON.stringify(s.players.map((p) => [p.name, p.on, p.ready, p.color]));
+    const ls = JSON.stringify([s.host, s.players.map((p) => [p.name, p.on, p.ready, p.color])]);
     if (ls !== listSig) {
       listSig = ls;
       list.replaceChildren(...s.players.filter((p) => p.on).map((p) => h('li', { class: p.ready ? 'is-ready' : '' },
         h('span', { class: 'chip', style: { background: safeColor(p.color) } }),
-        h('span', { class: 'lp-name' }, p.name, p.id === session.me ? h('em', null, ' (you)') : null, p.id === 0 ? h('em', null, ' host') : null),
+        h('span', { class: 'lp-name' }, p.name, p.id === session.me ? h('em', null, ' (you)') : null, p.id === (s.host | 0) ? h('em', null, ' host') : null),
         h('b', { class: 'lp-state' }, p.ready ? 'READY' : 'not ready'))));
       const me = s.players[session.me];
       const waiting = s.players.filter((p) => p.on && !p.ready).map((p) => p.name);

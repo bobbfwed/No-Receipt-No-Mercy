@@ -73,8 +73,65 @@ try {
   console.warn('Sound is unavailable:', err);
 }
 
+/** The game screen now showing, if any. */
+let game = null;
+
+/** Shows a game, replacing the one on screen (after a host hand-over or a reconnection). */
+function show(session, options) {
+  if (game) game.destroy();
+  game = startGame(session, { mount: app, sound, ...options });
+  return game;
+}
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Tries something that may fail for a while (a room code still held, a host not up yet). */
+async function keepTrying(fn, tries, pauseMs = 2000) {
+  for (let n = 1; ; n++) {
+    try { return await fn(); } catch (err) { if (n >= tries) throw err; }
+    await wait(pauseMs);
+  }
+}
+
+/**
+ * What a joined player's game does when its host disappears: the game carries on with a new host.
+ * Every player still in the game works out the same successor (the first of them in the list
+ * of players). The successor's browser takes the game over from its own copy and opens the room
+ * again under the same code; the others reconnect to it. The player who left can come back
+ * with the original link and gets his place back by name.
+ * @param {'online'|'local'} kind
+ * @param {string} code the room code
+ */
+function hostLost(kind, code) {
+  return async (old) => {
+    const s = old.state;
+    const name = s.players[old.me].name;
+    const gone = s.host | 0;
+    const staying = s.players.filter((p) => p.on && p.id !== gone);
+    const successor = staying.length ? staying[0].id : old.me;
+    if (successor === old.me) {
+      const session = new HostSession({ name, director: createDirector(), state: JSON.parse(JSON.stringify(s)), takeOver: true });
+      const accept = (conn) => session.accept(conn);
+      // The old host's room code is released a few seconds after his page closes.
+      const room = await keepTrying(async () => (kind === 'online' ? hostOnline(code, accept) : hostLocal(code, accept)), 30);
+      addEventListener('pagehide', () => room.close());
+      show(session, { roomCode: code, roomKind: kind, autostart: opts.autostart });
+    } else {
+      await wait(1500);
+      const session = await keepTrying(async () => {
+        const conn = await (kind === 'online' ? joinOnline(code) : joinLocal(code));
+        const client = new ClientSession(conn, name);
+        try { await whenReady(client); } catch (err) { conn.close(); throw err; }
+        return client;
+      }, 30);
+      show(session, { roomCode: code, roomKind: kind, onHostLost: hostLost(kind, code) });
+    }
+  };
+}
+
 /** Leaves a game for the menu or a fresh solo game by reloading the page. */
 function leaveTo(where) {
+  if (game) game.allowLeave(); // he pressed a button to leave: do not ask "are you sure"
   location.assign(where === 'solo' ? `${location.pathname}?solo=1` : location.pathname);
 }
 
@@ -95,21 +152,21 @@ function whenReady(session, timeoutMs = 12000) {
 
 const actions = {
   async solo(name, map, lobby) {
-    startGame(newHost(name, map, lobby), { mount: app, sound, ff: opts.ff, autostart: opts.autostart });
+    show(newHost(name, map, lobby), { ff: opts.ff, autostart: opts.autostart });
   },
   /** The training shift: a guided game that cannot be lost. `step` jumps ahead (for screenshots). */
   async tutorial(name, step = 0) {
     const session = new HostSession({
       name, director: createDirector(), state: createGame({ seed: opts.seed || 7, training: true, zones: true }),
     });
-    startGame(session, { mount: app, sound, tutorial: true, tutorialStep: step, onExit: leaveTo });
+    show(session, { tutorial: true, tutorialStep: step, onExit: leaveTo });
   },
   async host(name, fixedCode, map, lobby) {
     const code = fixedCode || makeRoomCode();
     const session = newHost(name, map, lobby);
     const room = await hostOnline(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
-    startGame(session, { mount: app, sound, roomCode: code, roomKind: 'online', ff: opts.ff, autostart: opts.autostart });
+    show(session, { roomCode: code, roomKind: 'online', ff: opts.ff, autostart: opts.autostart });
   },
   async join(name, code) {
     const conn = await joinOnline(code);
@@ -120,13 +177,13 @@ const actions = {
       conn.close();
       throw err;
     }
-    startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'online' });
+    show(session, { roomCode: code.toUpperCase(), roomKind: 'online', onHostLost: hostLost('online', code.toUpperCase()) });
   },
   async hostLocal(name, code, map, lobby) {
     const session = newHost(name, map, lobby);
     const room = hostLocal(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
-    startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });
+    show(session, { roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });
   },
   async joinLocal(name, code) {
     const conn = await joinLocal(code);
@@ -137,7 +194,7 @@ const actions = {
       conn.close();
       throw err;
     }
-    startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'local' });
+    show(session, { roomCode: code.toUpperCase(), roomKind: 'local', onHostLost: hostLost('local', code.toUpperCase()) });
   },
 };
 
@@ -151,8 +208,8 @@ function menu(error = '') {
 async function boot() {
   const name = defaultName();
   if (flag('demo')) {
-    startGame(newHost(name, null), {
-      mount: app, sound, ff: opts.ff, autostart: opts.autostart,
+    show(newHost(name, null), {
+      ff: opts.ff, autostart: opts.autostart,
       prepare(session) {
         const problems = applyDemoLayout(session.state, session.me);
         if (problems.length) showError(`Demo layout: ${problems.join('; ')}`);

@@ -135,6 +135,8 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     ws: { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0 },
     /** @type {Player[]} */
     players: [],
+    /** The player whose browser runs the game. Changes if the host leaves and another takes over. */
+    host: 0,
   };
   openDoors(state);
   return state;
