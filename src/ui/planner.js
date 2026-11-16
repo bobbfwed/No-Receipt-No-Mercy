@@ -11,6 +11,7 @@ import { OFFICE, SHOPPERS, SUPERS, ST, TUNE, priceOf, planCost, canBuy, checkPla
 import { SHOPPER_HELP, SUPER_HELP } from '../content/help.js';
 import { drawShopper, createShopperSprites } from '../render/shoppers.js';
 import { h, setText, setClass, setStyle, money, safeColor } from './dom.js';
+import { longPress, touchedLast } from './touch.js';
 
 const KINDS = Object.keys(OFFICE.kinds);
 /** Names short enough for a card; the tooltip has the full one. */
@@ -229,10 +230,12 @@ export function createPlanner(session, { playSound = () => {} } = {}) {
     const lock = h('span', { class: 'plc-lock' });
     const el = h('div', { class: 'pl-card' }, main, sup, lock);
     for (const [btn, isSup] of [[main, 0], [sup, 1]]) {
-      btn.addEventListener('pointerenter', () => showTip(el, k, isSup));
+      // A finger has no hover: on a touch screen a long press shows the tooltip instead.
+      btn.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') showTip(el, k, isSup); });
       btn.addEventListener('pointerleave', hideTip);
-      btn.addEventListener('focus', () => showTip(el, k, isSup));
+      btn.addEventListener('focus', () => { if (!touchedLast()) showTip(el, k, isSup); });
       btn.addEventListener('blur', hideTip);
+      longPress(btn, () => showTip(el, k, isSup), hideTip);
     }
     return { el, main, sup, lock, sig: '' };
   }

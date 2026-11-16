@@ -64,10 +64,25 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     // An invite link opens the menu with the room code already filled in.
     roomKind === 'online' ? copyButton(() => `${location.origin}${location.pathname}?join=${roomCode}`, 'Copy link') : null) : null;
 
-  const help = h('button', { type: 'button', class: 'btn-help', 'aria-label': 'How to play', title: 'How to play', onclick: onHelp }, '?');
+  const help = h('button', { type: 'button', class: 'btn-help', 'aria-label': 'How to play', title: 'How to play', onclick: () => { setMore(false); onHelp(); } }, '?');
   const audio = sound ? createSoundMenu(sound) : null;
 
-  const el = h('header', { class: 'topbar' }, cash, event, phase, h('div', { class: 'spacer' }), refunds, speed, room, audio, help);
+  // On a narrow screen the things a player needs less often (speed, room code, sound, help) fold
+  // away behind one button. On a wide screen the wrapper takes no part in the layout
+  // (display: contents) and the button is hidden, so the bar looks as it always has.
+  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, speed, room, audio, help);
+  const moreBtn = h('button', {
+    type: 'button', class: 'btn-more', 'aria-label': 'More: speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
+    onclick: () => setMore(!more.classList.contains('open')),
+  }, '☰');
+  function setMore(open) {
+    setClass(more, 'open', open);
+    moreBtn.setAttribute('aria-expanded', String(open));
+  }
+  // A click anywhere else closes it. (Not stopPropagation: the sound menu listens for the same.)
+  addEventListener('click', (e) => { if (!more.contains(e.target) && !moreBtn.contains(e.target)) setMore(false); });
+
+  const el = h('header', { class: 'topbar' }, cash, event, phase, h('div', { class: 'spacer' }), refunds, moreBtn, more);
 
   let wasOffice = null;
   function update(s) {
@@ -212,7 +227,14 @@ export function createPlayersPanel(session, { playSound = () => {} } = {}) {
     class: 'ready-lights hidden', role: 'status',
     title: 'Before the clock runs out, the doors open only when the store (any store player presses OPEN THE DOORS) and Head Office (READY) have both asked.',
   }, h('small', null, 'OPEN EARLY'), storeLight, officeLight);
-  const el = h('section', { class: 'panel players', 'aria-label': 'Players' }, h('h3', null, 'ON SHIFT'), list, lights, foot);
+  // On a narrow screen the list folds down to this button, so it does not sit on the floor.
+  // (Hidden on a wide screen, where the list is always open.)
+  const pillCount = h('b');
+  const pill = h('button', {
+    type: 'button', class: 'players-pill', 'aria-expanded': 'false', 'aria-label': 'Players on shift',
+    onclick: () => { const open = !el.classList.contains('open'); setClass(el, 'open', open); pill.setAttribute('aria-expanded', String(open)); },
+  }, h('span', { class: 'pp-icon', 'aria-hidden': 'true' }, '👥'), pillCount, h('span', { class: 'pp-caret', 'aria-hidden': 'true' }));
+  const el = h('section', { class: 'panel players', 'aria-label': 'Players' }, pill, h('h3', null, 'ON SHIFT'), list, lights, foot);
   let sig = '';
   const cashEls = new Map(); // player id -> the element showing his cash
   let statusEl = null; // what Head Office is doing, on his row
@@ -246,6 +268,7 @@ export function createPlayersPanel(session, { playSound = () => {} } = {}) {
       setClass(officeLight, 'on', !!s.office.ready);
     }
     const online = s.players.filter((p) => p.on).length;
+    setText(pillCount, String(online));
     setText(foot, online === 1 ? '1 player online. Says a lot.'
       : boss ? `${online} players online · income is split between the store players`
         : `${online} players online · income is split evenly`);

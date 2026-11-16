@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Two players, one screen (test page)</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; font: 14px "Segoe UI", system-ui, sans-serif; color: #ddd; }
@@ -10,6 +11,10 @@
   .col[hidden] { display: none; }
   .col p { margin: 0; padding: 4px 10px; background: #222; }
   iframe { flex: 1; border: 0; width: 100%; }
+  /* view=join: the joined player fills the window; the host runs underneath, out of sight. */
+  .solo .col { position: absolute; inset: 0; }
+  .solo .col p { display: none; }
+  .solo #join-col { z-index: 2; }
 </style>
 </head>
 <body>
@@ -24,10 +29,12 @@
   &third=1 adds a third player (Gaz). &drop=4000 closes the host's game after that many
   milliseconds, to watch another player take over as host; &back=9000 then brings Dave back
   through the same room code that long after the start.
+  &view=join shows only the joined player, full size (for a phone-sized screenshot).
+  &open=1 opens the joined player's chat box and types a line in it, as if about to send.
 -->
-<div class="row">
+<div class="row" id="row">
   <div class="col"><p>Host (Dave)</p><iframe id="host" title="Host"></iframe></div>
-  <div class="col"><p>Joined player (Steve)</p><iframe id="join" title="Joined player"></iframe></div>
+  <div class="col" id="join-col"><p>Joined player (Steve)</p><iframe id="join" title="Joined player"></iframe></div>
   <div class="col" id="third-col" hidden><p>Third player (Gaz)</p><iframe id="third" title="Third player"></iframe></div>
 </div>
 <script>
@@ -45,6 +52,14 @@
   if (q.has('say')) {
     setTimeout(() => document.getElementById('join').contentWindow.__game.session.chat('where is the loading bay'), 4000);
     setTimeout(() => document.getElementById('host').contentWindow.__game.session.chat('top of the map, genius'), 4800);
+  }
+  if (q.get('view') === 'join') document.getElementById('row').classList.add('solo');
+  if (q.has('open')) {
+    setTimeout(() => {
+      const d = document.getElementById('join').contentDocument;
+      d.querySelector('.chat-open').click();
+      d.querySelector('.chat-input').value = 'build the belts, Dave';
+    }, 5600);
   }
   if (q.has('third')) {
     document.getElementById('third-col').hidden = false;

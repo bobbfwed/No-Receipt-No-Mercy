@@ -91,6 +91,12 @@ One player stops defending and plays the other side: each wave he gets a budget,
 9. Pepper Spray and Pray
 10. Store Credit Only, Dickhead
 
+## Phones, tablets and chat (owner's request, built; not tried on a real phone)
+- Every screen has a phone and tablet layout and the floor is fully usable by touch (see README.md for the gestures). Checked in an emulator at five screen sizes with a page of simulated finger touches; desktop screens were compared before and after and did not change.
+- Needs a real phone to confirm: the chat box staying above the keyboard on iPhones, page zoom and pull-to-refresh staying blocked, notches and home bars, how the pinch feels, and sound starting on the first tap.
+- Known rough edges: the tutorial and help text still speak of keys and right-click; a phone held sideways leaves only about a third of the screen height for the floor; the Head Office planner is cramped on a phone.
+- Chat: Enter or the Chat button; one line of up to 200 characters; floods are cut off.
+
 ## Leaving and host hand-over (owner's request, built)
 - Once a game has started, or anyone else is in it, the browser asks for confirmation before the page is closed, refreshed or left.
 - If the host leaves, the first remaining player in the list becomes the host, using his own copy of the game; the others reconnect to him under the same room code, and the old host can rejoin with the original link. Checked with three players in one browser (test rooms) and by test. Not yet checked over the internet, where the room code takes a few seconds to be released and the hand-over can take up to a minute.
@@ -119,4 +125,5 @@ Also not done: the host sends the whole game state in one message; on the larges
 - An endless mode after wave 20.
 - Teaching the newer shoppers in the training shift (it covers dads and one super shopper; the others are explained by DEB and the ? screen).
 - Saving a game in the host's browser so a session can be resumed.
+- Wording for touch screens in the tutorial and help text (they still say "press 5" and "right-click").
 - Role restrictions as an optional hard mode.
