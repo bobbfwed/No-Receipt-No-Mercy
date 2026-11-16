@@ -40,6 +40,8 @@ Upgrades: `src/sim/upgrades.js`. A building's level is `b.lv` (absent means 1); 
 
 Super shoppers: a shopper with `sup: 1` plays by `SUPERS[kind]` instead of `SHOPPERS[kind]`; always go through `defOf(shopper)`.
 
+Head Office: `src/sim/office.js`. One player may switch `side` to `'office'` and buy the coming wave from a budget instead of building (`state.office`, the `side` and `plan` commands). His plan is turned into the same list of groups `waveSpec()` produces, with an entrance per group. He is left out of everything that counts store players (`shareCount`, income, the review).
+
 Path maps: there are four (`NORMAL`, `HOP` for dads, `SMASH` for gym bros, `GHOST` for runaway children, who are stopped only by the store's walls), plus `getFieldTo(state, tile)` for a mom running to where her child waits. All are cached until `state.gridVer` changes.
 
 Coordinates: the grid is `state.w` x `state.h` tiles. A tile index is `y * state.w + x`. Shopper positions are in tiles as decimals; the centre of tile (3, 5) is (3.5, 5.5). Directions are 0 east, 1 south, 2 west, 3 north.

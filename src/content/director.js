@@ -1,7 +1,7 @@
 // The director turns simulation events into jokes: what DEB the HR chatbot says, which customer
 // reviews pop up, and the end-of-wave performance review. It runs on the host only, and its
 // output is sent to every player, so everyone sees the same insult at the same time.
-import { TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash } from '../sim/index.js';
+import { TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer } from '../sim/index.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, fill,
 } from './lines.js';
@@ -49,7 +49,8 @@ export function createDirector(random = Math.random) {
   }
 
   function report(out, state, e) {
-    const players = state.players.filter((p) => p.on);
+    // Head Office is not reviewed: he does not work here any more.
+    const players = state.players.filter((p) => p.on && p.side !== 'office');
     // Rank by a rough contribution score so the stamps go to the right people.
     const score = (p) => p.w.earned + p.w.stopped * 12 + p.w.annoy * 0.2;
     const ranked = [...players].sort((a, b) => score(b) - score(a));
@@ -110,7 +111,10 @@ export function createDirector(random = Math.random) {
                   introduced = true;
                 }
               }
-              if (!introduced) say(out, state, LINES.waveStart, { w: e.wave }, { must: true });
+              const boss = officePlayer(state);
+              if (boss && e.office) say(out, state, LINES.officeWave, { p: boss.name, n: e.total }, { must: true, mood: 'smug' });
+              else if (boss) say(out, state, LINES.officeNoPlan, { p: boss.name }, { must: true });
+              else if (!introduced) say(out, state, LINES.waveStart, { w: e.wave }, { must: true });
             }
             if (e.dads > 0) say(out, state, LINES.dadLine, { n: e.dads }, { must: true, mood: 'smug' });
             break;
@@ -131,6 +135,17 @@ export function createDirector(random = Math.random) {
           case 'rebuilt':
             if (e.n >= 3) say(out, state, LINES.rebuilt, { p: nameOf(state, e.by), n: e.n }, { gap: 25, mood: 'smug' });
             break;
+          case 'side':
+            say(out, state, e.side === 'office' ? LINES.officeTaken : LINES.officeLeft, { p: nameOf(state, e.by) }, { must: true, mood: 'smug' });
+            break;
+          case 'ready': {
+            // One side is waiting for the other: name the one holding things up.
+            const boss = officePlayer(state);
+            if (!boss) break;
+            if (e.side === 'store') say(out, state, LINES.officeWaiting, { p: boss.name }, { gap: 8 });
+            else say(out, state, LINES.storeWaiting, { p: boss.name }, { gap: 8 });
+            break;
+          }
           case 'gave':
             say(out, state, LINES.gave, { p: nameOf(state, e.by), q: nameOf(state, e.to), n: e.n }, { gap: 10, mood: 'smug' });
             break;

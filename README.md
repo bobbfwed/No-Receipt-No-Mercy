@@ -28,6 +28,9 @@ Nobody runs a server. One player hosts in his browser and the others connect to 
 
 The first connection goes through the free public PeerJS service, which only introduces the browsers to each other; the game data then travels directly between you. If that service is down, online games cannot start (solo still works).
 
+## Head Office: one of you plays the shoppers
+With two or more players, one can stop defending and run the other side. Between sales events, press **Run the shoppers** next to your name in the players list. Each build phase you then get a budget and buy the coming crowd: which kinds of shopper, how many, which entrance each group uses and when it arrives. Buy nothing and the usual crowd comes. You win if the store reaches its refund limit; the others win if it survives all 20 sales events. Somebody must always be left running the store.
+
 ## Controls
 | Key or mouse | Does |
 |---|---|
