@@ -6,7 +6,9 @@
 <title>Render harness</title>
 <style>
   html, body { margin: 0; height: 100%; background: #1b1f24; overflow: hidden; }
-  canvas { display: block; width: 100vw; height: 100vh; }
+  canvas#c { display: block; width: 100vw; height: 100vh; }
+  #mini { position: fixed; right: 12px; bottom: 26px; width: 200px; height: 110px; background: rgba(20,24,28,0.85);
+          border: 2px solid #1d2125; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.5); display: none; cursor: pointer; }
   #err { position: fixed; left: 16px; top: 16px; right: 16px; color: #ff3b30; font: bold 28px/1.3 "Segoe UI", Arial, sans-serif;
          white-space: pre-wrap; text-shadow: 0 2px 0 #000; pointer-events: none; }
   #stats { position: fixed; right: 8px; bottom: 6px; color: #fff; font: 12px Consolas, monospace; text-shadow: 0 1px 0 #000; }
@@ -14,35 +16,52 @@
 <!--
   Test page for the canvas renderer. URL options:
     ?seed=7        random seed (default 7)
-    &demo=0        do not build the demo layout
+    &design=showroom  map design: warehouse, showroom or aisles (giving design or size makes a
+                   map with six entrances, as a real game does; without either it is the original
+                   30 x 16 warehouse with one entrance, which the demo layout is made for)
+    &size=m        map size: xs, s, m, l, xl, xxl, huge
+    &players=3     that many players in all (so that many entrances open)
+    &cam=40,20,30  camera: centre on tile 40,20 at 30 CSS pixels per tile (any part may be empty)
+    &fitview=1     start fully zoomed out
+    &mini=1        show the minimap in the bottom-right corner (click it to move the view)
+    &demo=0        do not build the demo layout (on other maps it is placed where it fits)
     &extra=1       also build belt corners and spare machines (to see every building kind)
+    &upgrades=1    upgrade the security buildings to assorted levels (2 to 10)
+    &rubble=1      wreck a few buildings and leave the rubble (as a gym bro would)
     &wave=N        start at wave N (later waves bring dads, Karens and scooters; moms from 3,
-                   teenagers from 4, guide dogs from 6, gym bros from 8)
+                   teenagers from 4, guide dogs from 6, gym bros from 8; supers from 6 on)
+    &supers=1      make every third shopper a super shopper
     &nostart=1     stay in the build phase
     &ff=600        run that many ticks before the first frame
-    &tool=belt&hx=10&hy=5&dir=1   placement preview (tool may be 'remove'); no hx/hy = follow the mouse
+    &tool=belt&hx=10&hy=5&dir=1   placement preview (tool may be 'remove' or 'upgrade');
+                   no hx/hy = follow the mouse
+    &route=1       draw the shopper routes
     &cursors=1     two more players with pointers
     &wall=3        crate stacks down that column (gym bros smash through; seed 7 wave 8: tick 652)
     &stats=1       show frame timing (and every 60 frames the average draw time)
     &null=1        a session with no state (should draw only the background)
     &lineup=1      every shopper kind in every state, large (fitted to the window, or &zoom=2),
-                   plus messes and every effect at &fxage=350 ms old; &pan=x,y scrolls it
-                   (logical pixels) for close-ups with a big &zoom
+                   with the super version of each in the three columns on the right, plus messes,
+                   wreckage and every effect at &fxage=350 ms old; &pan=x,y scrolls it (logical
+                   pixels) for close-ups with a big &zoom
     &allfx=1       inject one of every effect event every &every=1200 ms at fixed places
-    &zoom=1.6&at=24,7   draw bigger than the window, centred on that tile (close-ups)
+    &zoom=1.6&at=24,7   close-up: that many times the whole-map zoom, centred on that tile
   Debugging and stress tests:
     &freeze=1      do not run the game after the fast-forward (still drawn every frame)
     &frames=N      stop the game and drawing after N frames
     &keep=dad,karen  keep only these shopper kinds; &fx=sale,shot  keep only these pending events
     &clone=150     copy shoppers up to this many; &fill=300  scatter buildings up to this many
     &bench=N       draw N frames back to back (forcing rasterisation) and print ms per frame
-  Keys: 1-9,0 pick a building, x remove, Esc no tool, r rotate. Click places.
-  Note: headless Edge screenshots (tools/shot.ps1) tend to capture an early frame, so effects
-  show at the moment they start; use &lineup=1 to see them part way through.
+  Keys: 1-9,0 pick a building, x remove, u upgrade, Esc no tool, r rotate. Click places.
+        WASD or arrow keys pan, mouse wheel or +/- zooms, f fits the whole map, m toggles the minimap.
+  Errors are printed in big red text on the page. Note: headless Edge screenshots (tools/shot.ps1)
+  tend to capture an early frame, so effects show at the moment they start; use &lineup=1 to see
+  them part way through.
 -->
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="mini"></canvas>
 <div id="err"></div>
 <div id="stats"></div>
 <script>
@@ -54,8 +73,9 @@
 <script type="module">
 import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
-import { applyDemoLayout, applyCommand, addPlayer, BUILD } from '../src/sim/index.js';
+import { applyDemoLayout, applyCommand, addPlayer, BUILD, TUNE, TICK_HZ } from '../src/sim/index.js';
 import { createRenderer } from '../src/render/renderer.js';
+import { createMinimap } from '../src/render/minimap.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) && q.get(k) !== '' ? Number(q.get(k)) : d);
@@ -65,14 +85,20 @@ let session;
 if (q.get('null') === '1') {
   session = { state: null, me: 0, drainFx: () => [], alpha: () => 0, start() {} };
 } else {
-  session = new HostSession({ name: 'Dave', seed: num('seed', 7), director: createDirector() });
+  const map = q.has('design') || q.has('size') ? { design: q.get('design') || 'warehouse', size: q.get('size') || 'xs' } : null;
+  session = new HostSession({ name: 'Dave', seed: num('seed', 7), director: createDirector(), map });
   const s = session.state;
+  const me = s.players[0];
+  const names = ['Steve', 'Kev', 'Big Gaz', 'Tommo', 'Dazza'];
+  for (let n = 1; n < num('players', 1) && n < 6; n++) addPlayer(s, names[n - 1]);
+  if (q.get('cursors') === '1' && s.players.length < 3) { addPlayer(s, 'Steve'); addPlayer(s, 'Kev'); }
+  const place = (k, x, y, d) => applyCommand(s, 0, { c: 'place', k, x, y, d });
   if (q.get('demo') !== '0') {
     const problems = applyDemoLayout(s, 0);
-    if (problems.length) console.warn(problems);
+    if (problems.length) console.warn('demo layout:', problems.length, 'pieces did not fit');
   }
   if (q.get('extra') === '1') {
-    s.cash += 5000;
+    me.cash += 5000;
     const E = 0, S = 1, Wd = 2, N = 3;
     const extra = [
       // Right-turning loop in the top-right corner.
@@ -85,20 +111,56 @@ if (q.get('null') === '1') {
       ['samples', 17, 12, 0], ['packer', 2, 13, E], ['press', 3, 13, E],
     ];
     for (const [k, x, y, d] of extra) {
-      const r = applyCommand(s, 0, { c: 'place', k, x, y, d });
+      const r = place(k, x, y, d);
       if (!r.ok) console.warn('extra', k, x, y, r.why);
     }
   }
   // &wall=3  a wall of crate stacks down column 3 (gap in the top row): gym bros smash through it
   if (q.has('wall')) {
-    s.cash += 5000;
-    for (let y = 2; y < 15; y++) applyCommand(s, 0, { c: 'place', k: 'crate', x: num('wall', 3), y, d: 0 });
+    me.cash += 5000;
+    for (let y = 2; y < s.h - 1; y++) place('crate', num('wall', 3), y, 0);
   }
-  if (q.get('cursors') === '1') { addPlayer(s, 'Steve'); addPlayer(s, 'Kev'); }
+  // &fill=300  scatter belts and machines over free floor until there are this many buildings
+  if (q.has('fill')) {
+    const kinds = ['belt', 'belt', 'belt', 'press', 'sprinkler', 'crate', 'packer', 'forklift', 'chute', 'unpacker', 'samples', 'wetfloor'];
+    let count = s.grid.filter(Boolean).length;
+    for (let i = 0; i < s.grid.length && count < num('fill', 300); i++) {
+      if (s.tiles[i] !== '.' || s.grid[i] || (i * 7) % 5 === 0) continue;
+      const k = kinds[i % kinds.length];
+      s.grid[i] = { k, o: 0, d: i % 4, it: k === 'belt' ? [['box', 0.3]] : undefined, t: 10, n: 1, out: 0, cd: 0, a: i };
+      count++;
+    }
+  }
+  // &upgrades=1  raise every upgradable building to an assorted level (2..10)
+  if (q.get('upgrades') === '1') {
+    me.cash += 1e7;
+    let n = 0;
+    for (let i = 0; i < s.grid.length; i++) {
+      const b = s.grid[i];
+      if (!b || !BUILD[b.k].up) continue;
+      const want = 2 + (n++ * 3) % (TUNE.maxLevel - 1);
+      const x = i % s.w, y = (i / s.w) | 0;
+      for (let lv = 1; lv < want; lv++) applyCommand(s, 0, { c: 'upgrade', x, y });
+    }
+    me.cash = 400;
+  }
+  // &rubble=1  wreck every seventh building, leaving rubble (only if the rules keep a list of it)
+  if (q.get('rubble') === '1') {
+    s.rubble = s.rubble || [];
+    let n = 0;
+    for (let i = 0; i < s.grid.length; i++) {
+      const b = s.grid[i];
+      if (!b || n++ % 7) continue;
+      s.rubble.push([i, b.k, b.d | 0, b.o]);
+      s.grid[i] = 0;
+    }
+    s.gridVer++;
+  }
   if (q.has('wave')) s.wave = Math.max(0, num('wave', 1) - 1);
   if (q.get('nostart') !== '1') session.send({ c: 'start' });
   session.fastForward(num('ff', 0));
-  // &keep=dad,karen  keep only these shopper kinds (debugging)
+  // &supers=1  every third shopper becomes a super one
+  if (q.get('supers') === '1') s.shoppers.forEach((sh, n) => { if (n % 3 === 0) sh.sup = 1; });
   // &fx=sale,shot  only pass these event types to the renderer (debugging); fx=none drops them all
   if (q.has('fx')) {
     const allow = q.get('fx').split(',');
@@ -109,40 +171,45 @@ if (q.get('null') === '1') {
     const want = num('clone', 150), src = s.shoppers.slice();
     for (let k = 0; s.shoppers.length < want; k++) {
       const o = src[k % src.length];
-      s.shoppers.push({ ...o, id: 10000 + k, x: 1.5 + ((k * 7.3) % 27), y: 1.5 + ((k * 3.1) % 13) });
+      s.shoppers.push({ ...o, id: 10000 + k, x: 1.5 + ((k * 7.3) % (s.w - 3)), y: 1.5 + ((k * 3.1) % (s.h - 3)), sup: k % 9 === 0 ? 1 : o.sup });
     }
   }
-  // &fill=300  scatter belts and machines over free floor until there are this many buildings
-  if (q.has('fill')) {
-    const kinds = ['belt', 'belt', 'belt', 'press', 'sprinkler', 'crate', 'packer', 'forklift', 'chute', 'unpacker'];
-    let count = s.grid.filter(Boolean).length;
-    for (let i = 0; i < s.grid.length && count < num('fill', 300); i++) {
-      if (s.tiles[i] !== '.' || s.grid[i] || (i * 7) % 5 === 0) continue;
-      const k = kinds[i % kinds.length];
-      s.grid[i] = { k, o: 0, d: i % 4, it: k === 'belt' ? [['box', 0.3]] : undefined, t: 10, n: 1, out: 0, cd: 0, a: i };
-      count++;
-    }
-  }
+  // &keep=dad,karen  keep only these shopper kinds (debugging)
   if (q.has('keep')) {
     const keep = q.get('keep').split(',');
     s.shoppers = s.shoppers.filter((sh) => keep.includes(sh.k));
   }
 }
 
-// &zoom=2&at=10,8  make the canvas bigger than the window and centre that tile (for close-ups)
-if (q.has('zoom') && q.get('lineup') !== '1') {
-  const z = num('zoom', 2);
-  const [ax, ay] = (q.get('at') || '15,8').split(',').map(Number);
-  const cw = innerWidth * z, ch = innerHeight * z;
-  const s = Math.min(cw / 1200, ch / 640);
-  Object.assign(canvas.style, {
-    position: 'absolute', width: cw + 'px', height: ch + 'px',
-    left: (innerWidth / 2 - ((cw - 1200 * s) / 2 + (ax + 0.5) * 40 * s)) + 'px',
-    top: (innerHeight / 2 - ((ch - 640 * s) / 2 + (ay + 0.5) * 40 * s)) + 'px',
-  });
-}
 const renderer = createRenderer(canvas, session);
 addEventListener('resize', () => renderer.resize());
+// For poking at from the browser console (or a test script): window.harness.renderer.cam etc.
+window.harness = { renderer, session };
+// &cam=x,y,zoom  /  &fitview=1  /  &zoom=Z&at=x,y
+if (q.get('fitview') === '1') renderer.fit();
+if (q.has('cam')) {
+  const [cx, cy, cz] = q.get('cam').split(',').map((v) => (v === '' ? NaN : Number(v)));
+  if (cz > 0) renderer.zoomBy(cz / renderer.cam.zoom);
+  renderer.centerOn(Number.isFinite(cx) ? cx : renderer.cam.x, Number.isFinite(cy) ? cy : renderer.cam.y);
+}
+if (q.has('zoom') && q.get('lineup') !== '1') {
+  renderer.fit();
+  renderer.zoomBy(num('zoom', 2));
+  const [ax, ay] = (q.get('at') || '15,8').split(',').map(Number);
+  renderer.centerOn(ax + 0.5, ay + 0.5);
+}
+
+// Minimap in the corner.
+const miniCanvas = document.getElementById('mini');
+const mini = createMinimap(miniCanvas, session, renderer);
+let miniOn = q.get('mini') === '1';
+const showMini = () => { miniCanvas.style.display = miniOn ? 'block' : 'none'; if (miniOn) mini.draw(); };
+showMini();
+setInterval(() => { if (miniOn) mini.draw(); }, 250);
+miniCanvas.addEventListener('mousedown', (e) => {
+  const t = mini.tileAt(e.clientX, e.clientY);
+  if (t) { renderer.centerOn(t.x + 0.5, t.y + 0.5); mini.draw(); }
+});
 
 const tools = ['belt', 'unpacker', 'press', 'packer', 'chute', 'crate', 'sprinkler', 'forklift', 'wetfloor', 'samples'];
 const view = {
@@ -150,6 +217,7 @@ const view = {
   dir: num('dir', 0),
   hover: q.has('hx') ? { x: num('hx', 0), y: num('hy', 0) } : null,
   cursors: new Map(),
+  route: q.get('route') === '1',
 };
 const fixedHover = q.has('hx');
 canvas.addEventListener('mousemove', (e) => { if (!fixedHover) view.hover = renderer.tileAt(e.clientX, e.clientY); });
@@ -158,34 +226,64 @@ canvas.addEventListener('click', (e) => {
   const t = renderer.tileAt(e.clientX, e.clientY);
   if (!t || !session.send) return;
   if (view.tool === 'remove') session.send({ c: 'remove', x: t.x, y: t.y });
+  else if (view.tool === 'upgrade') session.send({ c: 'upgrade', x: t.x, y: t.y });
   else if (BUILD[view.tool]) session.send({ c: 'place', k: view.tool, x: t.x, y: t.y, d: view.dir });
 });
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  renderer.zoomBy(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+}, { passive: false });
+const held = new Set();
 addEventListener('keydown', (e) => {
+  const k = e.key.toLowerCase();
   if (e.key >= '0' && e.key <= '9') view.tool = tools[(Number(e.key) + 9) % 10];
-  else if (e.key === 'x') view.tool = 'remove';
+  else if (k === 'x') view.tool = 'remove';
+  else if (k === 'u') view.tool = 'upgrade';
   else if (e.key === 'Escape') view.tool = null;
-  else if (e.key === 'r') view.dir = (view.dir + 1) & 3;
+  else if (k === 'r') view.dir = (view.dir + 1) & 3;
+  else if (k === 'f') renderer.fit();
+  else if (k === 'm') { miniOn = !miniOn; showMini(); }
+  else if (e.key === '+' || e.key === '=') renderer.zoomBy(1.25);
+  else if (e.key === '-') renderer.zoomBy(0.8);
+  else held.add(k);
 });
+addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
+let lastT = 0;
+function panKeys(t) {
+  const dt = Math.min(0.05, (t - lastT) / 1000);
+  lastT = t;
+  const speed = (700 / renderer.cam.zoom) * dt; // about 700 screen pixels a second
+  let dx = 0, dy = 0;
+  if (held.has('a') || held.has('arrowleft')) dx -= speed;
+  if (held.has('d') || held.has('arrowright')) dx += speed;
+  if (held.has('w') || held.has('arrowup')) dy -= speed;
+  if (held.has('s') || held.has('arrowdown')) dy += speed;
+  if (dx || dy) renderer.pan(dx, dy);
+}
 
 const stats = document.getElementById('stats');
 let total = 0, n = 0;
 // &allfx=1  inject one of every effect event every 1.2 s (&every=ms), at fixed places, to check the effects
 if (q.get('allfx') === '1' && session.fx) {
+  const W = session.state.w;
   const inject = () => session.fx.push(
-    { e: 'sale', i: 11 * 30 + 6, v: 24, kind: 'giftset' },
-    { e: 'escape', k: 'dad', x: 29.2, y: 7.5, refund: 25 },
+    { e: 'sale', i: 11 * W + 6, v: 24, kind: 'giftset' },
+    { e: 'escape', k: 'dad', x: W - 0.8, y: 7.5, refund: 25 },
     { e: 'left', k: 'dad', x: 16.5, y: 6.5, by: 0, why: 'bored' },
     { e: 'left', k: 'karen', x: 19, y: 12.5, by: 0, why: 'annoyed' },
     { e: 'slip', x: 13.5, y: 2.5 },
     { e: 'grab', x: 11.5, y: 9.5, kind: 'gadget' },
     { e: 'sample', x: 9.5, y: 12.2 },
-    { e: 'spray', i: 3 * 30 + 12 },
-    { e: 'shot', i: 8 * 30 + 9, x: 12.5, y: 6.5 },
-    { e: 'mess', i: 13 * 30 + 13 },
+    { e: 'spray', i: 3 * W + 12 },
+    { e: 'shot', i: 8 * W + 9, x: 12.5, y: 6.5 },
+    { e: 'mess', i: 13 * W + 13 },
     { e: 'kid', x: 22.5, y: 2.5 },
     { e: 'caught', x: 22.5, y: 13.5 },
     { e: 'bolt', x: 6.5, y: 2.5 },
-    { e: 'smash', i: 13 * 30 + 24, x: 24.5, y: 13.5 },
+    { e: 'smash', i: 13 * W + 24, x: 24.5, y: 13.5, k: 'crate', owner: 0 },
+    { e: 'smash', i: 9 * W + 24, x: 24.5, y: 9.5, k: 'press', owner: 0 },
+    { e: 'smash', i: 5 * W + 24, x: 24.5, y: 5.5, k: 'sprinkler', owner: 0, down: 1 },
+    { e: 'upgraded', k: 'sprinkler', x: 7, y: 11, by: 0, lv: 3 },
   );
   inject();
   setInterval(inject, num('every', 1200));
@@ -197,6 +295,7 @@ function frame(t) {
     view.cursors.set(1, { x: 11.3 + Math.sin(t / 900) * 2, y: 9.6 + Math.cos(t / 700) });
     view.cursors.set(2, { x: 23.7 + Math.cos(t / 1100), y: 5.2 + Math.sin(t / 800) });
   }
+  panKeys(t);
   const t0 = performance.now();
   try {
     renderer.draw(view);
@@ -221,20 +320,23 @@ if (q.get('lineup') === '1') {
   // Every shopper kind in every state, drawn large, for checking the art.
   // Rows: the nine kinds. Columns: walking right, walking left, browsing, stunned, leaving; then
   // two extra poses for the mom (chasing her running child, child waiting) and the man with the
-  // guide dog (bolting, right and left). To the right: messes and one of each effect.
+  // guide dog (bolting, right and left). Then the super version: walking right, browsing, stunned.
+  // To the right: messes, wreckage and one of each effect.
   const { drawShopper, drawKid, createShopperSprites } = await import('../src/render/shoppers.js');
   const { createMessSprites, drawMesses } = await import('../src/render/messes.js');
-  const { TUNE, TICK_HZ } = await import('../src/sim/index.js');
+  const { drawRubble, drawBadge } = await import('../src/render/buildings.js');
   const sprites = createShopperSprites();
   const messSprites = createMessSprites();
   const g = canvas.getContext('2d');
   const kinds = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro'];
   const states = [[0, 1, 0.05], [0, -1, -0.05], [1, 1, 0], [2, 1, 0], [3, 1, 0]];
   const colX = [36, 98, 160, 222, 284, 360, 470];
-  const rowY = (r) => 46 + r * 52;
+  const supX = [600, 690, 780];
+  const supStates = [[0, 1, 0.05], [1, -1, 0], [2, 1, 0]];
+  const rowY = (r) => 52 + r * 58;
   canvas.width = innerWidth; canvas.height = innerHeight;
-  // Logical size of the line-up is about 880 x 520; fit it unless &zoom is given.
-  const z = num('zoom', Math.min(canvas.width / 880, canvas.height / 520));
+  // Logical size of the line-up is about 1250 x 580; fit it unless &zoom is given.
+  const z = num('zoom', Math.min(canvas.width / 1250, canvas.height / 580));
   sprites.setScale(z);
   messSprites.setScale(z);
   // One of each effect, frozen at &fxage ms old (default 350).
@@ -243,7 +345,9 @@ if (q.get('lineup') === '1') {
   const items = buildItemSprites(z);
   const fxAge = num('fxage', 350);
   const life = Math.round(TUNE.messSecs * TICK_HZ);
-  const ti = (x, y) => y * 30 + x;
+  const LW = 30; // the line-up pretends to be a map this wide, for tile-indexed effects
+  const ti = (x, y) => y * LW + x;
+  const fakeState = { w: LW, h: 16, grid: [] };
   const lineup = (t) => {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = '#8d9093';
@@ -252,17 +356,26 @@ if (q.get('lineup') === '1') {
     g.setTransform(z, 0, 0, z, -panX * z, -panY * z);
     const F = { time: t / 1000, now: t, alpha: 0 };
     // Messes along the bottom right: fresh (splashing in), settled (both flavours), fading out.
-    drawMesses(g, [[ti(14, 12), life - 2], [ti(16, 12), 200], [ti(18, 12), 150], [ti(20, 12), 14]], 0, messSprites);
+    drawMesses(g, [[ti(22, 12), life - 2], [ti(24, 12), 200], [ti(26, 12), 150], [ti(28, 12), 14]], 0, messSprites, LW);
+    // Wreckage of each kind, and level badges, in the bottom row.
+    ['crate', 'press', 'sprinkler', 'belt', 'forklift'].forEach((k, n) => drawRubble(g, ti(21 + n, 13), k, LW));
+    [2, 5, 9, 10].forEach((lv, n) => {
+      g.fillStyle = '#6b7178';
+      g.fillRect((26 + n) * 40 + 4, 13 * 40 + 4, 32, 32);
+      drawBadge(g, (26 + n) * 40 + 20, 13 * 40 + 20, lv, 1);
+    });
     kinds.forEach((k, r) => {
-      const cols = states.map(([st, face, vx]) => ({ st, face, vx }));
-      if (k === 'mom') cols.push({ st: 0, face: 1, vx: 0.05, kd: 1 }, { st: 0, face: 1, vx: 0.05, kd: 2 });
-      if (k === 'blind') cols.push({ st: 0, face: 1, vx: 0.08, bt: 20 }, { st: 0, face: -1, vx: -0.08, bt: 20 });
-      cols.forEach(({ st, face, vx, kd = 0, bt = 0 }, c) => {
+      const cols = states.map(([st, face, vx]) => ({ st, face, vx, x: colX[0] }));
+      cols.forEach((c, n) => { c.x = colX[n]; });
+      if (k === 'mom') cols.push({ st: 0, face: 1, vx: 0.05, kd: 1, x: colX[5] }, { st: 0, face: 1, vx: 0.05, kd: 2, x: colX[6] });
+      if (k === 'blind') cols.push({ st: 0, face: 1, vx: 0.08, bt: 20, x: colX[5] }, { st: 0, face: -1, vx: -0.08, bt: 20, x: colX[6] });
+      supStates.forEach(([st, face, vx], n) => cols.push({ st, face, vx, sup: 1, x: supX[n] }));
+      cols.forEach(({ st, face, vx, kd = 0, bt = 0, sup = 0, x }, c) => {
         const sh = {
-          id: r * 7 + c, k, x: 0, y: 0, vx, vy: 0, hp: c === 0 ? 30 : 15, mhp: 30, st, t: st === 3 ? 12 : 20, cd: 0,
+          id: r * 11 + c, k, sup, x: 0, y: 0, vx, vy: 0, hp: c === 0 ? 30 : 15, mhp: 30, st, t: st === 3 ? 12 : 20, cd: 0,
           kd, kx: 0, ky: 0, kvx: kd === 1 ? 0.14 : 0, kvy: 0, bt,
         };
-        const x = colX[c], y = rowY(r);
+        const y = rowY(r);
         drawShopper(g, sh, x, y, face, F, sprites);
         // The loose child, out ahead of her (drawKid is told where; the renderer uses kx, ky).
         if (kd) drawKid(g, sh, x + 36, y + 4, kd === 2 ? -1 : 1, F, sprites);
@@ -270,23 +383,32 @@ if (q.get('lineup') === '1') {
     });
     const fx = createEffects();
     fx.handle([
-      { e: 'sale', i: ti(14, 1), v: 24 }, { e: 'escape', x: 15.05, y: 3.3, refund: 25 },
-      { e: 'left', k: 'dad', x: 14.5, y: 5.1 }, { e: 'left', k: 'karen', x: 14.5, y: 6.6 },
-      { e: 'slip', x: 14.5, y: 7.9 }, { e: 'grab', x: 14.5, y: 9.3 }, { e: 'sample', x: 14.5, y: 10.6 },
-      { e: 'spray', i: ti(17, 2) }, { e: 'shot', i: ti(16, 5), x: 18.5, y: 5.5 },
-    ], t - fxAge);
+      { e: 'sale', i: ti(22, 1), v: 24 }, { e: 'escape', x: 23.05, y: 3.3, refund: 25 },
+      { e: 'left', k: 'dad', x: 22.5, y: 5.1 }, { e: 'left', k: 'karen', x: 22.5, y: 6.6 },
+      { e: 'slip', x: 22.5, y: 7.9 }, { e: 'grab', x: 22.5, y: 9.3 }, { e: 'sample', x: 22.5, y: 10.6 },
+      { e: 'spray', i: ti(25, 2) }, { e: 'shot', i: ti(24, 5), x: 26.5, y: 5.5 },
+    ], t - fxAge, fakeState);
     fx.draw(g, t, 0, items);
     fx.draw(g, t, 1, items);
     // The newer events in a second effects system, as blips are capped at six on screen.
     const fx2 = createEffects();
     fx2.handle([
-      { e: 'mess', i: ti(17, 7) }, { e: 'smash', i: ti(17, 9), x: 17.6, y: 9.5 },
-      { e: 'left', k: 'teen', x: 20.5, y: 2.1 }, { e: 'left', k: 'mom', x: 20.5, y: 3.6 },
-      { e: 'left', k: 'blind', x: 20.5, y: 5.1 }, { e: 'left', k: 'gymbro', x: 20.5, y: 6.6 },
-      { e: 'kid', x: 20, y: 8.1 }, { e: 'caught', x: 20.5, y: 9.4 }, { e: 'bolt', x: 20.1, y: 10.9 },
-    ], t - fxAge);
+      { e: 'mess', i: ti(25, 7) }, { e: 'smash', i: ti(25, 9), x: 25.6, y: 9.5, k: 'crate' },
+      { e: 'left', k: 'teen', x: 28.5, y: 2.1 }, { e: 'left', k: 'mom', x: 28.5, y: 3.6 },
+      { e: 'left', k: 'blind', x: 28.5, y: 5.1 }, { e: 'left', k: 'gymbro', x: 28.5, y: 6.6 },
+      { e: 'kid', x: 28, y: 8.1 }, { e: 'caught', x: 28.5, y: 9.4 }, { e: 'bolt', x: 28.1, y: 10.9 },
+    ], t - fxAge, fakeState);
     fx2.draw(g, t, 0, items);
     fx2.draw(g, t, 1, items);
+    // Wreckage of a machine, a hit that only cost a level, and an upgrade, in a third.
+    const fx3 = createEffects();
+    fx3.handle([
+      { e: 'smash', i: ti(27, 11), x: 27.5, y: 11.5, k: 'press' },
+      { e: 'smash', i: ti(29, 11), x: 29.5, y: 11.5, k: 'sprinkler', down: 1 },
+      { e: 'upgraded', k: 'forklift', x: 21, y: 11, lv: 4 },
+    ], t - fxAge, fakeState);
+    fx3.draw(g, t, 0, items);
+    fx3.draw(g, t, 1, items);
   };
   const loop = (t) => { lineup(t); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
@@ -300,7 +422,7 @@ if (q.get('lineup') === '1') {
   for (let k = 0; k < N; k++) { renderer.draw(view); g0.getImageData(0, 0, 1, 1); } // getImageData forces the drawing to be rasterised now
   const ms = (performance.now() - t0) / N;
   const st = session.state;
-  stats.textContent = `bench ${ms.toFixed(2)} ms/frame` + (st ? `  shoppers ${st.shoppers.length}  phase ${st.phase}  tick ${st.tick}  refunds ${st.refunds}` : '');
+  stats.textContent = `bench ${ms.toFixed(2)} ms/frame` + (st ? `  shoppers ${st.shoppers.length}  phase ${st.phase}  tick ${st.tick}  refunds ${st.refunds}  zoom ${renderer.cam.zoom.toFixed(1)}` : '');
   document.title = stats.textContent;
   session.stop();
 } else {

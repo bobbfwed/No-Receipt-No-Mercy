@@ -271,7 +271,7 @@ export const STEPS = [
     ],
     quip: "It gets bigger if you pay for it. I'm told there are clinics. For you, there's the U key.",
     mood: 'smug',
-    marks: (s) => SPRINKLERS.filter(([x, y]) => levelOf(at(s, x, y)) < UP_TO).map(([x, y]) => ({ x, y, label: `Upgrade to level ${UP_TO}` })),
+    marks: (s) => SPRINKLERS.filter(([x, y]) => levelOf(at(s, x, y)) < UP_TO).map(([x, y]) => ({ x, y, label: 'Upgrade' })),
     done: (s, f) => SPRINKLERS.every(([x, y]) => is(s, x, y, 'sprinkler') && levelOf(at(s, x, y)) >= UP_TO) && f.waveEnds >= 1,
     hint: (s, f) => {
       for (const [x, y] of SPRINKLERS) {

@@ -15,6 +15,7 @@
   screenshot tool can photograph screens that need a click or a key press to reach.
     tools/poke.html?u=<game options>&do=<actions separated by ;>
   Actions:  click:<css selector>   key:<key>   tile:<x>,<y>   hover:<x>,<y>   wait:<ms>   text:<button text>
+            hold:<key>,<ms> (hold a key down, e.g. hold:d,800 to move the view)   wheel:<x>,<y>,<deltaY>
   Example:  tools/poke.html?u=solo%3D1&do=key:7;hover:8,10;click:.btn-help
   Photograph it with:  node tools/realshot.mjs "<url>" out.png 4000
 -->
@@ -30,11 +31,13 @@
     const win = frame.contentWindow, doc = frame.contentDocument;
     await wait(700);
     const canvas = () => doc.querySelector('canvas');
+    // Where a tile is on screen, from the game's own camera.
     const at = (tx, ty) => {
       const r = canvas().getBoundingClientRect();
-      const s = Math.min(r.width / 1200, r.height / 640);
-      return { clientX: r.left + (r.width - 1200 * s) / 2 + (tx + 0.5) * 40 * s, clientY: r.top + (r.height - 640 * s) / 2 + (ty + 0.5) * 40 * s };
+      const cam = win.__game.renderer.cam;
+      return { clientX: r.left + r.width / 2 + (tx + 0.5 - cam.x) * cam.zoom, clientY: r.top + r.height / 2 + (ty + 0.5 - cam.y) * cam.zoom };
     };
+    const keyEvent = (type, k) => win.dispatchEvent(new win.KeyboardEvent(type, { key: k, code: /^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`, bubbles: true }));
     const mouse = (type, x, y) => canvas().dispatchEvent(new win.PointerEvent(type, { ...at(x, y), button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerId: 1, bubbles: true, cancelable: true }));
     for (const step of (q.get('do') || '').split(';').filter(Boolean)) {
       const [verb, ...rest] = step.split(':');
@@ -42,7 +45,9 @@
       if (verb === 'wait') await wait(Number(arg) || 300);
       else if (verb === 'click') { const el = doc.querySelector(arg); if (el) el.click(); else log('no element ' + arg); }
       else if (verb === 'text') { const el = [...doc.querySelectorAll('button')].find((b) => b.textContent.trim().toLowerCase().startsWith(arg.toLowerCase())); if (el) el.click(); else log('no button ' + arg); }
-      else if (verb === 'key') win.dispatchEvent(new win.KeyboardEvent('keydown', { key: arg, code: /^\d$/.test(arg) ? `Digit${arg}` : `Key${arg.toUpperCase()}`, bubbles: true }));
+      else if (verb === 'key') keyEvent('keydown', arg);
+      else if (verb === 'hold') { const [k, ms] = arg.split(','); keyEvent('keydown', k); await wait(Number(ms) || 500); keyEvent('keyup', k); }
+      else if (verb === 'wheel') { const [x, y, d] = arg.split(',').map(Number); canvas().dispatchEvent(new win.WheelEvent('wheel', { ...at(x, y), deltaY: d, bubbles: true, cancelable: true })); }
       else if (verb === 'hover' || verb === 'tile') {
         const [x, y] = arg.split(',').map(Number);
         mouse('pointermove', x, y);

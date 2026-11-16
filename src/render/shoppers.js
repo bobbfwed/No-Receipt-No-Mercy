@@ -41,16 +41,23 @@ const KID_HAIR = '#e07b24';
  * drawing leans by itself, or not at all), `down` has its own lying-down pose.
  */
 const KIND = {
-  hunter: { n: 0, sc: 1, top: 33, step: 11, vars: HUNTER_SHIRTS.length },
-  clipper: { n: 1, sc: 0.82, top: 33, step: 17, vars: 1 },
-  dad: { n: 2, sc: 1.05, top: 35, step: 15, vars: DAD_POLOS.length },
-  karen: { n: 3, sc: 1.12, top: 37, step: 9, vars: 1 },
-  scooter: { n: 4, sc: 1, top: 38, step: 6, vars: 1, still: true },
-  teen: { n: 5, sc: 1, top: 34, step: 7, vars: HOODIES.length },
-  mom: { n: 6, sc: 1, top: 37, step: 11, vars: MOM_TOPS.length },
-  blind: { n: 7, sc: 1, top: 35, step: 9, vars: 1, still: true, down: true, box: [-30, -52, 88, 64] },
-  gymbro: { n: 8, sc: 1.08, top: 38, step: 13, vars: TANKS.length, box: [-31, -52, 63, 64] },
+  hunter: { n: 0, sc: 1, top: 33, step: 11, vars: HUNTER_SHIRTS.length, crown: [1, -32] },
+  clipper: { n: 1, sc: 0.82, top: 33, step: 17, vars: 1, crown: [1.5, -33] },
+  dad: { n: 2, sc: 1.05, top: 35, step: 15, vars: DAD_POLOS.length, crown: [1.5, -36] },
+  karen: { n: 3, sc: 1.12, top: 37, step: 9, vars: 1, crown: [2.5, -38.5] },
+  scooter: { n: 4, sc: 1, top: 38, step: 6, vars: 1, still: true, crown: [-3.5, -37.5] },
+  teen: { n: 5, sc: 1, top: 34, step: 7, vars: HOODIES.length, crown: [1.4, -33.5] },
+  mom: { n: 6, sc: 1, top: 37, step: 11, vars: MOM_TOPS.length, crown: [1.5, -32.5] },
+  blind: { n: 7, sc: 1, top: 35, step: 9, vars: 1, still: true, down: true, box: [-30, -52, 88, 64], crown: [1.5, -33] },
+  gymbro: { n: 8, sc: 1.08, top: 38, step: 13, vars: TANKS.length, box: [-31, -52, 63, 64], crown: [1.8, -34.5] },
 };
+/**
+ * Super shoppers are drawn this much bigger, with a gold outline and glow and a crown, so they
+ * stand out in a crowd. SUP_PAD is the extra room round the sprite for the glow.
+ */
+export const SUP_SCALE = 1.3;
+const SUP_PAD = 4;
+const GOLD = '#ffd23f';
 /** Not shoppers, but drawn with the same sprite cache: a mom's runaway child, a sitting guide dog. */
 const KID = { n: 9, sc: 1, top: 22, step: 24, vars: 1, box: [-20, -32, 40, 40] };
 const DOGSIT = { n: 10, sc: 1, top: 24, step: 1, vars: 1, box: [-16, -30, 32, 36] };
@@ -913,6 +920,52 @@ function gymbro(ctx, P) {
 
 const DRAW = [hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit];
 
+/** A super shopper's little gold crown, worn at a jaunty angle on top of the head. */
+function crown(ctx, K, P) {
+  let [x, y] = K.crown;
+  if (K.n === KIND.blind.n) {
+    // He leans back when his dog bolts and a little forward when walking; the crown goes with him.
+    const lean = P.alt ? -0.3 : P.moving ? 0.07 : 0;
+    const c = Math.cos(lean), s = Math.sin(lean);
+    [x, y] = [x * c - y * s, x * s + y * c];
+  }
+  ctx.save();
+  ctx.translate(x, y + 1.5);
+  ctx.rotate(0.22);
+  ctx.beginPath();
+  ctx.moveTo(-5, 0);
+  ctx.lineTo(-5.6, -6.5);
+  ctx.lineTo(-2.4, -3.4);
+  ctx.lineTo(0, -8);
+  ctx.lineTo(2.4, -3.4);
+  ctx.lineTo(5.6, -6.5);
+  ctx.lineTo(5, 0);
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  paint(ctx, GOLD, 1.4);
+  ctx.fillStyle = '#e8303a';
+  ctx.beginPath();
+  ctx.arc(0, -2, 1.4, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** A copy of a sprite grown by r device pixels all round and filled with one colour. */
+function dilate(src, r, colour) {
+  const c = document.createElement('canvas');
+  c.width = src.width; c.height = src.height;
+  const g = c.getContext('2d');
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * TAU;
+    g.drawImage(src, Math.cos(a) * r, Math.sin(a) * r);
+  }
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = colour;
+  g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'source-over'; // the caller draws on top of it
+  return c;
+}
+
 // --- sprite cache ----------------------------------------------------------------------------
 
 const pose = { v: 0, sw: 0, moving: false, alt: false, ph: 0, down: false, face: 1 };
@@ -929,16 +982,22 @@ export function createShopperSprites() {
     if (s !== scale) { scale = s; map.clear(); }
   }
 
-  function get(K, v, face, frame, alt) {
-    const key = ((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 2) + (alt ? 1 : 0);
+  /**
+   * A pose's sprite. A super shopper's (sup) is bigger and has room round it for the glow; draw
+   * it with the box from supBox().
+   */
+  function get(K, v, face, frame, alt, sup = false) {
+    const key = (((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 2) + (alt ? 1 : 0)) * 2 + (sup ? 1 : 0);
     let c = map.get(key);
     if (c) return c;
+    const pad = sup ? SUP_PAD : 0, z = sup ? SUP_SCALE : 1;
+    const bw = K.bw + pad * 2, bh = K.bh + pad * 2;
     c = document.createElement('canvas');
-    c.width = Math.max(1, Math.ceil(K.bw * scale));
-    c.height = Math.max(1, Math.ceil(K.bh * scale));
+    c.width = Math.max(1, Math.ceil(bw * scale * z));
+    c.height = Math.max(1, Math.ceil(bh * scale * z));
     const g = c.getContext('2d');
-    const kx = c.width / K.bw, ky = c.height / K.bh;
-    g.setTransform(kx, 0, 0, ky, -boxX(K, face) * kx, -K.by * ky);
+    const kx = c.width / bw, ky = c.height / bh;
+    g.setTransform(kx, 0, 0, ky, -(boxX(K, face) - pad) * kx, -(K.by - pad) * ky);
     pose.v = v;
     pose.moving = frame < WALK_FRAMES;
     pose.down = frame === DOWN;
@@ -949,6 +1008,16 @@ export function createShopperSprites() {
     g.scale(face * K.sc, K.sc);
     if (pose.moving && !K.still) g.rotate(0.07); // lean into the walk (scooters do not lean)
     DRAW[K.n](g, pose);
+    if (sup) {
+      crown(g, K, pose);
+      // A soft gold glow, a crisp gold outline, then the figure on top.
+      const glow = dilate(c, 3.4 * kx, 'rgba(255,196,30,0.5)');
+      const line = dilate(c, 1.7 * kx, GOLD);
+      const gg = glow.getContext('2d');
+      gg.drawImage(line, 0, 0);
+      gg.drawImage(c, 0, 0);
+      c = glow;
+    }
     map.set(key, c);
     return c;
   }
@@ -958,13 +1027,19 @@ export function createShopperSprites() {
 
 // --- overlays ------------------------------------------------------------------------------
 
-function patienceBar(ctx, x, y, f) {
+function patienceBar(ctx, x, y, f, sup) {
+  // A super shopper's bar is wider and taller, in a gold frame.
+  const hw = sup ? 17 : 12, hh = sup ? 3.5 : 2.5;
+  if (sup) {
+    ctx.fillStyle = GOLD;
+    ctx.fillRect(x - hw - 1.5, y - hh - 1.5, hw * 2 + 3, hh * 2 + 3);
+  }
   ctx.fillStyle = INK;
-  ctx.fillRect(x - 12, y - 2.5, 24, 5);
+  ctx.fillRect(x - hw, y - hh, hw * 2, hh * 2);
   ctx.fillStyle = '#4b5563';
-  ctx.fillRect(x - 11, y - 1.5, 22, 3);
+  ctx.fillRect(x - hw + 1, y - hh + 1, hw * 2 - 2, hh * 2 - 2);
   ctx.fillStyle = ramp(f);
-  ctx.fillRect(x - 11, y - 1.5, 22 * Math.max(0, Math.min(1, f)), 3);
+  ctx.fillRect(x - hw + 1, y - hh + 1, (hw * 2 - 2) * Math.max(0, Math.min(1, f)), hh * 2 - 2);
 }
 
 /** A thought bubble: the shopper has stopped for a sample or a bargain. */
@@ -1003,16 +1078,18 @@ function puff(ctx, x, y, k) {
 /** Adds this shopper's ground shadow to the current path (all shadows are filled at once). */
 export function shadowPath(ctx, s, sx, sy, face = 1) {
   const K = KIND[s.k] || KIND.hunter;
+  const z = s.sup ? SUP_SCALE : 1;
   let rx = (s.k === 'scooter' ? 18 : s.k === 'gymbro' ? 11 : 9) * K.sc;
   let cx = sx;
   if (s.k === 'blind' && s.st !== ST.STUN) {
     // One long shadow under the man and his dog.
     const bolt = s.bt > 0;
-    cx += face * (bolt ? 15 : 10);
+    cx += face * (bolt ? 15 : 10) * z;
     rx = bolt ? 27 : 20;
   }
+  rx *= z;
   ctx.moveTo(cx + rx, sy + FEET);
-  ctx.ellipse(cx, sy + FEET, rx, 3.5, 0, 0, TAU);
+  ctx.ellipse(cx, sy + FEET, rx, 3.5 * z, 0, 0, TAU);
 }
 
 /** Adds the shadow of a mom's loose child (at its own position) to the current path. */
@@ -1067,16 +1144,20 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites) {
   const ph = F.time * K.step * pace + s.id * 1.7; // walking cycle, radians
   const frame = stunned && K.down ? DOWN : moving ? ((((ph / TAU) % 1) * WALK_FRAMES) | 0) : STAND;
   const v = K.vars > 1 ? s.id % K.vars : 0;
-  const img = sprites.get(K, v, face, frame, alt);
+  const sup = !!s.sup;
+  const img = sprites.get(K, v, face, frame, alt, sup);
   const fy = sy + FEET;
-  const bx = boxX(K, face);
+  // The sprite's box around the feet; a super's is padded for the glow and drawn bigger.
+  const z = sup ? SUP_SCALE : 1, pad = sup ? SUP_PAD : 0;
+  const bx = (boxX(K, face) - pad) * z, by = (K.by - pad) * z;
+  const bw = (K.bw + pad * 2) * z, bh = (K.bh + pad * 2) * z;
 
   if (leaving) {
     const fade = Math.max(0, Math.min(1, (s.t - F.alpha) / LEAVE_TICKS));
     ctx.globalAlpha = fade;
-    ctx.drawImage(img, sx + bx + Math.sin(F.time * 60) * 1.2, fy + K.by, K.bw, K.bh); // shaking with rage
+    ctx.drawImage(img, sx + bx + Math.sin(F.time * 60) * 1.2, fy + by, bw, bh); // shaking with rage
     ctx.globalAlpha = Math.min(1, fade * 1.6);
-    puff(ctx, sx, fy - K.top * K.sc - 4 - (1 - fade) * 10, 1 - fade);
+    puff(ctx, sx, fy - K.top * K.sc * z - 4 - (1 - fade) * 10, 1 - fade);
     ctx.globalAlpha = 1;
     return;
   }
@@ -1084,20 +1165,21 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites) {
     if (s.k === 'blind') {
       // His dog sits by him, ahead, looking back at him.
       const dimg = sprites.get(DOGSIT, 0, -face, STAND, false);
-      ctx.drawImage(dimg, sx + face * 21 + boxX(DOGSIT, -face), fy + DOGSIT.by, DOGSIT.bw, DOGSIT.bh);
+      ctx.drawImage(dimg, sx + face * 21 * z + boxX(DOGSIT, -face), fy + DOGSIT.by, DOGSIT.bw, DOGSIT.bh);
     }
     // Flat on his back, feet toward where he was going, stars round his head.
     ctx.save();
     ctx.translate(sx - face * 2, fy - 3);
     ctx.rotate(-face * Math.PI * 0.47);
-    ctx.drawImage(img, bx, K.by + 14, K.bw, K.bh);
+    ctx.drawImage(img, bx, by + 14 * z, bw, bh);
     ctx.restore();
-    stars(ctx, sx - face * 16, fy - 10, F.time);
+    stars(ctx, sx - face * 16 * z, fy - 10, F.time);
   } else {
     const bob = moving ? Math.abs(Math.cos(frame / WALK_FRAMES * TAU)) * (pace > 1 ? 2.2 : 1.3) : 0;
-    ctx.drawImage(img, sx + bx, fy + K.by - bob, K.bw, K.bh);
+    ctx.drawImage(img, sx + bx, fy + by - bob, bw, bh);
   }
-  const top = fy - K.top * K.sc;
+  // Supers wear a crown above the figure, so their bar sits a little higher.
+  const top = fy - K.top * K.sc * z - (sup ? 7 : 0);
   if (s.st === ST.BROWSE) thought(ctx, sx + 10, top - 10, s.k === 'clipper' ? '%' : '$');
-  if (s.k === 'dad' || s.hp < s.mhp - 0.01) patienceBar(ctx, sx, top - 4, s.hp / s.mhp);
+  if (s.k === 'dad' || sup || s.hp < s.mhp - 0.01) patienceBar(ctx, sx, top - 4, s.hp / s.mhp, sup);
 }

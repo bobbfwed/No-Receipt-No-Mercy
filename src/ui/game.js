@@ -178,5 +178,8 @@ export function startGame(session, {
   }
   requestAnimationFrame(frame);
 
+  // For the test pages in tools/, which drive the game with made-up mouse and key events and
+  // need to know where a tile is on screen.
+  globalThis.__game = { session, renderer, input };
   return { session, renderer, input };
 }

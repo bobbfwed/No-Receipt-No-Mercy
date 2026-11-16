@@ -1,15 +1,17 @@
-// Guides drawn over the warehouse to explain it: the route shoppers will walk, the shorter route
-// dads take (they step over belts), and highlighted tiles the tutorial wants the player to use.
-import { W, H, DIRS, getDist, getHopDist, UNREACHABLE } from '../sim/index.js';
+// Guides drawn over the store to explain it: the route shoppers will walk from every open
+// entrance, the shorter routes dads take (they step over belts), and highlighted tiles the
+// tutorial wants the player to use.
+import { DIRS, getDist, getHopDist, UNREACHABLE } from '../sim/index.js';
 import { TILE, INK, rr, label, font } from './paint.js';
 
 const T = TILE;
 const DASH = [10, 9];
 const NO_DASH = [];
-const cache = new WeakMap(); // state -> { ver, normal, dad }
+const cache = new WeakMap(); // state -> { ver, tiles, normal: [pts], dad: [pts] }
 
 /** Follows a distance map downhill from a tile to a till. Returns pixel points along the way. */
-function trace(field, start) {
+function trace(s, field, start) {
+  const W = s.w, H = s.h;
   const pts = [];
   let i = start;
   for (let guard = 0; guard < W * H; guard++) {
@@ -28,22 +30,28 @@ function trace(field, start) {
   return pts;
 }
 
+/** The tile of an entrance nearest the tills by a distance map, or -1. */
+function bestTile(door, field) {
+  let best = -1;
+  for (const i of door) if (field[i] !== UNREACHABLE && (best < 0 || field[i] < field[best])) best = i;
+  return best;
+}
+
+/** One shopper route per open entrance, and a dad route from each where his is shorter. */
 function routes(s) {
   const hit = cache.get(s);
-  if (hit && hit.ver === s.gridVer) return hit;
+  if (hit && hit.ver === s.gridVer && hit.tiles === s.tiles) return hit;
   const dist = getDist(s), hop = getHopDist(s);
-  // Start from the door nearest the tills on each map.
-  let door = -1, dadDoor = -1;
-  for (let i = 0; i < s.tiles.length; i++) {
-    if (s.tiles[i] !== 'D') continue;
-    if (dist[i] !== UNREACHABLE && (door < 0 || dist[i] < dist[door])) door = i;
-    if (hop[i] !== UNREACHABLE && (dadDoor < 0 || hop[i] < hop[dadDoor])) dadDoor = i;
+  const normal = [], dad = [];
+  const doors = s.doors ? s.doors.slice(0, Math.max(1, s.open | 0)) : [];
+  for (const door of doors) {
+    if (s.tiles[door[0]] !== 'D') continue;
+    const a = bestTile(door, dist), b = bestTile(door, hop);
+    if (a >= 0) normal.push(trace(s, dist, a));
+    // Only show the dad route when it really is a short cut.
+    if (b >= 0 && (a < 0 || hop[b] < dist[a])) dad.push(trace(s, hop, b));
   }
-  const normal = door >= 0 ? trace(dist, door) : [];
-  let dad = dadDoor >= 0 ? trace(hop, dadDoor) : [];
-  // Only show the dad route when it really is a short cut.
-  if (door >= 0 && dadDoor >= 0 && hop[dadDoor] >= dist[door]) dad = [];
-  const out = { ver: s.gridVer, normal, dad };
+  const out = { ver: s.gridVer, tiles: s.tiles, normal, dad };
   cache.set(s, out);
   return out;
 }
@@ -82,18 +90,22 @@ function tag(ctx, pts, at, text, color, shift) {
 export function drawRoutes(ctx, s, time) {
   const r = routes(s);
   const offset = (time * 38) % 19;
-  strokeRoute(ctx, r.normal, '#ffe14a', offset, 0);
-  if (r.dad.length) strokeRoute(ctx, r.dad, '#5cc8ff', offset * 1.6, 5);
-  tag(ctx, r.normal, 0.5, 'SHOPPER ROUTE', '#ffe14a', 0);
-  if (r.dad.length) tag(ctx, r.dad, 0.3, 'DAD SHORT CUT', '#8fdcff', 5);
+  for (const pts of r.normal) strokeRoute(ctx, pts, '#ffe14a', offset, 0);
+  for (const pts of r.dad) strokeRoute(ctx, pts, '#5cc8ff', offset * 1.6, 5);
+  // Each route is labelled once; where routes have merged the labels would sit on top of each
+  // other, so they are placed at different points along each route.
+  r.normal.forEach((pts, k) => tag(ctx, pts, 0.5 - k * 0.07, 'SHOPPER ROUTE', '#ffe14a', 0));
+  r.dad.forEach((pts, k) => tag(ctx, pts, 0.3 - k * 0.04, 'DAD SHORT CUT', '#8fdcff', 5));
 }
 
 /**
  * Highlights tiles: a pulsing outline with a bouncing arrow above, and an optional caption.
  * @param {Array<{x:number, y:number, label?:string}>} marks
  * @param {number} now milliseconds
+ * @param {number} W map width in tiles
+ * @param {number} H map height in tiles
  */
-export function drawMarks(ctx, marks, now) {
+export function drawMarks(ctx, marks, now, W, H) {
   const pulse = 0.5 + 0.5 * Math.sin(now / 180);
   const bounce = Math.abs(Math.sin(now / 260)) * 7;
   // With many marks (a run of belts) only the captioned ones get an arrow, or it turns to clutter.
