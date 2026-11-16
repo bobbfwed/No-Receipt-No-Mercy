@@ -2,7 +2,7 @@
 
 *The customer is always a prick.*
 
-**Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in Chrome, Edge or Firefox on a computer).
+**Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
 
 A co-op browser game for 1 to 6 players, set in the returns department of a discount warehouse. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
 
@@ -20,8 +20,8 @@ Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chro
 - The speaker button at the top right turns sound effects, music and DEB's voice on or off.
 - To try multiplayer alone, open http://localhost:5173/tools/two-player.html : a host and a second player side by side.
 
-## Play with friends in other houses
-Nobody runs a server. One player hosts in his browser and the others connect to him directly.
+## Play online with friends
+The game is online multiplayer for up to six players, wherever they are. Nobody runs a server: one player hosts in his browser and the others connect to him directly over the internet.
 
 1. Everyone opens https://bobbfwed.github.io/No-Receipt-No-Mercy/ . (The site is this repository published with GitHub Pages from the `main` branch; every push to `main` updates it within a minute or two.)
 2. The host enters a name and presses **Host a game**. A five-letter room code appears at the top.
@@ -31,7 +31,7 @@ Nobody runs a server. One player hosts in his browser and the others connect to 
 6. If the host leaves, the game carries on: another player's browser takes over as host within a few seconds (up to a minute), and everyone else reconnects by themselves. The player who left can come back with the same link and gets his place back. Only when the last player leaves is the game gone.
 7. Once a game is under way, the browser asks before the page is closed, refreshed or left, so a stray Back button does not end it.
 
-If a friend's join times out with "could not reach each other", he is most likely on the same wifi as the host or behind a strict firewall or VPN; trying from another network usually works. https://bobbfwed.github.io/No-Receipt-No-Mercy/tools/net-check.html shows what a given computer's network allows.
+**Known limit: two players on the same network.** A player on the same wifi or home network as the host usually cannot join (tested: a phone joining a computer on one network fails, and the same phone on mobile data succeeds). Two browsers on one network can only reach each other through a relay server, and the game does not have a dependable one yet. Until it does, a player in the same house as the host should join over mobile data, or play from a different network. The same message, "could not reach each other", can also mean a strict firewall or VPN. https://bobbfwed.github.io/No-Receipt-No-Mercy/tools/net-check.html shows what a given device's network allows.
 
 The first connection goes through the free public PeerJS service, which only introduces the browsers to each other; the game data then travels directly between you. If that service is down, online games cannot start (solo still works).
 
