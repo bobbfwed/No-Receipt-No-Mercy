@@ -331,6 +331,6 @@ export function startGame(session, {
   }
   /** The player meant to leave (a button did it): do not ask. */
   const allowLeave = () => { leaving = true; };
-  globalThis.__game = { session, renderer, input };
+  globalThis.__game = { session, renderer, input, allowLeave };
   return { session, renderer, input, destroy, allowLeave };
 }

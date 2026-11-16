@@ -148,6 +148,7 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `tools/tutorial-test.html` plays the first ten lessons of the training shift with simulated mouse and keyboard events (photograph it with `realshot.mjs`, about 70 seconds).
 - `tools/poke.html?u=<game options>&do=<actions>` opens the game and clicks, presses or holds keys, turns the wheel or hovers tiles, to reach screens a plain screenshot cannot (actions are listed in the file).
 - `tools/sound-test.html` measures every sound and has a play button for each.
+- `node tools/phone.mjs` runs the touch checks in Chrome on a real Android phone attached by USB (the three `adb` commands it needs are at the top of the file). The touches go through the phone's own Chrome.
 - `tools/touch-test.html` plays a game with simulated finger touches and lists 33 checks of the touch rules. Photograph it as a phone with `node tools/realshot.mjs <url> out.png 40000 390 844 --touch --dpr=2` (`--touch` and `--dpr=N` make `realshot.mjs` emulate a touch device).
 - `tools/net-check.html` reports which of the helper servers for online play (`ICE_SERVERS` in `src/net/transports.js`) answer from the computer it is opened on. Use it when two players cannot connect.
 - `tools/office-test.html?view=join|host|both&step=...` plays a two-player game in which the joined player takes the Head Office job, buys a wave through the real buttons and plays it; the steps are listed in the file.

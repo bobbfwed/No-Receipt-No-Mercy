@@ -93,7 +93,8 @@ One player stops defending and plays the other side: each wave he gets a budget,
 
 ## Phones, tablets and chat (owner's request, built; not tried on a real phone)
 - Every screen has a phone and tablet layout and the floor is fully usable by touch (see README.md for the gestures). Checked in an emulator at five screen sizes with a page of simulated finger touches; desktop screens were compared before and after and did not change.
-- Needs a real phone to confirm: the chat box staying above the keyboard on iPhones, page zoom and pull-to-refresh staying blocked, notches and home bars, how the pinch feels, and sound starting on the first tap.
+- Checked on a real Android phone (Galaxy S24 Ultra, Chrome 156) with `tools/phone.mjs`: drag to move the view, pinch zoom, the page not zooming or refreshing, building by tap, belts by drag, the tapped-building sheet, the full-screen button, chat staying above the keyboard and sending with the keyboard's Send key, the leave confirmation, and Chrome reporting the game installable. Portrait only.
+- Still unconfirmed: anything on an iPhone, landscape on a real phone, how the gestures feel to a finger (the checks sent touches through Chrome, not a hand), sound starting on the first tap, and installing from the live site.
 - Known rough edges: a phone held sideways leaves only about a third of the screen height for the floor; the Head Office planner is cramped on a phone.
 - Chat: Enter or the Chat button; one line of up to 200 characters; floods are cut off.
 
