@@ -30,7 +30,7 @@ export const MAP_DESIGNS = {
   },
   showroom: {
     name: 'Flat-Pack Showroom',
-    desc: 'Walled rooms joined by narrow doorways that everyone has to file through. Good choke points, awkward factories.',
+    desc: 'Walled rooms joined by doorways that everyone, and every belt, has to go through. Good choke points, awkward factories.',
   },
   aisles: {
     name: 'Supermarket Aisles',
@@ -111,8 +111,9 @@ function pillars(w, h, wall) {
 }
 
 /**
- * Showroom: the floor is cut into rooms by walls, and every wall between two rooms has one
- * doorway two tiles wide. The doorways are staggered so there is no straight line through.
+ * Showroom: the floor is cut into rooms by walls, and every wall between two rooms has a
+ * doorway three tiles wide (two on a long wall). The doorways are staggered so there is no
+ * straight line through.
  */
 function rooms(w, h, wall, set) {
   const cols = Math.max(2, Math.round((w - 2) / 10)), rows = Math.max(2, Math.round((h - 2) / 7.5));
@@ -121,24 +122,36 @@ function rooms(w, h, wall, set) {
   for (let k = 0; k <= rows; k++) ys.push(Math.round((k * (h - 1)) / rows));
   for (let k = 1; k < cols; k++) for (let y = 1; y < h - 1; y++) wall(xs[k], y);
   for (let k = 1; k < rows; k++) for (let x = 1; x < w - 1; x++) wall(x, ys[k]);
-  // Doorways in the walls that run up and down.
+  // Doorways in the walls that run up and down, then in the ones that run across.
   for (let k = 1; k < cols; k++) {
     for (let r = 0; r < rows; r++) {
-      const from = ys[r] + 1, len = ys[r + 1] - ys[r] - 1;
-      const at = from + ((k * 5 + r * 3) % Math.max(1, len - 1));
-      set(xs[k], at, '.');
-      set(xs[k], at + 1, '.');
+      for (const at of doorways(ys[r + 1] - ys[r] - 1, k * 5 + r * 3)) set(xs[k], ys[r] + 1 + at, '.');
     }
   }
-  // Doorways in the walls that run across.
   for (let k = 1; k < rows; k++) {
     for (let c = 0; c < cols; c++) {
-      const from = xs[c] + 1, len = xs[c + 1] - xs[c] - 1;
-      const at = from + ((k * 7 + c * 4 + 2) % Math.max(1, len - 1));
-      set(at, ys[k], '.');
-      set(at + 1, ys[k], '.');
+      for (const at of doorways(xs[c + 1] - xs[c] - 1, k * 7 + c * 4 + 2)) set(xs[c] + 1 + at, ys[k], '.');
     }
   }
+}
+
+/**
+ * Where the doorways go in a stretch of wall `len` tiles long: the offsets of the tiles to open.
+ * A doorway is three tiles wide, so a production line can run through it and still leave
+ * shoppers a way past; a long stretch of wall gets a second doorway, so there is more than one
+ * way between two rooms once the first is full of belts. `seed` staggers them from wall to wall.
+ */
+function doorways(len, seed) {
+  const wide = len >= 6 ? 3 : Math.min(2, len);
+  const spots = Math.max(1, len - wide + 1);
+  const first = seed % spots;
+  const out = [];
+  for (let j = 0; j < wide; j++) out.push(first + j);
+  if (len >= 9) {
+    const second = (first + (len >> 1)) % spots;
+    if (Math.abs(second - first) > wide) for (let j = 0; j < wide; j++) out.push(second + j);
+  }
+  return out;
 }
 
 /**

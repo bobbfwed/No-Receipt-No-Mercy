@@ -91,6 +91,13 @@ One player stops defending and plays the other side: each wave he gets a budget,
 9. Pepper Spray and Pray
 10. Store Credit Only, Dickhead
 
+## Showroom doorways (found by the owner, improved, not played)
+The owner suspected the showroom would clog: belts between the marked floor areas have to go through the doorways, belts cannot cross each other, and the rule against walling off the tills refuses the last tile of a doorway. `tools/line-check.mjs` lays lines by the shortest free route (it does not plan ahead, so a person can do better) and counts how many fit:
+- Open Warehouse and Supermarket Aisles: two lines in every section, on every size.
+- Showroom with the original doorways (one per wall, two tiles wide): the first line of a section nearly always fitted; the second often did not.
+- Showroom now (doorways three tiles wide, two on walls nine tiles or longer): every first line fits on every size; of the second lines, all fit on four sizes and some fail on three (60 of 66 lines in total; the largest size manages 12 of 18).
+So the showroom is still the tight map, by design, but a first line everywhere is certain and a second is usually possible. Four-tile doorways were tried and did no better. Nobody has played the showroom.
+
 ## Lobby (owner's request, built)
 Games started from the menu (solo, host, test room) begin in a lobby: the store is drawn whole, the host can change its design and size and every player sees it change, and the game starts when every connected player has pressed Ready. Changing the store un-readies everyone. A player who drops out does not hold it up. A friend who joins after the start skips the lobby and plays at once.
 

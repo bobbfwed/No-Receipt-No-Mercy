@@ -131,6 +131,7 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `node tools/serve.mjs [port]` serves the game at `http://localhost:5173/`.
 - `tools/shot.ps1` takes a headless-Edge screenshot of a URL (see the comments in the file).
 - `node tools/balance.mjs [seed] [size] [design] [-v]` plays whole solo games with scripted players and prints how they went (`-v` lists every wave; `size` may be `all`).
+- `node tools/line-check.mjs [design] [size]` tries to build two whole production lines in every section of marked floor on every map and reports how many fit. Run it after changing a map design or the marked floor.
 - `node tools/realshot.mjs <url> <out.png> [waitMs]` takes a screenshot after waiting in real time (needed for anything that uses the network, which `shot.ps1` cannot wait for).
 - `tools/two-player.html` shows a host and a joined player side by side in one window (`?online=1` links them through the internet broker; `?autostart=1` opens the doors by itself).
 - `tools/input-test.html` plays a solo game with simulated mouse and keyboard events and logs each step.
