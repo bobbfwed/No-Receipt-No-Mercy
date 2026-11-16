@@ -85,6 +85,8 @@ function newBuilding(k, owner, d) {
  *   { c: 'rotate', x, y }       turn a building a quarter turn clockwise
  *   { c: 'upgrade', x, y }      raise a security building one level
  *   { c: 'give', to, n }        hand n of your cash to player `to`
+ *   { c: 'rebuild' }            put back what gym bros wrecked of yours, as far as your cash goes
+ *                               (with all: true, everybody's)
  *   { c: 'start' }              open the doors now instead of waiting for the timer
  *   { c: 'role', role }         change your job title (cosmetic)
  *   { c: 'speed', n }           game speed 1, 2 or 3
@@ -99,8 +101,10 @@ export function applyCommand(state, pid, cmd, ev = []) {
       const why = canPlace(state, cmd.k, cmd.x, cmd.y, pid);
       if (why) return { ok: false, why };
       const def = BUILD[cmd.k];
-      state.grid[idxOf(state, cmd.x, cmd.y)] = newBuilding(cmd.k, pid, cmd.d | 0);
+      const i = idxOf(state, cmd.x, cmd.y);
+      state.grid[i] = newBuilding(cmd.k, pid, cmd.d | 0);
       state.gridVer++;
+      if (state.rubble.length) state.rubble = state.rubble.filter((r) => r[0] !== i);
       player.cash -= def.cost;
       bump(state, pid, 'spent', def.cost);
       bump(state, pid, 'built');
@@ -149,6 +153,27 @@ export function applyCommand(state, pid, cmd, ev = []) {
       to.cash += n;
       ev.push({ e: 'gave', by: pid, to: to.id, n });
       return { ok: true };
+    }
+    case 'rebuild': {
+      // Oldest wreck first. Whatever cannot go back yet (no cash, a shopper in the way) stays as rubble.
+      let n = 0, why = 'empty';
+      for (const r of state.rubble.slice()) {
+        const [i, k, d, owner] = r;
+        if (owner !== pid && !cmd.all) continue;
+        const x = i % state.w, y = (i / state.w) | 0;
+        const no = canPlace(state, k, x, y, pid);
+        if (no) { if (no === 'occupied') state.rubble.splice(state.rubble.indexOf(r), 1); else why = no; continue; }
+        state.grid[i] = newBuilding(k, pid, d);
+        state.gridVer++;
+        state.rubble.splice(state.rubble.indexOf(r), 1);
+        player.cash -= BUILD[k].cost;
+        bump(state, pid, 'spent', BUILD[k].cost);
+        bump(state, pid, 'built');
+        n++;
+      }
+      if (!n) return { ok: false, why };
+      ev.push({ e: 'rebuilt', by: pid, n });
+      return { ok: true, n };
     }
     case 'start': {
       if (state.phase !== 'build') return { ok: false, why: 'phase' };

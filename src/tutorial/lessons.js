@@ -11,7 +11,7 @@
 //   hint(s, f)    a one-line nudge for where the player is right now, or null
 //   solve(s)      the commands that complete the step (used by tests, Skip, and ?step= jumps)
 //   manual        the step is only an explanation; it ends when the player presses Next
-import { queueTrainingWave, setTrainingCash } from '../sim/index.js';
+import { queueTrainingWave, setTrainingCash, levelOf } from '../sim/index.js';
 
 const S = 1; // facing south
 const X = 10; // the column the production line runs down
@@ -23,6 +23,8 @@ const remove = (x, y) => ({ c: 'remove', x, y });
 const BELTS = [3, 4, 5, 6, 7, 8, 9, 10]; // rows of the belt run under the unpacker
 const CRATES = [[X, 1], [X, 12], [X, 13]];
 const GAP = [X, 14];
+const SPRINKLERS = [[9, 13], [11, 13]]; // the two beside the gap
+const UP_TO = 4; // the level the upgrade lesson asks for
 
 /** Marks for a list of [x, y, kind, label] wanted buildings that are not correctly in place yet. */
 function wanted(s, list) {
@@ -259,12 +261,43 @@ export const STEPS = [
     solve: () => [place('forklift', 12, 6), place('wetfloor', 9, 7), place('wetfloor', 9, 8), { c: 'start' }],
   },
   {
+    title: 'Upgrades, and super shoppers',
+    tool: 'upgrade',
+    wave: [{ k: 'hunter', n: 3, gap: 1.5, at: 0, sup: 3 }],
+    text: [
+      'Later in a real game, SUPER versions of every shopper turn up. They are bigger, marked in gold, far more patient, and take a double refund. Three Doorbusters (super Bargain Hunters, with three times the patience) are waiting outside. Your two Sprinklers will not stop them as they are.',
+      'Security can be upgraded. Each level hits harder and reaches a little further, and costs nearly twice as much as the level before. When the floor is full, this is what your money is for.',
+      `Do this: point at each of the two Sprinklers beside the gap and press U three times, until both are level ${UP_TO}. (Or pick Upgrade in the build bar and click them.) Then press OPEN THE DOORS.`,
+    ],
+    quip: "It gets bigger if you pay for it. I'm told there are clinics. For you, there's the U key.",
+    mood: 'smug',
+    marks: (s) => SPRINKLERS.filter(([x, y]) => levelOf(at(s, x, y)) < UP_TO).map(([x, y]) => ({ x, y, label: `Upgrade to level ${UP_TO}` })),
+    done: (s, f) => SPRINKLERS.every(([x, y]) => is(s, x, y, 'sprinkler') && levelOf(at(s, x, y)) >= UP_TO) && f.waveEnds >= 1,
+    hint: (s, f) => {
+      for (const [x, y] of SPRINKLERS) {
+        if (!is(s, x, y, 'sprinkler')) return 'A Sprinkler is missing beside the gap. Put it back on the highlighted tile first (press 7).';
+        if (levelOf(at(s, x, y)) < UP_TO) return `Point at the highlighted Sprinkler and press U. It is level ${levelOf(at(s, x, y))}; it needs to be level ${UP_TO}.`;
+      }
+      return openDoorsHint(s, f);
+    },
+    solve: (s) => {
+      const cmds = [];
+      for (const [x, y] of SPRINKLERS) {
+        if (!is(s, x, y, 'sprinkler')) cmds.push(place('sprinkler', x, y));
+        for (let lv = is(s, x, y, 'sprinkler') ? levelOf(at(s, x, y)) : 1; lv < UP_TO; lv++) cmds.push({ c: 'upgrade', x, y });
+      }
+      cmds.push({ c: 'start' });
+      return cmds;
+    },
+  },
+  {
     title: 'Training complete',
     manual: true,
     last: true,
     text: [
-      'That is every building. In a real game, cash is limited and shared by the whole team, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
-      'New kinds of shopper turn up as the game goes on: moms chasing runaway kids, teenagers spilling slushies, Karens, a man whose guide dog bolts when sprayed, gym bros who walk through crates. DEB explains each one the first time it appears, and the ? at the top right has the full list.',
+      'That is every building. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
+      'New kinds of shopper turn up as the game goes on: moms chasing runaway kids, teenagers spilling slushies, Karens, a man whose guide dog bolts when sprayed, gym bros who wreck what you built (press B to rebuild it). DEB explains each one the first time it appears, and the ? at the top right has the full list.',
+      'A real store is bigger than this one. Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. With friends, each of you gets your own entrance to look after.',
       'A good opening: one production line built as a wall, one gap, sprinklers and a wet floor sign at the gap, and something covering the dad short cut.',
       'Pick any button in the build bar to see what it does and how to use it. You can stay here and practise for as long as you like.',
     ],

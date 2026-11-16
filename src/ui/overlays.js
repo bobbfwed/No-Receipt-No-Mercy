@@ -1,6 +1,6 @@
 // Full-screen overlays: the end of the game, losing the host, and the in-game "how to play".
-import { TUNE, SHOPPERS, BUILD } from '../sim/index.js';
-import { HOW, SHOPPER_HELP } from '../content/help.js';
+import { TUNE, SHOPPERS, SUPERS, BUILD, teamCash } from '../sim/index.js';
+import { HOW, SHOPPER_HELP, SUPER_HELP } from '../content/help.js';
 import { h, money, safeColor } from './dom.js';
 import { debFace } from './icons.js';
 
@@ -8,12 +8,15 @@ import { debFace } from './icons.js';
 export function howToPlay() {
   return h('div', { class: 'howto' },
     h('h3', null, 'The job'),
-    h('p', null, `Shoppers come in the doors on the left and head for the tills on the right. Every one who gets there takes a refund out of the team's cash. ${TUNE.refundLimit} refunds and corporate shuts the store. Survive ${TUNE.waves} sales events.`),
+    h('p', null, `Shoppers come in through the entrances (one per player, mostly on the left) and head for the tills on the right. Every one who gets there takes a refund. ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more per extra player) and corporate shuts the store. Survive ${TUNE.waves} sales events.`),
     h('h3', null, 'Two halves'),
     h('ul', null,
       h('li', null, h('b', null, 'Factory makes cash. '), 'Unpackers spit out boxes, belts carry them, the Press and the Packer turn them into pricier goods, and a Shipping Chute sells whatever lands in it.'),
       h('li', null, h('b', null, 'Security makes them leave. '), 'Sprinklers, forklifts, wet floor signs and free samples wear down patience until shoppers storm out empty-handed.'),
       h('li', null, h('b', null, 'The factory is the maze. '), 'Nobody can walk through belts or machines, so lay your lines to make the walk long and painful. You cannot block the tills completely. Legal checked.'),
+      h('li', null, h('b', null, 'Your money is yours. '), 'Each player has his own cash and pays for what he builds. Everything the store earns, and every refund, is split evenly between you, whoever built what. You can hand a colleague money from the list of players.'),
+      h('li', null, h('b', null, 'Upgrade when the floor is full. '), 'Security can be upgraded to level 10. Each level costs nearly twice the last.'),
+      h('li', null, h('b', null, 'It gets worse. '), 'From sales event 6, super versions of every shopper turn up: bigger, with a gold crown, and a double refund.'),
       h('li', null, h('b', null, 'Except dads. '), 'Dads arrive in a line, ignore free samples, and step straight over your belts. Only crates, machines and towers stop one. His patience runs out by itself, so waste his time: he ignores wet floor signs and slips on them.')),
     h('h3', null, 'Controls'),
     h('ul', { class: 'keys' },
@@ -21,6 +24,8 @@ export function howToPlay() {
       h('li', null, h('kbd', null, 'Click'), ' build · ', h('kbd', null, 'Drag'), ' build a line; belts follow the drag'),
       h('li', null, h('kbd', null, 'R'), ' rotate what you are holding, or the building under the mouse when holding nothing'),
       h('li', null, h('kbd', null, 'Right-click'), ' or ', h('kbd', null, 'X'), ' remove (75% back) · ', h('kbd', null, 'Esc'), ' put it down'),
+      h('li', null, h('kbd', null, 'U'), ' upgrade the security under the mouse, or pick the Upgrade tool'),
+      h('li', null, h('kbd', null, 'W'), h('kbd', null, 'A'), h('kbd', null, 'S'), h('kbd', null, 'D'), ' or arrows move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'F'), ' whole map · ', h('kbd', null, 'H'), ' your entrance · click the small map to jump'),
       h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early, for the impatient')));
 }
 
@@ -30,7 +35,8 @@ function shopperGuide() {
     h('h3', null, 'Who comes through the door'),
     h('dl', { class: 'guide' }, Object.entries(SHOPPER_HELP).map(([k, v]) => [
       h('dt', null, SHOPPERS[k] ? SHOPPERS[k].name : k),
-      h('dd', null, v.trick, ' ', h('em', null, `Beat it with: ${v.beat}`)),
+      h('dd', null, v.trick, ' ', h('em', null, `Beat it with: ${v.beat}`),
+        SUPER_HELP[k] && SUPERS[k] ? h('span', { class: 'guide-super' }, h('b', null, `Super (${SUPERS[k].name}, from event ${SHOPPERS[k].sup.from}): `), SUPER_HELP[k]) : null),
     ])));
 }
 
@@ -72,8 +78,8 @@ export function endScreen(s, debLine) {
       : `Refund limit reached in sales event ${s.wave}. Hand in your lanyards.`),
     h('div', { class: 'end-stats' },
       stat('Sales event reached', `${s.wave} / ${TUNE.waves}`),
-      stat('Refunds', `${s.refunds} / ${TUNE.refundLimit}`),
-      stat('Cash left', money(s.cash))),
+      stat('Refunds', `${s.refunds} / ${s.refundLimit}`),
+      stat('Cash left', money(teamCash(s)))),
     h('table', { class: 'end-table' },
       h('thead', null, h('tr', null, ['Employee', 'Role', 'Shipped', 'Stopped', 'Earned', 'Wasted', 'Built'].map((t) => h('th', null, t)))),
       h('tbody', null, players)),

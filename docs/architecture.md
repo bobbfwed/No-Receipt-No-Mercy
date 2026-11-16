@@ -3,7 +3,7 @@
 Read this before changing anything. It is the contract between the parts of the game.
 
 ## The game in one paragraph
-Shoppers enter a warehouse by the doors on the left and walk to the tills on the right. Every shopper who reaches a till takes a refund out of the team's shared cash; 40 refunds and the store closes. Players build a factory (belts and machines that turn boxes into goods and sell them for cash) and security (towers that wear down shoppers' patience until they storm out). Belts and machines block shoppers, so **the factory is the maze**. There are 20 waves ("sales events") with a build pause between them.
+Shoppers enter a store through its entrances (one per player, mostly on the left) and walk to the tills on the right. Every shopper who reaches a till takes a refund, split evenly between the players; 40 refunds (10 more per extra player) and the store closes. Players build a factory (belts and machines that turn boxes into goods and sell them for cash) and security (towers that wear down shoppers' patience until they storm out). Belts and machines block shoppers, so **the factory is the maze**. There are 20 waves ("sales events") with a build pause between them. Each player has his own cash and pays for what he builds; income is split evenly. Security can be upgraded, every shopper kind has a tougher "super" version in later waves, and the store comes in several designs and sizes.
 
 Dads are the special case the owner asked for. They arrive in a single-file "dad line", walk fast, ignore free samples and goods on belts, and **step over conveyor belts** (only machines, crates and towers stop them). Their patience drains every second they are in the store, so the way to beat a dad is to waste his time: solid walls, wet floor signs (he ignores the sign and may slip) and towers along his route. A dad who gets through leaves a smug five-star review.
 
@@ -28,14 +28,24 @@ Dependencies only point downward. `src/sim` imports nothing from the other folde
 - The game state is one plain JSON-safe object made by `createGame()`. Its fields are documented in `src/sim/state.js`.
 - `step(state)` advances one tick (30 ticks a second) and returns the events of that tick.
 - `applyCommand(state, playerId, cmd)` is the only way players change the state. It validates everything.
-- `canPlace(state, kind, x, y)` returns `null` if a building may go there, otherwise a reason string. The UI uses it to colour the placement preview.
+- `canPlace(state, kind, x, y, playerId)` returns `null` if that player may put a building there, otherwise a reason string. The UI uses it to colour the placement preview. `canUpgrade(state, x, y, playerId)` does the same for upgrades.
 - It is deterministic: random numbers come from `rand(state)`, never `Math.random()`. Keep it that way; clients rely on it to predict the game between host updates.
 - All tuning numbers and all definitions of buildings, shoppers and items are in `src/sim/constants.js`.
 
-Coordinates: the grid is 30 x 16 tiles (`W`, `H`). A tile index is `y * W + x`. Shopper positions are in tiles as decimals; the centre of tile (3, 5) is (3.5, 5.5). Directions are 0 east, 1 south, 2 west, 3 north.
+Maps: `src/sim/maps.js` builds the floor plan from a design and a size (`createGame({ map: { design, size } })`; left out, it is the original 30 x 16 warehouse with one entrance, which the tutorial and most tests use). The plan lives in the state: `state.w`, `state.h`, `state.tiles` (one string; the characters are explained in `maps.js`), `state.doors` (the entrances in the order they open) and `state.open` (how many are open: one per player). Entrances that are still shut exist from the start and count as floor for path-finding, so the maze can never wall one in. Nothing may assume a fixed map size.
+
+Money: `state.players[i].cash`. There is no shared pot. `earn()` and `lose()` in `state.js` split income and refunds evenly between the connected players; `teamCash(state)` adds everyone's up for display.
+
+Upgrades: `src/sim/upgrades.js`. A building's level is `b.lv` (absent means 1); `statsOf(b)` gives its numbers at its level and is the only place the simulation or the interface should read a tower's damage or range from.
+
+Super shoppers: a shopper with `sup: 1` plays by `SUPERS[kind]` instead of `SHOPPERS[kind]`; always go through `defOf(shopper)`.
+
+Path maps: there are four (`NORMAL`, `HOP` for dads, `SMASH` for gym bros, `GHOST` for runaway children, who are stopped only by the store's walls), plus `getFieldTo(state, tile)` for a mom running to where her child waits. All are cached until `state.gridVer` changes.
+
+Coordinates: the grid is `state.w` x `state.h` tiles. A tile index is `y * state.w + x`. Shopper positions are in tiles as decimals; the centre of tile (3, 5) is (3.5, 5.5). Directions are 0 east, 1 south, 2 west, 3 north.
 
 ## Sessions (`src/net/session.js`)
-The host's browser owns the real state. Clients send commands, receive the whole state five times a second, and run `step()` on their copy in between. The user interface talks to a session and never to the simulation's state-changing functions directly:
+The host's browser owns the real state. Clients send commands, receive the whole state up to five times a second (less often when the crowd is large, to spare the host's connection), and run `step()` on their copy in between. The user interface talks to a session and never to the simulation's state-changing functions directly:
 
 | Member | Meaning |
 |---|---|
@@ -103,7 +113,7 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `node --test` runs all tests in `test/`.
 - `node tools/serve.mjs [port]` serves the game at `http://localhost:5173/`.
 - `tools/shot.ps1` takes a headless-Edge screenshot of a URL (see the comments in the file).
-- `node tools/balance.mjs` plays whole games with a scripted player and prints how they went.
+- `node tools/balance.mjs [seed] [size] [design] [-v]` plays whole solo games with scripted players and prints how they went (`-v` lists every wave; `size` may be `all`).
 - `node tools/realshot.mjs <url> <out.png> [waitMs]` takes a screenshot after waiting in real time (needed for anything that uses the network, which `shot.ps1` cannot wait for).
 - `tools/two-player.html` shows a host and a joined player side by side in one window (`?online=1` links them through the internet broker; `?autostart=1` opens the doors by itself).
 - `tools/input-test.html` plays a solo game with simulated mouse and keyboard events and logs each step.
@@ -119,6 +129,7 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `?demo=1` solo game with the ready-made layout from `src/sim/demo.js`, wave already started.
 - `&ff=900` run that many ticks before the first frame (30 ticks = 1 second).
 - `&seed=7` fixed random seed.
+- `&map=showroom&size=m` the store: a design and a size (keys of `MAP_DESIGNS` and `MAP_SIZES`). Without them a game uses the open warehouse in the one-player size; `?demo=1` and the tutorial use the original small map.
 - `?local=host&code=TEST` / `?local=join&code=TEST` host or join between tabs on one computer.
 - `?join=ABCDE` an invite link: opens the menu with that room code filled in. The in-game "Copy link" button produces it.
 - `?online=host&code=ABCDE` / `?online=join&code=ABCDE` test only: host or join online without the menu.

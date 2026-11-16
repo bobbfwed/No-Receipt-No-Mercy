@@ -100,6 +100,9 @@ export function createGame({ seed = 1, training = false, map = null } = {}) {
     shoppers: [],
     /** Messes teenagers have left on the floor, as [tile index, ticks left]. */
     messes: [],
+    /** What gym bros have wrecked and nobody has rebuilt yet, oldest first, as
+     *  [tile index, kind, facing, owner]. The 'rebuild' command puts these back. */
+    rubble: [],
     nextId: 1,
     /** Shoppers still to arrive this wave, as [tick, kind, super 0|1], soonest first. */
     spawnQ: [],

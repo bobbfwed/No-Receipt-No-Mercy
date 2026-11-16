@@ -1,9 +1,9 @@
 // The director turns simulation events into jokes: what DEB the HR chatbot says, which customer
 // reviews pop up, and the end-of-wave performance review. It runs on the host only, and its
 // output is sent to every player, so everyone sees the same insult at the same time.
-import { TICK_HZ, TUNE, teamCash } from '../sim/index.js';
+import { TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash } from '../sim/index.js';
 import {
-  LINES, INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, fill,
+  LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, fill,
 } from './lines.js';
 
 const DEB = 'DEB (HR)';
@@ -20,6 +20,7 @@ export function createDirector(random = Math.random) {
   let warned = -1; // wave whose "ten seconds" warning has been given
   const lastPlaced = new Map(); // "x,y" -> { tick, by }
   const met = new Set(); // kinds of shopper DEB has already introduced
+  const metSuper = new Set(); // and the super versions
 
   function pick(bank) {
     let i = (random() * bank.length) | 0;
@@ -99,6 +100,16 @@ export function createDirector(random = Math.random) {
                 met.add(k);
                 if (INTRO[k]) { out.push({ t: 'say', who: DEB, mood: 'flat', text: INTRO[k] }); lastSay = state.tick; introduced = true; }
               }
+              // The same for the super version of a kind.
+              for (const k of e.supers || []) {
+                if (metSuper.has(k)) continue;
+                metSuper.add(k);
+                if (SUPER_INTRO[k]) {
+                  out.push({ t: 'say', who: DEB, mood: 'angry', text: fill(SUPER_INTRO[k], { p: anyone(state) }) });
+                  lastSay = state.tick;
+                  introduced = true;
+                }
+              }
               if (!introduced) say(out, state, LINES.waveStart, { w: e.wave }, { must: true });
             }
             if (e.dads > 0) say(out, state, LINES.dadLine, { n: e.dads }, { must: true, mood: 'smug' });
@@ -107,7 +118,21 @@ export function createDirector(random = Math.random) {
             say(out, state, LINES.kid, {}, { gap: 20 });
             break;
           case 'smash':
-            say(out, state, LINES.smash, {}, { gap: 10, mood: 'angry' });
+            // Whoever owned it hears about it by name.
+            if (e.k === 'crate') say(out, state, LINES.smash, {}, { gap: 10, mood: 'angry' });
+            else say(out, state, LINES.smashOther, { k: BUILD[e.k].name, p: nameOf(state, e.owner) }, { gap: 8, mood: 'angry' });
+            break;
+          case 'upgraded': {
+            const vars = { p: nameOf(state, e.by), k: BUILD[e.k].name, n: e.lv };
+            if (e.lv >= TUNE.maxLevel) say(out, state, LINES.maxed, vars, { must: true, mood: 'smug' });
+            else if (random() < 0.2) say(out, state, LINES.upgraded, vars, { gap: 15, mood: 'smug' });
+            break;
+          }
+          case 'rebuilt':
+            if (e.n >= 3) say(out, state, LINES.rebuilt, { p: nameOf(state, e.by), n: e.n }, { gap: 25, mood: 'smug' });
+            break;
+          case 'gave':
+            say(out, state, LINES.gave, { p: nameOf(state, e.by), q: nameOf(state, e.to), n: e.n }, { gap: 10, mood: 'smug' });
             break;
           case 'mess':
             say(out, state, LINES.mess, {}, { gap: 45 });
@@ -161,9 +186,14 @@ export function createDirector(random = Math.random) {
           case 'lost':
             say(out, state, LINES.lost, {}, { must: true, mood: 'angry' });
             break;
-          case 'joined':
+          case 'joined': {
             say(out, state, LINES.joined, { p: nameOf(state, e.by) }, { must: true });
+            // More players than the map was sized for: say so once per arrival.
+            const fits = MAP_SIZES[state.map.size]?.players || 1;
+            const here = state.players.filter((p) => p.on).length;
+            if (here > fits && here > 1 && !state.training) say(out, state, LINES.cramped, { n: fits, m: here }, { must: true });
             break;
+          }
           case 'quit':
             say(out, state, LINES.quit, { p: nameOf(state, e.by) }, { must: true });
             break;

@@ -60,6 +60,7 @@ test('the whole training shift can be completed, and each lesson shows what it s
   assert.equal(waves['Make them stop: Free Samples'].escaped, 0, 'the gap holds against a crowd');
   assert.deepEqual(waves.Dads, { stopped: 0, escaped: 4 }, 'all four dads walk straight through the belts');
   assert.ok(waves['Stopping dads'].stopped >= 3, `forklift and signs stop most dads (stopped ${waves['Stopping dads'].stopped} of 5)`);
+  assert.deepEqual(waves['Upgrades, and super shoppers'], { stopped: 3, escaped: 0 }, 'upgraded sprinklers stop three super shoppers');
   assert.ok(session.state.players[0].cash >= 1000, 'money is never the obstacle in training');
 });
 
@@ -83,6 +84,7 @@ test('the wave lessons play out the same whatever the random seed', () => {
     assert.equal(waves['Make them stop: Free Samples'].escaped, 0, `seed ${seed}: crowd`);
     assert.deepEqual(waves.Dads, { stopped: 0, escaped: 4 }, `seed ${seed}: dads walk through`);
     assert.ok(waves['Stopping dads'].stopped >= 3, `seed ${seed}: dads stopped ${waves['Stopping dads'].stopped} of 5`);
+    assert.deepEqual(waves['Upgrades, and super shoppers'], { stopped: 3, escaped: 0 }, `seed ${seed}: supers`);
   }
 });
 

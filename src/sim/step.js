@@ -400,11 +400,25 @@ function smashAround(state, s, def, i, ev) {
   if (ti >= 0) wreck(state, ti, s, ev);
 }
 
+/** Most rubble remembered; beyond this the oldest is forgotten. */
+const RUBBLE_MAX = 400;
+
+/**
+ * Wrecks the building on a tile. An upgraded building is tougher: it loses a level instead of
+ * being destroyed. What is destroyed is remembered as rubble so it can be rebuilt in one go.
+ */
 function wreck(state, ti, s, ev) {
   const b = state.grid[ti];
+  state.ws.wrecked++;
+  if (b.lv > 1) {
+    if (--b.lv === 1) delete b.lv;
+    ev.push({ e: 'smash', i: ti, x: s.x, y: s.y, k: b.k, owner: b.o, down: 1 });
+    return;
+  }
   state.grid[ti] = 0;
   state.gridVer++;
-  state.ws.wrecked++;
+  state.rubble.push([ti, b.k, b.d | 0, b.o]);
+  if (state.rubble.length > RUBBLE_MAX) state.rubble.shift();
   ev.push({ e: 'smash', i: ti, x: s.x, y: s.y, k: b.k, owner: b.o });
 }
 
@@ -540,8 +554,9 @@ function stepShoppers(state, fields, stands, ev) {
  *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind}
  *   mess {i} a teenager dropped a mess on tile i · kid {x,y} a child escaped · caught {x,y}
  *   bolt {x,y} a guide dog bolted
- *   smash {i,x,y,k,owner} a gym bro wrecked the building of kind k on tile i
- * (Commands add: placed, removed, upgraded {k,x,y,by,lv}, gave {by,to,n}.)
+ *   smash {i,x,y,k,owner,down} a gym bro wrecked the building of kind k on tile i; with
+ *     down: 1 it was upgraded and only lost a level
+ * (Commands add: placed, removed, upgraded {k,x,y,by,lv}, gave {by,to,n}, rebuilt {by,n}.)
  */
 export function step(state) {
   const ev = [];

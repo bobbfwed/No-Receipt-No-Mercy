@@ -1,21 +1,55 @@
 // The front door: name, play solo, host, join, and the same-computer test options.
+import { MAP_DESIGNS, MAP_SIZES } from '../sim/index.js';
 import { h, loadName, saveName } from './dom.js';
 import { howToPlay } from './overlays.js';
 
 /**
  * @param {HTMLElement} mount
  * @param {Object} actions  each returns a promise; a rejection's message is shown to the player
- * @param {(name) => Promise} actions.solo
- * @param {(name) => Promise} actions.host
+ * @param {(name, map) => Promise} actions.solo  map is { design, size }
+ * @param {(name, fixedCode, map) => Promise} actions.host
  * @param {(name, code) => Promise} actions.join
- * @param {(name, code) => Promise} actions.hostLocal
+ * @param {(name, code, map) => Promise} actions.hostLocal
  * @param {(name, code) => Promise} actions.joinLocal
  * @param {Object} [o]
  * @param {string} [o.error]  an error to show straight away (from a URL option that failed)
  * @param {string} [o.name]
  */
-export function showMenu(mount, actions, { error = '', name = '', code = '' } = {}) {
+const MAP_KEY = 'returns-dept.map';
+/** The store picked last time, if the browser remembers it. */
+function loadMap() {
+  try {
+    const m = JSON.parse(localStorage.getItem(MAP_KEY) || 'null');
+    if (m && MAP_DESIGNS[m.design] && MAP_SIZES[m.size]) return m;
+  } catch { /* no storage: use the default */ }
+  return null;
+}
+function saveMap(m) {
+  try { localStorage.setItem(MAP_KEY, JSON.stringify(m)); } catch { /* not remembered, no harm */ }
+}
+
+export function showMenu(mount, actions, { error = '', name = '', code = '', map = null } = {}) {
   document.body.classList.remove('in-game');
+
+  // ---- The store: a design and a size --------------------------------------------------------
+  const picked = map || loadMap() || { design: 'warehouse', size: 's' };
+  const designIn = h('select', { id: 'map-design' }, Object.entries(MAP_DESIGNS).map(([k, d]) => h('option', { value: k }, d.name)));
+  const sizeIn = h('select', { id: 'map-size' }, Object.entries(MAP_SIZES).map(([k, z]) => h('option', { value: k },
+    `${z.name} · ${z.w} x ${z.h} · ${z.players ? `best for ${z.players} player${z.players > 1 ? 's' : ''}` : z.note}`)));
+  designIn.value = picked.design;
+  sizeIn.value = picked.size;
+  const mapNote = h('p', { class: 'map-note' });
+  const chosenMap = () => ({ design: designIn.value, size: sizeIn.value });
+  function describeMap() {
+    const m = chosenMap(), z = MAP_SIZES[m.size];
+    mapNote.textContent = `${MAP_DESIGNS[m.design].desc} ${z.players
+      ? `This size suits ${z.players} player${z.players > 1 ? 's' : ''}; each player gets his own shopper entrance.`
+      : 'This is the original small store: tight even for one.'}`;
+    saveMap(m);
+  }
+  designIn.addEventListener('change', describeMap);
+  sizeIn.addEventListener('change', describeMap);
+  describeMap();
 
   const nameIn = h('input', {
     id: 'name', type: 'text', maxlength: '14', autocomplete: 'nickname', spellcheck: 'false',
@@ -41,7 +75,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '' } = 
   const btnJoin = h('button', { type: 'submit', class: 'btn-big btn-red' }, 'Join a game');
   const btnLHost = h('button', { type: 'button', class: 'btn-small' }, 'Host in this tab');
   const btnLJoin = h('button', { type: 'button', class: 'btn-small' }, 'Join from this tab');
-  const all = [btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn];
+  const all = [btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn, designIn, sizeIn];
 
   function playerName() {
     const n = nameIn.value.trim().slice(0, 14);
@@ -66,8 +100,8 @@ export function showMenu(mount, actions, { error = '', name = '', code = '' } = 
   }
 
   btnTrain.addEventListener('click', () => run(() => actions.tutorial(playerName()), 'Starting your training...'));
-  btnSolo.addEventListener('click', () => run(() => actions.solo(playerName()), 'Clocking in...'));
-  btnHost.addEventListener('click', () => run(() => actions.host(playerName()),
+  btnSolo.addEventListener('click', () => run(() => actions.solo(playerName(), chosenMap()), 'Clocking in...'));
+  btnHost.addEventListener('click', () => run(() => actions.host(playerName(), null, chosenMap()),
     'Opening a room on the internet. Please hold, like a real customer...'));
   const joinForm = h('form', { class: 'join-row' }, codeIn, btnJoin);
   joinForm.addEventListener('submit', (e) => {
@@ -81,7 +115,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '' } = 
     run(() => actions.join(playerName(), code), `Knocking on room ${code}. Connecting...`);
   });
   const localCode = () => localIn.value.trim() || 'TEST';
-  btnLHost.addEventListener('click', () => run(() => actions.hostLocal(playerName(), localCode()), 'Opening a test room...'));
+  btnLHost.addEventListener('click', () => run(() => actions.hostLocal(playerName(), localCode(), chosenMap()), 'Opening a test room...'));
   btnLJoin.addEventListener('click', () => run(() => actions.joinLocal(playerName(), localCode()), 'Looking for the other tab...'));
 
   const card = h('div', { class: 'menu-card' },
@@ -90,6 +124,11 @@ export function showMenu(mount, actions, { error = '', name = '', code = '' } = 
       h('h1', { class: 'menu-title' }, 'RETURNS', h('br'), 'DEPARTMENT'),
       h('p', { class: 'menu-pitch' }, 'Build a factory, wall in the returns desk, and stop a horde of refund-hungry shoppers before they bankrupt the store. Co-op, for 1 to 6 disappointments.'),
       h('label', { class: 'field', for: 'name' }, h('span', null, 'Your name (for the disciplinary file)'), nameIn),
+      h('fieldset', { class: 'map-pick' },
+        h('legend', null, 'The store (for Play solo and Host a game)'),
+        h('label', { for: 'map-design' }, h('span', null, 'Design'), designIn),
+        h('label', { for: 'map-size' }, h('span', null, 'Size'), sizeIn),
+        mapNote),
       h('div', { class: 'menu-actions' },
         btnTrain,
         btnSolo,

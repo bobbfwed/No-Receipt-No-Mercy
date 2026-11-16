@@ -1,6 +1,7 @@
 // The game screen: puts the top bar, the canvas, the build bar and the floating panels together,
 // connects them to the session, and runs the drawing loop.
 import { createRenderer } from '../render/renderer.js';
+import { createMinimap } from '../render/minimap.js';
 import { nopeLine } from '../content/lines.js';
 import { h } from './dom.js';
 import { createTopBar, createPlayersPanel } from './hud.js';
@@ -54,15 +55,26 @@ export function startGame(session, {
   });
   const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, sound, playSound });
   const players = createPlayersPanel(session);
-  const bar = createBuildBar(input);
+  const bar = createBuildBar(input, session);
   const deb = createDeb();
   const toasts = createToasts();
   const training = tutorial && session.isHost
     ? createTutorialPanel(session, { onExit, highlight: bar.highlight, playSound })
     : null;
 
+  // A small map of the whole store, for maps too big to see at once. Click it to jump there.
+  const mapCanvas = h('canvas', { class: 'minimap-canvas' });
+  const mapBox = h('div', { class: 'minimap hidden', title: 'The whole store. Click to jump there. WASD moves the view, the wheel zooms, F shows everything, H goes to your entrance.' }, mapCanvas);
+  const minimap = createMinimap(mapCanvas, session, renderer);
+  const jump = (e) => {
+    const t = minimap.tileAt(e.clientX, e.clientY);
+    if (t) renderer.centerOn(t.x + 0.5, t.y + 0.5);
+  };
+  mapBox.addEventListener('pointerdown', (e) => { e.preventDefault(); mapBox.setPointerCapture(e.pointerId); jump(e); });
+  mapBox.addEventListener('pointermove', (e) => { if (e.buttons & 1) jump(e); });
+
   // In training the lesson panel sits where the players list normally is.
-  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el);
+  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox);
   const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, bar.tip);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');
@@ -123,12 +135,15 @@ export function startGame(session, {
     if (replaying) { replaying = false; deb.collapse(); }
   }
 
-  const resize = () => { renderer.resize(); input.calibrate(); };
+  const resize = () => renderer.resize();
   resize();
   new ResizeObserver(resize).observe(stage);
+  // On a map too big for the screen, start by looking at this player's own entrance.
+  input.goHome();
   session.start();
 
   // ---- Drawing loop --------------------------------------------------------------------------------
+  let mapShown = false, mapDrawn = 0;
   function frame(now) {
     requestAnimationFrame(frame);
     const s = session.state;
@@ -141,6 +156,11 @@ export function startGame(session, {
     deb.tick(now);
     toasts.tick(now);
     if (training) training.tick();
+    // The small map only earns its space when the whole store does not fit on screen.
+    const r = renderer.viewRect();
+    const partial = r.x1 - r.x0 < s.w - 0.5 || r.y1 - r.y0 < s.h - 0.5;
+    if (partial !== mapShown) { mapShown = partial; mapBox.classList.toggle('hidden', !partial); }
+    if (partial && now - mapDrawn > 120) { mapDrawn = now; minimap.draw(); }
     if (!ended && (s.phase === 'won' || s.phase === 'lost')) {
       ended = true;
       root.classList.add('ended');

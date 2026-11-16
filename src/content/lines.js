@@ -53,6 +53,35 @@ export const LINES = {
     "Crate stack down. He didn't go around it. Men like that never go around anything.",
     "That's a hole in your wall, {p}. Fill it. A sentence I never enjoy saying to you.",
   ],
+  // A gym bro wrecked something that is not a crate stack. {k} is what it was.
+  smashOther: [
+    "A gym bro just put his fist through your {k}. No refund. He doesn't do refunds, he does 'reps'.",
+    'There goes a {k}. {p}, a man in a vest two sizes too small is dismantling your life\'s work.',
+    "He wrecked the {k}. Rebuild it, {p}. Out of your own pocket. I'd say sorry, but I'm enjoying this.",
+    "Your {k} is now scrap. He called it 'functional training'. I call it Tuesday.",
+  ],
+  upgraded: [
+    '{p} upgraded a {k} to level {n}. Throwing money at a problem. Finally, a strategy he can sustain.',
+    "Level {n} {k}. {p} is compensating for something. We've all seen the staff shower.",
+    "{p} paid for an upgrade. It's bigger and it lasts longer. Don't tell his wife that's available.",
+  ],
+  maxed: [
+    "{p} has a level {n} {k}. That's the limit. Nothing gets bigger than that, however hard he pulls on it.",
+  ],
+  gave: [
+    '{p} just handed {q} ${n}. Paying a man to do your job for you. Management material.',
+    '{p} gave {q} ${n}. I assume this is for services rendered. I do not want details.',
+  ],
+  rebuilt: [
+    '{p} rebuilt {n} things a man in a vest knocked over. Paying twice for the same wall. Just like his wedding.',
+    '{p} put {n} things back up. If only that worked at home.',
+  ],
+  cramped: [
+    'This store was built for {n}. There are now {m} of you in it. Try not to touch. Some of you will enjoy that too much.',
+  ],
+  superArrive: [
+    'A {k} is in the building. Bigger, meaner, and takes a double refund. Like your ex with a lawyer.',
+  ],
   mess: [
     'A teenager has spilled a slushie. It is slowing everyone else down. First useful thing a teenager has ever done.',
     'Mess in the aisle. Leave it. It is working harder than {p}.',
@@ -124,12 +153,25 @@ export const LINES = {
  */
 export const INTRO = {
   clipper: 'New today: Coupon Clippers. Lots of them, fast, and each one easily discouraged. Like your exes.',
-  mom: 'New today: moms with kids. The kid escapes, she sprints after him, and she will not stop for your free samples.',
+  mom: 'New today: moms with kids. The kid escapes and runs straight through your machines; she sprints round the maze after him and will not stop for your free samples.',
   teen: "New today: teenagers. They spill slushies that slow everyone else down. Don't thank them. They hate that.",
   karen: 'New today: Karens. Security near one works at half speed, because she is asking it for the manager.',
   blind: 'New today: a man with a guide dog. Pepper spray makes the dog bolt, so sprinklers speed him UP. Use forklifts.',
   scooter: 'New today: mobility scooters. Nothing slows them. Not wet floors, not free samples, not shame.',
-  gymbro: 'New today: gym bros. They walk straight through crate stacks. Machines and belts still stop them. So does a mirror.',
+  gymbro: 'New today: gym bros. They walk through crate stacks and wreck whatever is next to them: crates always, your machines when the mood takes them. Stop them early. Or use a mirror.',
+};
+
+/** What DEB says the first time the super version of a kind turns up. */
+export const SUPER_INTRO = {
+  hunter: 'New and worse: the Doorbuster. A Bargain Hunter with three times the patience. She camped outside since Tuesday. She has nothing to go home to. You two should talk.',
+  dad: "New and worse: Dad on a Mission. Faster, far more patient, and he does not slip. He has the receipt, the box and a tee time. God help you.",
+  clipper: 'New and worse: the Extreme Couponer. Faster, tougher, and she has a binder. Nobody with a binder has ever been reasoned with.',
+  mom: 'New and worse: the Soccer Mom. Her kid escapes twice as often and she chases him three times as fast. Nothing in this building moves like a woman late for practice.',
+  karen: 'New and worse: Karen Supreme. Four times the patience, and security slows to a crawl twice as far away. She does not want the manager. She wants the owner. And his mother.',
+  teen: 'New and worse: the Teen Influencer. Three times the mess and he is filming it. Smile, {p}, you are content now.',
+  gymbro: "New and worse: the Roid Rager. He wrecks nearly everything he passes. It isn't anger, he says. It's 'pre-workout'.",
+  scooter: 'New and worse: the Turbo Scooter. Still cannot be slowed, now nearly twice as fast. He removed the limiter himself. He removed the brakes by accident.',
+  blind: 'New and worse: a man with TWO guide dogs. They bolt from forklift hits as well, further and faster. You are being outrun by a blind man. Reflect on that.',
 };
 
 /** Customer reviews when a shopper reaches the tills and gets a refund. */
@@ -225,7 +267,7 @@ export const EMPLOYEES_OF_THE_WAVE = [
 
 /** What DEB says to you alone when your command is refused. Keyed by the reason from canPlace. */
 export const NOPE = {
-  cash: ["You can't afford that. Add it to the list, {p}.", 'Insufficient funds. A phrase {p} knows from dating.'],
+  cash: ["You can't afford that. Add it to the list, {p}.", 'Insufficient funds. A phrase {p} knows from dating.', "Not with YOUR money, {p}. Beg a colleague. You're good on your knees, I hear."],
   blocked: [
     "You can't wall the customers out, {p}. Legal checked. Twice.",
     'That would block the way to the tills. Tempting, but illegal.',
@@ -237,9 +279,11 @@ export const NOPE = {
   phase: ['The doors are already open, {p}. Do keep up.'],
   notyet: ["Not yet, {p}. Do the thing I asked first. It's called foreplay."],
   empty: ["There's nothing there, {p}. Like your Friday nights."],
+  noup: ["That can't be upgraded, {p}. Only security can. Some things just stay the size they are. You'd know."],
+  max: ["It's at the top level, {p}. It will not get any bigger. I know you've heard that before."],
 };
 
-/** Fills {p}, {n}, {w} in a line. */
+/** Fills {p}, {n}, {w} and other one-letter placeholders in a line. */
 export function fill(text, vars = {}) {
   return text.replace(/\{(\w)\}/g, (m, key) => (vars[key] !== undefined ? String(vars[key]) : m));
 }
