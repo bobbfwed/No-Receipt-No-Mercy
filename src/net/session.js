@@ -51,8 +51,12 @@
 import { createGame, addPlayer, setPlayerOnline, applyCommand, step, TICK_HZ } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
-/** Steps between advance messages at normal speed: ten a second. */
-const ADV_EVERY = 3;
+/** Steps between advance messages at normal speed: one every step, thirty a second. They are
+ *  tiny, and sending them this often is what lets clients run close behind the host. */
+const ADV_EVERY = 1;
+/** Client: how many steps behind the host to aim for at normal speed (about 100 ms). Enough to
+ *  ride out a message that arrives a little late without the picture stopping. */
+const WANT_BEHIND = 3;
 /** Seconds between routine full copies, the safety net for drift the checksum cannot see. */
 const FULL_EVERY_SECS = 10;
 /** Host: the fewest steps between two copies sent because one client asked. */
@@ -90,7 +94,7 @@ export function checksum(s) {
   mix(s.phase.charCodeAt(0)); mix(s.phase.length);
   mix(s.spawnQ.length); mix(s.messes.length); mix(s.rubble.length);
   mix(s.office ? s.office.pid + 1 : 0);
-  for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); mix(p.gone ?? -1); }
+  for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
   for (const sh of s.shoppers) { mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd); }
   const g = s.grid;
   for (let i = 0; i < g.length; i++) {
@@ -193,7 +197,7 @@ export class HostSession extends Session {
       for (const p of s.players) {
         if (!p.on) continue;
         p.on = false;
-        if (s.phase !== 'lobby') p.gone = s.tick;
+        if (s.phase !== 'lobby') p.gone = 0;
       }
     }
     this.me = addPlayer(s, name);
@@ -479,11 +483,11 @@ export class ClientSession extends Session {
     const dt = this._elapsed(now);
     if (!this.state) return;
     const speed = this.state.speed || 1;
-    // Stay about two advance messages behind the host: enough to ride out a late message
+    // Stay a few steps behind the host (WANT_BEHIND): enough to ride out a late message
     // without stopping. Run a little slower when closer than that and faster when further, so
     // the gap settles there by itself without visible jumps.
     const behind = this._top - this._n;
-    const want = 2 * advEvery(this.state);
+    const want = WANT_BEHIND * speed;
     this._lag += (behind - this._lag) * 0.05;
     const rate = 1 + Math.max(-0.15, Math.min(1, (this._lag - want) / (3 * want)));
     if (behind > FAR_BEHIND_SECS * TICK_HZ * speed) this._ask();

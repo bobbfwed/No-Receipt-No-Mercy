@@ -218,7 +218,7 @@ test('when the host changes speed, clients follow at the new pace with about the
   now = run(host, clients, 2, now, () => { most = Math.max(most, host.state.tick - steve.state.tick); });
   assert.ok(host.state.tick - t0 > 170, 'three times as many ticks');
   const advsAt3 = kinds.filter((t) => t === 'adv').length;
-  assert.ok(advsAt3 <= advsAt1 + 2, `still about ten messages a second (${advsAt1} then ${advsAt3})`);
+  assert.ok(advsAt3 <= advsAt1 + 5 && advsAt1 >= 50 && advsAt1 <= 62, `still about thirty messages a second (${advsAt1} then ${advsAt3} in two seconds)`);
   assert.equal(steve.state.speed, 3);
   assert.ok(most <= 40, `the client keeps up (at most ${most} ticks behind, about a third of a second)`);
   host.send({ c: 'speed', n: 1 });
@@ -461,7 +461,7 @@ test('on a take-over, a player who had already dropped out keeps his original gr
   assert.ok(gone > 0);
   const next = new HostSession({ name: 'Steve', state: JSON.parse(JSON.stringify(steve.state)), takeOver: true });
   assert.equal(next.state.players[2].gone, gone, 'his clock was not restarted');
-  assert.equal(next.state.players[0].gone, next.state.tick, 'the old host\'s starts now');
+  assert.equal(next.state.players[0].gone, 0, 'the old host\'s starts now');
   assert.equal(next.state.players[1].gone, undefined, 'and the new host is here');
 });
 
