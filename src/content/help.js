@@ -5,28 +5,28 @@
 /** Per building: `does` = what it is for, `use` = how to place it so it works. */
 export const HOW = {
   belt: {
-    does: 'Carries goods one way, in the direction of its arrows. Machines only hand goods to a belt and only take them from one, and goods sell for more the further they ride: a long line pays up to half as much again.',
+    does: 'Carries goods one way, in the direction of its arrows. Each machine only goes on its own marked floor, and the marked areas are apart, so belts are how goods get from one machine to the next.',
     use: 'Drag to lay a line: the belts follow your drag. Goods wait on the belt if the next tile cannot take them. Point at a belt and press R to turn it.',
     maze: 'Blocks shoppers, except dads, who step over it.',
   },
   unpacker: {
     does: 'The start of every production line. Makes a Mystery Box ($2) every 2.5 seconds, for free.',
-    use: 'It pushes boxes out of the side with the arrow, and only onto a belt. Put a belt on that side. Press R before placing to choose the side.',
+    use: 'It only goes on LOADING BAY floor (blue). It pushes boxes out of the side with the arrow. Put a belt on that side. Press R before placing to choose the side.',
     maze: 'Blocks all shoppers.',
   },
   press: {
-    does: 'Turns a Mystery Box ($2) into a Gadget ($6, or up to $9 after a long ride: $1 more for every 5 belts).',
-    use: 'Run a belt of boxes into its back or either side. The Gadget comes out of the side with the arrow, and only onto a belt. It is expensive: it takes about 55 Gadgets to pay for itself.',
+    does: 'Turns a Mystery Box ($2) into a Gadget ($7).',
+    use: 'It only goes on PRESS SHOP floor (orange). Run a belt of boxes into its back or either side. The Gadget comes out of the side with the arrow, so put a belt there. It is expensive: it takes 44 Gadgets to pay for itself.',
     maze: 'Blocks all shoppers.',
   },
   packer: {
-    does: 'Turns a Gadget ($6) into a Gift Set ($13, or up to $19 after a long ride: $1 more for every 3 belts).',
-    use: 'It only accepts Gadgets, so it goes after a Press. Feed it by belt from the back or either side; the Gift Set comes out of the side with the arrow, onto a belt.',
+    does: 'Turns a Gadget ($7) into a Gift Set ($16).',
+    use: 'It only goes on GIFT WRAP floor (pink). It only accepts Gadgets, so it comes after a Press. Feed it from the back or either side; the Gift Set comes out of the side with the arrow.',
     maze: 'Blocks all shoppers.',
   },
   chute: {
     does: 'The end of every production line. Anything pushed into it is sold on the spot and the cash is split evenly between the players.',
-    use: 'Point the last belt of a line at it. It accepts goods from belts on all four sides, and from nothing else. Nothing earns money until it reaches a chute.',
+    use: 'It only goes on SHIPPING floor (green). Point the last belt of a line at it. It accepts goods from all four sides. Nothing earns money until it reaches a chute.',
     maze: 'Blocks all shoppers.',
   },
   crate: {

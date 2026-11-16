@@ -1,6 +1,7 @@
 // Plays the whole training shift automatically and checks that every step can be completed and
 // that each lesson shows what it claims to show. Run with: node --test
 import test from 'node:test';
+import { nopeLine } from '../src/content/lines.js';
 import assert from 'node:assert/strict';
 import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
@@ -9,7 +10,7 @@ import { HOW } from '../src/content/help.js';
 import { createGame, applyCommand, step, queueTrainingWave, BUILD, TUNE, TICK_HZ } from '../src/sim/index.js';
 
 function trainingSession(seed = 9) {
-  return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true }) });
+  return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
 }
 
 test('training mode: no timer, no losing, waves only when lined up', () => {
@@ -114,4 +115,23 @@ test('every building has a plain explanation', () => {
     const inText = STEPS.some((s) => s.text.join(' ').includes(BUILD[k].name.split(' ')[0]));
     assert.ok(taught.has(k) || inText, `the tutorial covers ${k}`);
   }
+});
+
+test('the training floor is marked, and every machine the lessons ask for is on its own patch', () => {
+  const session = trainingSession();
+  const s = session.state;
+  assert.ok(s.zones.length > 0, 'the training map has marked floor');
+  const tut = createTutorial(session);
+  tut.autoplay();
+  let machines = 0;
+  for (let i = 0; i < s.grid.length; i++) {
+    const b = s.grid[i];
+    if (!b || !BUILD[b.k].zone) continue;
+    machines++;
+    assert.equal(s.zones[i], BUILD[b.k].zone, `the ${b.k} is on its own floor`);
+  }
+  assert.ok(machines >= 4, 'unpacker, press, packer and chute were all built');
+  // Trying a machine anywhere else is refused with a reason DEB has a line for.
+  assert.equal(session.send({ c: 'place', k: 'press', x: 3, y: 3, d: 0 }).why, 'zone');
+  assert.ok(nopeLine('zone', 'Dave').length > 10);
 });

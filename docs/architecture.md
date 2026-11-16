@@ -34,6 +34,8 @@ Dependencies only point downward. `src/sim` imports nothing from the other folde
 
 Maps: `src/sim/maps.js` builds the floor plan from a design and a size (`createGame({ map: { design, size } })`; left out, it is the original 30 x 16 warehouse with one entrance, which the tutorial and most tests use). The plan lives in the state: `state.w`, `state.h`, `state.tiles` (one string; the characters are explained in `maps.js`), `state.doors` (the entrances in the order they open) and `state.open` (how many are open: one per player). Entrances that are still shut exist from the start and count as floor for path-finding, so the maze can never wall one in. Nothing may assume a fixed map size.
 
+Marked floor: `state.zones` is a string like `state.tiles`, one character per tile: a key of `ZONES` (`u` Loading Bay, `p` Press Shop, `k` Gift Wrap, `c` Shipping) or a space. A building whose definition has a `zone` may only be placed on that kind of floor (`canPlace` returns `'zone'`). `makeZones()` in `maps.js` lays the patches out so that different kinds never touch, which is what makes belts necessary. An empty string means no marked floor: the bare default map used by most tests. The tutorial turns it on with `createGame({ training: true, zones: true })`.
+
 Money: `state.players[i].cash`. There is no shared pot. `earn()` and `lose()` in `state.js` split income and refunds evenly between the connected players; `teamCash(state)` adds everyone's up for display.
 
 Upgrades: `src/sim/upgrades.js`. A building's level is `b.lv` (absent means 1); `statsOf(b)` gives its numbers at its level and is the only place the simulation or the interface should read a tower's damage or range from.

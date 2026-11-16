@@ -28,34 +28,43 @@ const S = 1, N = 3;
 function plan(s) {
   const { w, h } = s, mid = h >> 1;
   const list = [], machines = [];
-  const cols = [];
-  for (let x = 5; x <= w - 6; x += 7) cols.push(x);
-  cols.forEach((x, k) => {
-    // A production line the full height of the floor, with one gap: bottom, top, bottom...
-    const down = k % 2 === 0;
-    const ys = [];
-    for (let y = 1; y <= h - 3; y++) ys.push(down ? y : h - 1 - y);
-    const d = down ? S : N, last = ys.length - 1;
-    const press = Math.round(last / 3), packer = Math.round((2 * last) / 3);
+  // One production line per section of marked floor, down the third column of its patches.
+  let k = 0;
+  for (let x0 = 9; x0 + 3 <= w - 4; x0 += 10) {
+    const x = x0 + 2;
+    const rowsOf = (ch) => { const out = []; for (let y = 1; y < h - 1; y++) if (s.zones[y * w + x] === ch) out.push(y); return out; };
+    const u = rowsOf('u'), p = rowsOf('p'), pk = rowsOf('k'), c = rowsOf('c');
+    if (!u.length || !p.length || !pk.length || !c.length) continue; // a wall cut this section up
+    // Loading Bay above Shipping: the line runs down and its gap is at the bottom; otherwise up.
+    const down = u[0] < c[0];
+    const d = down ? S : N, step = down ? 1 : -1;
+    const from = down ? u[0] : u[u.length - 1], to = down ? c[c.length - 1] : c[0];
+    const press = down ? p[0] : p[p.length - 1], packer = down ? pk[0] : pk[pk.length - 1];
     // The line is laid with belts all the way first, so it earns at once. The Press and the
-    // Packer are expensive, so they are swapped in for a belt later, after the line's security.
+    // Packer are expensive, so they are swapped in for a belt later.
     const swaps = [];
-    ys.forEach((y, j) => {
-      list.push([j === 0 ? 'unpacker' : j === last ? 'chute' : 'belt', x, y, d]);
-      if (j === press) swaps.push(['press', x, y, d]);
-      if (j === packer) swaps.push(['packer', x, y, d]);
-    });
-    // Where in the list this line's belts are all laid: its machines can be bought from then on.
+    for (let y = from; y !== to + step; y += step) {
+      list.push([y === from ? 'unpacker' : y === to ? 'chute' : 'belt', x, y, d]);
+      if (y === press) swaps.push(['press', x, y, d]);
+      if (y === packer && k > 0) swaps.push(['packer', x, y, d]);
+    }
+    // Crates carry the wall on to the far side, leaving one gap; and close anything behind
+    // the unpacker.
+    const gy = down ? h - 2 : 1;
+    for (let y = to + step; y !== gy; y += step) list.push(['crate', x, y, 0]);
+    for (let y = from - step; y >= 1 && y <= h - 2; y -= step) list.push(['crate', x, y, 0]);
+    // Where in the list this line is all laid: its machines can be bought from then on.
     const laid = list.length;
     // Security at the gap.
-    const gy = down ? h - 2 : 1, inY = down ? gy - 1 : gy + 1;
+    const inY = down ? gy - 1 : gy + 1;
     list.push(['sprinkler', x - 1, inY, 0], ['sprinkler', x + 1, inY, 0], ['wetfloor', x, gy, 0]);
     // Dads step over the belts and walk straight across from the entrance: guard that lane too.
     list.push(['wetfloor', x - 1, mid - 1, 0], ['wetfloor', x - 1, mid, 0],
       ['sprinkler', x - 1, mid - 2, 0], ['sprinkler', x - 1, mid + 1, 0], ['forklift', x + 2, mid - 2, 0]);
     if (k > 0) list.push(['samples', x - 2, inY, 0], ['forklift', x + 2, mid + 1, 0]);
     for (const m of swaps) machines.push([m[0], m[1], m[2], m[3], laid]);
-  });
+    k++;
+  }
   // Presses before Packers: a Packer does nothing without a Press upstream.
   machines.sort((a, b) => (a[0] === 'press' ? 0 : 1) - (b[0] === 'press' ? 0 : 1) || a[4] - b[4]);
   return { list, machines };

@@ -97,7 +97,7 @@ const actions = {
   /** The training shift: a guided game that cannot be lost. `step` jumps ahead (for screenshots). */
   async tutorial(name, step = 0) {
     const session = new HostSession({
-      name, director: createDirector(), state: createGame({ seed: opts.seed || 7, training: true }),
+      name, director: createDirector(), state: createGame({ seed: opts.seed || 7, training: true, zones: true }),
     });
     startGame(session, { mount: app, sound, tutorial: true, tutorialStep: step, onExit: leaveTo });
   },
