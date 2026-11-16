@@ -1,99 +1,149 @@
-// Plays whole games with scripted players and prints how each wave went, to judge difficulty
-// without a human. Usage: node tools/balance.mjs [seed]
+// Plays whole solo games with scripted players and prints how each went, to judge difficulty
+// without a human.
+// Usage: node tools/balance.mjs [seed] [size] [design] [-v]
+//   size    a key of MAP_SIZES (default: s, the size recommended for one player), or "all"
+//   design  a key of MAP_DESIGNS (default: warehouse; the bots' layout suits an open floor)
+//   -v      also print every wave
 //
 // Bots:
 //   nothing   builds nothing (the game should be lost quickly)
-//   demo      gets the full demo layout for free at the start and never builds again
-//   honest    starts with the normal cash and buys a fixed shopping list as money allows
+//   honest    builds a fixed plan as money allows (production lines that wall the floor into a
+//             zigzag, with security at every gap and on the dads' short cut), patches what gym
+//             bros wreck, and then stops spending
+//   keen      the same, then keeps buying forklifts on a loose grid, and when the floor is full
+//             spends everything on upgrades, cheapest first
 import {
-  createGame, addPlayer, applyCommand, step, applyDemoLayout, canPlace, BUILD, TUNE, TICK_HZ,
+  createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, BUILD, TICK_HZ, MAP_SIZES,
 } from '../src/sim/index.js';
 
 const S = 1, N = 3;
 
-/** The honest bot's shopping list, in order. It buys the next entry as soon as it can afford it. */
-const SHOPPING = [
-  // A first production line that is also a wall down column 6.
-  ['unpacker', 6, 1, S], ['belt', 6, 2, S], ['belt', 6, 3, S], ['belt', 6, 4, S], ['belt', 6, 5, S],
-  ['press', 6, 6, S], ['belt', 6, 7, S], ['belt', 6, 8, S], ['belt', 6, 9, S], ['belt', 6, 10, S], ['chute', 6, 11, 0],
-  // Guard the gap under it.
-  ['sprinkler', 7, 11, 0], ['sprinkler', 5, 13, 0], ['wetfloor', 6, 13, 0], ['sprinkler', 7, 14, 0],
-  // Dads step over the belts and walk straight down the middle: guard that lane too.
-  ['wetfloor', 4, 7, 0], ['wetfloor', 4, 8, 0], ['sprinkler', 5, 6, 0], ['sprinkler', 5, 9, 0],
-  ['wetfloor', 8, 7, 0], ['wetfloor', 8, 8, 0], ['forklift', 9, 6, 0],
-  // Second line, a wall up column 13, with a packer.
-  ['unpacker', 13, 14, N], ['belt', 13, 13, N], ['belt', 13, 12, N], ['belt', 13, 11, N], ['belt', 13, 10, N],
-  ['press', 13, 9, N], ['belt', 13, 8, N], ['belt', 13, 7, N], ['packer', 13, 6, N], ['belt', 13, 5, N], ['chute', 13, 4, 0],
-  ['sprinkler', 12, 3, 0], ['sprinkler', 14, 3, 0], ['wetfloor', 13, 2, 0], ['forklift', 9, 8, 0], ['samples', 9, 13, 0],
-  // Third line and wall in column 21.
-  ['unpacker', 21, 1, S], ['belt', 21, 2, S], ['belt', 21, 3, S], ['belt', 21, 4, S], ['press', 21, 5, S],
-  ['belt', 21, 6, S], ['packer', 21, 7, S], ['belt', 21, 8, S], ['belt', 21, 9, S], ['chute', 21, 10, 0],
-  ['crate', 21, 11, 0], ['crate', 21, 12, 0],
-  ['sprinkler', 20, 13, 0], ['sprinkler', 22, 13, 0], ['wetfloor', 21, 13, 0], ['forklift', 17, 7, 0],
-  // Then keep adding security along the route.
-  ['forklift', 25, 8, 0], ['sprinkler', 12, 1, 0], ['sprinkler', 14, 1, 0], ['samples', 16, 3, 0],
-  ['forklift', 10, 12, 0], ['sprinkler', 20, 14, 0], ['sprinkler', 22, 14, 0], ['forklift', 18, 12, 0],
-  ['samples', 24, 13, 0], ['forklift', 24, 10, 0], ['forklift', 16, 5, 0], ['sprinkler', 7, 13, 0],
-  ['forklift', 3, 5, 0], ['forklift', 3, 10, 0], ['sprinkler', 27, 6, 0], ['sprinkler', 27, 9, 0],
-  ['forklift', 26, 5, 0], ['forklift', 26, 11, 0], ['forklift', 10, 5, 0], ['forklift', 18, 9, 0],
-  ['forklift', 15, 12, 0], ['forklift', 23, 5, 0], ['forklift', 11, 9, 0], ['forklift', 8, 12, 0],
-];
+/** The honest bot's plan for a map, in buying order: [kind, x, y, facing]. */
+function plan(s) {
+  const { w, h } = s, mid = h >> 1;
+  const list = [];
+  const cols = [];
+  for (let x = 5; x <= w - 6; x += 7) cols.push(x);
+  cols.forEach((x, k) => {
+    // A production line the full height of the floor, with one gap: bottom, top, bottom...
+    const down = k % 2 === 0;
+    const ys = [];
+    for (let y = 1; y <= h - 3; y++) ys.push(down ? y : h - 1 - y);
+    const d = down ? S : N, last = ys.length - 1;
+    const press = Math.round(last / 3), packer = Math.round((2 * last) / 3);
+    ys.forEach((y, j) => {
+      const kind = j === 0 ? 'unpacker' : j === last ? 'chute' : j === press ? 'press' : j === packer && k > 0 ? 'packer' : 'belt';
+      list.push([kind, x, y, d]);
+    });
+    // Security at the gap.
+    const gy = down ? h - 2 : 1, inY = down ? gy - 1 : gy + 1;
+    list.push(['sprinkler', x - 1, inY, 0], ['sprinkler', x + 1, inY, 0], ['wetfloor', x, gy, 0]);
+    // Dads step over the belts and walk straight across from the entrance: guard that lane too.
+    list.push(['wetfloor', x - 1, mid - 1, 0], ['wetfloor', x - 1, mid, 0],
+      ['sprinkler', x - 1, mid - 2, 0], ['sprinkler', x - 1, mid + 1, 0], ['forklift', x + 2, mid - 2, 0]);
+    if (k > 0) list.push(['samples', x - 2, inY, 0], ['forklift', x + 2, mid + 1, 0]);
+  });
+  return list;
+}
 
-function play(bot, seed) {
-  const s = createGame({ seed });
+/** The keen bot's extra shopping: forklifts on a loose grid over the whole floor. */
+function extras(s) {
+  const out = [];
+  for (let y = 2; y <= s.h - 3; y += 3) for (let x = 2; x <= s.w - 3; x += 3) out.push(['forklift', x, y, 0]);
+  return out;
+}
+
+function play(bot, seed, map) {
+  const s = createGame({ seed, map });
   addPlayer(s, 'Bot');
-  if (bot === 'demo') applyDemoLayout(s, 0);
-  const buyer = bot === 'honest' || bot === 'keen';
-  let next = 0;
+  const me = s.players[0];
+  const buyer = bot !== 'nothing';
+  const list = buyer ? plan(s).concat(bot === 'keen' ? extras(s) : []) : [];
+  let next = 0; // how far down the list it has got
+  let bought = 0, upgrades = 0, rebuilt = 0, wrecked = 0;
   const rows = [];
   let byKind = {};
-  const limit = 60 * 60 * TICK_HZ; // an hour of game time
-  while (s.phase !== 'won' && s.phase !== 'lost' && s.tick < limit) {
-    if (bot === 'honest' || bot === 'keen') {
-      const list = bot === 'keen' ? SHOPPING.concat(EXTRA) : SHOPPING;
-      while (next < list.length) {
-        const [k, x, y, d] = list[next];
-        if (s.cash < BUILD[k].cost) break;
-        const why = canPlace(s, k, x, y);
-        if (why === 'shopper') break; // try again next tick
-        if (!why) applyCommand(s, 0, { c: 'place', k, x, y, d });
-        next++;
-      }
+  const limit = 90 * 60 * TICK_HZ; // an hour and a half of game time
+
+  function shop() {
+    // Patch holes first: put back whatever gym bros have wrecked.
+    if (s.rubble.length) {
+      const r = applyCommand(s, 0, { c: 'rebuild' });
+      if (r.ok) rebuilt += r.n;
     }
-    if (s.phase === 'build' && (s.phaseT === -1 || (!buyer && s.phaseT > 1))) {
-      // The honest bot uses the whole build pause, like a person would; the others skip it.
-      if (!buyer || s.phaseT === -1) {
-        if (buyer && next === 0) { step(s); continue; }
-        applyCommand(s, 0, { c: 'start' });
-        byKind = {};
+    while (next < list.length) {
+      const [k, x, y, d] = list[next];
+      if (me.cash < BUILD[k].cost) return;
+      const why = canPlace(s, k, x, y, 0);
+      if (why === 'shopper') return; // try again shortly
+      if (!why && applyCommand(s, 0, { c: 'place', k, x, y, d }).ok) bought++;
+      next++;
+    }
+    if (bot !== 'keen') return;
+    // Nothing left to build: upgrade, cheapest first. Sprinklers sit at the gaps everyone must
+    // pass, so it will pay up to three times as much for one of those as for a forklift.
+    for (;;) {
+      let best = -1, cost = Infinity, score = Infinity;
+      for (let i = 0; i < s.grid.length; i++) {
+        const b = s.grid[i];
+        if (!b || !BUILD[b.k].tower) continue;
+        const c = upgradeCost(b);
+        const sc = b.k === 'sprinkler' ? c / 3 : c;
+        if (c && sc < score) { score = sc; cost = c; best = i; }
       }
+      if (best < 0 || me.cash < cost) return;
+      const x = best % s.w, y = (best / s.w) | 0;
+      if (canUpgrade(s, x, y, 0) !== null || !applyCommand(s, 0, { c: 'upgrade', x, y }).ok) return;
+      upgrades++;
+    }
+  }
+
+  while (s.phase !== 'won' && s.phase !== 'lost' && s.tick < limit) {
+    if (buyer && s.tick % 15 === 0) shop();
+    if (s.phase === 'build' && s.phaseT === -1) {
+      // The buying bots use the whole build pause, like a person would; "nothing" just starts.
+      if (buyer && bought === 0) { shop(); if (bought === 0) { step(s); continue; } }
+      if (!buyer) applyCommand(s, 0, { c: 'start' });
     }
     for (const e of step(s)) {
       if (e.e === 'waveStart') byKind = {};
-      if (e.e === 'escape') byKind[e.k] = (byKind[e.k] || 0) + 1;
+      if (e.e === 'escape') { const k = (e.sup ? 'SUPER ' : '') + e.k; byKind[k] = (byKind[k] || 0) + 1; }
+      if (e.e === 'smash') wrecked++;
       if (e.e === 'waveEnd' || e.e === 'lost') {
         rows.push({
-          wave: s.wave, escaped: s.ws.escaped, stopped: s.ws.stopped, stolen: s.ws.stolen,
-          earned: s.ws.earned, cash: Math.round(s.cash), refunds: s.refunds, built: next,
+          wave: s.wave, escaped: s.ws.escaped, stopped: s.ws.stopped, wrecked: s.ws.wrecked,
+          earned: s.ws.earned, cash: Math.round(me.cash), refunds: s.refunds, built: bought, up: upgrades,
           who: Object.entries(byKind).map(([k, n]) => k + ' ' + n).join(', '),
         });
       }
     }
   }
-  return { bot, result: s.phase, wave: s.wave, refunds: s.refunds, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows };
+  return {
+    bot, result: s.phase, wave: s.wave, refunds: s.refunds, limit: s.refundLimit, cash: Math.round(me.cash),
+    bought, of: list.length, upgrades, rebuilt, wrecked, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
+  };
 }
 
-const seed = Number(process.argv[2]) || 11;
-// The 'keen' bot follows the same list, then keeps buying forklifts on a loose grid for the rest of the game.
-const EXTRA = [];
-for (let y = 2; y <= 13; y += 3) for (let x = 2; x <= 27; x += 3) EXTRA.push(['forklift', x, y, 0]);
+const args = process.argv.slice(2);
+const verbose = args.includes('-v');
+const [seedArg, sizeArg, designArg] = args.filter((a) => a !== '-v');
+const seed = Number(seedArg) || 11;
+const sizes = sizeArg === 'all' ? Object.keys(MAP_SIZES) : [sizeArg || 's'];
+const design = designArg || 'warehouse';
 
-for (const bot of ['nothing', 'demo', 'honest', 'keen']) {
-  const r = play(bot, seed);
-  console.log(`\n== ${bot}: ${r.result.toUpperCase()} at wave ${r.wave}, ${r.refunds}/${TUNE.refundLimit} refunds, ${r.minutes} min of game time`);
-  console.log('wave  escaped  stopped  stolen  earned   cash  refunds  bought  who got through');
-  for (const w of r.rows) {
-    console.log([w.wave, w.escaped, w.stopped, w.stolen, w.earned, w.cash, w.refunds, w.built]
-      .map((v, i) => String(v).padStart([4, 8, 8, 7, 7, 7, 8, 7][i])).join(' ') + '  ' + w.who);
+for (const size of sizes) {
+  const z = MAP_SIZES[size];
+  console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player`);
+  for (const bot of ['nothing', 'honest', 'keen']) {
+    const r = play(bot, seed, { design, size });
+    console.log(`== ${bot.padEnd(7)} ${r.result.toUpperCase().padEnd(5)} wave ${String(r.wave).padStart(2)}, `
+      + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
+      + `${r.upgrades} upgrades, ${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.minutes} min`);
+    if (!verbose) continue;
+    console.log('wave  escaped  stopped  wrecked  earned    cash  refunds   built  upgr  who got through');
+    for (const w of r.rows) {
+      console.log([w.wave, w.escaped, w.stopped, w.wrecked, w.earned, w.cash, w.refunds, w.built, w.up]
+        .map((v, i) => String(v).padStart([4, 8, 8, 8, 7, 7, 8, 7, 5][i])).join(' ') + '  ' + w.who);
+    }
   }
 }

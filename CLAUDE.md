@@ -4,7 +4,10 @@
 A browser game the owner and his friends play together, each from his own house.
 - **No permanent server.** One player acts as a temporary host for the session; the others join him from their browsers.
 - **Players:** must work well for 1 to 6. Most sessions will be 1 to 3, so balance for that first.
-- **The game:** Returns Department, a tower defense with shared cash where players run a factory (belts and machines that make goods) while security stops waves of shoppers reaching the tills. The factory is the maze the shoppers walk through.
+- **The game:** Returns Department, a tower defense where players run a factory (belts and machines that make goods) while security stops waves of shoppers reaching the tills. The factory is the maze the shoppers walk through.
+- **Money:** each player has his own cash and pays for what he builds. Everything the store earns or loses is split evenly between the connected players.
+- **Maps:** the store comes in several designs and sizes (`src/sim/maps.js`), with a recommended size per player count. Each player gets his own shopper entrance. Players move the view with WASD.
+- **Late game:** security can be upgraded (each level costs more than the last) and every shopper kind has a tougher "super" version, so there is always something to spend on and something to fear.
 - **Roles:** each area (factory, security) must be deep enough that a player has to learn its layout and becomes the "expert" for it. A solo player switches back and forth between areas; a group splits them up.
 - **Dads:** a shopper type the owner asked for. Men who just want to get through the line: single file, fast, ignore distractions, step over conveyor belts. Keep them prominent.
 
@@ -31,7 +34,7 @@ Building the first playable version. `PLAN.md` has the plan, the decisions made 
 - Test: `node --test`
 - Run locally: `node tools/serve.mjs` then open `http://localhost:5173/` (modules do not load from a double-clicked file).
 - Screenshot a page for UI checks: `tools/shot.ps1` (usage is in the file). Useful URLs: `/?demo=1&ff=600` (ready-made layout, mid-wave), `/?solo=1`.
-- Difficulty check: `node tools/balance.mjs`
+- Difficulty check: `node tools/balance.mjs` (options are in the file)
 - Lint/format: none.
 
 ## Git

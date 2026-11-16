@@ -83,7 +83,7 @@ test('a client stops predicting when the host goes quiet', () => {
   host.update(0); client.update(0);
   const tick = client.state.tick;
   for (let i = 1; i <= 300; i++) client.update(i * TICK_MS); // ten seconds with no word from the host
-  assert.ok(client.state.tick - tick <= 20);
+  assert.ok(client.state.tick - tick <= 70, 'it runs on a little (over two seconds) and then waits');
 });
 
 test('the director announces to everyone and the report lists every player', () => {
@@ -167,4 +167,27 @@ test('every line bank is non-empty and covers every shopper and refusal reason',
   for (const why of ['cash', 'blocked', 'occupied', 'shopper', 'bounds', 'over']) assert.ok(NOPE[why]?.length, why);
   assert.equal(nopeLine('cash', 'Kev', () => 0), "You can't afford that. Add it to the list, Kev.");
   assert.ok(nopeLine('something-new', 'Kev').length > 0);
+});
+
+test('on a chosen map, a joining player gets his own entrance and money, and upgrades cross the wire', () => {
+  const host = new HostSession({ name: 'Dave', seed: 9, map: { design: 'showroom', size: 'm' } });
+  assert.equal(host.state.w, 44);
+  assert.equal(host.state.open, 1);
+  const [a, b] = memoryPair();
+  host.accept(a);
+  const client = new ClientSession(b, 'Steve');
+  assert.equal(host.state.open, 2, 'a second entrance opened for Steve');
+  assert.equal(client.state.w, 44);
+  assert.equal(client.state.tiles, host.state.tiles);
+  assert.equal(client.state.players[1].cash, TUNE.startCash);
+
+  // Steve builds and upgrades a sprinkler with his own money; Dave's is untouched.
+  client.send({ c: 'place', k: 'sprinkler', x: 4, y: 4 });
+  client.send({ c: 'upgrade', x: 4, y: 4 });
+  for (let n = 0; n < 12; n++) { host.update(n * TICK_MS); client.update(n * TICK_MS); }
+  const i = 4 * host.state.w + 4;
+  assert.equal(host.state.grid[i].lv, 2);
+  assert.equal(client.state.grid[i].lv, 2);
+  assert.equal(client.state.players[0].cash, TUNE.startCash);
+  assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.sprinkler.cost * 2);
 });

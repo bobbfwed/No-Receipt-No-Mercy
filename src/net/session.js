@@ -31,10 +31,21 @@
 import { createGame, addPlayer, setPlayerOnline, applyCommand, step, TICK_HZ } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
-/** Ticks between routine state updates sent to clients (5 a second). */
+/** Ticks between routine state updates sent to clients (5 a second at normal speed). */
 const SNAP_EVERY = 6;
 /** A client stops predicting this many ticks after its last update, in case the host has stalled. */
-const MAX_AHEAD = 20;
+const MAX_AHEAD = 70;
+
+/**
+ * How many ticks to leave between routine updates right now. The whole state is sent each time,
+ * and on a big map with a big crowd that is a lot of data for the host's connection, so updates
+ * thin out as the crowd grows (down to about two a second). Clients fill the gaps by simulating.
+ * At 2x and 3x speed ticks pass faster, so the count scales to keep the same real-time rate.
+ */
+function snapEvery(state) {
+  const crowd = Math.min(12, ((state.shoppers.length / 100) | 0) * 3);
+  return (SNAP_EVERY + crowd) * (state.speed || 1);
+}
 
 class Emitter {
   constructor() { this._handlers = {}; }
@@ -89,13 +100,14 @@ export class HostSession extends Session {
    * @param {Object} o
    * @param {string} o.name      the host player's name
    * @param {number} [o.seed]
+   * @param {{design: string, size: string}} [o.map] the floor plan; left out, the original small warehouse
    * @param {Object} [o.director] turns simulation events into jokes; see src/content/director.js
    * @param {Object} [o.state]   continue an existing game instead of starting a new one
    */
-  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null }) {
+  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null }) {
     super();
     this.isHost = true;
-    this.state = state || createGame({ seed });
+    this.state = state || createGame({ seed, map });
     this.me = addPlayer(this.state, name);
     this.director = director;
     /** @type {Map<Object, number>} connection -> player id */
@@ -143,7 +155,7 @@ export class HostSession extends Session {
     if (this.director && this.state.tick % TICK_HZ === 0) {
       for (const msg of this.director.idle(this.state)) this._announce(msg);
     }
-    if (++this._sinceSnap >= SNAP_EVERY) this._dirty = true;
+    if (++this._sinceSnap >= snapEvery(this.state)) this._dirty = true;
   }
 
   _onMessage(conn, m) {

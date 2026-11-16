@@ -18,6 +18,7 @@
     http://localhost:5173/tools/two-player.html
   Add ?autostart=1 to have the host open the doors by itself, and ?ff=600 to skip ahead.
   Add ?online=1 to link them over the internet instead (needs the PeerJS broker to be reachable).
+  &map=showroom&size=m picks the store (see MAP_DESIGNS and MAP_SIZES in src/sim/maps.js).
 -->
 <div class="row">
   <div class="col"><p>Host (Dave)</p><iframe id="host" title="Host"></iframe></div>
@@ -26,7 +27,7 @@
 <script>
   const q = new URLSearchParams(location.search);
   const code = 'T' + Math.random().toString(36).slice(2, 6).toUpperCase();
-  const extra = ['autostart', 'ff', 'seed'].filter((k) => q.has(k)).map((k) => `&${k}=${encodeURIComponent(q.get(k))}`).join('');
+  const extra = ['autostart', 'ff', 'seed', 'map', 'size'].filter((k) => q.has(k)).map((k) => `&${k}=${encodeURIComponent(q.get(k))}`).join('');
   // ?online=1 links the two through the internet broker instead, exactly as two houses would.
   const how = q.has('online') ? 'online' : 'local';
   const room = how === 'online' ? ('Q' + code).slice(0, 5).replace(/[^A-Z]/g, 'X') : code;

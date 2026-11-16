@@ -434,6 +434,62 @@ test('a super gym bro wrecks far more than a normal one', () => {
   assert.ok(big >= normal * 2 && big >= 18, `super wrecked ${big}, normal ${normal}`);
 });
 
+test('an upgraded tower loses a level instead of being wrecked', (t) => {
+  tune(t, { smashOther: 1 });
+  const s = stage(3);
+  for (let x = 3; x <= 26; x++) { place(s, 'sprinkler', x, 6); place(s, 'sprinkler', x, 8); }
+  for (let x = 3; x <= 26; x++) for (const y of [6, 8]) for (let n = 0; n < 2; n++) applyCommand(s, 0, { c: 'upgrade', x, y });
+  // Shoppers in training keep their starting patience, so give this one enough to get through.
+  send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
+  step(s);
+  s.shoppers[0].hp = s.shoppers[0].mhp = 1e9;
+  const ev = [];
+  for (let i = 0; i < 20 * TICK_HZ; i++) ev.push(...step(s).filter((e) => e.e === 'smash'));
+  assert.ok(ev.length >= 5);
+  assert.ok(ev.every((e) => e.down === 1), 'every hit only knocked a level off');
+  let lower = 0;
+  for (let x = 3; x <= 26; x++) for (const y of [6, 8]) {
+    const b = s.grid[at(x, y)];
+    assert.ok(b, 'nothing was destroyed');
+    if (levelOf(b) < 3) lower++;
+  }
+  assert.ok(lower >= 3);
+  assert.equal(s.rubble.length, 0);
+});
+
+test('what a gym bro wrecks can be rebuilt in one go by its owner', () => {
+  const s = stage(2);
+  addPlayer(s, 'Steve');
+  s.players[1].cash = 1000;
+  for (let x = 3; x <= 14; x++) for (const y of [6, 8]) place(s, 'crate', x, y, 0, x <= 8 ? 0 : 1);
+  send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
+  play(s, 120);
+  const mine = s.rubble.filter((r) => r[3] === 0).length, his = s.rubble.filter((r) => r[3] === 1).length;
+  assert.ok(mine >= 2 && his >= 2, `rubble: ${mine} of Dave's, ${his} of Steve's`);
+
+  // Building on a wrecked tile by hand clears that bit of rubble.
+  const [tile] = s.rubble.find((r) => r[3] === 0);
+  assert.ok(place(s, 'crate', tile % 30, (tile / 30) | 0).ok);
+  assert.equal(s.rubble.filter((r) => r[3] === 0).length, mine - 1);
+
+  // Rebuilding puts back only your own, and you pay for it.
+  const cash = s.players[0].cash;
+  const r = applyCommand(s, 0, { c: 'rebuild' });
+  assert.ok(r.ok);
+  assert.equal(r.n, mine - 1);
+  assert.equal(s.players[0].cash, cash - (mine - 1) * BUILD.crate.cost);
+  assert.equal(s.rubble.length, his);
+  for (let x = 3; x <= 14; x++) assert.equal(s.grid[at(x, 6)].k, 'crate');
+  assert.equal(applyCommand(s, 0, { c: 'rebuild' }).why, 'empty', 'nothing left of his to rebuild');
+
+  // A player with no money gets nothing rebuilt and is told why.
+  s.players[1].cash = 0;
+  assert.equal(applyCommand(s, 1, { c: 'rebuild' }).why, 'cash');
+  s.players[1].cash = 1000;
+  assert.equal(applyCommand(s, 1, { c: 'rebuild' }).n, his);
+  assert.equal(s.rubble.length, 0);
+});
+
 // ---------------------------------------------------------------- mom and kid
 
 /** A wall of crates down column 12 with one gap at the bottom, so the walking route is long. */

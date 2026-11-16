@@ -1,5 +1,5 @@
 // The top bar (cash, sales event, doors, refunds, speed, room code) and the players panel.
-import { TUNE, ROLES } from '../sim/index.js';
+import { TUNE, ROLES, teamCash } from '../sim/index.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } from './dom.js';
 
 /**
@@ -11,8 +11,12 @@ import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } f
  */
 export function createTopBar(session, { roomCode = null, roomKind = null, onHelp, sound = null, playSound = () => {} }) {
   const cashVal = h('b', { class: 'val' });
-  const cash = h('div', { class: 'hud-box hud-cash', title: 'Shared cash. Everyone spends it. Nobody earns it.' },
-    h('span', { class: 'coin', 'aria-hidden': 'true' }, '$'), h('span', { class: 'lbl' }, 'CASH'), cashVal);
+  const teamVal = h('small', { class: 'team-cash' });
+  const cash = h('div', {
+    class: 'hud-box hud-cash',
+    title: 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.',
+  },
+  h('span', { class: 'coin', 'aria-hidden': 'true' }, '$'), h('span', { class: 'lbl' }, 'YOUR CASH'), cashVal, teamVal);
 
   const evTitle = h('b', { class: 'ev-title' });
   const evSub = h('small', { class: 'ev-sub' });
@@ -31,9 +35,10 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   const phase = h('div', { class: 'hud-phase' }, countdown, openBtn, remaining);
 
   const refVal = h('b');
+  const refMax = h('span');
   const refFill = h('i');
-  const refunds = h('div', { class: 'hud-box hud-refunds', title: `${TUNE.refundLimit} refunds and corporate closes the store.` },
-    h('span', { class: 'ref-text' }, 'Refunds ', refVal, ` / ${TUNE.refundLimit}`),
+  const refunds = h('div', { class: 'hud-box hud-refunds', title: 'Too many refunds and corporate closes the store. The limit rises with the number of players.' },
+    h('span', { class: 'ref-text' }, 'Refunds ', refVal, ' / ', refMax),
     h('div', { class: 'meter', role: 'presentation' }, refFill));
 
   const speedBtns = [1, 2, 3].map((n) => h('button', {
@@ -56,7 +61,10 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   const el = h('header', { class: 'topbar' }, cash, event, phase, h('div', { class: 'spacer' }), refunds, speed, room, audio, help);
 
   function update(s) {
-    setText(cashVal, money(s.cash));
+    const mine = s.players[session.me];
+    setText(cashVal, money(mine ? Math.floor(mine.cash) : 0));
+    // With company, also show what the whole team has.
+    setText(teamVal, s.players.length > 1 ? `team ${money(teamCash(s))}` : '');
     const total = TUNE.waves;
     if (s.training) {
       setText(evTitle, 'TRAINING SHIFT');
@@ -95,7 +103,8 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     }
 
     setText(refVal, String(s.refunds));
-    const share = Math.max(0, Math.min(1, s.refunds / TUNE.refundLimit));
+    setText(refMax, String(s.refundLimit));
+    const share = Math.max(0, Math.min(1, s.refunds / s.refundLimit));
     setStyle(refFill, 'width', `${(share * 100).toFixed(1)}%`);
     // Yellow when empty, through orange, to sale-sign red when full.
     setStyle(refFill, 'background', `hsl(${Math.round(48 - 48 * share)} 90% ${Math.round(52 - 6 * share)}%)`);
@@ -145,20 +154,39 @@ function createSoundMenu(sound) {
   return h('div', { class: 'hud-sound' }, btn, menu);
 }
 
-/** Who is on shift. Click your own job title to change it. */
+/** Who is on shift, and what each has in the bank. Click your own job title to change it. */
 export function createPlayersPanel(session) {
   const list = h('ul', { class: 'players-list' });
   const foot = h('div', { class: 'players-foot' });
   const el = h('section', { class: 'panel players', 'aria-label': 'Players' }, h('h3', null, 'ON SHIFT'), list, foot);
   let sig = '';
+  const cashEls = new Map(); // player id -> the element showing his cash
+  const GIVE = 100;
 
   function update(s) {
     const next = JSON.stringify([session.me, s.players.map((p) => [p.name, p.role, p.on, p.color])]);
-    if (next === sig) return;
-    sig = next;
+    if (next !== sig) { sig = next; rebuild(s); }
+    for (const p of s.players) setText(cashEls.get(p.id), money(Math.floor(p.cash)));
+    const online = s.players.filter((p) => p.on).length;
+    setText(foot, online === 1 ? '1 player online. Says a lot.' : `${online} players online · income is split evenly`);
+  }
+
+  function rebuild(s) {
     const hadFocus = document.activeElement && list.contains(document.activeElement);
+    cashEls.clear();
     list.replaceChildren(...s.players.map((p) => {
       const mine = p.id === session.me;
+      const cashEl = h('b', { class: 'pcash' });
+      cashEls.set(p.id, cashEl);
+      // Money is personal, so there has to be a way to hand it over.
+      const give = mine || !p.on ? null : h('button', {
+        type: 'button', class: 'give-btn', title: `Give ${p.name} $${GIVE} of your own money (hold Shift for $${GIVE * 10}).`,
+        onclick: (e) => {
+          const have = Math.floor(session.state.players[session.me]?.cash || 0);
+          const n = Math.min(have, e.shiftKey ? GIVE * 10 : GIVE);
+          if (n > 0) session.send({ c: 'give', to: p.id, n });
+        },
+      }, `Give $${GIVE}`);
       const role = mine
         ? h('button', {
           type: 'button', class: 'role role-btn', title: 'Change your job title. It changes nothing else.',
@@ -170,13 +198,12 @@ export function createPlayersPanel(session) {
         : h('span', { class: 'role' }, p.role);
       return h('li', { class: `player${p.on ? '' : ' off'}${mine ? ' me' : ''}` },
         h('span', { class: 'chip', style: { background: safeColor(p.color) } }),
-        h('span', { class: 'pname' }, p.name, mine ? h('em', null, ' (you)') : null),
+        h('span', { class: 'pname' }, p.name, mine ? h('em', null, ' (you)') : null, cashEl),
         role,
+        give,
         p.on ? null : h('span', { class: 'gone' }, 'clocked out'));
     }));
     if (hadFocus) list.querySelector('.role-btn')?.focus();
-    const online = s.players.filter((p) => p.on).length;
-    setText(foot, online === 1 ? '1 player online. Says a lot.' : `${online} players online`);
   }
 
   return { el, update };

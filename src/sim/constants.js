@@ -100,7 +100,7 @@ export const SHOPPERS = {
   // The super dad does not slip and his patience runs out half as fast.
   dad: {
     name: 'Dad', hp: 34, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, hopsBelts: true,
-    sup: { name: 'Dad on a Mission', from: 7, hp: 2.5, speed: 1.4, drain: 0.5, steady: true },
+    sup: { name: 'Dad on a Mission', from: 7, hp: 2.5, speed: 1.25, drain: 0.5, steady: true },
   },
   // The super Karen slows towers twice as far away, and to a quarter speed instead of half.
   karen: {
@@ -160,10 +160,10 @@ export const TUNE = {
   crowdPerPlayer: 0.5, // each player after the first adds this share of a solo game's shoppers
   // From wave lateFrom on, every group grows by lateGrowth of its size per wave.
   lateFrom: 8,
-  lateGrowth: 0.09,
+  lateGrowth: 0.08,
   // Super shoppers: the share of a group that is super once its kind has them (see SHOPPERS.sup.from).
   superShare: 0.08, // in the wave they first appear...
-  superShareStep: 0.02, // ...growing by this each wave after
+  superShareStep: 0.012, // ...growing by this each wave after
   // Upgrades: the first costs upFirst times the building's price, each one after upGrowth times the last.
   upFirst: 1,
   upGrowth: 1.8,

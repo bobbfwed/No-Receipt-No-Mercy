@@ -41,6 +41,11 @@ const BUILDING = {
     <rect x="3" y="20" width="34" height="7" rx="1.5" fill="#f472b6" ${S}/>
     <path d="M9 20l4-9h7l-3 9z" fill="#fde047" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/>
     <path d="M26 20l2-11" stroke="#6b3f17" stroke-width="1.6"/><circle cx="28.3" cy="8" r="3.3" fill="#fb923c" stroke="#111" stroke-width="1.4"/>`,
+  upgrade: `<circle cx="20" cy="20" r="15" fill="#16a34a" ${S}/>
+    <path d="M12 21l8-9 8 9M12 29l8-9 8 9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`,
+  rebuild: `<circle cx="20" cy="20" r="15" fill="#2563eb" ${S}/>
+    <path d="M12 28l10-10" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M21 12a6 6 0 0 1 8 8l-3-1-3-3z" fill="#fff"/>`,
   remove: `<circle cx="20" cy="20" r="15" fill="#dc2626" ${S}/>
     <path d="M13.5 13.5l13 13M26.5 13.5l-13 13" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>`,
 };

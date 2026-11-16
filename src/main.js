@@ -6,6 +6,7 @@
 //   ?demo=1                       solo game with the ready-made layout, doors already open
 //   &ff=900                       run that many ticks before the first frame (host only)
 //   &seed=7                       fixed random seed
+//   &map=showroom&size=m          the store: a design and a size (keys of MAP_DESIGNS and MAP_SIZES)
 //   ?local=host&code=TEST         host between tabs of this browser
 //   ?local=join&code=TEST         join a tab of this browser
 //   ?join=ABCDE                   an invite link: opens the menu with the room code filled in
@@ -16,7 +17,7 @@ import { showError } from './ui/errors.js';
 import { HostSession, ClientSession } from './net/session.js';
 import { createDirector } from './content/director.js';
 import { hostOnline, joinOnline, hostLocal, joinLocal, makeRoomCode } from './net/transports.js';
-import { applyDemoLayout, createGame } from './sim/index.js';
+import { applyDemoLayout, createGame, MAP_DESIGNS, MAP_SIZES } from './sim/index.js';
 import { loadName, saveName } from './ui/dom.js';
 import { showMenu } from './ui/menu.js';
 import { startGame } from './ui/game.js';
@@ -35,8 +36,25 @@ const opts = {
 if (opts.name) saveName(opts.name);
 const defaultName = () => opts.name || loadName() || 'New Guy';
 
-function newHost(name) {
-  return new HostSession({ name, seed: opts.seed, director: createDirector() });
+/** The store a new game is played in unless the player picks another: sized for one player. */
+const DEFAULT_MAP = { design: 'warehouse', size: 's' };
+/** A store named in the URL, if any. */
+function urlMap() {
+  const design = q.get('map'), size = q.get('size');
+  if (!design && !size) return null;
+  return {
+    design: MAP_DESIGNS[design] ? design : DEFAULT_MAP.design,
+    size: MAP_SIZES[size] ? size : DEFAULT_MAP.size,
+  };
+}
+
+/**
+ * @param {string} name
+ * @param {{design: string, size: string}|null} [map] the store chosen in the menu. `null` means
+ *   the original small warehouse with one entrance (which the ready-made demo layout is for).
+ */
+function newHost(name, map = urlMap() || DEFAULT_MAP) {
+  return new HostSession({ name, seed: opts.seed, director: createDirector(), map });
 }
 
 // Sound is optional: if the module fails to load, the game still runs, silently.
@@ -73,8 +91,8 @@ function whenReady(session, timeoutMs = 12000) {
 }
 
 const actions = {
-  async solo(name) {
-    startGame(newHost(name), { mount: app, sound, ff: opts.ff, autostart: opts.autostart });
+  async solo(name, map) {
+    startGame(newHost(name, map), { mount: app, sound, ff: opts.ff, autostart: opts.autostart });
   },
   /** The training shift: a guided game that cannot be lost. `step` jumps ahead (for screenshots). */
   async tutorial(name, step = 0) {
@@ -83,9 +101,9 @@ const actions = {
     });
     startGame(session, { mount: app, sound, tutorial: true, tutorialStep: step, onExit: leaveTo });
   },
-  async host(name, fixedCode) {
+  async host(name, fixedCode, map) {
     const code = fixedCode || makeRoomCode();
-    const session = newHost(name);
+    const session = newHost(name, map);
     const room = await hostOnline(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
     startGame(session, { mount: app, sound, roomCode: code, roomKind: 'online', ff: opts.ff, autostart: opts.autostart });
@@ -101,8 +119,8 @@ const actions = {
     }
     startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'online' });
   },
-  async hostLocal(name, code) {
-    const session = newHost(name);
+  async hostLocal(name, code, map) {
+    const session = newHost(name, map);
     const room = hostLocal(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
     startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });
@@ -124,13 +142,13 @@ const actions = {
 const inviteCode = (q.get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 
 function menu(error = '') {
-  showMenu(app, actions, { error, name: opts.name, code: inviteCode });
+  showMenu(app, actions, { error, name: opts.name, code: inviteCode, map: urlMap() });
 }
 
 async function boot() {
   const name = defaultName();
   if (flag('demo')) {
-    startGame(newHost(name), {
+    startGame(newHost(name, null), {
       mount: app, sound, ff: opts.ff, autostart: opts.autostart,
       prepare(session) {
         const problems = applyDemoLayout(session.state, session.me);
