@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HostSession, ClientSession } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
+import { VERSION, RELEASE, versionText } from '../src/version.js';
 import { createDirector } from '../src/content/director.js';
 import { nopeLine, LINES, ESCAPE_REVIEWS, LEFT_REVIEWS, NOPE } from '../src/content/lines.js';
 import { applyDemoLayout, TICK_HZ, TUNE, SHOPPERS, BUILD } from '../src/sim/index.js';
@@ -259,4 +260,10 @@ test('a player who joins in the middle of a wave can build at once and gets his 
     }
   }
   assert.ok(used.has(1), 'some arrive through the new entrance');
+});
+
+test('the version reads as a big number and a two-digit release', () => {
+  assert.match(VERSION, /^\d+\.\d+$/);
+  assert.ok(Number.isInteger(RELEASE) && RELEASE >= 1);
+  assert.match(versionText(), /^\d+\.\d+\.\d{2,}$/);
 });
