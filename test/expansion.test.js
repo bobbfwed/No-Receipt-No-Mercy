@@ -693,3 +693,64 @@ test('shoppers get more patient every single wave, and upgrades do not outrun th
   // A sprinkler upgrade costs 80% more for 25% more damage.
   assert.ok(BUILD.sprinkler.up.dmg <= 1.3 && TUNE.upGrowth >= 1.8);
 });
+
+// ---------------------------------------------------------------- lobby
+
+test('a game with a lobby waits for every player to be ready, and the host can change the store', () => {
+  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 's' }, lobby: true });
+  addPlayer(s, 'Dave');
+  addPlayer(s, 'Steve');
+  assert.equal(s.phase, 'lobby');
+  // Nothing runs and nothing can be built.
+  for (let i = 0; i < 100; i++) assert.deepEqual(step(s), []);
+  assert.equal(s.tick, 0);
+  assert.equal(canPlace(s, 'crate', 5, 5), 'lobby');
+  assert.equal(place(s, 'crate', 5, 5).why, 'lobby');
+  assert.equal(applyCommand(s, 0, { c: 'start' }).why, 'lobby');
+
+  // Only the host changes the store; a change un-readies everyone.
+  assert.ok(applyCommand(s, 1, { c: 'ready' }).ok);
+  assert.equal(s.players[1].ready, true);
+  assert.equal(applyCommand(s, 1, { c: 'map', design: 'showroom', size: 'l' }).why, 'host');
+  assert.equal(applyCommand(s, 0, { c: 'map', design: 'nope', size: 'l' }).why, 'bad');
+  assert.ok(applyCommand(s, 0, { c: 'map', design: 'showroom', size: 'l' }).ok);
+  assert.deepEqual(s.map, { design: 'showroom', size: 'l' });
+  assert.equal(s.w, MAP_SIZES.l.w);
+  assert.equal(s.grid.length, s.w * s.h);
+  assert.equal(s.zones.length, s.w * s.h);
+  assert.equal(s.open, 2, 'both players still have an entrance on the new map');
+  assert.equal([...s.tiles].filter((c) => c === 'D').length, 4);
+  assert.equal(s.players[1].ready, false, 'Steve has to look at the new store and say ready again');
+  const same = createGame({ seed: 4, map: { design: 'showroom', size: 'l' } });
+  addPlayer(same, 'Dave');
+  addPlayer(same, 'Steve');
+  assert.equal(s.tiles, same.tiles, 'the same store a game started on that map would have');
+  assert.equal(s.zones, same.zones);
+
+  // One ready is not enough; un-readying works; everyone ready starts the game.
+  applyCommand(s, 0, { c: 'ready' });
+  assert.deepEqual(step(s), []);
+  applyCommand(s, 0, { c: 'ready', on: false });
+  applyCommand(s, 1, { c: 'ready' });
+  assert.deepEqual(step(s), []);
+  applyCommand(s, 0, { c: 'ready' });
+  assert.deepEqual(step(s), [{ e: 'begun' }]);
+  assert.equal(s.phase, 'build');
+  assert.equal(s.phaseT, -1, 'the clock still waits for the first thing built');
+  assert.ok(place(s, 'crate', 5, 5).ok);
+  // The store cannot be changed once the game has started.
+  assert.equal(applyCommand(s, 0, { c: 'map', design: 'warehouse', size: 's' }).ok, false);
+  assert.equal(s.w, MAP_SIZES.l.w);
+});
+
+test('a player who has dropped out does not hold up the lobby; games without a lobby start at once', () => {
+  const s = createGame({ lobby: true, map: { design: 'warehouse', size: 's' } });
+  addPlayer(s, 'Dave');
+  addPlayer(s, 'Steve');
+  applyCommand(s, 0, { c: 'ready' });
+  assert.equal(step(s).length, 0);
+  setPlayerOnline(s, 1, false);
+  assert.deepEqual(step(s), [{ e: 'begun' }]);
+  assert.equal(createGame().phase, 'build');
+  assert.equal(createGame({ map: { design: 'warehouse', size: 's' } }).phase, 'build');
+});

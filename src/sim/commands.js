@@ -1,7 +1,7 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
 import { BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
-import { inBounds, idxOf, bump } from './state.js';
+import { inBounds, idxOf, bump, setMap } from './state.js';
 import { computeDist, modeOf, UNREACHABLE } from './path.js';
 import { beginWave } from './step.js';
 import { upgradeCost, spentOn, levelOf } from './upgrades.js';
@@ -21,13 +21,14 @@ function tileOf(state, s) {
  * Checks whether a player may put a building on a tile.
  * @param {number} [pid] the player who would pay for it
  * @returns {string|null} null if allowed, otherwise the reason:
- *   'over' game finished, 'kind' unknown building, 'bounds' not a floor tile, 'occupied',
+ *   'over' game finished, 'lobby' the game has not started, 'kind' unknown building, 'bounds' not a floor tile, 'occupied',
  *   'zone' that machine only goes on its own marked floor,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
  *   'blocked' it would wall off the tills from an entrance or from a shopper.
  */
 export function canPlace(state, k, x, y, pid = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
+  if (state.phase === 'lobby') return 'lobby';
   const def = BUILD[k];
   if (!def) return 'kind';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
@@ -94,6 +95,9 @@ function newBuilding(k, owner, d) {
  *   { c: 'give', to, n }        hand n of your cash to player `to`
  *   { c: 'rebuild' }            put back what gym bros wrecked of yours, as far as your cash goes
  *                               (with all: true, everybody's)
+ *   { c: 'map', design, size }  lobby only, host only (player 0): change the store
+ *   { c: 'ready', on }          lobby only: say you are ready (or not). The game starts when
+ *                               every connected player is
  *   { c: 'side', side }         take the Head Office job ('office': run the shoppers) or go back
  *                               to the store ('store'). Only between waves, only one at a time,
  *                               and only if somebody is left to run the store
@@ -110,6 +114,20 @@ export function applyCommand(state, pid, cmd, ev = []) {
   const player = state.players[pid];
   if (!player || !cmd || typeof cmd !== 'object') return { ok: false, why: 'bad' };
   if (player.side === 'office' && STORE_ONLY.has(cmd.c)) return { ok: false, why: 'office' };
+  if (state.phase === 'lobby') {
+    // Before the game starts there are only two things to do: pick the store, and say you are ready.
+    if (cmd.c === 'map') {
+      if (pid !== 0) return { ok: false, why: 'host' };
+      if (!setMap(state, cmd.design, cmd.size)) return { ok: false, why: 'bad' };
+      ev.push({ e: 'map', design: cmd.design, size: cmd.size });
+      return { ok: true };
+    }
+    if (cmd.c === 'ready') {
+      player.ready = cmd.on !== false;
+      return { ok: true };
+    }
+    if (cmd.c !== 'role') return { ok: false, why: 'lobby' };
+  }
   switch (cmd.c) {
     case 'place': {
       const why = canPlace(state, cmd.k, cmd.x, cmd.y, pid);

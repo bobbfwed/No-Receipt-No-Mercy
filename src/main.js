@@ -7,6 +7,7 @@
 //   &ff=900                       run that many ticks before the first frame (host only)
 //   &seed=7                       fixed random seed
 //   &map=showroom&size=m          the store: a design and a size (keys of MAP_DESIGNS and MAP_SIZES)
+//   &lobby=1                      start in the lobby, as games started from the menu do
 //   ?local=host&code=TEST         host between tabs of this browser
 //   ?local=join&code=TEST         join a tab of this browser
 //   ?join=ABCDE                   an invite link: opens the menu with the room code filled in
@@ -50,11 +51,13 @@ function urlMap() {
 
 /**
  * @param {string} name
+ * @param {boolean} [lobby] start in the lobby: players look at the store, the host may change
+ *   it, and the game begins when everyone has pressed Ready. Games started from the menu do.
  * @param {{design: string, size: string}|null} [map] the store chosen in the menu. `null` means
  *   the original small warehouse with one entrance (which the ready-made demo layout is for).
  */
-function newHost(name, map = urlMap() || DEFAULT_MAP) {
-  return new HostSession({ name, seed: opts.seed, director: createDirector(), map });
+function newHost(name, map = urlMap() || DEFAULT_MAP, lobby = flag('lobby')) {
+  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: lobby && !!map });
 }
 
 // Sound is optional: if the module fails to load, the game still runs, silently.
@@ -91,8 +94,8 @@ function whenReady(session, timeoutMs = 12000) {
 }
 
 const actions = {
-  async solo(name, map) {
-    startGame(newHost(name, map), { mount: app, sound, ff: opts.ff, autostart: opts.autostart });
+  async solo(name, map, lobby) {
+    startGame(newHost(name, map, lobby), { mount: app, sound, ff: opts.ff, autostart: opts.autostart });
   },
   /** The training shift: a guided game that cannot be lost. `step` jumps ahead (for screenshots). */
   async tutorial(name, step = 0) {
@@ -101,9 +104,9 @@ const actions = {
     });
     startGame(session, { mount: app, sound, tutorial: true, tutorialStep: step, onExit: leaveTo });
   },
-  async host(name, fixedCode, map) {
+  async host(name, fixedCode, map, lobby) {
     const code = fixedCode || makeRoomCode();
-    const session = newHost(name, map);
+    const session = newHost(name, map, lobby);
     const room = await hostOnline(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
     startGame(session, { mount: app, sound, roomCode: code, roomKind: 'online', ff: opts.ff, autostart: opts.autostart });
@@ -119,8 +122,8 @@ const actions = {
     }
     startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'online' });
   },
-  async hostLocal(name, code, map) {
-    const session = newHost(name, map);
+  async hostLocal(name, code, map, lobby) {
+    const session = newHost(name, map, lobby);
     const room = hostLocal(code, (conn) => session.accept(conn));
     addEventListener('pagehide', () => room.close());
     startGame(session, { mount: app, sound, roomCode: code.toUpperCase(), roomKind: 'local', ff: opts.ff, autostart: opts.autostart });

@@ -101,13 +101,14 @@ export class HostSession extends Session {
    * @param {string} o.name      the host player's name
    * @param {number} [o.seed]
    * @param {{design: string, size: string}} [o.map] the floor plan; left out, the original small warehouse
+   * @param {boolean} [o.lobby] start in the lobby (players press Ready; the host may change the map)
    * @param {Object} [o.director] turns simulation events into jokes; see src/content/director.js
    * @param {Object} [o.state]   continue an existing game instead of starting a new one
    */
-  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null }) {
+  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false }) {
     super();
     this.isHost = true;
-    this.state = state || createGame({ seed, map });
+    this.state = state || createGame({ seed, map, lobby });
     this.me = addPlayer(this.state, name);
     this.director = director;
     /** @type {Map<Object, number>} connection -> player id */

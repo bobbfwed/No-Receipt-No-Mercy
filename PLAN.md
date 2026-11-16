@@ -91,6 +91,9 @@ One player stops defending and plays the other side: each wave he gets a budget,
 9. Pepper Spray and Pray
 10. Store Credit Only, Dickhead
 
+## Lobby (owner's request, built)
+Games started from the menu (solo, host, test room) begin in a lobby: the store is drawn whole, the host can change its design and size and every player sees it change, and the game starts when every connected player has pressed Ready. Changing the store un-readies everyone. A player who drops out does not hold it up. A friend who joins after the start skips the lobby and plays at once.
+
 ## Known problem: two players on the same wifi may not connect online
 Found by the owner on 2026-11-15: joining failed from the host's own wifi and worked from another network. Two browsers on one network have to reach each other by their local addresses (which browsers hide, and some networks do not pass) or through a relay server. The game only has the free relays the PeerJS project runs, and on the day they did not answer (`tools/net-check.html` shows this). Players in different houses are not affected unless one is behind a strict router, VPN or office firewall. The fix is a relay of our own: an account with a TURN provider (several have a free allowance), with its address and password added to `ICE_SERVERS` in `src/net/transports.js`. The password would be readable by anyone, as the game is a public static site.
 

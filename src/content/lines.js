@@ -102,6 +102,10 @@ export const LINES = {
   storeWaiting: [
     '{p} is ready to send them in. The store is still fiddling with itself.',
   ],
+  begun: [
+    "Everyone's ready. That's a first. The clock starts when one of you builds something.",
+    'All present and ready. I use both words loosely. Build something.',
+  ],
   cramped: [
     'This store was built for {n}. There are now {m} of you in it. Try not to touch. Some of you will enjoy that too much.',
   ],
@@ -305,6 +309,8 @@ export const NOPE = {
   phase: ['The doors are already open, {p}. Do keep up.'],
   notyet: ["Not yet, {p}. Do the thing I asked first. It's called foreplay."],
   empty: ["There's nothing there, {p}. Like your Friday nights."],
+  lobby: ["We haven't opened yet, {p}. Press Ready. It's the big button. I made it big specially."],
+  host: ['Only the host picks the store, {p}. You just get to complain about it.'],
   zone: [
     "Not there, {p}. That machine only goes on its own painted floor. The floor has words on it. Sound them out.",
     "Wrong floor, {p}. Each machine has its own marked patch. It's colour-coded, for people exactly like you.",
