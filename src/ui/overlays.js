@@ -27,7 +27,7 @@ export function howToPlay() {
       h('li', null, h('b', null, '⟳'), ' rotates what you hold · ', h('b', null, '✋'), ' puts it down · ', h('b', null, '⤢'), ' whole map · ', h('b', null, '⌂'), ' your entrance'),
       h('li', null, h('b', null, 'Tap something you built'), ' with nothing held to upgrade, rotate or remove it'),
       h('li', null, h('b', null, 'Hold a button'), ' in the bar to read what it does'),
-      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early, for the impatient')),
+      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It costs you nothing: the factory is paid at once for the time you skip')),
     h('ul', { class: 'keys key-only' },
       h('li', null, h('kbd', null, '1'), '–', h('kbd', null, '0'), ', ', h('kbd', null, '-'), ' and ', h('kbd', null, '='), ' pick a building, or click it in the bar'),
       h('li', null, h('kbd', null, 'Click'), ' build · ', h('kbd', null, 'Drag'), ' build a line; belts follow the drag'),
@@ -37,7 +37,7 @@ export function howToPlay() {
       h('li', null, h('kbd', null, 'B'), ' rebuild what gym bros wrecked, at half price'),
       h('li', null, h('kbd', null, 'W'), h('kbd', null, 'A'), h('kbd', null, 'S'), h('kbd', null, 'D'), ' or arrows move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'F'), ' whole map · ', h('kbd', null, 'H'), ' your entrance · click the small map to jump'),
       h('li', null, h('kbd', null, 'Enter'), ' chat with the other players'),
-      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early, for the impatient')));
+      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It costs you nothing: the factory is paid at once for the time you skip')));
 }
 
 /** Every kind of shopper: what makes it different and what works against it. */

@@ -109,15 +109,16 @@ export function createBuildBar(input, session) {
     h('div', null, h('kbd', null, 'WASD'), ' move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'H'), ' my entrance'),
     h('div', null, h('kbd', null, 'Right-click'), ' remove · ', h('kbd', null, 'Esc'), ' drop it'));
 
-  // A card in the build bar that stays up while a tool is held, explaining what it does and how
-  // to use it. It takes the place of the control hints, so it never covers the floor.
+  // A card that stays up while a tool is held, explaining what it does and how to use it. It
+  // floats just above the bar and must never be part of the bar's layout: when it was, the bar's
+  // height changed with each building's description, the floor was resized and the view jumped.
   const info = h('aside', { class: `bb-info hidden${folded ? ' folded' : ''}`, 'aria-live': 'polite' });
   // The buttons scroll sideways on a narrow screen. On a wide one this wrapper is invisible to
   // the layout (display: contents), so the bar is laid out as it always was.
   const scroller = h('div', { class: 'bb-scroll' }, groups, tools);
   const el = h('footer', { class: 'buildbar' }, scroller, info, hint);
 
-  /** The button that folds the info sheet on a phone (hidden on a big screen). */
+  /** The button that folds the card down to its heading, for players who know the buildings. */
   const foldBtn = () => h('button', {
     type: 'button', class: 'bbi-fold', 'aria-label': folded ? 'Show what it does' : 'Hide the details', 'aria-expanded': String(!folded),
     onclick: () => {

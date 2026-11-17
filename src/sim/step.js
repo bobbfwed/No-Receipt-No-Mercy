@@ -64,6 +64,35 @@ export function setTrainingCash(state, cash) {
   if (state.training) for (const p of state.players) p.cash = Math.max(0, Math.floor(cash));
 }
 
+/**
+ * The doors are being opened before the build timer ran out. Without this, opening early threw
+ * away whatever the factory would have sold in the time that was left, so it was always the
+ * wrong thing to do (the owner's complaint). So the time that was left is played through in one
+ * go, exactly as it would have gone: belts move, machines work, chutes sell and pay, puddles dry.
+ * Nothing else happens in a build phase (there are no shoppers), so the store ends up precisely
+ * as if the players had waited. One 'early' event reports it instead of a sale event per item.
+ * Call it just before beginWave().
+ */
+export function skipBuild(state, ev) {
+  // (The tick on which the timer runs out is already the wave's first, so one fewer than is left.)
+  const left = state.phase === 'build' && state.phaseT > 1 ? state.phaseT - 1 : 0;
+  if (!left) return;
+  const only = [];
+  for (let i = 0; i < state.grid.length; i++) if (state.grid[i] && state.grid[i].part === undefined) only.push(i);
+  const fields = [getField(state, NORMAL), getField(state, HOP), getField(state, SMASH)];
+  const quiet = [];
+  let cash = 0, sold = 0;
+  for (let n = 0; n < left; n++) {
+    for (let k = state.messes.length - 1; k >= 0; k--) {
+      if (--state.messes[k][1] <= 0) state.messes.splice(k, 1);
+    }
+    stepBuildings(state, fields, quiet, only);
+    for (const e of quiet) if (e.e === 'sale') { cash += e.v; sold++; }
+    quiet.length = 0;
+  }
+  ev.push({ e: 'early', secs: Math.round(left / TICK_HZ), cash, sold });
+}
+
 /** Opens the doors for the next wave. */
 export function beginWave(state, ev) {
   // Training waves do not count up: shoppers keep their starting patience.
@@ -280,7 +309,11 @@ function strike(state, s, dmg, by, cosplayers, ev) {
  * Runs every building for one tick. Returns what the shoppers need to know about the security:
  * stands (free samples), salesmen (TV Salesmen) and posts (what a dog may pee on), all working.
  */
-function stepBuildings(state, fields, ev) {
+/**
+ * One tick of every building. `only`, if given, is the list of tile indexes to visit, in rising
+ * order (skipBuild uses it so that a big, mostly empty map costs nothing to run forward).
+ */
+function stepBuildings(state, fields, ev, only = null) {
   const grid = state.grid, S = state.shoppers, W = state.w;
   const stands = [], salesmen = [], posts = [];
   const karens = [], cosplayers = [];
@@ -292,7 +325,9 @@ function stepBuildings(state, fields, ev) {
   const beltAdv = TUNE.beltSpeed * DT;
   const way = (s) => fields[modeOf(s.k)][((s.y | 0) * W) + (s.x | 0)];
 
-  for (let i = 0; i < grid.length; i++) {
+  const count = only ? only.length : grid.length;
+  for (let q = 0; q < count; q++) {
+    const i = only ? only[q] : q;
     const b = grid[i];
     // The other tiles of a big building only point at it; it works from its anchor tile.
     if (!b || b.part !== undefined) continue;
@@ -870,6 +905,8 @@ function stepShoppers(state, fields, sec, ev) {
  *   shield {x,y} a cosplayer soaked up a shot meant for someone near him (at most once a second each)
  *   flash {x,y,n} an exhibitionist opened her bathrobe; n dads and teenagers stopped to stare
  *   fall {x,y} a day drinker fell over going round a corner
+ *   early {secs,cash,sold} the doors were opened that many seconds early; the factory sold `sold`
+ *     items for `cash` (the whole store's takings, before it is split) in the time skipped
  * (Commands add: placed {k,x,y,d,by,rebuilt?,short?}, removed, upgraded {k,x,y,by,t,lv},
  *  gave {by,to,n}, rebuilt {by,n,short}.)
  */
