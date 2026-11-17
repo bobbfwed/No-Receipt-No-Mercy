@@ -272,31 +272,37 @@ test('a player who joins late gets starting money plus something for the waves h
 
 // ---------------------------------------------------------------- upgrades
 
-test('upgrades cost more each level and make a tower stronger', () => {
+test('each upgrade track costs more each level, up to its top level, and makes a tower stronger', () => {
   const s = createGame();
   addPlayer(s, 'Dave');
   s.players[0].cash = 1e9;
   place(s, 'forklift', 5, 5);
   const b = s.grid[at(5, 5)];
-  let last = 0, spent = 0;
+  let spent = 0;
   const base = statsOf(b);
-  for (let lv = 2; lv <= TUNE.maxLevel; lv++) {
-    const cost = upgradeCost(b);
-    assert.ok(cost > last * 1.5, `level ${lv} costs ${cost}, the one before ${last}`);
-    last = cost;
-    spent += cost;
-    const cash = s.players[0].cash;
-    assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5 }).ok);
-    assert.equal(s.players[0].cash, cash - cost);
-    assert.equal(levelOf(b), lv);
+  for (const t of ['dmg', 'spd', 'rng', 'dur']) {
+    let last = 0;
+    for (let lv = 1; lv <= TUNE.maxLevel; lv++) {
+      const cost = upgradeCost(b, t);
+      assert.equal(cost, Math.round(BUILD.forklift.cost * BUILD.forklift.up[t].cost * TUNE.upGrowth ** (lv - 1)));
+      assert.ok(cost > last * 1.5, `${t} level ${lv} costs ${cost}, the one before ${last}`);
+      last = cost;
+      spent += cost;
+      const cash = s.players[0].cash;
+      assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t }).ok);
+      assert.equal(s.players[0].cash, cash - cost);
+      assert.equal(b.u[t], lv);
+    }
+    assert.equal(upgradeCost(b, t), 0);
+    assert.equal(canUpgrade(s, 5, 5, 0, t), 'max');
+    assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t }).why, 'max');
   }
-  assert.equal(upgradeCost(b), 0);
-  assert.equal(canUpgrade(s, 5, 5), 'max');
-  assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5 }).why, 'max');
+  assert.equal(levelOf(b), 1 + 4 * TUNE.maxLevel, 'the badge counts every level in every track');
   const top = statsOf(b);
-  assert.ok(top.dmg > base.dmg * 10);
-  assert.ok(top.range > base.range);
-  assert.ok(last > BUILD.forklift.cost * 50, 'the last level is very expensive');
+  assert.ok(top.dmg > base.dmg * 6);
+  assert.ok(top.cd < base.cd / 2);
+  assert.ok(top.range > base.range + 2);
+  assert.equal(top.hits, 1 + TUNE.maxLevel);
 
   // Selling gives back the same share of everything spent on it.
   const cash = s.players[0].cash;
@@ -304,29 +310,31 @@ test('upgrades cost more each level and make a tower stronger', () => {
   assert.equal(s.players[0].cash, cash + Math.floor((BUILD.forklift.cost + spent) * TUNE.sellBack));
 });
 
-test('only security can be upgraded, and only with enough money', () => {
+test('every building has some upgrade, and only the tracks its kind has', () => {
   const s = createGame();
   addPlayer(s, 'Dave');
   place(s, 'belt', 4, 4);
   place(s, 'sprinkler', 5, 5);
-  assert.equal(canUpgrade(s, 4, 4), 'noup');
+  assert.equal(canUpgrade(s, 4, 4), null, 'a belt has durability');
+  assert.equal(canUpgrade(s, 4, 4, 0, 'dmg'), 'noup');
+  assert.equal(canUpgrade(s, 4, 4, 0, 'nonsense'), 'noup');
   assert.equal(canUpgrade(s, 9, 9), 'empty');
   assert.equal(canUpgrade(s, 5, 5), null);
   s.players[0].cash = 10;
   assert.equal(canUpgrade(s, 5, 5), 'cash');
-  for (const k of ['sprinkler', 'forklift', 'wetfloor', 'samples']) assert.ok(BUILD[k].up, `${k} can be upgraded`);
+  for (const k of Object.keys(BUILD)) assert.ok(BUILD[k].up && Object.keys(BUILD[k].up).length, `${k} can be upgraded`);
 });
 
 test('an upgraded sprinkler stops shoppers a plain one lets through', () => {
   const run = (levels) => {
     const s = stage(9);
     place(s, 'sprinkler', 14, 6);
-    for (let i = 0; i < levels; i++) assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 14, y: 6 }).ok);
+    for (const [t, n] of Object.entries(levels)) for (let i = 0; i < n; i++) assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 14, y: 6, t }).ok);
     send(s, [{ k: 'hunter', n: 6, gap: 1, at: 0 }]);
     return play(s, 90).filter((e) => e.e === 'left').length;
   };
-  assert.equal(run(0), 0, 'one plain sprinkler stops nobody');
-  assert.equal(run(5), 6, 'at level 6 it stops them all');
+  assert.equal(run({}), 0, 'one plain sprinkler stops nobody');
+  assert.equal(run({ dmg: 4, spd: 3, rng: 3 }), 6, 'upgraded in damage, speed and range it stops them all');
 });
 
 test('upgraded samples hold shoppers longer and an upgraded sign slows them more', () => {
@@ -336,9 +344,11 @@ test('upgraded samples hold shoppers longer and an upgraded sign slows them more
   const stand = s.grid[at(5, 5)], sign = s.grid[at(6, 6)];
   const a = statsOf(stand), b = statsOf(sign);
   applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5 });
+  assert.ok(statsOf(stand).secs > a.secs && statsOf(stand).range === a.range, 'U on samples: they hold longer');
+  applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'rng' });
+  assert.ok(statsOf(stand).range > a.range);
   applyCommand(s, 0, { c: 'upgrade', x: 6, y: 6 });
-  assert.ok(statsOf(stand).secs > a.secs && statsOf(stand).range > a.range);
-  assert.ok(statsOf(sign).slow < b.slow && statsOf(sign).slip > b.slip);
+  assert.ok(statsOf(sign).slow < b.slow && statsOf(sign).slip > b.slip && statsOf(sign).slipDmg > b.slipDmg);
 });
 
 // ---------------------------------------------------------------- super shoppers
@@ -409,6 +419,7 @@ test('a gym bro wrecks things next to his route: crates always, other things som
     const ev = play(s, 120).filter((e) => e.e === 'smash');
     for (const e of ev) {
       assert.equal(e.k, kind);
+      assert.equal(e.left, 0, 'a plain building takes one hit');
       assert.equal(s.grid[e.i], 0, 'what he wrecks is gone');
     }
     return ev.length;
@@ -439,50 +450,63 @@ test('a super gym bro wrecks far more than a normal one', () => {
   assert.ok(big >= normal * 2 && big >= 18, `super wrecked ${big}, normal ${normal}`);
 });
 
-test('an upgraded tower loses a level instead of being wrecked', (t) => {
+test('a building with durability takes more hits; the damage is forgotten when the wave ends', (t) => {
   tune(t, { smashOther: 1 });
   const s = stage(3);
   for (let x = 3; x <= 26; x++) { place(s, 'sprinkler', x, 6); place(s, 'sprinkler', x, 8); }
-  for (let x = 3; x <= 26; x++) for (const y of [6, 8]) for (let n = 0; n < 2; n++) applyCommand(s, 0, { c: 'upgrade', x, y });
+  for (let x = 3; x <= 26; x++) for (const y of [6, 8]) for (let n = 0; n < 2; n++) applyCommand(s, 0, { c: 'upgrade', x, y, t: 'dur' });
+  assert.equal(statsOf(s.grid[at(3, 6)]).hits, 3);
   // Shoppers in training keep their starting patience, so give this one enough to get through.
   send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   step(s);
   s.shoppers[0].hp = s.shoppers[0].mhp = 1e9;
   const ev = [];
-  for (let i = 0; i < 20 * TICK_HZ; i++) ev.push(...step(s).filter((e) => e.e === 'smash'));
+  // (Half way down the corridor: the wave must not have ended yet, or the damage is forgotten.)
+  for (let i = 0; i < 9 * TICK_HZ; i++) ev.push(...step(s).filter((e) => e.e === 'smash'));
+  assert.equal(s.phase, 'wave');
   assert.ok(ev.length >= 5);
-  assert.ok(ev.every((e) => e.down === 1), 'every hit only knocked a level off');
-  let lower = 0;
+  // Each hit takes one off what is left this wave.
+  for (const e of ev) assert.ok(e.left === 2 || e.left === 1 || e.left === 0);
+  let hit = 0;
   for (let x = 3; x <= 26; x++) for (const y of [6, 8]) {
     const b = s.grid[at(x, y)];
-    assert.ok(b, 'nothing was destroyed');
-    if (levelOf(b) < 3) lower++;
+    if (b && b.hit) { hit++; assert.equal(statsOf(b).hits - b.hit, ev.filter((e) => e.i === at(x, y)).pop().left); }
   }
-  assert.ok(lower >= 3);
-  assert.equal(s.rubble.length, 0);
+  assert.ok(hit >= 3, `${hit} sprinklers took hits and stood`);
+  assert.equal(s.rubble.length, ev.filter((e) => e.left === 0).length, 'only the ones out of hits are rubble');
+  // At the end of the wave, everything is whole again.
+  play(s, 200);
+  assert.equal(s.phase, 'build');
+  assert.ok(s.grid.every((b) => !b || !b.hit));
 });
 
-test('what a gym bro wrecks can be rebuilt in one go by its owner', () => {
+test('what a gym bro wrecks can be rebuilt in one go by its owner, at half price', () => {
   const s = stage(2);
   addPlayer(s, 'Steve');
   s.players[1].cash = 1000;
   for (let x = 3; x <= 14; x++) for (const y of [6, 8]) place(s, 'crate', x, y, 0, x <= 8 ? 0 : 1);
   send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   play(s, 120);
-  const mine = s.rubble.filter((r) => r[3] === 0).length, his = s.rubble.filter((r) => r[3] === 1).length;
+  const mine = s.rubble.filter((r) => r.o === 0).length, his = s.rubble.filter((r) => r.o === 1).length;
   assert.ok(mine >= 2 && his >= 2, `rubble: ${mine} of Dave's, ${his} of Steve's`);
+  for (const r of s.rubble) assert.deepEqual(Object.keys(r).sort(), ['d', 'i', 'k', 'o', 'spent', 'u']);
+  assert.equal(s.rubble[0].spent, BUILD.crate.cost);
 
-  // Building on a wrecked tile by hand clears that bit of rubble.
-  const [tile] = s.rubble.find((r) => r[3] === 0);
-  assert.ok(place(s, 'crate', tile % 30, (tile / 30) | 0).ok);
-  assert.equal(s.rubble.filter((r) => r[3] === 0).length, mine - 1);
+  // Building something else on a wrecked tile by hand clears that bit of rubble.
+  const { i: tile } = s.rubble.find((r) => r.o === 0);
+  assert.ok(place(s, 'belt', tile % 30, (tile / 30) | 0).ok);
+  assert.equal(s.rubble.filter((r) => r.o === 0).length, mine - 1);
+  applyCommand(s, 0, { c: 'remove', x: tile % 30, y: (tile / 30) | 0 });
+  assert.equal(s.rubble.filter((r) => r.o === 0).length, mine - 1, 'and it stays cleared');
+  place(s, 'crate', tile % 30, (tile / 30) | 0);
 
-  // Rebuilding puts back only your own, and you pay for it.
+  // Rebuilding puts back only your own, and you pay half for it.
   const cash = s.players[0].cash;
   const r = applyCommand(s, 0, { c: 'rebuild' });
   assert.ok(r.ok);
   assert.equal(r.n, mine - 1);
-  assert.equal(s.players[0].cash, cash - (mine - 1) * BUILD.crate.cost);
+  assert.equal(r.short, 0);
+  assert.equal(s.players[0].cash, cash - (mine - 1) * Math.floor(BUILD.crate.cost * TUNE.rebuildShare));
   assert.equal(s.rubble.length, his);
   for (let x = 3; x <= 14; x++) assert.equal(s.grid[at(x, 6)].k, 'crate');
   assert.equal(applyCommand(s, 0, { c: 'rebuild' }).why, 'empty', 'nothing left of his to rebuild');
@@ -503,7 +527,9 @@ function longWayRound(s) {
 }
 
 test('a runaway child runs straight through the maze and waits further along the route', (t) => {
-  tune(t, { kidChance: 100, kidMin: 6, kidMax: 6 }); // escapes at once, runs six tiles
+  // He can only escape once, so let him out near the wall: after eight seconds in the cart he
+  // escapes at once, and runs six tiles.
+  tune(t, { kidChance: 100, kidMin: 6, kidMax: 6, kidRest: 16 });
   const s = stage(6);
   longWayRound(s);
   send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
@@ -684,7 +710,7 @@ test('a production line across the marked floor needs belts, and sells at full p
   const sales = [];
   for (let i = 0; i < 60 * TICK_HZ; i++) sales.push(...step(s).filter((e) => e.e === 'sale'));
   assert.ok(sales.length >= 5);
-  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === 16));
+  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === Math.round(16 * SETTINGS.difficulty.normal.pay)));
   assert.equal(ITEMS.gadget.value, 7);
 });
 
@@ -721,8 +747,9 @@ test('shoppers get more patient every single wave, and upgrades do not outrun th
   const hp = (n) => 1 + TUNE.hpGrowth * (n - 1) + TUNE.hpGrowth2 * (n - 1) ** 2;
   for (let n = 2; n <= TUNE.waves; n++) assert.ok(hp(n) > hp(n - 1) * 1.05, `wave ${n} is at least 5% more patient than the one before`);
   assert.ok(hp(10) >= 3.5 && hp(20) >= 9);
-  // A sprinkler upgrade costs 80% more for 25% more damage.
-  assert.ok(BUILD.sprinkler.up.dmg <= 1.3 && TUNE.upGrowth >= 1.8);
+  // Each level of a track costs 60% more than the last, for at most 30% more of anything.
+  assert.ok(TUNE.upGrowth >= 1.6);
+  for (const k of ['sprinkler', 'forklift', 'railgun']) for (const t of ['dmg', 'spd']) assert.ok(BUILD[k].up[t].mul <= 1.3, `${k} ${t}`);
 });
 
 // ---------------------------------------------------------------- lobby
@@ -848,7 +875,8 @@ test('a mom taken down while her child is loose crawls to him, untouchable, then
   assert.ok(ev.filter((e) => e.e === 'crawl').length <= TUNE.crawlTimes);
   assert.equal(ev.filter((e) => e.e === 'left' || e.e === 'escape').length, 1, 'in the end she is stopped, or gets through, like anyone else');
 
-  // She can do it twice, and no more: the third time her patience runs out, she leaves.
+  // She can do it TUNE.crawlTimes times (once), and no more: the next time her patience runs out,
+  // she leaves.
   const g = stage(6);
   send(g, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
   let m2 = null;
@@ -858,8 +886,9 @@ test('a mom taken down while her child is loose crawls to him, untouchable, then
   place(g, 'forklift', at2[0], at2[1]);
   m2.crn = TUNE.crawlTimes - 1;
   m2.hp = 1;
-  const second = play(g, 60, () => { if (m2.crn === TUNE.crawlTimes && m2.cr !== 1 && m2.kd === 0) { m2.kd = 2; m2.kx = m2.x + 2; m2.ky = m2.y; m2.hp = 1; } });
-  assert.equal(second.filter((e) => e.e === 'crawl').length, 1, 'her second and last crawl');
+  // (Once she is up again, the child is put down ahead of her, as if loose once more.)
+  const second = play(g, 60, () => { if (m2.crn === TUNE.crawlTimes && m2.cr !== 1 && (m2.kd === 0 || m2.kd === 3)) { m2.kd = 2; m2.kx = m2.x + 2; m2.ky = m2.y; m2.hp = 1; } });
+  assert.equal(second.filter((e) => e.e === 'crawl').length, 1, 'her last crawl');
   assert.equal(second.filter((e) => e.e === 'left').length, 1, 'then she is out for good');
 });
 

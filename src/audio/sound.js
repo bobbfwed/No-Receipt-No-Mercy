@@ -20,6 +20,7 @@ import { createChain } from './mix.js';
 import { createDebVoice } from './speech.js';
 import { hashText, built } from './synth.js';
 import { createGate } from './crowd.js';
+import { maxIn } from '../sim/index.js';
 
 const STORE_KEY = 'returnsDept.sound';
 const DEFAULTS = { sfx: true, music: true, voice: true, volume: 0.7 };
@@ -44,6 +45,17 @@ const LOOKAHEAD = 0.6;
 const TICK_MS = 120;
 /** Music level while DEB is talking. */
 const DUCK = 0.45;
+
+/**
+ * Did this upgrade take its track to the top level? Tracks have different tops (TUNE.maxLevel,
+ * or the track's own `max`), so the rules are asked; with no track in the event, level 10.
+ */
+function isTop(e) {
+  try {
+    const top = e.t ? maxIn(e.k, e.t) : 0;
+    return top > 0 ? (e.lv | 0) >= top : (e.lv | 0) >= 10;
+  } catch { return false; }
+}
 
 function loadSettings() {
   const s = { ...DEFAULTS };
@@ -148,17 +160,27 @@ export function createSound() {
         case 'sample': fire('sample'); break;
         case 'mess': fire('mess'); break;
         case 'kid': fire('kid'); break;
-        case 'caught': fire('caught'); break;
         case 'crawl': fire('crawl'); break;
         case 'bolt': fire('bolt'); break;
-        case 'smash': fire('smash', { k: e.k, down: e.down | 0 }, { sub: e.down ? 'down' : e.k }); break;
-        case 'upgraded':
-          if (!mine(e.by)) fire('upgraded', { k: e.k, lv: e.lv }, { gain: OTHERS });
-          else if (!heardAlready('fx', 'upgrade')) fire('upgraded', { k: e.k, lv: e.lv });
+        case 'caught': fire('caught', { carry: e.carry | 0 }); break;
+        case 'rail': fire('rail', { n: e.n | 0 }); break;
+        case 'pee': fire('pee'); break;
+        case 'flash': fire('flash', { n: e.n | 0 }); break;
+        case 'fall': fire('fall'); break;
+        case 'pitch': fire('pitch', { r: e.r === 'rush' ? 'rush' : 'stop' }, { sub: e.r === 'rush' ? 'rush' : 'stop' }); break;
+        case 'kidtv': fire('kidtv'); break;
+        case 'shield': fire('shield'); break;
+        // left > 0: the building took a hit and stands (the small clang); 0: destroyed (the wreck).
+        case 'smash': fire('smash', { k: e.k, left: e.left | 0 }, { sub: e.left > 0 ? 'hit' : e.k }); break;
+        case 'upgraded': {
+          const o = { k: e.k, t: e.t, lv: e.lv, top: isTop(e) };
+          if (!mine(e.by)) fire('upgraded', o, { gain: OTHERS });
+          else if (!heardAlready('fx', 'upgrade')) fire('upgraded', o);
           break;
+        }
         case 'rebuilt':
-          if (!mine(e.by)) fire('rebuilt', { n: e.n }, { gain: OTHERS });
-          else if (!heardAlready('fx', 'rebuild')) fire('rebuilt', { n: e.n });
+          if (!mine(e.by)) fire('rebuilt', { n: e.n, short: e.short | 0 }, { gain: OTHERS });
+          else if (!heardAlready('fx', 'rebuild')) fire('rebuilt', { n: e.n, short: e.short | 0 });
           break;
         case 'gave': fire('gave', { n: e.n }, { gain: mine(e.by) || mine(e.to) ? 1 : OTHERS }); break;
         case 'begun': fire('begun'); break;

@@ -142,7 +142,7 @@ test('several commands in one tick from different players, one of them refused, 
   for (const c of [steve, gaz]) {
     assert.equal(c.state.grid[8 * w + 8].k, 'sprinkler');
     assert.equal(c.state.grid[8 * w + 8].o, 1);
-    assert.equal(c.state.grid[8 * w + 8].lv, 2);
+    assert.equal(c.state.grid[8 * w + 8].u.dmg, 1);
     assert.equal(c.state.grid[8 * w + 9].o, 2);
     assert.equal(c.state.phase, 'wave');
     assert.ok(same(c, host));

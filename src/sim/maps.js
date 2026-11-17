@@ -175,13 +175,24 @@ function shelves(w, h, mid, wall) {
  * near the bottom. Every other section is upside down, so production lines run down one section
  * and up the next, which is what makes them a zigzag for shoppers. Patches never touch, so
  * goods always need a belt to get from one to the next.
+ * No patch touches the outer wall: the Loading Bay is a tile in from it, or two in front of an
+ * entrance in that wall, so there is always a walkway round the edge and in through the doors.
  * @returns {string} one character per tile: a key of ZONES, or a space
  */
 export function makeZones(w, h, tiles, doors) {
   const z = new Array(w * h).fill(' ');
   const tall = h >= 30 ? 3 : 2, wide = 4;
-  const tops = { u: 1, p: Math.round(h * 0.25), k: Math.round(h * 0.5), c: Math.round(h * 0.7) };
   for (let n = 0, x0 = 9; x0 + wide - 1 <= w - 4; n++, x0 += 10) {
+    // The Loading Bay is against the top wall in even sections and the bottom wall in odd ones
+    // (they are upside down). Is an entrance in that wall in front of it?
+    const wallY = n % 2 ? h - 1 : 0;
+    const facing = doors.some((door) => door.some((t) => ((t / w) | 0) === wallY && (t % w) >= x0 - 1 && (t % w) <= x0 + wide));
+    const u = facing ? 3 : 2;
+    // The patches below follow on, never closer than one tile apart, and never touching the far wall.
+    const p = Math.max(Math.round(h * 0.25), u + tall + 1);
+    const k = Math.max(Math.round(h * 0.5), p + tall + 1);
+    const c = Math.min(Math.max(Math.round(h * 0.7), k + tall + 1), h - 2 - tall);
+    const tops = { u, p, k, c };
     for (const [ch, top] of Object.entries(tops)) {
       for (let dy = 0; dy < tall; dy++) {
         const y = n % 2 ? h - 1 - (top + dy) : top + dy;

@@ -17,14 +17,16 @@
 // The shoppers' own voices are in shoppers.js.
 import { voice, tone, noise, bell, brass, formant, gain, mtof, rng, vary, say, babble } from './synth.js';
 import { SHAPES, LEFT_ABOUT, bark, thud, knock, leftVoice, escapeVoice, walkout } from './shoppers.js';
+import { rail, railWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, trackIntro, deflate, carryUp } from './newfx.js';
 
-/** The nine kinds of shopper (SHOPPERS in src/sim/constants.js), for the test page's rows. */
-const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro'];
+/** The thirteen kinds of shopper (SHOPPERS in src/sim/constants.js), for the test page's rows. */
+export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker'];
 
 /** What a gym bro can wreck, grouped by what it sounds like. */
 const WRECK = {
   belt: 'belt', unpacker: 'machine', press: 'machine', packer: 'machine', chute: 'machine',
   crate: 'crate', sprinkler: 'sprinkler', forklift: 'forklift', wetfloor: 'wetfloor', samples: 'samples',
+  railgun: 'railgun', salesman: 'tv',
 };
 
 /** A wrench ratchet: a few quick clicks. */
@@ -48,14 +50,20 @@ function clink(v, t, x, peak = 0.12) {
   tone(v, { t, f: f * 1.47, type: 'triangle', peak: peak * 0.5, a: 0.002, d: 0.05 });
 }
 
+const TRACKS = ['dmg', 'spd', 'rng', 'dur'];
+
 /** The upgrade sound for a level (0: not known, a middle pitch). */
 function upgradeSound(ctx, dest, t, o = {}) {
   const v = voice(ctx, dest, o.level);
-  // The level sets the pitch; the version sets the instrument (or the run, at level 10).
+  // The level sets the pitch; the version sets the instrument (or the run, at the top level). The
+  // track (damage, speed, range, durability) sets the colour of the first half second.
   const x = vary(o.seed, 3);
-  ratchet(v, t, x, 2 + (x.r() < 0.5 ? 1 : 0));
   const lv = Math.max(0, Math.min(10, o.lv | 0));
-  if (lv >= 10) {
+  const base = lv ? 62 + lv * 2 : 68;
+  let c0 = 0.08;
+  if (TRACKS.includes(o.t)) c0 = trackIntro(v, t, x, o.t, base);
+  else ratchet(v, t, x, 2 + (x.r() < 0.5 ? 1 : 0));
+  if (o.top || lv >= 10) {
     // The top level: a fast arpeggio up two octaves, a brass stab and a sparkle.
     const runs = [[72, 76, 79, 84, 88, 91], [72, 79, 76, 84, 79, 88], [67, 72, 76, 79, 84, 91]];
     runs[x.shape].forEach((m, i) => {
@@ -71,10 +79,9 @@ function upgradeSound(ctx, dest, t, o = {}) {
     return v.end;
   }
   // One whole tone higher for every level: level 1 starts on E4, level 9 on G#5.
-  const base = lv ? 62 + lv * 2 : 68;
   [0, 4, 7].forEach((st, i) => {
     const last = i === 2;
-    const at = t + 0.08 + i * 0.06 * x.j(0.1);
+    const at = t + c0 + i * 0.06 * x.j(0.1);
     const f = mtof(base + st);
     if (x.shape === 1) {
       bell(v, { t: at, f, peak: last ? 0.16 : 0.13, d: last ? 0.35 : 0.12, ratio: 2, index: 0.6 }); // "ding ding DING"
@@ -100,6 +107,12 @@ function rebuildSound(ctx, dest, t, o = {}) {
     at += 0.075 * x.j(0.15);
   }
   const e = at + 0.04;
+  if (o.short > 0) {
+    // Some came back with fewer upgrades (no money for the rest): the "ta-DA" sags into a sad slide.
+    bell(v, { t: e, f: mtof(84), peak: 0.1, d: 0.25, ratio: 2, index: 0.6 });
+    deflate(v, e + 0.1, x);
+    return v.end;
+  }
   bell(v, { t: e, f: mtof(84), peak: 0.12, d: 0.3, ratio: 2, index: 0.6 });
   bell(v, { t: e + 0.08, f: mtof(91), peak: 0.14, d: 0.33, ratio: 2, index: 0.6 });
   return v.end;
@@ -201,6 +214,14 @@ export const SOUNDS = {
       { label: 'dad super', opts: { k: 'dad', sup: 1 }, max: 1.1, about: 'Dad on a Mission: the kazoo an octave down, then coins.' },
       { label: 'karen super', opts: { k: 'karen', sup: 1 }, max: 1.1, about: 'Karen Supreme: more coins, "mm-HM" and the drawer.' },
       { label: 'blind super', opts: { k: 'blind', sup: 1 }, max: 1.1, about: 'Two guide dogs: more coins, a bark and the drawer.' },
+      { label: 'dog', opts: { k: 'dog' }, about: 'Stray Dog: coins, then a happy yelp.' },
+      { label: 'cosplay', opts: { k: 'cosplay' }, about: 'Cosplayer: coins, then a muffled "yay" from inside the foam head.' },
+      { label: 'flasher', opts: { k: 'flasher' }, about: 'Exhibitionist: coins, then a smug "mm-hm" and the robe flapping.' },
+      { label: 'drinker', opts: { k: 'drinker' }, about: 'Day Drinker: coins, a hiccup and a bottle clink.' },
+      { label: 'dog super', opts: { k: 'dog', sup: 1 }, max: 1.1, about: 'Great Dane: more coins, a deep woof and the drawer.' },
+      { label: 'cosplay super', opts: { k: 'cosplay', sup: 1 }, max: 1.1, about: 'Full Mech Suit: more coins, a muffled "yay", servo whirr and the drawer.' },
+      { label: 'flasher super', opts: { k: 'flasher', sup: 1 }, max: 1.1, about: 'Nudist Nan: more coins, a cackle and the drawer.' },
+      { label: 'drinker super', opts: { k: 'drinker', sup: 1 }, max: 1.1, about: 'Bottomless Bruncher: more coins, a hiccup, a cork and the drawer.' },
     ],
     play(ctx, dest, t, o = {}) {
       const v = voice(ctx, dest, o.level);
@@ -217,6 +238,7 @@ export const SOUNDS = {
       { label: k, opts: { k }, about: LEFT_ABOUT[k][0] },
       { label: k + ' super', opts: { k, sup: 1 }, max: 0.95, about: LEFT_ABOUT[k][1] },
     ]),
+    // (every kind of shopper above, normal and super; sound.js passes e.k and e.sup)
     play(ctx, dest, t, o = {}) {
       const v = voice(ctx, dest, (o.level ?? 1) * (o.sup ? 1.15 : 1));
       leftVoice(v, t, o, vary(o.seed, SHAPES));
@@ -367,10 +389,15 @@ export const SOUNDS = {
     about: 'Mum catches the kid: a short relieved "got-CHA", an "AH-ha!", or a grab and a "hm". Quieter than the kid.',
     max: 0.45,
     shapes: 3,
+    variants: [
+      { label: 'cart', opts: {} },
+      { label: 'carried', opts: { carry: 1 }, max: 0.8, about: 'She has lost her cart: the catch, then "oof", a small thump and an "up you get" lift.' },
+    ],
     play(ctx, dest, t, o = {}) {
       const v = voice(ctx, dest, o.level);
       const x = vary(o.seed, 3);
       const p = x.j(0.06);
+      if (o.carry) carryUp(v, t + 0.2, x);
       if (x.shape === 0) {
         tone(v, { t, f: 660 * p, f1: 520 * p, glide: 0.08, type: 'triangle', peak: 0.13, a: 0.005, h: 0.03, d: 0.06 });
         tone(v, { t: t + 0.12, f: 560 * p, f1: 760 * p, glide: 0.06, type: 'triangle', peak: 0.13, a: 0.005, h: 0.06, d: 0.14 });
@@ -445,12 +472,14 @@ export const SOUNDS = {
       { label: 'forklift', opts: { k: 'forklift' }, about: 'Forklift turret: a heavy crash, then its horn dying, its reversing beeper giving up, or a tyre going down.' },
       { label: 'wetfloor', opts: { k: 'wetfloor' }, about: 'Wet floor sign: plastic clattering flat.' },
       { label: 'samples', opts: { k: 'samples' }, about: 'Free samples: the table cracks and the plates smash (sometimes the cheese lands with a splat).' },
-      { label: 'lost a level', opts: { k: 'forklift', down: 1 }, about: 'An upgraded building only lost a level: one clang and a bolt bouncing away.' },
+      { label: 'rail gun', opts: { k: 'railgun' }, max: 1.2, about: 'Rail Gun: the casing cracks, a deep boom, bolts ringing down, the coil winding down (or steam and falling parts).' },
+      { label: 'salesman', opts: { k: 'salesman' }, max: 1.0, about: 'TV Salesman: the television implodes: cracking glass, a "fwump", the tube whining down, sparks or tinkling or static.' },
+      { label: 'hit (hits left)', opts: { k: 'forklift', left: 2 }, about: 'A building took a hit and can take more: one clang and a bolt bouncing away.' },
     ],
     play(ctx, dest, t, o = {}) {
       const v = voice(ctx, dest, o.level);
       const x = vary(o.seed, 3);
-      if (o.down) {
+      if (o.left > 0 || o.down) {
         clang(v, t, 900 * x.j(0.1), 0.16, 0.25);
         noise(v, { t, type: 'bandpass', f: 2500, q: 1, peak: 0.15, a: 0.002, d: 0.03 });
         [0.12, 0.2, 0.26, 0.3].forEach((dt, i) => {
@@ -459,7 +488,11 @@ export const SOUNDS = {
         return v.end;
       }
       const kind = WRECK[o.k] || 'crate';
-      if (kind === 'belt') {
+      if (kind === 'railgun') {
+        railWreck(v, t, x);
+      } else if (kind === 'tv') {
+        tvWreck(v, t, x);
+      } else if (kind === 'belt') {
         noise(v, { t, type: 'lowpass', f: 450, q: 0.7, peak: 0.35, a: 0.002, d: 0.07 }); // rubber slap
         tone(v, { t, f: 95 * x.j(0.1), f1: 50, glide: 0.1, peak: 0.28, a: 0.003, d: 0.12 });
         for (let i = 0; i < 4; i++) clang(v, t + 0.06 + i * x.between(0.06, 0.11), x.between(1200, 2400), 0.09 * (1 - i * 0.15), 0.09, 1.2);
@@ -552,6 +585,12 @@ export const SOUNDS = {
       { label: 'level 5', opts: { lv: 5 } },
       { label: 'level 9', opts: { lv: 9 } },
       { label: 'level 10', opts: { lv: 10 }, max: 1.6 },
+      { label: 'damage 3', opts: { t: 'dmg', lv: 3 }, about: 'Damage track: a heavy knock and a low growl under the chord.' },
+      { label: 'speed 3', opts: { t: 'spd', lv: 3 }, about: 'Speed track: a quick rising whirr.' },
+      { label: 'range 3', opts: { t: 'rng', lv: 3 }, about: 'Range track: a ping that rises.' },
+      { label: 'durability 3', opts: { t: 'dur', lv: 3 }, about: 'Durability track: a bolt being tightened, clicks bunching up, then a clunk.' },
+      { label: 'damage top (8)', opts: { t: 'dmg', lv: 8, top: 1 }, max: 1.6, about: 'The top level of a track: the flourish.' },
+      { label: 'range top (5)', opts: { t: 'rng', lv: 5, top: 1 }, max: 1.6, about: 'A track with its own lower maximum, at the top: the flourish at a lower pitch.' },
     ],
     play: upgradeSound,
   },
@@ -564,8 +603,71 @@ export const SOUNDS = {
       { label: '1', opts: { n: 1 } },
       { label: '3', opts: { n: 3 } },
       { label: '8', opts: { n: 8 } },
+      { label: '3, 2 short', opts: { n: 3, short: 2 }, max: 1.2, about: 'Two of the three came back with fewer upgrades (no money): the "ta-DA" deflates into a sad slide.' },
+      { label: '8, all short', opts: { n: 8, short: 8 }, max: 1.2, about: 'The same after a big rebuild.' },
     ],
     play: rebuildSound,
+  },
+
+  rail: {
+    about: 'The Rail Gun fires: a heavy charging whine climbing for half a second, then a flat CRACK, a deep boom and the beam ringing away. Much heavier than the forklift. More sparkle when it hit a crowd.',
+    max: 1.3,
+    shapes: 3,
+    variants: [
+      { label: 'hit 1', opts: { n: 1 } },
+      { label: 'hit 5', opts: { n: 5 }, about: 'The beam went through five shoppers: a few high sparkles on the end.' },
+    ],
+    play: rail,
+  },
+
+  pee: {
+    about: 'A stray dog pees on a piece of security: a little trickle, then the machine fizzes and crackles, powers down with a falling whine, or zaps and smokes.',
+    max: 1.1,
+    shapes: 3,
+    play: pee,
+  },
+
+  flash: {
+    about: 'The exhibitionist opens her robe: a brassy "ta-DAAA" with a cymbal, a wolf whistle, or both, and an "ooooh" from the men watching (more voices when more stop).',
+    max: 1.2,
+    shapes: 3,
+    variants: [
+      { label: '1 watcher', opts: { n: 1 } },
+      { label: '5 watchers', opts: { n: 5 }, about: 'A second, higher "ooh" joins in.' },
+    ],
+    play: flash,
+  },
+
+  fall: {
+    about: 'The day drinker falls over at a corner: a "whoa" or a few scuffs, a thud, then a bottle rolling away clinking (or breaking).',
+    max: 1.2,
+    shapes: 3,
+    play: fall,
+  },
+
+  pitch: {
+    about: 'The TV Salesman works a shopper. Stop: a quick snatch of patter (sometimes a knife "shing" or a barbecue sizzle). Rush: a "no thanks" swish with a mutter, footsteps or a "tsk". Tiny, because there are many a second.',
+    max: 0.35,
+    shapes: 3,
+    variants: [
+      { label: 'stop', opts: { r: 'stop' } },
+      { label: 'rush', opts: { r: 'rush' } },
+    ],
+    play: pitch,
+  },
+
+  kidtv: {
+    about: 'A runaway child stops to watch the salesman\'s television: a short cartoon jingle sting (xylophone, "da-da-da-da-DAA", or a squeaky run).',
+    max: 0.9,
+    shapes: 3,
+    play: kidtv,
+  },
+
+  shield: {
+    about: 'A cosplayer soaks up shots meant for those around him: a dull foam-armour "bonk" (sometimes with a squeak) or a quick force-field hum.',
+    max: 0.35,
+    shapes: 3,
+    play: shield,
   },
 
   gave: {

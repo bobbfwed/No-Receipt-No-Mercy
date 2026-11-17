@@ -40,6 +40,8 @@ function flood(state, isStart, extraBlocked, mode) {
   const W = state.w, H = state.h, n = W * H;
   const dist = new Uint16Array(n).fill(UNREACHABLE);
   const queue = new Int32Array(n);
+  // A building bigger than one tile is tested by blocking all of its tiles at once.
+  const many = Array.isArray(extraBlocked) ? new Set(extraBlocked) : null;
   let head = 0, tail = 0;
   for (let i = 0; i < n; i++) {
     if (isStart(i)) { dist[i] = 0; queue[tail++] = i; }
@@ -51,7 +53,7 @@ function flood(state, isStart, extraBlocked, mode) {
       const nx = x + DIRS[k][0], ny = y + DIRS[k][1];
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const t = ny * W + nx;
-      if (dist[t] !== UNREACHABLE || t === extraBlocked || !walkable(state, t, mode)) continue;
+      if (dist[t] !== UNREACHABLE || t === extraBlocked || (many && many.has(t)) || !walkable(state, t, mode)) continue;
       dist[t] = d;
       queue[tail++] = t;
     }
@@ -61,7 +63,8 @@ function flood(state, isStart, extraBlocked, mode) {
 
 /**
  * Distance in tiles from every tile to the nearest till.
- * @param {number} extraBlocked a tile index to treat as blocked (to test a placement), or -1
+ * @param {number|number[]} extraBlocked a tile index, or a list of them, to treat as blocked (to
+ *   test a placement), or -1
  * @param {number} [mode] NORMAL, HOP, SMASH or GHOST
  * @returns {Uint16Array}
  */

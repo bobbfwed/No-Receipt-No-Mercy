@@ -1,18 +1,28 @@
 // Short-lived effects driven by simulation events: floating cash, speech blips, "WHOA" pops,
-// forklift shots, sprinkler bursts, wreckage when a gym bro smashes something, and sparkles when
-// something is upgraded. A fixed pool of effect objects is reused so a big wave does not allocate,
-// and every kind has a cap so the screen stays readable.
-import { BUILD, statsOf } from '../sim/index.js';
+// forklift shots, rail gun beams, sprinkler bursts, wreckage when a gym bro smashes something,
+// shield flashes round cosplayers, and sparkles when something is upgraded. A fixed pool of effect
+// objects is reused so a big wave does not allocate, and every kind has a cap so the screen stays
+// readable.
+import { BUILD, DIRS, statsOf, sizeOf } from '../sim/index.js';
 import { TILE, INK, C, rr, paint, label, starPath, burstPath, font, hash2 } from './paint.js';
 import { drawItem } from './items.js';
 import { KIND_COLOURS } from './buildings.js';
 
 const T = TILE;
 const TEXT = 1, BLIP = 2, POP = 3, SHOT = 4, SPRAY = 5, DEBRIS = 6, UPGRADE = 7, DENT = 8;
+const BEAM = 9, MARK = 10, SHIELD = 11;
 /** At most this many of each kind on screen at once; extra events are skipped. */
-const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8];
+const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8];
 /** Lifetime of each kind in ms. */
-const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550];
+const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550, 480, 700, 420];
+/** Upgrade tracks: the colour of the flash and the word on it. */
+const TRACK_LOOK = {
+  dmg: ['#ff6b5e', 'DMG'], spd: ['#5cc8ff', 'SPD'], rng: ['#4ade80', 'RNG'], dur: ['#ffd23f', 'DUR'],
+};
+/** What the TV Salesman shouts now and then, from his stand. */
+const PITCH_LINES = ['ONLY $19.99', 'BUT WAIT!', 'LOOK AT THAT MEAT', 'CUTS LIKE YOUR EX', 'NO MONEY DOWN', 'CALL NOW, LOSER'];
+/** Ms between the salesman's shouts (pitch events come several a second in a crowd). */
+const PITCH_GAP = 2600;
 const POOL = 90;
 /**
  * Events processed per frame at most. Normally a frame brings a handful; after a fast-forward or
@@ -43,14 +53,16 @@ export function createEffects() {
   }
   const count = new Int32Array(CAP.length);
   /** Times (ms) of the latest event per tile or row, read by buildings and the tills. */
-  const timers = { sprayAt: null, shotAt: null, saleAt: null, upAt: null, tillAt: null };
+  const timers = { sprayAt: null, shotAt: null, railAt: null, saleAt: null, upAt: null, tillAt: null };
   let W = 0, H = 0;
+  let pitchAt = -1e9; // when the salesman last shouted
   /** Sizes the per-tile timers for a map (they are kept if the size has not changed). */
   function setMap(w, h) {
     if (w === W && h === H) return;
     W = w; H = h;
     timers.sprayAt = new Float64Array(W * H).fill(-1e9);
     timers.shotAt = new Float64Array(W * H).fill(-1e9);
+    timers.railAt = new Float64Array(W * H).fill(-1e9);
     timers.saleAt = new Float64Array(W * H).fill(-1e9);
     timers.upAt = new Float64Array(W * H).fill(-1e9);
     timers.tillAt = new Float64Array(H).fill(-1e9);
@@ -65,7 +77,7 @@ export function createEffects() {
       const e = pool[k];
       if (!e.type) { if (!slot) slot = e; continue; }
       // Words and shots do not stack: skip one that would land on a live one of the same kind.
-      if (e.type === type && type !== TEXT && type !== SPRAY && now - e.t0 < DUR[type] &&
+      if (e.type === type && type !== TEXT && type !== SPRAY && type !== BEAM && now - e.t0 < DUR[type] &&
           Math.abs(e.x - x) < (type === SHOT ? 1 : 40) && Math.abs(e.y - y) < (type === SHOT ? 1 : 22)) return null;
       if (!oldest || e.t0 < oldest.t0) oldest = e;
     }
@@ -141,25 +153,92 @@ export function createEffects() {
           break;
         case 'caught':
           f = add(POP, now, e.x * T, e.y * T - 34);
-          if (f) { f.text = 'gotcha'; f.color = '#4ade80'; f.r = 0.08; f.sz = 13; }
+          if (f) { f.text = e.carry ? 'UP YOU GET' : 'gotcha'; f.color = '#4ade80'; f.r = 0.08; f.sz = e.carry ? 11 : 13; }
+          break;
+        case 'crawl':
+          f = add(BLIP, now, e.x * T, e.y * T - 22);
+          if (f) { f.text = "MOMMY'S COMING"; f.color = '#c2307a'; f.sz = 11; }
+          break;
+        case 'rail': {
+          // The beam: from the gun's front end, straight out along its facing, the full length.
+          timers.railAt[e.i] = now;
+          const [cx, cy, fw] = centre(s, e.i, 'railgun', e.d);
+          const [dx, dy] = DIRS[e.d & 3];
+          f = add(BEAM, now, cx + dx * fw * T / 2, cy + dy * fw * T / 2);
+          if (f) {
+            f.x2 = f.x + dx * (e.len || 10) * T; f.y2 = f.y + dy * (e.len || 10) * T;
+            const b = s && s.grid[e.i];
+            f.w = (b && b.k === 'railgun' ? statsOf(b).width : BUILD.railgun.width) * 2 * T;
+            f.sz = e.n | 0;
+          }
+          break;
+        }
+        case 'pee': {
+          // A spritz of yellow over the building the dog went for.
+          const [cx, cy] = centre(s, e.i, e.k);
+          f = add(POP, now, cx, cy - 24);
+          if (f) { f.text = 'PSSSST'; f.color = '#f2d21b'; f.r = -0.08; f.st = SPLASH; f.sz = 11; }
+          break;
+        }
+        case 'flash':
+          f = add(POP, now, e.x * T, e.y * T - 48);
+          if (f) { f.text = 'TA-DA!'; f.color = '#ff5fa8'; f.r = -0.1; f.st = STAR; f.sz = 13; }
+          if (e.n > 0) {
+            f = add(MARK, now, e.x * T + 26, e.y * T - 30);
+            if (f) { f.text = e.n > 1 ? `PHWOAR x${e.n}` : 'PHWOAR'; f.color = '#ff3d7f'; f.st = 1; }
+          }
+          break;
+        case 'fall':
+          f = add(POP, now, e.x * T, e.y * T - 20);
+          if (f) { f.text = 'THUD'; f.color = '#e0a33a'; f.r = 0.12; f.st = JAGGED; f.sz = 13; }
+          break;
+        case 'pitch': {
+          // A little mark over the shopper every time; a shout from the stand only now and then.
+          f = add(MARK, now, e.x * T, e.y * T - 44);
+          if (f) {
+            f.text = e.r === 'rush' ? 'NOPE' : 'ooh';
+            f.color = e.r === 'rush' ? '#cbd5e1' : '#7dd3fc';
+            f.st = e.r === 'rush' ? 2 : 0;
+          }
+          if (now - pitchAt < PITCH_GAP || !s) break;
+          const stand = nearestSalesman(s, e.x, e.y);
+          if (stand < 0) break;
+          const [cx, cy] = centre(s, stand, 'salesman');
+          f = add(BLIP, now, cx + 10, cy - 52);
+          if (f) { pitchAt = now; pick++; f.text = PITCH_LINES[pick % PITCH_LINES.length]; f.color = '#b8860b'; f.sz = 11; }
+          break;
+        }
+        case 'kidtv':
+          f = add(BLIP, now, e.x * T + 4, e.y * T - 22);
+          if (f) { f.text = 'OOH, KNIVES!'; f.color = '#e8590c'; f.sz = 11; }
+          break;
+        case 'shield':
+          f = add(SHIELD, now, e.x * T, e.y * T - 18);
+          if (f) f.r = hash2(now | 0, 3) * 6;
           break;
         case 'bolt':
           f = add(POP, now, e.x * T + 14, e.y * T - 30);
           if (f) { f.text = 'WOOF!'; f.color = '#d9372b'; f.r = -0.12; f.st = JAGGED; f.sz = 15; }
           break;
         case 'smash': {
-          const x = (e.i % W) * T + T / 2, y = ((e.i / W) | 0) * T + T / 2;
-          if (e.down) {
-            // An upgraded building only loses a level: a dent, a few chips and a smaller word.
+          // A building still standing (left > 0) is still on the grid; a destroyed one is in the
+          // rubble list, which remembers its facing.
+          let d = 0;
+          if (s && e.left === 0 && s.rubble) {
+            for (let k = s.rubble.length - 1; k >= 0; k--) if (s.rubble[k].i === e.i) { d = s.rubble[k].d | 0; break; }
+          }
+          const [x, y, fw, fh] = centre(s, e.i, e.k || 'crate', d);
+          if (e.left > 0) {
+            // It took the hit and is still standing: a dent, a few chips and a smaller word.
             f = add(DENT, now, x, y);
             if (f) { f.x2 = e.i; f.text = e.k || 'crate'; }
-            f = add(POP, now, x + 8, y - 22);
-            if (f) { f.text = 'BONK'; f.color = '#ffd23f'; f.r = -0.12; f.st = PLAIN; f.sz = 11; }
+            f = add(POP, now, x + 8, y - fh * T / 2 - 2);
+            if (f) { f.text = e.left === 1 ? 'CLANG!' : 'BONK'; f.color = '#ffd23f'; f.r = -0.12; f.st = PLAIN; f.sz = 11; }
             break;
           }
           f = add(DEBRIS, now, x, y);
-          if (f) { f.x2 = e.i; f.text = e.k || 'crate'; }
-          f = add(POP, now, x, y - T / 2 - 6);
+          if (f) { f.x2 = e.i; f.text = e.k || 'crate'; f.sz = Math.max(fw, fh); }
+          f = add(POP, now, x, y - fh * T / 2 - 6);
           if (f) {
             const crate = !e.k || e.k === 'crate';
             f.text = crate ? 'CRUNCH' : 'CRASH!'; f.color = crate ? C.orange : '#ff5a4e'; f.r = 0.1; f.st = JAGGED; f.sz = 14;
@@ -168,14 +247,53 @@ export function createEffects() {
         }
         case 'upgraded': {
           if (!(e.x >= 0 && e.y >= 0 && e.x < W && e.y < H)) break;
-          timers.upAt[e.y * W + e.x] = now;
-          f = add(UPGRADE, now, e.x * T + T / 2, e.y * T + T / 2);
-          if (f) { f.text = 'LV ' + (e.lv | 0); f.r = (e.x * 7 + e.y * 3) % 10; }
+          const ai = e.y * W + e.x;
+          timers.upAt[ai] = now;
+          const b = s && s.grid[ai];
+          const [cx, cy] = centre(s, ai, e.k, b ? b.d | 0 : 0);
+          f = add(UPGRADE, now, cx, cy);
+          if (f) {
+            const look = TRACK_LOOK[e.t];
+            f.text = look ? `${look[1]} ${e.lv | 0}` : 'LV ' + (e.lv | 0);
+            f.color = look ? look[0] : '#ffd23f';
+            f.r = (e.x * 7 + e.y * 3) % 10;
+          }
           break;
         }
         default:
       }
     }
+  }
+
+  /**
+   * The centre of a building's footprint in logical pixels, and its size in tiles: [cx, cy, w, h].
+   * The building on the anchor tile decides the facing if it is still there; otherwise `d`.
+   */
+  function centre(s, ai, k, d = 0) {
+    const g = s && s.grid && s.grid[ai];
+    const b = g && g.part === undefined ? g : null;
+    const kind = b ? b.k : k;
+    const def = BUILD[kind];
+    const [fw, fh] = def ? sizeOf(kind, def.rot ? (b ? b.d | 0 : d) : 0) : [1, 1];
+    return [(ai % W) * T + (fw * T) / 2, ((ai / W) | 0) * T + (fh * T) / 2, fw, fh];
+  }
+
+  /** The anchor tile of the TV Salesman nearest (x, y) in tiles, or -1. */
+  function nearestSalesman(s, x, y) {
+    let best = -1, bd = Infinity;
+    const g = s.grid;
+    // Only near the shopper: his reach is a few tiles, upgraded a few more.
+    const r = 10, x0 = Math.max(0, (x | 0) - r), x1 = Math.min(W - 1, (x | 0) + r);
+    const y0 = Math.max(0, (y | 0) - r), y1 = Math.min(H - 1, (y | 0) + r);
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const b = g[ty * W + tx];
+        if (!b || b.k !== 'salesman' || b.part !== undefined || b.off > 0) continue;
+        const d2 = (tx + 1 - x) ** 2 + (ty + 1 - y) ** 2;
+        if (d2 < bd) { bd = d2; best = ty * W + tx; }
+      }
+    }
+    return best;
   }
 
   /**
@@ -197,6 +315,9 @@ export function createEffects() {
         case DEBRIS: if (e.text === 'crate') debris(ctx, e, k01); else wreckage(ctx, e, k01); break;
         case DENT: dent(ctx, e, k01); break;
         case UPGRADE: upgrade(ctx, e, k01); break;
+        case BEAM: beam(ctx, e, k01); break;
+        case MARK: mark(ctx, e, k01); break;
+        case SHIELD: shield(ctx, e, k01); break;
         default:
       }
     }
@@ -382,16 +503,19 @@ function debris(ctx, e, k) {
 function wreckage(ctx, e, k) {
   const seed = e.x2 | 0;
   const col = KIND_COLOURS[e.text] || KIND_COLOURS.crate;
+  // A big building (sz = its longer side in tiles) goes up in a bigger burst.
+  const sc = e.sz > 1 ? 1 + (e.sz - 1) * 0.55 : 1;
+  const bits = DEBRIS_BITS + 2 + (sc > 1 ? 6 : 0);
   ctx.globalAlpha = 0.55 * (1 - k);
   ctx.beginPath();
-  ctx.ellipse(e.x, e.y + 4, 12 + k * 26, 7 + k * 12, 0, 0, Math.PI * 2);
+  ctx.ellipse(e.x, e.y + 4, (12 + k * 26) * sc, (7 + k * 12) * sc, 0, 0, Math.PI * 2);
   ctx.fillStyle = '#cfcac0';
   ctx.fill();
   ctx.globalAlpha = fadeOut(k, 0.6);
-  for (let j = 0; j < DEBRIS_BITS + 2; j++) {
+  for (let j = 0; j < bits; j++) {
     const h1 = hash2(seed, j), h2 = hash2(j, seed + 7);
-    const a = (j / (DEBRIS_BITS + 2)) * Math.PI * 2 + h1 * 0.6;
-    const v = 30 + h2 * 38;
+    const a = (j / bits) * Math.PI * 2 + h1 * 0.6;
+    const v = (30 + h2 * 38) * sc;
     const x = e.x + Math.cos(a) * v * k;
     const y = e.y + Math.sin(a) * v * k * 0.6 - 40 * k + 46 * k * k;
     ctx.save();
@@ -457,7 +581,7 @@ function upgrade(ctx, e, k) {
   ctx.globalAlpha = Math.max(0, 1 - k * 1.3);
   ctx.beginPath();
   ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-  ctx.strokeStyle = '#ffd23f';
+  ctx.strokeStyle = e.color || '#ffd23f';
   ctx.lineWidth = 4 * (1 - k) + 1;
   ctx.stroke();
   ctx.globalAlpha = fadeOut(k, 0.55);
@@ -469,6 +593,106 @@ function upgrade(ctx, e, k) {
   }
   ctx.globalAlpha = fadeOut(k, 0.6);
   const grow = k < 0.15 ? 0.5 + (k / 0.15) * 0.5 : 1;
-  label(ctx, e.text, e.x, e.y - 24 - k * 18, 15 * grow, '#ffd23f', INK, 4);
+  label(ctx, e.text, e.x, e.y - 24 - k * 18, 15 * grow, e.color || '#ffd23f', INK, 4);
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The rail gun's beam: a white-hot core in a cyan glow, the full length at once, thinning and
+ * fading fast; a flash at the muzzle and a ring of sparks where it starts. (x, y) is the gun's
+ * front end, (x2, y2) the far end, w the width it hits.
+ */
+function beam(ctx, e, k) {
+  const fade = 1 - k;
+  const w = Math.max(6, e.w || 48);
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.moveTo(e.x, e.y);
+  ctx.lineTo(e.x2, e.y2);
+  ctx.globalAlpha = 0.35 * fade;
+  ctx.strokeStyle = '#38e1ff';
+  ctx.lineWidth = w * (1 + k * 0.4);
+  ctx.stroke();
+  ctx.globalAlpha = 0.9 * fade;
+  ctx.strokeStyle = '#7df9ff';
+  ctx.lineWidth = w * 0.45 * (1 - k * 0.6);
+  ctx.stroke();
+  ctx.globalAlpha = fade;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.5, w * 0.18 * (1 - k));
+  ctx.stroke();
+  // Crackles along the beam.
+  const dx = e.x2 - e.x, dy = e.y2 - e.y, len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  ctx.beginPath();
+  for (let j = 0; j < 7; j++) {
+    const p = (j + 0.5) / 7, off = (hash2(j, e.t0 | 0) - 0.5) * w * 0.9;
+    const px = e.x + dx * p, py = e.y + dy * p;
+    ctx.moveTo(px - dx / len * 8, py - dy / len * 8);
+    ctx.lineTo(px + nx * off, py + ny * off);
+    ctx.lineTo(px + dx / len * 8, py + dy / len * 8);
+  }
+  ctx.globalAlpha = 0.8 * fade;
+  ctx.strokeStyle = '#e0ffff';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  // Muzzle flash.
+  ctx.globalAlpha = Math.max(0, 1 - k * 1.8);
+  starPath(ctx, e.x, e.y, 14 + k * 10, k * 3);
+  paint(ctx, '#e0ffff', 1.6);
+  if (e.sz > 1 && k < 0.8) {
+    ctx.globalAlpha = fadeOut(k, 0.5);
+    label(ctx, 'x' + e.sz, e.x + dx / len * 34 + nx * 22, e.y + dy / len * 34 + ny * 22 - 6, 13, '#7df9ff', INK, 3.5);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** A small word over a shopper: st 0 plain, 1 with wolf-whistle marks, 2 with speed lines. */
+function mark(ctx, e, k) {
+  ctx.globalAlpha = fadeOut(k, 0.6);
+  const y = e.y - k * 10;
+  const sz = e.st === 1 ? 12 : 10;
+  label(ctx, e.text, e.x, y, sz, e.color, INK, 3);
+  if (e.st === 1) {
+    // Two little whistle marks either side.
+    ctx.beginPath();
+    for (const sgn of [-1, 1]) {
+      ctx.font = font(sz);
+      const hw = ctx.measureText(e.text).width / 2 + 4;
+      ctx.moveTo(e.x + sgn * hw, y - 4); ctx.lineTo(e.x + sgn * (hw + 5), y - 9);
+      ctx.moveTo(e.x + sgn * hw, y + 1); ctx.lineTo(e.x + sgn * (hw + 7), y + 1);
+    }
+    ctx.strokeStyle = e.color; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke();
+  } else if (e.st === 2) {
+    ctx.beginPath();
+    for (let j = 0; j < 3; j++) { ctx.moveTo(e.x - 16 - j * 2, y - 4 + j * 4); ctx.lineTo(e.x - 24 - j * 2 - k * 6, y - 4 + j * 4); }
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** A cosplayer soaking up a shot: a bubble shield flashing round him, and a TINK. */
+function shield(ctx, e, k) {
+  const r = 20 + k * 8;
+  ctx.globalAlpha = 0.5 * (1 - k);
+  ctx.beginPath();
+  ctx.ellipse(e.x, e.y, r, r * 1.15, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#7df9ff';
+  ctx.fill();
+  ctx.globalAlpha = 1 - k;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#e0ffff';
+  ctx.stroke();
+  // Hexagon facets on the bubble.
+  ctx.beginPath();
+  for (let j = 0; j < 6; j++) {
+    const a = e.r + (j * Math.PI) / 3;
+    ctx.moveTo(e.x + Math.cos(a) * r * 0.45, e.y + Math.sin(a) * r * 0.5);
+    ctx.lineTo(e.x + Math.cos(a) * r * 0.95, e.y + Math.sin(a) * r * 1.08);
+  }
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  ctx.stroke();
+  if (k < 0.7) label(ctx, 'TINK', e.x + r * 0.9, e.y - r * 0.9, 10, '#e0ffff', INK, 3);
   ctx.globalAlpha = 1;
 }

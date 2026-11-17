@@ -19,7 +19,7 @@
 // counts of what the shoppers did: kid (a child escaped), crawl (a mom crawled), mess (a teenager
 // spilled), bolt (a guide dog bolted), slip (a dad slipped), smashed (a gym bro wrecked something;
 // smashedCrate for crate stacks), rebuilt (the Rebuild button put something back).
-import { queueTrainingWave, setTrainingCash, levelOf } from '../sim/index.js';
+import { queueTrainingWave, setTrainingCash, levelIn, maxIn } from '../sim/index.js';
 
 const S = 1; // facing south
 const X = 10; // the column the production line runs down
@@ -32,12 +32,15 @@ const BELTS = [3, 4, 5, 6, 7, 8, 9, 10]; // rows of the belt run under the unpac
 const CRATES = [[X, 1], [X, 12], [X, 13]];
 const GAP = [X, 14];
 const SPRINKLERS = [[9, 13], [11, 13]]; // the two beside the gap
-const UP_TO = 4; // the level the upgrade lesson asks for
+const UP_TO = 3; // the damage level the upgrade lesson asks for (the U key buys damage)
+const DAD_FORK = [12, 6]; // covers the dad short cut over the belts
 
 // Part 2. Where things go was chosen by playing each lesson across many random seeds (see
 // test/tutorial.test.js): the claims in each lesson's text hold whatever the seed.
-const KAREN_FORK = [16, 13]; // past the gap: it covers the way out of the gap from 5 tiles off
-const FORK_UP = 3; // the level the guide dog and scooter lesson asks for
+// Past the gap: it covers the way out of the gap from 6 tiles off, so far back that no Karen gets
+// within her 2.5 tiles of it.
+const KAREN_FORK = [17, 12];
+const FORK_UP = 2; // the damage level the guide dog and scooter lesson asks for
 const MOM_FORK = [3, 5]; // reaches the entrance, so it hits a mom the moment she walks in
 // By the entrance: shoppers coming in must walk round these, a gym bro walks through one. (This
 // lesson comes after the moms: with these crates in place, every mom would walk past the forklift
@@ -70,11 +73,14 @@ const openDoorsHint = (s, f) => (f.waveEnds ? null
 const watchHint = (watch) => (s, f) => (f.waveEnds ? null
   : s.phase === 'wave' ? watch : 'Press OPEN THE DOORS at the top of the screen.');
 
-/** Commands that bring the building on (x, y) up to level `lv`, placing it first if missing. */
+/** The damage level of the building on (x, y): what the U key raises. */
+const dmgAt = (s, x, y) => levelIn(at(s, x, y), 'dmg');
+
+/** Commands that bring the building on (x, y) up to damage level `lv`, placing it first if missing. */
 function upTo(s, k, x, y, lv) {
   const cmds = [];
   if (!is(s, x, y, k)) cmds.push(place(k, x, y));
-  for (let n = is(s, x, y, k) ? levelOf(at(s, x, y)) : 1; n < lv; n++) cmds.push({ c: 'upgrade', x, y });
+  for (let n = is(s, x, y, k) ? dmgAt(s, x, y) : 0; n < lv; n++) cmds.push({ c: 'upgrade', x, y, t: 'dmg' });
   return cmds;
 }
 
@@ -280,16 +286,16 @@ export const STEPS = [
     text: [
       'Each dad who reaches a till takes $25 and leaves a five-star review, which is somehow worse.',
       'Three things work on a dad. Time: his patience drains by itself every second he is in the store. Solid walls: he cannot climb crates or machines, only belts. And Wet Floor Signs: he ignores the sign, so he has a 1 in 3 chance of slipping and lying there stunned.',
-      'A Forklift Turret hits one shopper hard from 5 tiles away.',
+      'A Forklift Turret hits one shopper hard from 6 tiles away.',
       'Do this: put a Forklift (press 8) on the highlighted tile so its circle covers the short cut, and Wet Floor Signs (press 9) on the two tiles in front of the belt. Then OPEN THE DOORS for five more dads.',
     ],
     quip: "The only thing that stops a dad is time. Waste his. You're good at wasting time. I've seen your timesheets.",
-    marks: (s) => wanted(s, [[12, 6, 'forklift', undefined, 'Forklift'], [9, 7, 'wetfloor', undefined, 'Wet Floor'], [9, 8, 'wetfloor', undefined, 'Wet Floor']]),
-    done: (s, f) => is(s, 12, 6, 'forklift') && is(s, 9, 7, 'wetfloor') && is(s, 9, 8, 'wetfloor') && f.waveEnds >= 1,
-    hint: (s, f) => tileHint(s, 12, 6, 'forklift', undefined, 'Forklift') || tileHint(s, 9, 7, 'wetfloor', undefined, 'Wet Floor Sign')
+    marks: (s) => wanted(s, [[...DAD_FORK, 'forklift', undefined, 'Forklift'], [9, 7, 'wetfloor', undefined, 'Wet Floor'], [9, 8, 'wetfloor', undefined, 'Wet Floor']]),
+    done: (s, f) => is(s, ...DAD_FORK, 'forklift') && is(s, 9, 7, 'wetfloor') && is(s, 9, 8, 'wetfloor') && f.waveEnds >= 1,
+    hint: (s, f) => tileHint(s, ...DAD_FORK, 'forklift', undefined, 'Forklift') || tileHint(s, 9, 7, 'wetfloor', undefined, 'Wet Floor Sign')
       || tileHint(s, 9, 8, 'wetfloor', undefined, 'Wet Floor Sign')
-      || (is(s, 12, 6, 'forklift') && is(s, 9, 7, 'wetfloor') && is(s, 9, 8, 'wetfloor') ? openDoorsHint(s, f) : null),
-    solve: () => [place('forklift', 12, 6), place('wetfloor', 9, 7), place('wetfloor', 9, 8), { c: 'start' }],
+      || (is(s, ...DAD_FORK, 'forklift') && is(s, 9, 7, 'wetfloor') && is(s, 9, 8, 'wetfloor') ? openDoorsHint(s, f) : null),
+    solve: () => [place('forklift', ...DAD_FORK), place('wetfloor', 9, 7), place('wetfloor', 9, 8), { c: 'start' }],
   },
   {
     title: 'Upgrades, and super shoppers',
@@ -297,26 +303,25 @@ export const STEPS = [
     wave: [{ k: 'hunter', n: 3, gap: 1.5, at: 0, sup: 3 }],
     text: [
       'Later in a real game, SUPER versions of every shopper turn up. They are bigger, marked in gold, far more patient, and take a double refund. Three Doorbusters (super Bargain Hunters, with three times the patience) are waiting outside. Your two Sprinklers will not stop them as they are.',
-      'Security can be upgraded. Each level hits harder and reaches a little further, and costs nearly twice as much as the level before. It gets more out of the floor space the security already stands on.',
-      `Do this: point at each of the two Sprinklers beside the gap and press U three times, until both are level ${UP_TO}. (Or pick Upgrade in the build bar and click them.) Then press OPEN THE DOORS.`,
+      'Everything you build can be upgraded, in separate tracks: damage, speed, range and durability (how many gym bro hits it survives in a sales event). You buy each track a level at a time, and each level of a track costs more than the one before. Upgrades get more out of the floor space you have already built on. The quick upgrade below buys damage, which is what these Sprinklers need; the number on a building adds up all its levels.',
+      // (This sentence and the Forklift one are reworded for touch screens in content/touch.js,
+      // which matches them word for word.)
+      `Do this: point at each of the two Sprinklers beside the gap and press U three times, until both show Damage ${UP_TO}/${maxIn('sprinkler', 'dmg')}. (Or click a Sprinkler and use its Damage button.) Then press OPEN THE DOORS.`,
     ],
     quip: "It gets bigger if you pay for it. I'm told there are clinics. For you, there's the U key.",
     mood: 'smug',
-    marks: (s) => SPRINKLERS.filter(([x, y]) => levelOf(at(s, x, y)) < UP_TO).map(([x, y]) => ({ x, y, label: 'Upgrade' })),
-    done: (s, f) => SPRINKLERS.every(([x, y]) => is(s, x, y, 'sprinkler') && levelOf(at(s, x, y)) >= UP_TO) && f.waveEnds >= 1,
+    marks: (s) => SPRINKLERS.filter(([x, y]) => dmgAt(s, x, y) < UP_TO).map(([x, y]) => ({ x, y, label: 'Upgrade' })),
+    done: (s, f) => SPRINKLERS.every(([x, y]) => is(s, x, y, 'sprinkler') && dmgAt(s, x, y) >= UP_TO) && f.waveEnds >= 1,
     hint: (s, f) => {
       for (const [x, y] of SPRINKLERS) {
         if (!is(s, x, y, 'sprinkler')) return 'A Sprinkler is missing beside the gap. Put it back on the highlighted tile first (press 7).';
-        if (levelOf(at(s, x, y)) < UP_TO) return `Point at the highlighted Sprinkler and press U. It is level ${levelOf(at(s, x, y))}; it needs to be level ${UP_TO}.`;
+        if (dmgAt(s, x, y) < UP_TO) return `Point at the highlighted Sprinkler and press U. It has ${dmgAt(s, x, y)} of the ${UP_TO} damage levels it needs.`;
       }
       return openDoorsHint(s, f);
     },
     solve: (s) => {
       const cmds = [];
-      for (const [x, y] of SPRINKLERS) {
-        if (!is(s, x, y, 'sprinkler')) cmds.push(place('sprinkler', x, y));
-        for (let lv = is(s, x, y, 'sprinkler') ? levelOf(at(s, x, y)) : 1; lv < UP_TO; lv++) cmds.push({ c: 'upgrade', x, y });
-      }
+      for (const [x, y] of SPRINKLERS) cmds.push(...upTo(s, 'sprinkler', x, y, UP_TO));
       cmds.push({ c: 'start' });
       return cmds;
     },
@@ -357,7 +362,7 @@ export const STEPS = [
     wave: [{ k: 'karen', n: 3, gap: 1, at: 0 }],
     text: [
       'A Karen has four times the patience of a Bargain Hunter and walks slowly. Her trick: while she demands the manager, every Sprinkler and Forklift within 2½ tiles of her works at half speed. Your cluster at the gap is exactly where she spends longest.',
-      'What works: Forklifts. One reaches more than 5 tiles, twice as far as she does, so it can hit her at full speed before she gets close. And a long route, so security all along the way gets a turn, instead of everything hanging on one cluster.',
+      'What works: Forklifts. One reaches 6 tiles, more than twice as far as she does, so it can hit her at full speed before she gets close. And a long route, so security all along the way gets a turn, instead of everything hanging on one cluster.',
       'Do this: put a Forklift (press 8) on the highlighted tile, past the gap. Then OPEN THE DOORS for three Karens.',
     ],
     quip: "Three Karens. Each one has the haircut, the sunglasses on her head, and a husband in the car who stopped listening in 2009. Same as yours.",
@@ -378,17 +383,17 @@ export const STEPS = [
       'The Man with a Guide Dog is not slowed by Wet Floor Signs or puddles, and cannot see Free Samples. Pepper spray makes his dog bolt, dragging him along at more than twice the speed: Sprinklers make him faster.',
       'The Mobility Scooter: nothing slows it at all. The second one today is a Turbo Scooter, a super one with more patience and nearly twice the speed. Your Sprinklers alone cannot stop it.',
       'What works on both: plain damage from a Forklift. It hits hard from far away, and it does not spray, so the dog stays calm.',
-      `Do this: point at the Forklift you just built past the gap and press U twice, to level ${FORK_UP}. (Or pick Upgrade in the build bar and click it.) Then OPEN THE DOORS for two of each.`,
+      `Do this: point at the Forklift you just built past the gap and press U twice, until it shows Damage ${FORK_UP}/${maxIn('forklift', 'dmg')}. (Or click it and use its Damage button.) Then OPEN THE DOORS for two of each.`,
     ],
     quip: "Two blind men and two mobility scooters. Don't feel bad about pepper-spraying them. The dog has already pissed on your sign, and the scooter has more horsepower than your sex life.",
     mood: 'smug',
-    marks: (s) => (is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') && levelOf(at(s, KAREN_FORK[0], KAREN_FORK[1])) >= FORK_UP ? []
+    marks: (s) => (is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') && dmgAt(s, KAREN_FORK[0], KAREN_FORK[1]) >= FORK_UP ? []
       : [{ x: KAREN_FORK[0], y: KAREN_FORK[1], label: is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') ? 'Upgrade' : 'Forklift' }]),
-    done: (s, f) => is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') && levelOf(at(s, KAREN_FORK[0], KAREN_FORK[1])) >= FORK_UP && f.waveEnds >= 1,
+    done: (s, f) => is(s, KAREN_FORK[0], KAREN_FORK[1], 'forklift') && dmgAt(s, KAREN_FORK[0], KAREN_FORK[1]) >= FORK_UP && f.waveEnds >= 1,
     hint: (s, f) => {
       const [x, y] = KAREN_FORK;
       if (!is(s, x, y, 'forklift')) return tileHint(s, x, y, 'forklift', undefined, 'Forklift') || 'The Forklift past the gap is missing. Put it back on the highlighted tile first (press 8).';
-      if (levelOf(at(s, x, y)) < FORK_UP) return `Point at the highlighted Forklift and press U. It is level ${levelOf(at(s, x, y))}; it needs to be level ${FORK_UP}.`;
+      if (dmgAt(s, x, y) < FORK_UP) return `Point at the highlighted Forklift and press U. It has ${dmgAt(s, x, y)} of the ${FORK_UP} damage levels it needs.`;
       return watchHint('Watch the dogs bolt when the sprinklers spray them, and the Forklift catch the Turbo Scooter past the gap.')(s, f);
     },
     solve: (s) => [...upTo(s, 'forklift', KAREN_FORK[0], KAREN_FORK[1], FORK_UP), { c: 'start' }],
@@ -397,8 +402,8 @@ export const STEPS = [
     title: 'Mom and Kid',
     wave: [{ k: 'mom', n: 3, gap: 3, at: 0 }],
     text: [
-      'A Mom and Kid has a child in her cart, and he is the trick. Every few seconds he may escape and run ahead, straight through belts, machines and crates, then wait further along the route. She sprints round the maze to fetch him, ignoring Free Samples.',
-      'If her patience runs out while he is loose, she does not leave. She crawls to him on her hands and knees, and nothing can hurt her on the way: your security wastes its shots. When she reaches him she gets up with a third of her patience back. She can do that twice.',
+      'A Mom and Kid has a child in her cart, and he is the trick. Once, at any moment, he may escape and run ahead, straight through belts, machines and crates, then wait further along the route (never right by the tills). She sprints round the maze to fetch him, ignoring Free Samples, and she will not take a refund without him.',
+      'If her patience runs out while he is loose, she does not leave. She crawls to him on her hands and knees, and nothing can hurt her on the way: your security wastes its shots. When she reaches him she gets up with a third of her patience back, but she has left her cart behind and carries him from then on. She can only do that once.',
       'Do this: press OPEN THE DOORS for three moms. Watch for a kid getting loose and running on ahead (usually straight through your production line), and a mom crawling after him.',
     ],
     quip: "Moms. She grew a whole human being and she can't keep him in a shopping cart. Don't judge her. Yours left you at a petrol station on purpose.",
@@ -431,16 +436,16 @@ export const STEPS = [
     tool: (s, f) => (f.waveEnds && s.rubble.length ? 'rebuild' : 'crate'),
     wave: [{ k: 'gymbro', n: 1, gap: 1, at: 0 }],
     text: [
-      'A Gym Bro does not go round Crate Stacks. He walks straight through them, and wrecks the ones beside him as he passes. Now and then he wrecks something else he passes, too: a belt, a machine, a sign. Upgraded security is tougher: it only loses a level.',
+      'A Gym Bro does not go round Crate Stacks. He walks straight through them, smashing any in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a belt, a machine, a sign. Each thing you build survives one hit in a sales event (more for the biggest security), and one more for every level of durability you buy it.',
       'Do this: put Crates (press 6) on the three highlighted tiles by the entrance, so shoppers have to walk round. Then OPEN THE DOORS for one Gym Bro.',
-      'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, at the normal price.',
+      'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, upgrades and all, for half of what you had spent on it.',
     ],
     quip: "Gym bro. Skips leg day, never skips your crates. He grunts like that in bed, too. Ask your wife.",
     mood: 'angry',
     marks: (s) => {
       if (s.phase === 'wave') return [];
       // The tiles are next to each other, so only the first of each gets a caption.
-      const out = s.rubble.map(([i], n) => ({ x: i % s.w, y: (i / s.w) | 0, label: n ? '' : 'Wrecked' }));
+      const out = s.rubble.map(({ i }, n) => ({ x: i % s.w, y: (i / s.w) | 0, label: n ? '' : 'Wrecked' }));
       const wrecks = out.length;
       for (const [x, y] of DOOR_CRATES) {
         if (!is(s, x, y, 'crate') && !out.some((m) => m.x === x && m.y === y)) out.push({ x, y, label: out.length > wrecks ? '' : 'Crates' });
@@ -465,7 +470,8 @@ export const STEPS = [
     last: true,
     text: [
       'That is every building and every kind of shopper. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
-      'The shoppers from part 2 arrive a few events in, one kind at a time, and DEB reminds you of each one the first time it turns up. Later still come SUPER versions of every shopper. The ? at the top right lists them all, with each trick and what beats it.',
+      'The shoppers from part 2 arrive a few events in, one kind at a time, and DEB reminds you of each one the first time it turns up. A few more you will only meet on the job: Day Drinkers, Stray Dogs, an Exhibitionist and Cosplayers. Later still come SUPER versions of every shopper. The ? at the top right lists them all, with each trick and what beats it.',
+      'Two pieces of security were not in this shift. The Rail Gun is three tiles long and fires straight ahead through everything, hitting every shopper in line. The TV Salesman takes two tiles by two and demonstrates knives on a television: shoppers walking past may stop to watch, or hurry away from him.',
       'A real store is bigger than this one. Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. With friends, each of you gets your own entrance to look after.',
       'A good opening: one production line built as a wall, one gap, sprinklers and a wet floor sign at the gap, and something covering the dad short cut. Then forklifts along the rest of the route, before the Karens and moms arrive.',
       'Pick any button in the build bar to see what it does and how to use it. You can stay here and practise for as long as you like.',

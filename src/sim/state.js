@@ -1,14 +1,22 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
-import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ } from './constants.js';
+import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ, BUILD } from './constants.js';
 import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
 
 /**
+ * A building. One bigger than a tile (BUILD[k].size) is held by the top-left tile of its
+ * footprint, the "anchor"; every other tile of it holds only `{ k, part }`, where `part` is the
+ * anchor's tile index. All the building's state lives on the anchor, so anything that acts once
+ * per building must skip tiles with `part` set.
  * @typedef {Object} Building
  * @property {string} k   kind, a key of BUILD
+ * @property {number} [part] only on the other tiles of a big building: the anchor's tile index
  * @property {number} o   owner player id
  * @property {number} [d] facing direction 0-3
- * @property {number} [lv] upgrade level, 2 or more (absent means level 1)
+ * @property {{dmg?: number, spd?: number, rng?: number, dur?: number}} [u] upgrade levels bought
+ *   in each track (absent or 0 = none; absent altogether until the first upgrade)
+ * @property {number} [hit] gym bro hits taken this wave (cleared when a wave ends)
+ * @property {number} [off] ticks it stays switched off (a dog peed on it); absent when working
  * @property {Array<[string, number]>} [it] belt only: items as [itemKind, progress 0..1], front item first
  * @property {number} [t]   machines: ticks left on the current job; unpacker: ticks until next box
  * @property {number} [n]   press/packer: inputs waiting
@@ -16,6 +24,43 @@ import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
  * @property {number} [cd]  towers: ticks until it can fire again
  * @property {number} [a]   forklift: aim angle in radians (for drawing)
  */
+
+/** A kind's footprint in tiles, [w, h], for a facing: turned on its side facing north or south. */
+export function sizeOf(k, d = 0) {
+  const s = (BUILD[k] && BUILD[k].size) || [1, 1];
+  return d & 1 ? [s[1], s[0]] : [s[0], s[1]];
+}
+
+/**
+ * The tile indexes a building of kind k would cover with its top-left tile at (x, y), facing d,
+ * anchor first; or null if any of them is off the map.
+ */
+export function footprint(state, k, x, y, d = 0) {
+  const [w, h] = sizeOf(k, BUILD[k] && BUILD[k].rot ? d : 0);
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x + w > state.w || y + h > state.h) return null;
+  const out = [];
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push((y + dy) * state.w + x + dx);
+  return out;
+}
+
+/** The anchor tile of the building on tile i (i itself for a 1 x 1 building or an empty tile). */
+export function anchorOf(state, i) {
+  const b = state.grid[i];
+  return b && b.part !== undefined ? b.part : i;
+}
+
+/** The tiles a building covers, from its anchor tile. */
+export function tilesOf(state, ai) {
+  const b = state.grid[ai];
+  if (!b) return [ai];
+  return footprint(state, b.k, ai % state.w, (ai / state.w) | 0, b.d | 0) || [ai];
+}
+
+/** The centre of a building's footprint, in tiles, from its anchor tile. */
+export function centreOf(state, ai, b = state.grid[ai]) {
+  const [w, h] = sizeOf(b.k, BUILD[b.k].rot ? b.d | 0 : 0);
+  return [(ai % state.w) + w / 2, ((ai / state.w) | 0) + h / 2];
+}
 
 /**
  * @typedef {Object} Shopper
@@ -37,15 +82,29 @@ import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
  * @property {number} [m]   teenager: ticks until the next mess
  * @property {number} [bt]  man with guide dog: ticks left of the dog bolting (he moves fast)
  * @property {number} [sm]  gym bro: ticks until he next tries to wreck something beside him
- * @property {number} [kd]  mom: where the child is. 0 in the cart, 1 running away, 2 waiting to be caught
- * @property {number} [kx]  mom: the loose child's position in tiles (only meaningful when kd > 0)
+ * @property {number} [kd]  mom: where the child is. 0 in the cart, 1 running away, 2 waiting to be
+ *                          caught, 3 carried in her arms (she lost the cart; he never runs again)
+ * @property {number} [kx]  mom: the loose child's position in tiles (only meaningful when kd is 1 or 2)
  * @property {number} [ky]
  * @property {number} [kvx] mom: the child's movement during the last tick (for smooth drawing)
  * @property {number} [kvy]
  * @property {number} [kr]  mom: tiles the child will still run
  * @property {number} [kc]  mom: ticks before the child may escape again
+ * @property {number} [kn]  mom: how many times the child has run away
+ * @property {number} [kl]  mom: the last tile the running child passed where he may wait
+ * @property {number} [kt]  mom: 1 once this escape's chance to stop at a salesman's television is used
  * @property {number} [cr]  mom: 1 while she is crawling to her child (nothing can hurt her)
  * @property {number} [crn] mom: how many times she has crawled to him and got up again
+ * @property {number} [nc]  mom: 1 once she has left her cart behind (she then carries the child)
+ * @property {number} [pc]  ticks before a salesman can pitch to this shopper again
+ * @property {number} [ru]  ticks left hurrying away from a salesman (moves faster)
+ * @property {number} [gz]  dads and teenagers: ticks before an exhibitionist can catch his eye again
+ * @property {number} [fl]  exhibitionist: ticks left with her bathrobe open (for drawing)
+ *                          (her `m` is the ticks until she next opens it)
+ * @property {number} [sh]  cosplayer: the tick of his last 'shield' event
+ * @property {number} [sv]  day drinker: his speed multiplier right now
+ * @property {number} [dr]  day drinker: the direction he last walked in, 0-3
+ *                          (a dog's `cd` is the ticks until it can pee again)
  */
 
 /**
@@ -91,7 +150,7 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
   const plan = makeMap(design, size, map ? map.slots ?? MAX_PLAYERS : 1);
   const set = cleanSettings(settings);
   const state = {
-    v: 2,
+    v: 3,
     seed,
     training,
     /** Training mode only: the groups for the next wave, or null. */
@@ -117,8 +176,10 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     shoppers: [],
     /** Messes teenagers have left on the floor, as [tile index, ticks left]. */
     messes: [],
-    /** What gym bros have wrecked and nobody has rebuilt yet, oldest first, as
-     *  [tile index, kind, facing, owner]. The 'rebuild' command puts these back. */
+    /** What gym bros have destroyed and nobody has rebuilt yet, oldest first, as
+     *  { i, k, d, o, u, spent }: anchor tile, kind, facing, owner, upgrade levels (as on a
+     *  building, possibly {}), and what had been spent on it (spentOn). The 'rebuild' command, or
+     *  placing the same kind there, puts them back at TUNE.rebuildShare of that. */
     rubble: [],
     nextId: 1,
     /** Shoppers still to arrive this wave, as [tick, kind, super 0|1, entrance or -1 for any],

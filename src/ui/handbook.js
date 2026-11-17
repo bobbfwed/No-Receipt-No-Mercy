@@ -3,12 +3,13 @@
 // version changes, and what every upgrade level of security costs and does.
 // Opened from the menu and from the game (the book button, or the ? screen). In a game it uses
 // that game's length, difficulty and number of players; from the menu, the standard game.
-import { BUILD, TUNE, SETTINGS, ZONES, shareCount, difficultyOf } from '../sim/index.js';
+import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  levelRows, factoryFacts, fmt,
+  trackRows, factoryFacts, fmt,
 } from '../content/facts.js';
+import { trackName } from './upgradetext.js';
 import { worded } from '../content/touch.js';
 import { versionText } from '../version.js';
 import { h, money } from './dom.js';
@@ -22,6 +23,40 @@ const table = (cls, head, rows) => h('div', { class: 'hb-scroll' }, h('table', {
   h('tbody', null, rows.map((r) => h('tr', null, r.map((c, i) => h(i === 0 ? 'th' : 'td', null, c)))))));
 const facts = (pairs) => h('dl', { class: 'hb-facts' }, pairs.map(([k, v]) => [h('dt', null, k), h('dd', null, v)]));
 const stat = (label, value) => h('span', { class: 'hb-stat' }, h('small', null, label), h('b', null, value));
+
+/** The columns of an upgrade table: for each number a track changes, its heading and how to print it. */
+const COLS = {
+  dmg: ['Hit', fmt],
+  dps: ['A second, one shopper', fmt],
+  most: ['A second, all it reaches', fmt],
+  slow: ['Walking speed on it', pct],
+  slip: ['Dad slips', pct],
+  slipDmg: ['A slip costs him', fmt],
+  secs: ['Holds them for', (v) => `${fmt(v)} s`],
+  stopLeft: ['A dad stops', (v) => pct(1 - (1 - SHOPPERS.dad.pitch[0]) * v)],
+  rushMul: ['A dad hurries past', (v) => pct(SHOPPERS.dad.pitch[1] * v)],
+  cd: ['Seconds between shots', (v) => (v < 2 ? v.toFixed(2) : fmt(v))],
+  period: ['Seconds a box', (v) => v.toFixed(2)],
+  time: ['Seconds an item', (v) => v.toFixed(2)],
+  perMin: ['A minute', fmt],
+  range: ['Reach (tiles)', fmt],
+  hits: ['Gym bro hits it survives', fmt],
+};
+
+/** A table for each kind of upgrade a building has: what each level costs and what it gives. */
+function upgradeTables(k) {
+  const def = BUILD[k];
+  return tracksOf(k).flatMap((track) => {
+    const rows = trackRows(k, track);
+    // "most" only means something for a tower that hits several at once; "perSec" repeats "cd".
+    const keys = Object.keys(COLS).filter((c) => rows[0][c] !== undefined && !(c === 'most' && !(def.targets > 1)));
+    return [
+      h('h4', null, `Upgrade: ${trackName(k, track)}`),
+      table('hb-levels', ['Level', 'Costs', 'Spent on it', ...keys.map((c) => COLS[c][0])],
+        rows.map((r) => [r.lv ? String(r.lv) : 'as built', r.lv ? money(r.cost) : '–', money(r.total), ...keys.map((c) => COLS[c][1](r[c]))])),
+    ];
+  });
+}
 
 /** One shopper: what it is, its numbers through the game, and its super version. */
 function shopperCard(k, ctx) {
@@ -74,36 +109,31 @@ function factoryCard(k, ctx) {
     h('p', null, h('b', null, 'How: '), worded(HOW[k].use)),
     // The sentences above quote Normal prices; the numbers below are for this game's difficulty.
     ctx.pay !== 1 && /$/.test(HOW[k].does) ? h('p', { class: 'hb-small' }, `The prices in the text are for Normal difficulty. On ${ctx.name}:`) : null,
-    facts(factoryFacts(k, ctx.pay).slice(2).filter(([label]) => label !== 'Goes on')));
+    facts(factoryFacts(k, ctx.pay).slice(2).filter(([label]) => label !== 'Goes on')),
+    ...upgradeTables(k));
 }
 
-/** One piece of security, with a row for every upgrade level. */
+/** One piece of security: what it does as built, and a table for each kind of upgrade. */
 function securityCard(k) {
-  const def = BUILD[k], rows = levelRows(k);
-  const reach = (r) => (r.lv === 1 ? def.cost : rows[r.lv - 2].next);
-  let head, body;
-  if (def.tower) {
-    const many = def.targets > 1;
-    head = ['Level', 'Costs', 'Spent in all', 'Hit', 'Range (tiles)', 'Per second, one shopper', ...(many ? [`Per second, all ${def.targets}`] : [])];
-    body = rows.map((r) => [String(r.lv), money(reach(r)), money(r.total), fmt(r.dmg), fmt(r.range), fmt(r.dps), ...(many ? [fmt(r.most)] : [])]);
-  } else if (k === 'wetfloor') {
-    head = ['Level', 'Costs', 'Spent in all', 'Walking speed on it', 'Dad slips', 'A slip costs him'];
-    body = rows.map((r) => [String(r.lv), money(reach(r)), money(r.total), pct(r.slow), pct(r.slip), fmt(r.slipDmg)]);
-  } else {
-    head = ['Level', 'Costs', 'Spent in all', 'Stops a shopper for', 'Range (tiles)'];
-    body = rows.map((r) => [String(r.lv), money(reach(r)), money(r.total), `${fmt(r.secs)} s`, fmt(r.range)]);
-  }
+  const def = BUILD[k], st = statsOf({ k });
   const extra = [];
-  if (def.tower) extra.push(['Fires', `every ${fmt(def.cd)} s${def.targets > 1 ? `, at up to ${def.targets} shoppers at once (the ones nearest the tills)` : ', at the one shopper nearest the tills'}`]);
+  if (def.size) extra.push(['Takes up', `${def.size[0]} x ${def.size[1]} tiles`]);
+  if (def.beam) extra.push(['Fires', `every ${fmt(st.cd)} s, a beam ${fmt(st.range)} tiles long that hits everyone within ${fmt(st.width)} of its line for ${fmt(st.dmg)}`]);
+  else if (def.tower) extra.push(['Fires', `every ${fmt(st.cd)} s for ${fmt(st.dmg)}, ${def.targets > 1 ? `at up to ${def.targets} shoppers at once (the ones nearest the tills)` : 'at the one shopper nearest the tills'}, within ${fmt(st.range)} tiles`]);
   extra.push(['Shoppers', def.blocks ? 'blocked' : 'walk over it']);
   if (k === 'samples') extra.push(['Same shopper again', `not for ${fmt(TUNE.browseCooldown)} s`]);
   if (k === 'wetfloor') extra.push(['A slipped dad', `lies stunned for ${fmt(TUNE.slipSecs)} s`]);
+  if (k === 'salesman') {
+    extra.push(['Reach', `${fmt(st.range)} tiles from the middle of the stand`]);
+    extra.push(['Stops / hurries', Object.keys(SHOPPERS).filter((c) => SHOPPERS[c].pitch).map((c) => `${SHOPPERS[c].name} ${pct(SHOPPERS[c].pitch[0])} / ${pct(SHOPPERS[c].pitch[1])}`).join(' · ')]);
+    extra.push(['A stopped shopper', `watches for ${fmt(st.secs)} s; a hurried one moves 40% faster for ${fmt(TUNE.rushSecs)} s`]);
+  }
+  extra.push(['Gym bro hits it survives', `${st.hits} a sales event`]);
   return h('article', { class: 'hb-card hb-wide' }, buildingHead(k),
     h('p', null, worded(HOW[k].does)),
     h('p', null, h('b', null, 'How: '), worded(HOW[k].use)),
     facts(extra),
-    h('h4', null, 'Upgrade levels'),
-    table('hb-levels', head, body));
+    ...upgradeTables(k));
 }
 
 /**
@@ -132,10 +162,10 @@ export function handbook({ state = null, onClose }) {
         + `Every shopper's patience grows each sales event: ×${fmt(1 + TUNE.hpGrowth + TUNE.hpGrowth2)} in the second, ×${fmt(1 + TUNE.hpGrowth * 9 + TUNE.hpGrowth2 * 81)} by the tenth, ×${fmt(1 + TUNE.hpGrowth * 19 + TUNE.hpGrowth2 * 361)} by the twentieth. Speed and refunds never change. A super shopper takes a double refund.`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)));
     } else if (id === 'factory') {
-      note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Factory buildings cannot be upgraded. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
+      note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price; everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
       body.replaceChildren(...FACTORY_ORDER.map((k) => factoryCard(k, ctx)));
     } else {
-      note.textContent = `Security goes up to level ${TUNE.maxLevel}. The first upgrade costs the building's price and each one after costs ×${fmt(TUNE.upGrowth)} the last. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed, and a gym bro knocks a level off instead of wrecking anything above level 1.`;
+      note.textContent = `Each kind of upgrade is bought separately, up to ${TUNE.maxLevel} levels, and each level costs ×${fmt(TUNE.upGrowth)} the last. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event, and a wrecked building comes back at half price with its upgrades (B).`;
       body.replaceChildren(...SECURITY_ORDER.map((k) => securityCard(k)));
     }
     body.dataset.tab = id;

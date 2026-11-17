@@ -26,19 +26,28 @@
 //   buildings.js  belts, machines, security, level badges, wreckage left by gym bros
 //   items.js      goods on belts (pre-rendered sprites)
 //   messes.js     slushie spills teenagers leave on the floor
-//   shoppers.js   the nine kinds of shopper, their super versions, and a mom's runaway child
-//   effects.js    floating cash, speech blips, shots, sprays, wreckage, upgrade sparkles
+//   shoppers.js   every kind of shopper, their super versions, a mom's runaway child, and the
+//                 carts moms leave behind
+//   effects.js    floating cash, speech blips, shots, beams, sprays, wreckage, upgrade sparkles
 //   guides.js     route guides and tutorial marks
 //   minimap.js    the whole map small, for the interface's corner (a separate canvas)
-import { BUILD, ZONES, TUNE, TICK_HZ, ST, canPlace, canUpgrade, statsOf, levelOf, upgradeCost } from '../sim/index.js';
+// Buildings bigger than a tile are drawn once, from their anchor, when the loop reaches the
+// bottom-left tile of their footprint (so what stands in front of them is drawn after them);
+// their other tiles (`part`) are skipped everywhere.
+import {
+  BUILD, ZONES, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, canUpgrade, statsOf, levelOf,
+  levelIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint,
+} from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
 import {
   beltShape, drawBelt, drawBeltItems, drawBuilding, createBeltSprites, createBuildingSprites, SP,
-  drawBadge, drawRubble,
+  drawBadge, drawRubble, drawWear, rectOf, BIG,
 } from './buildings.js';
 import { buildItemSprites } from './items.js';
-import { drawShopper, shadowPath, drawKid, kidShadowPath, createShopperSprites } from './shoppers.js';
+import {
+  drawShopper, shadowPath, drawKid, kidShadowPath, createShopperSprites, drawCart, drawDownTile,
+} from './shoppers.js';
 import { createMessSprites, drawMesses } from './messes.js';
 import { createEffects } from './effects.js';
 import { drawRoutes, drawMarks } from './guides.js';
@@ -105,6 +114,15 @@ export function createRenderer(canvas, session) {
   const nameWidths = new Map();
   /** Visible tiles this frame, with a margin (exclusive end). */
   const vis = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  /** Carts moms have left behind this wave, where they went down: { x, y, f } in tiles. */
+  const carts = [];
+  /** Moms' `nc` as last seen, by id, to notice the moment one leaves her cart. */
+  const hadCart = new Map();
+  /** Context for one shopper's drawing (see drawShopper): reused. */
+  const how = { pee: null, gawk: false, tv: false };
+  const peeAt = [0, 0];
+  /** Exhibitionists with the bathrobe open this frame, for who is staring at whom. */
+  const flashing = [];
 
   // --- camera ----------------------------------------------------------------------------------
 
@@ -266,6 +284,7 @@ export function createRenderer(canvas, session) {
       if (shapes.length !== s.w * s.h) shapes = new Int8Array(s.w * s.h);
     }
     F.w = s.w;
+    F.zoom = cam.zoom;
     fx.handle(events, now, s);
 
     const alpha = session.alpha();
@@ -293,7 +312,7 @@ export function createRenderer(canvas, session) {
 
     // Doors slide open while a wave is on.
     doorOpen += ((s.phase === 'wave' ? 1 : 0) - doorOpen) * Math.min(1, dt * 4);
-    drawDynamic(ctx, info, s.players, doorOpen, fx.timers.tillAt, now);
+    drawDynamic(ctx, info, doorOpen, fx.timers.tillAt, now);
     // Holding a machine: light up the marked floor it may go on.
     const zch = view.tool && BUILD[view.tool] && BUILD[view.tool].zone;
     if (zch && info.patches.length) drawZoneGlow(zch, now);
@@ -311,10 +330,10 @@ export function createRenderer(canvas, session) {
     if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now, s.w, s.h);
     ctx.restore();
 
-    // Labels that stay the same size on screen whatever the zoom.
+    // Labels that stay the same size on screen whatever the zoom. (Entrances have no name tags:
+    // the owner's ruling, "it's not their door".)
     const k = canvas.width / cssW;
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    drawDoorTags(s);
     if (view.cursors) drawCursors(s, view.cursors);
   }
 
@@ -369,17 +388,22 @@ export function createRenderer(canvas, session) {
   /** What gym bros have wrecked and nobody has rebuilt: a heap of bits where it stood. */
   function drawWreckage(s) {
     for (const r of s.rubble) {
-      const i = r[0];
-      if (s.grid[i]) continue; // rebuilt
+      // Rubble entries are { i, k, d, ... }; (very old saves had [i, k, d, o]).
+      const i = Array.isArray(r) ? r[0] : r.i, k = Array.isArray(r) ? r[1] : r.k, d = (Array.isArray(r) ? r[2] : r.d) | 0;
+      if (s.grid[i] || !BUILD[k]) continue; // rebuilt
       const x = i % s.w, y = (i / s.w) | 0;
-      if (x < vis.x0 || x >= vis.x1 || y < vis.y0 || y >= vis.y1) continue;
-      drawRubble(ctx, i, r[1], s.w);
+      // A big building's rubble starts up to two tiles before the visible area.
+      if (x < vis.x0 - 2 || x >= vis.x1 || y < vis.y0 - 2 || y >= vis.y1) continue;
+      drawRubble(ctx, i, k, s.w, d);
     }
   }
 
   function drawBuildings(s, now) {
     const grid = s.grid, w = s.w;
-    const { x0, y0, x1, y1 } = vis;
+    const { y0, x1, y1 } = vis;
+    // Start two tiles further left: a big building is drawn from the bottom-left of its footprint,
+    // which may be off screen while the rest of it shows.
+    const x0 = Math.max(0, vis.x0 - 2);
     // Belts first (flat on the floor), then the goods riding on them, then everything else.
     const phase = (((F.time * TUNE.beltSpeed * T) % SP) + SP) % SP;
     for (let y = y0; y < y1; y++) {
@@ -403,21 +427,44 @@ export function createRenderer(canvas, session) {
     const upAt = fx.timers.upAt;
     for (let y = y0; y < y1; y++) {
       for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
-        const b = grid[i];
+        let b = grid[i];
         if (!b) continue;
-        if (b.k !== 'belt') drawBuilding(ctx, b, i, F, buildingSprites);
-        const since = now - upAt[i];
+        let ai = i;
+        if (b.part !== undefined) {
+          ai = b.part;
+          b = grid[ai];
+          if (!b || !BIG[b.k]) continue;
+        }
+        // A big building is drawn when the loop reaches the bottom-left tile of its footprint.
+        if (BIG[b.k]) {
+          const fh = sizeOf(b.k, BUILD[b.k].rot ? b.d | 0 : 0)[1];
+          if (i !== ai + (fh - 1) * w) continue;
+        } else if (ai !== i) continue;
+        if (b.k !== 'belt') drawBuilding(ctx, b, ai, F, buildingSprites);
+        drawWear(ctx, b, ai, F);
+        const r = rectOf(b, ai, w);
+        const since = now - upAt[ai];
         if (since < 450) {
           // A flash of light over a building that has just been upgraded.
           ctx.globalAlpha = 0.75 * (1 - since / 450);
-          rr(ctx, x * T + 2, y * T + 2, T - 4, T - 4, 8);
+          rr(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 8);
           ctx.fillStyle = '#fff3b0';
           ctx.fill();
           ctx.globalAlpha = 1;
         }
-        if (b.lv > 1) drawBadge(ctx, x * T + T / 2, y * T + T / 2, b.lv, bk, bres);
+        const lv = b.u ? levelOf(b) : 1;
+        if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b));
       }
     }
+  }
+
+  const trackLists = {};
+  /** True if every upgrade track a building has is at its top level. */
+  function maxedOut(b) {
+    const ts = trackLists[b.k] || (trackLists[b.k] = tracksOf(b.k));
+    if (!ts.length) return false;
+    for (const t of ts) if (levelIn(b, t) < maxIn(b.k, t)) return false;
+    return true;
   }
 
   /** Which way a shopper faces, remembered so one who stops keeps facing the same way. */
@@ -429,14 +476,22 @@ export function createRenderer(canvas, session) {
 
   function drawShoppers(s, alpha) {
     order.length = 0;
+    flashing.length = 0;
     let nk = 0;
+    // Carts left behind stay until the wave is over.
+    if (s.phase !== 'wave') {
+      if (carts.length) carts.length = 0;
+      if (hadCart.size) hadCart.clear();
+    }
     // Only the ones on screen (a margin of two tiles for trolleys, dogs and bubbles).
     const ax = vis.x0 - 2, bx = vis.x1 + 2, ay = vis.y0 - 2, by = vis.y1 + 2;
     for (const sh of s.shoppers) {
+      if (sh.k === 'mom') noticeCart(sh);
+      if (sh.fl > 0 && sh.st !== ST.LEAVE) flashing.push(sh);
       if (sh.x >= ax && sh.x <= bx && sh.y >= ay && sh.y <= by) order.push(sh);
       // A mom's loose child is a figure of its own on the floor, sorted in with everyone else.
       // It runs straight through buildings, and like every shopper is drawn over them.
-      if (sh.kd > 0 && sh.st !== ST.LEAVE && sh.kx >= ax && sh.kx <= bx && sh.ky >= ay && sh.ky <= by) {
+      if ((sh.kd === 1 || sh.kd === 2) && sh.st !== ST.LEAVE && sh.kx >= ax && sh.kx <= bx && sh.ky >= ay && sh.ky <= by) {
         let p = kids[nk];
         if (!p) { p = { kid: true, y: 0, m: null }; kids.push(p); }
         p.y = sh.ky; p.m = sh;
@@ -445,6 +500,14 @@ export function createRenderer(canvas, session) {
       }
     }
     order.sort(byY);
+    // On the floor first: carts moms abandoned, and the tiles drunks are lying across.
+    for (const c of carts) {
+      if (c.x >= ax && c.x <= bx && c.y >= ay && c.y <= by) drawCart(ctx, c.x * T, c.y * T, c.f, shopperSprites);
+    }
+    for (let n = 0; n < order.length; n++) {
+      const sh = order[n];
+      if (!sh.kid && sh.st === ST.STUN && SHOPPERS[sh.k] && SHOPPERS[sh.k].sways) drawDownTile(ctx, sh.x | 0, sh.y | 0, F.time);
+    }
     // All ground shadows in one path, then the figures back to front.
     ctx.beginPath();
     for (let n = 0; n < order.length; n++) {
@@ -467,7 +530,11 @@ export function createRenderer(canvas, session) {
         drawKid(ctx, m, (m.kx + m.kvx * alpha) * T, (m.ky + m.kvy * alpha) * T, f, F, shopperSprites);
         continue;
       }
-      drawShopper(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T, faceOf(sh.id, sh.vx), F, shopperSprites);
+      const px = (sh.x + sh.vx * alpha) * T, py = (sh.y + sh.vy * alpha) * T;
+      let face = faceOf(sh.id, sh.vx);
+      how.pee = null; how.gawk = false; how.tv = false;
+      if (sh.st === ST.WATCH) face = watching(s, sh, face);
+      drawShopper(ctx, sh, px, py, face, F, shopperSprites, how);
     }
     for (let k = 0; k < nk; k++) kids[k].m = null;
     // Forget shoppers who have gone, now and then.
@@ -476,6 +543,81 @@ export function createRenderer(canvas, session) {
       for (const sh of s.shoppers) { live.add(sh.id); live.add(-sh.id); }
       for (const id of facing.keys()) if (!live.has(id)) facing.delete(id);
     }
+  }
+
+  /**
+   * Notices the moment a mom leaves her cart behind (her `nc` turns 1, as she goes down for the
+   * last time) and leaves it on the floor there for the rest of the wave. A mom first seen without
+   * it (after joining mid-wave) leaves nothing, as nobody knows where it is.
+   */
+  function noticeCart(sh) {
+    const was = hadCart.get(sh.id);
+    const now = sh.nc === 1 ? 1 : 0;
+    if (was === now) return;
+    hadCart.set(sh.id, now);
+    if (was === 0 && now === 1 && carts.length < 60) carts.push({ x: sh.x, y: sh.y, f: faceOf(sh.id, sh.vx) });
+  }
+
+  /**
+   * A shopper standing still to watch something (ST.WATCH): works out what, for the drawing (fills
+   * in `how`), and turns him toward it. A dog beside security that is switched off is peeing on it
+   * (rear end toward it); a dad or teenager near an exhibitionist with her robe open is staring at
+   * her; anyone else near a TV Salesman is watching the television.
+   * @returns {number} the facing to draw him with
+   */
+  function watching(s, sh, face) {
+    const def = defOf(sh);
+    if (def.flashes) return face;
+    const W = s.w, H = s.h, grid = s.grid;
+    const tx = sh.x | 0, ty = sh.y | 0;
+    if (def.pees) {
+      // As far as the rules let him reach (peeRange from the middle of a tile), and a little more.
+      const reach = (def.peeRange || TUNE.peeRange) + 0.5;
+      let best = -1, bd = reach * reach;
+      for (let y = Math.max(0, ty - 3); y <= Math.min(H - 1, ty + 3); y++) {
+        for (let x = Math.max(0, tx - 3); x <= Math.min(W - 1, tx + 3); x++) {
+          const g = grid[y * W + x];
+          if (!g) continue;
+          const b = g.part !== undefined ? grid[g.part] : g;
+          if (!b || !(b.off > 0)) continue;
+          const d2 = (x + 0.5 - sh.x) ** 2 + (y + 0.5 - sh.y) ** 2;
+          if (d2 < bd) { bd = d2; best = y * W + x; }
+        }
+      }
+      if (best >= 0) {
+        const bx = best % W, by = (best / W) | 0;
+        // Aim at the edge of that tile nearest the dog.
+        peeAt[0] = Math.max(bx + 0.15, Math.min(bx + 0.85, sh.x));
+        peeAt[1] = Math.max(by + 0.25, Math.min(by + 0.95, sh.y));
+        how.pee = peeAt;
+        if (Math.abs(peeAt[0] - sh.x) > 0.05) return peeAt[0] < sh.x ? 1 : -1;
+        return face;
+      }
+    }
+    if (def.gawks) {
+      for (const f of flashing) {
+        const r = (defOf(f).flashRange || TUNE.flashRange) + 0.5;
+        if ((f.x - sh.x) ** 2 + (f.y - sh.y) ** 2 <= r * r) {
+          how.gawk = true;
+          return Math.abs(f.x - sh.x) < 0.05 ? face : f.x > sh.x ? 1 : -1;
+        }
+      }
+    }
+    let cx = 0, bd = Infinity;
+    for (let y = Math.max(0, ty - 8); y <= Math.min(H - 1, ty + 8); y++) {
+      for (let x = Math.max(0, tx - 8); x <= Math.min(W - 1, tx + 8); x++) {
+        const b = grid[y * W + x];
+        if (!b || b.k !== 'salesman' || b.part !== undefined) continue;
+        const d2 = (x + 1 - sh.x) ** 2 + (y + 1 - sh.y) ** 2;
+        const r = statsOf(b).range + 0.5;
+        if (d2 <= r * r && d2 < bd) { bd = d2; cx = x + 1; }
+      }
+    }
+    if (bd < Infinity) {
+      how.tv = true;
+      return Math.abs(cx - sh.x) < 0.05 ? face : cx > sh.x ? 1 : -1;
+    }
+    return face;
   }
 
   /**
@@ -507,24 +649,95 @@ export function createRenderer(canvas, session) {
     ctx.setLineDash(NO_DASH);
   }
 
-  function tileOutline(px, py, color, width) {
-    rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+  /**
+   * The Rail Gun's beam: a straight strip `range` tiles long and `2 * width` wide from its front
+   * end, through everything. Same styles as rangeCircle.
+   */
+  function beamStrip(fx, fy, d, range, width, style) {
+    const [dx, dy] = DIRS[d & 3];
+    const len = range * T, half = width * T;
+    const x = Math.min(fx, fx + dx * len) - (dy ? half : 0);
+    const y = Math.min(fy, fy + dy * len) - (dx ? half : 0);
+    const w = dx ? len : half * 2, h = dy ? len : half * 2;
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    if (style === 'next') {
+      ctx.setLineDash(RANGE_DASH);
+      ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.lineWidth = 2; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
+      ctx.setLineDash(NO_DASH);
+      return;
+    }
+    const faint = style === 'faint', ok = style !== 'bad';
+    ctx.fillStyle = faint ? 'rgba(125,249,255,0.08)' : ok ? 'rgba(125,249,255,0.16)' : 'rgba(239,68,68,0.14)';
+    ctx.fill();
+    if (!faint) ctx.setLineDash(RANGE_DASH);
+    ctx.lineWidth = faint ? 1.5 : 2.5;
+    ctx.strokeStyle = faint ? 'rgba(200,250,255,0.5)' : ok ? 'rgba(200,250,255,0.95)' : 'rgba(255,120,110,0.9)';
+    ctx.stroke();
+    ctx.setLineDash(NO_DASH);
+    // The centre line, with an arrowhead at the far end.
+    if (!faint) {
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      const ex = fx + dx * len, ey = fy + dy * len;
+      ctx.lineTo(ex, ey);
+      ctx.moveTo(ex - dx * 10 - dy * 7, ey - dy * 10 - dx * 7);
+      ctx.lineTo(ex, ey);
+      ctx.lineTo(ex - dx * 10 + dy * 7, ey - dy * 10 + dx * 7);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = ok ? 'rgba(200,250,255,0.8)' : 'rgba(255,120,110,0.8)';
+      ctx.stroke();
+    }
+  }
+
+  /**
+   * What a building reaches, drawn for building b (any { k, d, u }) with its anchor at tile ai:
+   * the Rail Gun's beam, or a circle round the middle of its footprint for anything with a range.
+   */
+  function showRange(s, b, ai, style) {
+    const st = statsOf(b);
+    if (!(st.range > 0)) return;
+    const r = rectOf(b, ai, s.w);
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    if (BUILD[b.k].beam) {
+      const d = b.d | 0, [dx, dy] = DIRS[d];
+      beamStrip(cx + dx * r.w / 2, cy + dy * r.h / 2, d, st.range, st.width, style);
+    } else {
+      rangeCircle(cx, cy, st.range, style);
+    }
+  }
+
+  function tileOutline(px, py, color, width, pw = T, ph = T) {
+    rr(ctx, px + 1, py + 1, pw - 2, ph - 2, 5);
     ctx.lineWidth = width;
     ctx.strokeStyle = color;
     ctx.stroke();
   }
+
+  /** A scratch building for range previews: { k, d, u }. */
+  const probe = { k: '', d: 0, u: null };
+  const probeU = {};
+  const TRACK_NAME = { dmg: 'DAMAGE', spd: 'SPEED', rng: 'RANGE', dur: 'TOUGHER' };
 
   /** Ghost of the selected building at the hovered tile, the remove highlight, or the upgrade preview. */
   function drawPreview(s, view) {
     const h = view.hover;
     if (!h || !(h.x >= 0 && h.y >= 0 && h.x < s.w && h.y < s.h)) return;
     const i = h.y * s.w + h.x;
-    const px = h.x * T, py = h.y * T, cx = px + T / 2, cy = py + T / 2;
-    const here = s.grid[i];
+    const px = h.x * T, py = h.y * T;
+    // The building under the mouse, whichever of its tiles it is on.
+    const g = s.grid[i];
+    const ai = g && g.part !== undefined ? g.part : i;
+    const here = g ? s.grid[ai] : 0;
     const tool = view.tool;
+    let hr = null;
+    if (here) { const r = rectOf(here, ai, s.w); hr = { x: r.x, y: r.y, w: r.w, h: r.h }; }
 
     if (tool === 'remove') {
-      rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+      const x = hr ? hr.x : px, y = hr ? hr.y : py, w = hr ? hr.w : T, hh = hr ? hr.h : T;
+      const cx = x + w / 2, cy = y + hh / 2;
+      rr(ctx, x + 1, y + 1, w - 2, hh - 2, 5);
       ctx.fillStyle = here ? 'rgba(239,68,68,0.45)' : 'rgba(239,68,68,0.12)';
       ctx.fill();
       ctx.lineWidth = 3;
@@ -543,58 +756,75 @@ export function createRenderer(canvas, session) {
 
     if (tool === 'upgrade') {
       if (!here) { tileOutline(px, py, 'rgba(255,255,255,0.5)', 2); return; }
-      const why = canUpgrade(s, h.x, h.y, session.me);
+      // The track being bought: the one the interface names, or the kind's default.
+      const ts = tracksOf(here.k);
+      const track = view.track && ts.includes(view.track) ? view.track : defaultTrack(here.k);
+      const why = track ? canUpgrade(s, h.x, h.y, session.me, track) : 'noup';
       const ok = why === null;
-      const def = BUILD[here.k];
-      const lv = levelOf(here);
-      const range = statsOf(here).range;
-      if (range > 0) {
-        rangeCircle(cx, cy, range, ok ? 'ok' : 'faint');
-        if (def.up && lv < TUNE.maxLevel) rangeCircle(cx, cy, statsOf(here, lv + 1).range, 'next');
+      showRange(s, here, ai, ok ? 'ok' : 'faint');
+      // Only a range upgrade changes what it reaches: show the reach it would have after.
+      if (track === 'rng' && levelIn(here, 'rng') < maxIn(here.k, 'rng')) {
+        for (const t of ts) probeU[t] = levelIn(here, t);
+        probeU.rng = levelIn(here, 'rng') + 1;
+        probe.k = here.k; probe.d = here.d | 0; probe.u = probeU;
+        showRange(s, probe, ai, 'next');
+        for (const t of ts) delete probeU[t];
       }
-      rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+      rr(ctx, hr.x + 1, hr.y + 1, hr.w - 2, hr.h - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.22)' : 'rgba(239,68,68,0.25)';
       ctx.fill();
       ctx.lineWidth = 3.5;
       ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
       ctx.stroke();
-      // What the click would do: the next level and its price, or why not.
+      // What the click would do: the track's next level and its price, or why not.
       let txt;
-      if (!def.up) txt = 'NO UPGRADES';
-      else if (lv >= TUNE.maxLevel) txt = 'MAX LEVEL';
-      else txt = `LV ${lv + 1}  $${upgradeCost(here)}`;
-      label(ctx, txt, cx, py - 10, 12, ok ? '#86efac' : '#ff8a80', INK, 3.5);
+      if (!track) txt = 'NO UPGRADES';
+      else if (levelIn(here, track) >= maxIn(here.k, track)) txt = `${TRACK_NAME[track]} MAXED`;
+      else txt = `${TRACK_NAME[track]} ${levelIn(here, track) + 1}  $${upgradeCost(here, track)}`;
+      label(ctx, txt, hr.x + hr.w / 2, hr.y - 10, 12, ok ? '#86efac' : '#ff8a80', INK, 3.5);
       return;
     }
 
     const def = tool ? BUILD[tool] : null;
     if (def) {
-      const why = canPlace(s, tool, h.x, h.y, session.me);
+      const d = def.rot ? (view.dir | 0) & 3 : 0;
+      const why = canPlace(s, tool, h.x, h.y, session.me, d);
       const ok = why === null;
-      if (def.range) rangeCircle(cx, cy, def.range, ok ? 'ok' : 'bad');
-      rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+      // Placing a kind on its own rubble puts it back where and how it was (as the rules do).
+      let gi = i, gd = d;
+      for (const r of s.rubble || []) {
+        if (Array.isArray(r) || r.k !== tool) continue;
+        const under = footprint(s, tool, r.i % s.w, (r.i / s.w) | 0, r.d | 0);
+        if (under && under.includes(i)) { gi = r.i; gd = r.d | 0; break; }
+      }
+      ghost.k = tool;
+      ghost.d = gd;
+      ghost.o = session.me;
+      ghost.a = gd * Math.PI / 2;
+      ghost.u = null;
+      const fr = rectOf(ghost, gi, s.w);
+      const gx = fr.x, gy = fr.y, gw = fr.w, gh = fr.h;
+      showRange(s, ghost, gi, ok ? 'ok' : 'bad');
+      rr(ctx, gx + 1, gy + 1, gw - 2, gh - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.35)' : 'rgba(239,68,68,0.4)';
       ctx.fill();
-      ghost.k = tool;
-      ghost.d = (view.dir | 0) & 3;
-      ghost.o = session.me;
-      ghost.a = ((view.dir | 0) & 3) * Math.PI / 2;
       ctx.globalAlpha = 0.7;
       if (tool === 'belt') drawBelt(ctx, s, h.x, h.y, ghost.d, beltShape(s, h.x, h.y, ghost.d), 0, beltSprites, base);
-      else drawBuilding(ctx, ghost, i, F, buildingSprites);
+      else drawBuilding(ctx, ghost, gi, F, buildingSprites);
       ctx.globalAlpha = 1;
-      rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+      rr(ctx, gx + 1, gy + 1, gw - 2, gh - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.18)' : 'rgba(239,68,68,0.3)';
       ctx.fill();
       ctx.lineWidth = 3;
       ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
       ctx.stroke();
+      const cx = gx + gw / 2;
       // Off its marked floor: say where it does go, in that floor's colour. Grows when zoomed out
       // so it stays readable (about 11 screen pixels at least).
       if (why === 'zone' && ZONES[def.zone]) {
         const k = Math.max(1, 36 / cam.zoom);
         const name = ZONES[def.zone].name.toUpperCase() + ' ONLY';
-        const ly = h.y > 1 ? py - 10 * k : py + T + 10 * k;
+        const ly = gy > T ? gy - 10 * k : gy + gh + 10 * k;
         // Kept inside the map at the side walls.
         ctx.font = font(12 * k);
         const half = ctx.measureText(name).width / 2 + 4 * k;
@@ -604,9 +834,12 @@ export function createRenderer(canvas, session) {
       return;
     }
 
-    // No tool: show the range of a tower under the mouse faintly, and a light hover outline.
-    if (here && BUILD[here.k]) rangeCircle(cx, cy, statsOf(here).range, 'faint');
-    tileOutline(px, py, 'rgba(255,255,255,0.7)', 2);
+    // No tool: show the reach of security under the mouse faintly, and a light hover outline
+    // round the whole building.
+    if (here && BUILD[here.k]) {
+      showRange(s, here, ai, 'faint');
+      tileOutline(hr.x, hr.y, 'rgba(255,255,255,0.7)', 2, hr.w, hr.h);
+    } else tileOutline(px, py, 'rgba(255,255,255,0.7)', 2);
   }
 
   // --- screen-space labels (CSS pixel transform) -------------------------------------------------
@@ -618,44 +851,6 @@ export function createRenderer(canvas, session) {
     let w = nameWidths.get(name);
     if (!w) { ctx.font = font(11); w = ctx.measureText(name).width + 12; nameWidths.set(name, w); }
     return w;
-  }
-
-  /**
-   * A name tag in the owner's colour by each open entrance. It hangs outside the store beside its
-   * doorway when there is room on screen, and otherwise sits on the wall next to the doorway.
-   */
-  function drawDoorTags(s) {
-    const TH = 17;
-    for (const d of info.doors) {
-      if (!d.open) continue;
-      const p = s.players[d.n];
-      if (!p) continue;
-      const tw = nameWidth(p.name);
-      // The doorway on screen.
-      const a = { x: sx(d.x0 * T), y: sy(d.y0 * T) };
-      const vert = d.side === 'L' || d.side === 'R';
-      const b = { x: sx((d.x0 + (vert ? 1 : 2)) * T), y: sy((d.y0 + (vert ? 2 : 1)) * T) };
-      if (b.x < 0 || a.x > cssW || b.y < 0 || a.y > cssH) continue; // the doorway is off screen
-      let x, y; // top-left of the tag
-      if (d.side === 'L') {
-        const edge = a.x;
-        if (edge - 6 >= tw) { x = edge - 6 - tw; y = (a.y + b.y) / 2 - TH / 2; } else { x = (a.x + b.x) / 2 - tw / 2; y = sy(d.y0 * T - 14) - TH - 3; }
-      } else if (d.side === 'R') {
-        const edge = b.x;
-        if (cssW - edge - 6 >= tw) { x = edge + 6; y = (a.y + b.y) / 2 - TH / 2; } else { x = (a.x + b.x) / 2 - tw / 2; y = sy(d.y0 * T - 14) - TH - 3; }
-      } else if (d.side === 'T') {
-        const edge = a.y;
-        if (edge - 6 >= TH) { x = (a.x + b.x) / 2 - tw / 2; y = edge - 6 - TH; } else { x = sx(d.x0 * T - 14) - tw - 3; y = (a.y + b.y) / 2 - TH / 2; }
-      } else {
-        const edge = b.y;
-        if (cssH - edge - 6 >= TH) { x = (a.x + b.x) / 2 - tw / 2; y = edge + 6; } else { x = sx(d.x0 * T - 14) - tw - 3; y = (a.y + b.y) / 2 - TH / 2; }
-      }
-      x = Math.max(2, Math.min(cssW - tw - 2, x));
-      y = Math.max(2, Math.min(cssH - TH - 2, y));
-      rr(ctx, x, y, tw, TH, 5);
-      paint(ctx, p.color, 2);
-      label(ctx, p.name, x + tw / 2, y + TH / 2 + 0.5, 11, '#ffffff', INK, 2.5);
-    }
   }
 
   /** Other players' pointers: an arrow in the player's colour with the name beside it. */

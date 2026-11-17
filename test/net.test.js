@@ -5,7 +5,7 @@ import { HostSession, ClientSession } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
 import { VERSION, RELEASE, versionText } from '../src/version.js';
 import { createDirector } from '../src/content/director.js';
-import { nopeLine, LINES, ESCAPE_REVIEWS, LEFT_REVIEWS, NOPE } from '../src/content/lines.js';
+import { nopeLine, LINES, ESCAPE_REVIEWS, LEFT_REVIEWS, NOPE, fill, textOf } from '../src/content/lines.js';
 import { applyDemoLayout, TICK_HZ, TUNE, SHOPPERS, BUILD } from '../src/sim/index.js';
 
 const at = (x, y) => y * 30 + x; // the original small map is 30 tiles wide
@@ -213,10 +213,10 @@ test('on a chosen map, a joining player gets his own entrance and money, and upg
   client.send({ c: 'upgrade', x: 4, y: 4 });
   for (let n = 0; n < 12; n++) { host.update(n * TICK_MS); client.update(n * TICK_MS); }
   const i = 4 * host.state.w + 4;
-  assert.equal(host.state.grid[i].lv, 2);
-  assert.equal(client.state.grid[i].lv, 2);
+  assert.equal(host.state.grid[i].u.dmg, 1);
+  assert.equal(client.state.grid[i].u.dmg, 1);
   assert.equal(client.state.players[0].cash, TUNE.startCash);
-  assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.sprinkler.cost * 2);
+  assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.sprinkler.cost - Math.round(BUILD.sprinkler.cost * BUILD.sprinkler.up.dmg.cost));
 });
 
 test('a client can take the Head Office job, plan a wave over the wire, and DEB announces it', () => {
@@ -239,7 +239,7 @@ test('a client can take the Head Office job, plan a wave over the wire, and DEB 
   run(20, 10);
   assert.equal(host.state.phase, 'wave');
   assert.equal(host.state.spawnQ.length + host.state.shoppers.length, 3);
-  assert.ok(said.some((t) => LINES.officeWave.some((l) => t === l.replace('{p}', 'Steve').replace('{n}', '3'))), 'DEB blames him for the wave');
+  assert.ok(said.some((t) => LINES.officeWave.some((l) => t === fill(textOf(l), { p: 'Steve', n: 3 }))), 'DEB blames him for the wave');
 
   // His building is refused, and he is told why.
   const nopes = [];
