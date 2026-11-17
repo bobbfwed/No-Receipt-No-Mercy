@@ -11,12 +11,14 @@
 //     moves the view.
 // Nothing is built until the finger has either lifted or moved a little, so a second finger that
 // lands a moment after the first turns the touch into a pinch before anything is placed.
-import { BUILD, doorOf } from '../sim/index.js';
+import { BUILD, doorOf, anchorOf } from '../sim/index.js';
 import { startDrag } from './drag.js';
 
 export const BUILD_KEYS = Object.keys(BUILD);
 /** Hotkeys 1-9 then 0, in the order of BUILD. */
-export const HOTKEYS = BUILD_KEYS.map((_, i) => (i < 9 ? String(i + 1) : i === 9 ? '0' : ''));
+// (The first ten keep the keys they have always had; the two newer buildings follow on the same row.)
+const KEY_OF = { belt: '1', unpacker: '2', press: '3', packer: '4', chute: '5', crate: '6', sprinkler: '7', forklift: '8', wetfloor: '9', samples: '0', railgun: '-', salesman: '=' };
+export const HOTKEYS = BUILD_KEYS.map((k) => KEY_OF[k] || '');
 /** Tools that are not buildings. */
 const TOOLS = ['remove', 'upgrade'];
 
@@ -54,6 +56,13 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   const grid = () => session.state?.grid;
   const at = (t) => grid()?.[t.y * session.state.w + t.x];
   const hasBuilding = (t) => !!at(t);
+  /** The top-left tile of the building on a tile (a big building is selected as a whole). */
+  function anchorTile(t) {
+    const s = session.state;
+    if (!t || !s || !at(t)) return null;
+    const i = anchorOf(s, t.y * s.w + t.x);
+    return { x: i % s.w, y: (i / s.w) | 0 };
+  }
   // Head Office cannot touch the store: no tools, no building, no removing. He keeps the camera.
   const isOffice = () => session.state?.players[session.me]?.side === 'office';
 
@@ -61,7 +70,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const next = k && !isOffice() && (BUILD[k] || TOOLS.includes(k)) ? k : null;
     if (next === tool) return;
     tool = next;
-    if (tool) selected = null;
+    if (tool && tool !== 'upgrade') selected = null;
     canvas.dataset.tool = tool || '';
     if (tool) playSound('select');
     onChange();
@@ -85,10 +94,10 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   }
 
   /** Upgrades the building on a tile, if there is one that can be. */
-  function upgrade(t) {
+  function upgrade(t, track) {
     const b = t && at(t);
     if (!b) return;
-    send([{ c: 'upgrade', x: t.x, y: t.y }]);
+    send([track ? { c: 'upgrade', x: t.x, y: t.y, t: track } : { c: 'upgrade', x: t.x, y: t.y }]);
   }
 
   // ---- The view ----------------------------------------------------------------------------------
@@ -155,12 +164,16 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const t = renderer.tileAt(e.clientX, e.clientY);
     hover = t;
     if (!t || !session.state) return;
-    if (e.button === 0 && tool === 'upgrade') { e.preventDefault(); upgrade(t); return; }
+    // With the Upgrade tool, or with nothing held, a click on a building opens its sheet
+    // (what it has, what each upgrade costs, rotate, remove). A click on bare floor closes it.
+    if (e.button === 0 && (tool === 'upgrade' || !tool)) { e.preventDefault(); selected = anchorTile(t); return; }
     let mode = null;
     if (e.button === 2 || tool === 'remove') mode = 'remove';
     else if (tool) mode = 'build';
     if (!mode) return;
     e.preventDefault();
+    // A building bigger than one tile is placed one at a time: dragging would only pile refusals up.
+    if (mode === 'build' && BUILD[tool].size) { send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
     try { canvas.setPointerCapture(e.pointerId); } catch { /* not supported: drag still works inside */ }
     // Dragging belt over belts that are already there turns them, so those tiles are not skipped.
     const taken = mode === 'build' && tool === 'belt' ? (tile) => { const b = at(tile); return !!b && b.k !== 'belt'; } : hasBuilding;
@@ -221,10 +234,11 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** One finger tapped a tile without moving. */
   function touchTap(t) {
     if (!t || !session.state || isOffice()) { selected = null; return; }
-    if (tool === 'upgrade') { hover = t; upgrade(t); return; }
+    if (tool === 'upgrade') { hover = t; selected = anchorTile(t); return; }
+    if (builds() && BUILD[tool].size) { hover = t; send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
     if (builds()) { hover = t; startTouchBuild(t); endTouchBuild(); return; }
     // Nothing held: select the building there (touch.js offers what can be done with it).
-    selected = at(t) ? { x: t.x, y: t.y } : null;
+    selected = anchorTile(t);
     hover = selected;
   }
 
@@ -325,6 +339,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (isOffice() && !['f', 'h', 'Home', 'Escape'].includes(lower0)) return;
     let digit = /^[0-9]$/.test(key) ? key : null;
     if (!digit && /^(Digit|Numpad)[0-9]$/.test(e.code)) digit = e.code.slice(-1);
+    if (digit === null && (key === '-' || key === '=')) digit = key;
     if (digit !== null) {
       const i = HOTKEYS.indexOf(digit);
       if (i >= 0) { setTool(tool === BUILD_KEYS[i] ? null : BUILD_KEYS[i]); e.preventDefault(); }
@@ -335,9 +350,10 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       setTool(tool === 'remove' ? null : 'remove');
       e.preventDefault();
     } else if (lower === 'u') {
-      // With the mouse on a building, upgrade it; otherwise pick up (or put down) the upgrade tool.
+      // With the mouse on a building, upgrade it (whatever is held: the training shift hands you
+      // the Upgrade tool and then says "press U"); otherwise pick up or put down the upgrade tool.
       e.preventDefault();
-      if (tool !== 'upgrade' && hover && at(hover) && BUILD[at(hover).k].up) upgrade(hover);
+      if (hover && at(hover) && BUILD[at(hover).k].up) upgrade(hover);
       else setTool(tool === 'upgrade' ? null : 'upgrade');
     } else if (lower === 'r') {
       e.preventDefault();
@@ -420,7 +436,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   /** Selects a tile's building (as a finger tap does), or clears the selection with null. */
   function select(t) {
-    selected = t && at(t) ? { x: t.x, y: t.y } : null;
+    selected = anchorTile(t);
     if (!tool) hover = selected;
   }
 

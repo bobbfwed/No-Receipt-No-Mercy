@@ -11,12 +11,16 @@
 //             zigzag, with security at every gap and on the dads' short cut), patches what gym
 //             bros wreck, and then stops spending
 //   keen      the same, then keeps buying forklifts on a loose grid, and when the floor is full
-//             spends everything on upgrades, cheapest first
+//             spends everything on upgrades (damage, speed and range of its towers), cheapest first
 //   focus     like keen, but pours its upgrade money into the sprinklers nearest the entrance,
-//             one at a time, as far as each will go (how the owner plays)
+//             one at a time, as far as each will go, cheapest track first (how the owner plays)
+// None of them builds the Rail Gun or the TV Salesman, or buys durability.
 import {
   createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, BUILD, TICK_HZ, MAP_SIZES,
 } from '../src/sim/index.js';
+
+/** The upgrade tracks the bots buy for their towers. */
+const BOT_TRACKS = ['dmg', 'spd', 'rng'];
 
 const S = 1, N = 3;
 
@@ -127,9 +131,16 @@ function play(bot, seed, map) {
       // The first sprinklers in the plan are the ones nearest the entrance.
       for (const [k, x, y] of list) {
         if (k !== 'sprinkler') continue;
-        while (canUpgrade(s, x, y, 0) === null && applyCommand(s, 0, { c: 'upgrade', x, y }).ok) upgrades++;
-        const b = s.grid[y * s.w + x];
-        if (b && upgradeCost(b)) return; // save up for this one before moving on
+        for (;;) {
+          const b = s.grid[y * s.w + x];
+          if (!b || b.k !== 'sprinkler') break;
+          // Its cheapest track next.
+          let t = null, cost = Infinity;
+          for (const tr of BOT_TRACKS) { const c = upgradeCost(b, tr); if (c && c < cost) { cost = c; t = tr; } }
+          if (!t) break; // every track is at the top: on to the next sprinkler
+          if (canUpgrade(s, x, y, 0, t) !== null || !applyCommand(s, 0, { c: 'upgrade', x, y, t }).ok) return; // save up for it
+          upgrades++;
+        }
       }
       return;
     }
@@ -137,17 +148,19 @@ function play(bot, seed, map) {
     // Nothing left to build: upgrade, cheapest first. Sprinklers sit at the gaps everyone must
     // pass, so it will pay up to three times as much for one of those as for a forklift.
     for (;;) {
-      let best = -1, cost = Infinity, score = Infinity;
+      let best = -1, track = null, cost = Infinity, score = Infinity;
       for (let i = 0; i < s.grid.length; i++) {
         const b = s.grid[i];
-        if (!b || !BUILD[b.k].tower) continue;
-        const c = upgradeCost(b);
-        const sc = b.k === 'sprinkler' ? c / 3 : c;
-        if (c && sc < score) { score = sc; cost = c; best = i; }
+        if (!b || b.part !== undefined || !BUILD[b.k].tower) continue;
+        for (const t of BOT_TRACKS) {
+          const c = upgradeCost(b, t);
+          const sc = b.k === 'sprinkler' ? c / 3 : c;
+          if (c && sc < score) { score = sc; cost = c; best = i; track = t; }
+        }
       }
       if (best < 0 || me.cash < cost) return;
       const x = best % s.w, y = (best / s.w) | 0;
-      if (canUpgrade(s, x, y, 0) !== null || !applyCommand(s, 0, { c: 'upgrade', x, y }).ok) return;
+      if (canUpgrade(s, x, y, 0, track) !== null || !applyCommand(s, 0, { c: 'upgrade', x, y, t: track }).ok) return;
       upgrades++;
     }
   }

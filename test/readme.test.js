@@ -7,11 +7,11 @@ import fs from 'node:fs';
 import { fill, generated, pictures } from '../tools/readme.mjs';
 import { versionText } from '../src/version.js';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, SHOPPERS, SUPERS, BUILD, TUNE, MAP_DESIGNS,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, SHOPPERS, SUPERS, BUILD, TUNE, MAP_DESIGNS, SETTINGS,
 } from '../src/sim/index.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, firstWave, countIn,
-  sampleWaves, levelRows, factoryFacts,
+  sampleWaves, levelRows, trackRows, factoryFacts,
 } from '../src/content/facts.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP } from '../src/content/help.js';
 
@@ -30,21 +30,25 @@ test('README.md shows the current version, every store design and every shopper'
   assert.equal(Object.keys(generated()).length, 3);
 });
 
-test('the handbook covers every shopper and building, with help text for each', () => {
+test('the handbook covers every shopper and building', () => {
   assert.deepEqual([...SHOPPER_ORDER].sort(), Object.keys(SHOPPERS).sort());
   assert.deepEqual([...FACTORY_ORDER, ...SECURITY_ORDER].sort(), Object.keys(BUILD).sort());
   assert.deepEqual(SHOPPER_ORDER.map(firstWave), [...SHOPPER_ORDER.map(firstWave)].sort((a, b) => a - b), 'listed in the order they first appear');
   for (const k of SHOPPER_ORDER) {
-    assert.ok(SHOPPER_HELP[k] && SUPER_HELP[k], `help for ${k}`);
     const f = shopperFacts(k);
     assert.ok(f.first >= 1 && f.superFrom >= f.first && f.superHp >= f.hp * 2 && f.superPrice > f.price);
     assert.ok(shopperTraits(k, 0).length >= 2);
+    assert.ok(shopperTraits(k, 0).some(([label]) => label === 'TV Salesman'), `${k}: what the salesman does to him`);
   }
-  for (const k of [...FACTORY_ORDER, ...SECURITY_ORDER]) assert.ok(HOW[k], `help for ${k}`);
   for (const k of FACTORY_ORDER) assert.ok(factoryFacts(k).length >= 3);
   assert.deepEqual(sampleWaves(20), [1, 5, 10, 15, 20]);
   assert.deepEqual(sampleWaves(10), [1, 5, 10]);
   assert.deepEqual(sampleWaves(30), [1, 5, 10, 15, 20, 25, 30]);
+});
+
+test('every shopper and building has help text', () => {
+  for (const k of SHOPPER_ORDER) assert.ok(SHOPPER_HELP[k] && SUPER_HELP[k], `help for ${k}`);
+  for (const k of [...FACTORY_ORDER, ...SECURITY_ORDER]) assert.ok(HOW[k], `help for ${k}`);
 });
 
 test('the patience the handbook quotes is the patience shoppers really walk in with', () => {
@@ -59,7 +63,7 @@ test('the patience the handbook quotes is the patience shoppers really walk in w
     s.shoppers = [];
     let seen = null;
     for (let i = 0; i < 10 && !seen; i++) { step(s); seen = s.shoppers.find((sh) => sh.k === k); }
-    const mul = { easy: 0.75, normal: 1, hard: 1.3, brutal: 1.65 }[difficulty];
+    const mul = SETTINGS.difficulty[difficulty].hp;
     assert.ok(Math.abs(seen.mhp - patienceAt(k, sup, wave, mul)) < 1e-6, `${k} wave ${wave} ${difficulty}: ${seen.mhp} vs ${patienceAt(k, sup, wave, mul)}`);
   }
   // And the head-counts are the wave's.
@@ -68,24 +72,41 @@ test('the patience the handbook quotes is the patience shoppers really walk in w
   assert.deepEqual(countIn('karen', 2, 1), { all: 0, sup: 0 });
 });
 
-test('the upgrade table matches what upgrading really costs and does', () => {
-  for (const k of SECURITY_ORDER) {
-    const rows = levelRows(k);
-    assert.equal(rows.length, TUNE.maxLevel);
-    const s = createGame({ training: true });
-    addPlayer(s, 'Dave');
-    s.players[0].cash = 1e9;
-    applyCommand(s, 0, { c: 'place', k, x: 5, y: 5 });
-    let spent = BUILD[k].cost;
-    for (const row of rows) {
-      assert.equal(row.total, spent, `${k} level ${row.lv}: spent in all`);
-      if (row.lv === TUNE.maxLevel) { assert.equal(row.next, 0); break; }
-      const before = s.players[0].cash;
-      assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5 }).ok);
-      assert.equal(before - s.players[0].cash, row.next, `${k} level ${row.lv}: cost of the next level`);
-      spent += row.next;
+test('the upgrade tables match what upgrading really costs and does, track by track', () => {
+  let tables = 0;
+  for (const k of [...SECURITY_ORDER, ...FACTORY_ORDER]) {
+    for (const t of ['dmg', 'spd', 'rng', 'dur']) {
+      const rows = trackRows(k, t);
+      if (!tracksOf(k).includes(t)) { assert.deepEqual(rows, []); continue; }
+      tables++;
+      const s = createGame({ training: true });
+      addPlayer(s, 'Dave');
+      s.players[0].cash = 1e9;
+      // (Factory machines go anywhere on this map: it has no marked floor.)
+      assert.ok(applyCommand(s, 0, { c: 'place', k, x: 5, y: 5 }).ok);
+      const b = s.grid[5 * s.w + 5];
+      let spent = 0;
+      for (const row of rows) {
+        if (row.lv > 0) {
+          const before = s.players[0].cash;
+          assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t }).ok, `${k} ${t} level ${row.lv}`);
+          assert.equal(before - s.players[0].cash, row.cost, `${k} ${t} level ${row.lv}: what it cost`);
+          spent += row.cost;
+        }
+        assert.equal(row.total, spent, `${k} ${t} level ${row.lv}: spent on the track`);
+        // The numbers in the row are the building's real numbers.
+        const st = statsOf(b);
+        for (const [key, v] of Object.entries(row)) if (key in st) assert.ok(Math.abs(st[key] - v) < 1e-9, `${k} ${t} level ${row.lv}: ${key}`);
+      }
+      assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t }).why, 'max', `${k} ${t}: the table ends at the top level`);
     }
   }
+  assert.ok(tables >= 20);
+  // The old single table still loads: the default track, numbered from level 1.
+  const old = levelRows('sprinkler');
+  assert.equal(old[0].lv, 1);
+  assert.equal(old[0].total, BUILD.sprinkler.cost);
+  assert.equal(old[0].next, trackRows('sprinkler', 'dmg')[1].cost);
   // A level-1 forklift takes exactly its "Hit" off a shopper.
   const s = createGame({ training: true });
   addPlayer(s, 'Dave');

@@ -79,6 +79,16 @@ export const RULES = {
   bolt: { gap: 0.3, soft: 2, per: 2 },
   smash: { gap: 0.12, soft: 3, per: 3 },
   crawl: { gap: 0.4, soft: 2, per: 2 },
+  // The newer events. The salesman's pitches and the cosplayers' shields happen many times a
+  // second in a crowd, so they are tiny, thinned hard and give way to the rest (`common`); the
+  // rest are rare, but a late wave can still have several at once.
+  pitch: { gap: 0.12, soft: 2, per: 2, common: true },
+  shield: { gap: 0.2, soft: 2, per: 2, common: true },
+  kidtv: { gap: 0.3, soft: 2, per: 2 },
+  rail: { gap: 0.4, soft: 2, per: 2 },
+  pee: { gap: 0.3, soft: 2, per: 2 },
+  flash: { gap: 0.4, soft: 2, per: 2 },
+  fall: { gap: 0.3, soft: 2, per: 2 },
   upgraded: { gap: 0.1, soft: 3, per: 3 },
   rebuilt: { gap: 0.3, soft: 2, per: 2 },
   gave: { gap: 0.2, soft: 2, per: 2 },

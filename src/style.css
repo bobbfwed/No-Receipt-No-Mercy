@@ -1170,6 +1170,11 @@ kbd {
 .bb-hints { min-width: 0; overflow: hidden; }
 @media (max-width: 1700px) { .bb-hints { display: none; } }
 @media (max-width: 1280px) { .bb-btn { width: 4.8rem; } }
+/* Fifteen buttons since the Rail Gun and the TV Salesman: narrower ones on all but wide screens,
+   so the Tools group stays on screen. */
+@media (max-width: 1500px) { .bb-btn { width: 5.1rem; } }
+@media (max-width: 1380px) { .bb-btn { width: 4.95rem; } }
+@media (max-width: 1344px) { .bb-btn { width: 4.6rem; } }
 .map-pick { grid-template-columns: 2fr 3fr; }
 
 /* ---------------------------------------------------------------- Head Office */
@@ -1244,7 +1249,8 @@ kbd {
 
 /* The planner: in place of the build bar, the same height or a little more. */
 .planner {
-  --card-w: 6.8rem;
+  /* Thirteen kinds of shopper and a hint make fourteen cards: seven across, two rows. */
+  --card-w: 5.6rem;
   display: flex;
   align-items: stretch;
   gap: 0.6rem;
@@ -1319,15 +1325,15 @@ kbd {
 /* Shopper cards */
 .pl-shop { flex: none; border-color: var(--orange); }
 .pl-shop .pl-label { color: #fdba74; }
-.pl-cards { display: grid; grid-template-columns: repeat(5, var(--card-w)); grid-template-rows: 1fr 1fr; gap: 0.3rem; height: 100%; }
+.pl-cards { display: grid; grid-template-columns: repeat(7, var(--card-w)); grid-template-rows: 1fr 1fr; gap: 0.3rem; height: 100%; }
 .pl-card { position: relative; min-width: 0; min-height: 0; }
 /* Portrait top left with the price under it; name and trick to its right; the third line on the
    right is left free for the super button, which is a separate button laid over the card. */
 .plc-main {
   display: grid;
-  grid-template-columns: 1.75rem minmax(0, 1fr);
+  grid-template-columns: 1.6rem minmax(0, 1fr);
   grid-template-rows: 1fr 1fr auto;
-  column-gap: 0.25rem;
+  column-gap: 0.18rem;
   align-items: center;
   width: 100%;
   height: 100%;
@@ -1344,7 +1350,7 @@ kbd {
 .plc-main:disabled { cursor: not-allowed; opacity: 1; }
 .plc-pic { grid-column: 1; grid-row: 1 / 3; justify-self: center; width: 1.65rem; height: 1.65rem; }
 .plc-text { display: contents; }
-.plc-name { grid-column: 2; grid-row: 1; align-self: end; font-size: 0.72rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plc-name { grid-column: 2; grid-row: 1; align-self: end; font-size: 0.62rem; letter-spacing: -0.02em; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plc-trick { grid-column: 2; grid-row: 2; align-self: start; font-size: 0.58rem; color: #c3cad3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plc-price { grid-column: 1; grid-row: 3; justify-self: center; height: 0.95rem; font: 900 0.64rem/0.95rem var(--font-heavy); color: #4ade80; white-space: nowrap; }
 .plc-sup {
@@ -1389,7 +1395,7 @@ kbd {
 /* How the wave is going (in place of the cards while the doors are open) */
 .pl-live {
   flex: none;
-  width: calc(5 * var(--card-w) + 2.1rem);
+  width: calc(7 * var(--card-w) + 2.7rem);
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -1409,7 +1415,7 @@ kbd {
 .pll-note { margin: 0; font-size: 0.64rem; color: var(--muted); }
 
 /* The plan: one row per group, each with its own stretch of the timeline */
-.pl-plan { flex: 1 1 0; min-width: 31rem; display: flex; flex-direction: column; border-color: #f87171; }
+.pl-plan { flex: 1 1 0; min-width: 30rem; display: flex; flex-direction: column; border-color: #f87171; }
 /* In a small window the planner scrolls sideways instead of cutting the plan off. */
 .planner { overflow-x: auto; overflow-y: hidden; }
 .pl-plan .pl-label { color: #fca5a5; }
@@ -1988,6 +1994,25 @@ html, body { overscroll-behavior: none; }
   .bb-touch .tc-btn { min-width: 3.3rem; }
 }
 
+/* Fifteen buttons leave the held tool's card no room in the bar on anything narrower than a very
+   wide screen (it was squeezed to a sliver and made the bar taller than the floor). There it
+   floats just above the bar, in the middle of the space to the left of DEB's bubble, and gives
+   way to the building sheet. The block after this one restyles it again for small screens. */
+@media (max-width: 1720px) {
+  .bb-info {
+    position: absolute;
+    left: 0.6rem;
+    right: 31.5rem;
+    bottom: calc(100% + 0.45rem);
+    max-width: 28rem;
+    margin: 0 auto;
+    padding: 0.35rem 0.6rem 0.45rem;
+    font-size: 0.74rem;
+    box-shadow: 0 0.3rem 0 rgba(0, 0, 0, 0.45);
+  }
+  .game:has(.touch-sheet:not(.hidden)) .bb-info { display: none; }
+}
+
 /* Any narrow screen, and any touch screen: the build bar is one strip that scrolls sideways, with
    the touch buttons fixed at its end, and the held tool's card is a sheet just above the bar that
    folds down to one line. */
@@ -2275,3 +2300,18 @@ html, body { overscroll-behavior: none; }
   .hb-facts { grid-template-columns: 1fr; }
   .hb-facts dd { margin-bottom: 0.25rem; }
 }
+
+/* ---------------------------------------------------------------- building sheet: a button per upgrade */
+
+.touch-sheet { max-width: min(58rem, calc(100% - 1.2rem)); }
+/* The sheet and DEB's bubble share the bottom of the floor: while the sheet is open the bubble
+   stands on top of it (touch.js measures the sheet into --sheet-h). */
+.game:has(.touch-sheet:not(.hidden)) .deb { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
+.ts-btns { flex-wrap: wrap; }
+.ts-btn.ts-up { align-items: flex-start; text-align: left; min-width: 9.5rem; }
+.ts-btn .ts-gain { white-space: normal; line-height: 1.2; opacity: 0.95; }
+.ts-btn .ts-cost { margin-top: 0.1rem; font-size: 0.86rem; font-weight: 900; }
+.ts-btn.ts-up:disabled { opacity: 0.55; }
+.ts-btn.ts-up.poor .ts-cost { color: #fecaca; }
+.bbi-track { margin: 0.05rem 0 0 !important; }
+.bbi-track .bbi-cost { margin-left: 0.3rem; font-size: 0.74rem; }

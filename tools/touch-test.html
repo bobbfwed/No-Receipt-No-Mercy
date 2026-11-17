@@ -121,8 +121,10 @@
     /** A straight run of `len` free tiles going east. */
     function freeRun(kind, len) {
       const r = renderer.viewRect();
-      for (let y = Math.ceil(r.y0) + 2; y < Math.floor(r.y1) - 2; y++) {
-        for (let x = Math.ceil(r.x0) + 1; x + len < Math.floor(r.x1) - 1; x++) {
+      // (Not the row beside the top wall: a run of belts there can cover the front of a shopper
+      // entrance, and the rules rightly refuse the belt that would wall it in.)
+      for (let y = Math.max(3, Math.ceil(r.y0) + 2); y < Math.floor(r.y1) - 2; y++) {
+        for (let x = Math.max(3, Math.ceil(r.x0) + 1); x + len < Math.floor(r.x1) - 1; x++) {
           let ok = true;
           for (let i = 0; i < len && ok; i++) ok = canPlace(s(), kind, x + i, y, me) === null && !b(x + i, y);
           if (ok) return { x, y };
@@ -229,17 +231,22 @@
     const [sp] = freeTiles('sprinkler', 1);
     await tap(at(sp.x, sp.y));
     check('a tap places a sprinkler', b(sp.x, sp.y)?.k === 'sprinkler');
-    await pick('upgrade');
-    await tap(at(sp.x, sp.y));
-    check('a tap with the Upgrade tool upgrades it', (b(sp.x, sp.y)?.lv || 1) === 2, `level ${b(sp.x, sp.y)?.lv || 1}`);
-    s().players[me].cash += 1000; // enough for the next level
+    // (Each kind of upgrade is bought on its own, from the sheet; the Upgrade tool opens it.)
     await pick('upgrade');
     await tap(at(sp.x, sp.y));
     await wait(80);
-    const up = sheet.querySelector('.ts-up');
-    check('the sheet of a security building offers an upgrade', !!up && !up.disabled);
-    if (up) click(up);
-    check("the sheet's Upgrade button upgrades it", (b(sp.x, sp.y)?.lv || 1) === 3, `level ${b(sp.x, sp.y)?.lv || 1}`);
+    check('a tap with the Upgrade tool opens the sheet', !sheet.classList.contains('hidden') && input.selected?.x === sp.x && input.selected?.y === sp.y);
+    s().players[me].cash += 1000; // enough for a level of each
+    await wait(80);
+    const ups = [...sheet.querySelectorAll('.ts-up')];
+    check('the sheet of a sprinkler has a button for each of its four upgrades', ups.length === 4 && ups.every((u) => !u.disabled), `${ups.length} buttons`);
+    const lvOf = (t) => b(sp.x, sp.y)?.u?.[t] | 0;
+    if (sheet.querySelector('.ts-dmg')) click(sheet.querySelector('.ts-dmg'));
+    await wait(80);
+    check("the sheet's Damage button buys a level of damage", lvOf('dmg') === 1 && lvOf('dur') === 0, `damage ${lvOf('dmg')}, durability ${lvOf('dur')}`);
+    if (sheet.querySelector('.ts-dur')) click(sheet.querySelector('.ts-dur'));
+    await wait(80);
+    check('... and its Durability button a level of durability', lvOf('dmg') === 1 && lvOf('dur') === 1, `damage ${lvOf('dmg')}, durability ${lvOf('dur')}`);
     input.select(null);
 
     // 11. The Remove tool removes along a drag.

@@ -1,6 +1,6 @@
 // The minimap: the whole store drawn small on its own canvas, for a corner of the interface.
-// Walls, floor, the machines' marked floor tinted in each kind's colour, tills, entrances in their
-// owner's colour, buildings as dots coloured by group
+// Walls, floor, the machines' marked floor tinted in each kind's colour, tills, entrances (light
+// when open, dark when shut), buildings coloured by group over their whole footprint
 // (factory orange, security blue), shoppers as dots (dads light blue, supers bigger and gold),
 // wreckage, and a white frame showing what the main view shows.
 //
@@ -8,11 +8,11 @@
 //   mini.draw();                  a few times a second
 //   mini.tileAt(clientX, clientY) -> {x, y} tile under a click on the minimap, or null
 //                                 (then renderer.centerOn(x + 0.5, y + 0.5))
-import { BUILD, ZONES } from '../sim/index.js';
+import { BUILD, ZONES, sizeOf } from '../sim/index.js';
 import { INK } from './paint.js';
 
 const COL = {
-  wall: [45, 52, 60], floor: [141, 144, 147], till: [217, 55, 43], shut: [70, 76, 84],
+  wall: [45, 52, 60], floor: [141, 144, 147], till: [217, 55, 43], shut: [70, 76, 84], open: [236, 240, 244],
   factory: [245, 140, 30], security: [60, 150, 255], rubble: [110, 96, 80],
 };
 const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f';
@@ -62,11 +62,10 @@ export function createMinimap(canvas, session, renderer) {
       data = ig.createImageData(s.w, s.h);
     }
     const px = data.data, tiles = s.tiles, grid = s.grid, n = s.w * s.h;
-    // Which entrance each tile belongs to, for its owner's colour.
+    // Open entrances light, shut ones dark (an entrance is nobody's, so no player colours).
     const doorCol = new Map();
     (s.doors || []).forEach((door, d) => {
-      const p = s.players[d];
-      const c = d < s.open ? (p ? rgb(p.color) : [255, 255, 255]) : COL.shut;
+      const c = d < s.open ? COL.open : COL.shut;
       for (const i of door) doorCol.set(i, c);
     });
     const zones = s.zones && s.zones.length === n ? s.zones : '';
@@ -80,9 +79,18 @@ export function createMinimap(canvas, session, renderer) {
       px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = 255;
     }
     if (s.rubble) {
+      // A big building's rubble covers its whole footprint.
       for (const r of s.rubble) {
-        const i = r[0];
-        if (i >= 0 && i < n && !grid[i]) { const o = i * 4; px[o] = COL.rubble[0]; px[o + 1] = COL.rubble[1]; px[o + 2] = COL.rubble[2]; }
+        const i = Array.isArray(r) ? r[0] : r.i, k = Array.isArray(r) ? r[1] : r.k;
+        if (!(i >= 0 && i < n) || !BUILD[k]) continue;
+        const [fw, fh] = sizeOf(k, BUILD[k].rot ? (Array.isArray(r) ? r[2] : r.d) | 0 : 0);
+        for (let dy = 0; dy < fh; dy++) {
+          for (let dx = 0; dx < fw; dx++) {
+            const j = i + dy * s.w + dx;
+            if (j >= n || grid[j]) continue;
+            const o = j * 4; px[o] = COL.rubble[0]; px[o + 1] = COL.rubble[1]; px[o + 2] = COL.rubble[2];
+          }
+        }
       }
     }
     ig.putImageData(data, 0, 0);

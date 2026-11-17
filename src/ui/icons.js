@@ -35,6 +35,18 @@ const BUILDING = {
     <rect x="24" y="8" width="4" height="25" fill="#374151"/>
     <path d="M28 18h10M28 28h10" stroke="#6b7280" stroke-width="3"/>
     <circle cx="9" cy="31" r="4" fill="#111"/><circle cx="20" cy="31" r="4" fill="#111"/>`,
+  railgun: `<rect x="2" y="15" width="26" height="12" rx="3" fill="#475569" ${S}/>
+    <rect x="26" y="18" width="12" height="6" fill="#94a3b8" ${S}/>
+    <path d="M7 15v-5h8v5" fill="#facc15" stroke="#111" stroke-width="2"/>
+    <path d="M8 21h14" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="9" cy="31" r="3.5" fill="#111"/><circle cx="21" cy="31" r="3.5" fill="#111"/>`,
+  salesman: `<rect x="3" y="6" width="20" height="15" rx="2" fill="#1f2937" ${S}/>
+    <rect x="6" y="9" width="14" height="9" fill="#38bdf8"/>
+    <path d="M9 21l-2 5M17 21l2 5" stroke="#111" stroke-width="2"/>
+    <circle cx="30" cy="12" r="5" fill="#f5c9a0" stroke="#111" stroke-width="1.8"/>
+    <path d="M23 35v-9q0-7 7-7t7 7v9z" fill="#b91c1c" ${S}/>
+    <path d="M30 20v8" stroke="#facc15" stroke-width="2.5"/>
+    <rect x="2" y="28" width="19" height="7" rx="1.5" fill="#a16207" ${S}/>`,
   wetfloor: `<path d="M20 3L38 35H2z" fill="#facc15" stroke="#111" stroke-width="2.5" stroke-linejoin="round"/>
     <path d="M20 13v11" stroke="#111" stroke-width="4" stroke-linecap="round"/><circle cx="20" cy="29.5" r="2.4" fill="#111"/>`,
   samples: `<path d="M8 26v11M32 26v11" stroke="#111" stroke-width="3"/>

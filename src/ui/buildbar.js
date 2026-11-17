@@ -1,6 +1,7 @@
 // The build bar: one button per building, grouped Factory and Security, plus the Upgrade and
 // Remove tools.
-import { BUILD, TUNE, ZONES, levelOf, upgradeCost, statsOf } from '../sim/index.js';
+import { BUILD, TUNE, ZONES, anchorOf, levelOf, rebuildDeal } from '../sim/index.js';
+import { tracksInfo } from './upgradetext.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, HOTKEYS } from './input.js';
@@ -18,31 +19,17 @@ try { const v = localStorage.getItem(FOLD_KEY); if (v !== null) folded = v === '
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
 /** Names short enough for a button; the tooltip has the full one. */
-const SHORT = { chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples' };
+const SHORT = { chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman' };
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
-  upgrade: { name: 'Upgrade', key: 'U', price: 'security', how: HOW_UPGRADE, keys: 'key U' },
+  upgrade: { name: 'Upgrade', key: 'U', price: 'anything', how: HOW_UPGRADE, keys: 'key U' },
   // Not a tool you hold: one press puts back everything of yours that gym bros have wrecked.
-  rebuild: { name: 'Rebuild', key: 'B', price: 'nothing wrecked', how: HOW_REBUILD, keys: 'key B', action: true },
+  rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true },
   remove: { name: 'Remove', key: 'X', price: `${Math.round(TUNE.sellBack * 100)}% back`, how: HOW_REMOVE, keys: 'key X or Delete' },
 };
 
 const one = (n) => (Math.round(n * 10) / 10).toString();
-
-/** What the next level changes, as short "name old → new" phrases. */
-function gains(b) {
-  const lv = levelOf(b), now = statsOf(b, lv), next = statsOf(b, lv + 1);
-  const out = [];
-  const add = (label, a, z) => { if (one(a) !== one(z)) out.push(`${label} ${one(a)} → ${one(z)}`); };
-  if (b.k === 'sprinkler' || b.k === 'forklift') { add('hit', now.dmg, next.dmg); add('range', now.range, next.range); }
-  if (b.k === 'samples') { add('stops them for', now.secs, next.secs); add('range', now.range, next.range); }
-  if (b.k === 'wetfloor') {
-    out.push(`walking speed ${Math.round(now.slow * 100)}% → ${Math.round(next.slow * 100)}%`);
-    out.push(`dads slip ${Math.round(now.slip * 100)}% → ${Math.round(next.slip * 100)}%`);
-  }
-  return out.join(' · ');
-}
 
 /**
  * @param {Object} input the input controller (tool, dir, hover, setTool)
@@ -64,7 +51,7 @@ export function createBuildBar(input, session) {
       if (how && how.maze) facts.push(how.maze.replace(/\.$/, ''));
       if (def.zone) facts.push(`${ZONES[def.zone].name} floor only`);
       if (def.rot) facts.push('R rotates');
-      if (def.up) facts.push('U upgrades');
+      if (def.size) facts.push(`${def.size[0]} x ${def.size[1]} tiles`);
       lines.push(h('small', null, `${facts.join(' · ')} · key ${HOTKEYS[BUILD_KEYS.indexOf(k)]}`));
     } else {
       const t = TOOLS[k];
@@ -163,30 +150,28 @@ export function createBuildBar(input, session) {
       h('p', null, h('b', null, 'How: '), worded(how.use)));
   }
 
-  /** With the upgrade tool held: what upgrading the building under the mouse costs and gives. */
+  /** With the upgrade tool held: what the building under the mouse has and what more it could have. */
   function showUpgrade(s, cash) {
     const t = input.hover;
-    const b = t ? s.grid[t.y * s.w + t.x] : 0;
-    const key = b ? `${t.x},${t.y},${b.k},${levelOf(b)},${cash >= upgradeCost(b)}` : '';
+    const ai = t && s.grid[t.y * s.w + t.x] ? anchorOf(s, t.y * s.w + t.x) : -1;
+    const b = ai >= 0 ? s.grid[ai] : 0;
+    const key = b ? `${ai},${b.k},${JSON.stringify(b.u || 0)},${cash}` : '';
     if (key === lastUp) return;
     lastUp = key;
     if (!b) { showInfo('upgrade'); return; }
-    const def = BUILD[b.k], lv = levelOf(b), cost = upgradeCost(b);
+    const def = BUILD[b.k], tracks = tracksInfo(b);
     const head = h('div', { class: 'bbi-head' },
       h('span', { class: 'bbi-icon', html: buildingIcon(b.k) }),
-      h('b', null, `${def.name}, level ${lv}`),
-      cost ? h('span', { class: `bbi-cost${cash < cost ? ' poor' : ''}` }, money(cost)) : null,
+      h('b', null, levelOf(b) > 1 ? `${def.name}, ${levelOf(b) - 1} upgrade${levelOf(b) > 2 ? 's' : ''}` : def.name),
       foldBtn());
-    let body;
-    if (!def.up) body = h('p', null, 'This cannot be upgraded. Only security can: sprinklers, forklifts, wet floor signs and free samples.');
-    else if (!cost) body = h('p', null, `Level ${TUNE.maxLevel} is as far as it goes. It has peaked, like you.`);
-    else {
-      body = [
-        h('p', null, h('b', null, `Level ${lv + 1}: `), gains(b)),
-        h('p', null, cash < cost ? `You are ${money(cost - cash)} short. ` : touchedLast() ? 'Tap it again to upgrade. ' : 'Click to upgrade. ', `The level after costs ${money(Math.round(cost * TUNE.upGrowth))}.`),
-      ];
-    }
-    info.replaceChildren(head, ...[].concat(body));
+    const body = tracks.length
+      ? [
+        ...tracks.map((tr) => h('p', { class: 'bbi-track' }, h('b', null, `${tr.name} ${tr.lv}/${tr.max}: `), tr.gain,
+          tr.cost ? h('span', { class: `bbi-cost${cash < tr.cost ? ' poor' : ''}` }, ` ${money(tr.cost)}`) : null)),
+        h('p', null, touchedLast() ? 'Tap it to choose an upgrade.' : 'Click it to choose an upgrade. U buys the first one.'),
+      ]
+      : [h('p', null, 'This cannot be upgraded.')];
+    info.replaceChildren(head, ...body);
   }
 
   /** Lights up one button (the tutorial points at the tool to pick). Pass null to clear. */
@@ -220,11 +205,12 @@ export function createBuildBar(input, session) {
     if (input.tool === 'upgrade') showUpgrade(s, cash);
     // The Rebuild button says how much of yours is lying in pieces and what putting it back costs.
     let n = 0, cost = 0;
-    for (const r of s.rubble) if (r[3] === session.me) { n++; cost += BUILD[r[1]].cost; }
+    // (Half of what had been spent on each; with less money it comes back with fewer upgrades.)
+    for (const r of s.rubble) if (r.o === session.me) { n++; cost += rebuildDeal(r, Infinity).pay; }
     const sig = `${n},${cost},${cash >= cost}`;
     if (sig !== lastRubble) {
       lastRubble = sig;
-      rebuildNote.textContent = n ? `${n} for ${money(cost)}` : 'nothing wrecked';
+      rebuildNote.textContent = n ? `${n} for ${money(cost)}` : 'half price';
       setClass(rebuildBtn, 'idle', n === 0);
       setClass(rebuildBtn, 'alert', n > 0);
     }

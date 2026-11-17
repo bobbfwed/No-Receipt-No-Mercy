@@ -7,7 +7,7 @@ import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
 import { createTutorial, STEPS, PART_TWO } from '../src/tutorial/lessons.js';
 import { HOW } from '../src/content/help.js';
-import { createGame, applyCommand, step, queueTrainingWave, levelOf, defOf, BUILD, TUNE, TICK_HZ, DT, ST } from '../src/sim/index.js';
+import { createGame, applyCommand, step, queueTrainingWave, levelIn, statsOf, defOf, BUILD, TUNE, TICK_HZ, DT, ST } from '../src/sim/index.js';
 
 function trainingSession(seed = 9) {
   return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
@@ -29,6 +29,7 @@ function newWatch() {
     puddleSlow: 0, // ...of which he was moving at half his speed or less
     karenNear: new Set(), // tile indexes of towers that had a Karen within her reach at some point
     bolted: new Set(), // ids of guide dog owners whose dog bolted
+    sprayedOut: new Set(), // ids of guide dog owners who gave up on the spot when first sprayed
     steadyOnSign: 0, // ticks a guide dog owner or scooter spent walking over a Wet Floor Sign...
     steadySlowed: 0, // ...moving slower than his own speed while not bolting
     kidThroughLine: false, // a loose child past the production line while his mom was still before it
@@ -40,12 +41,21 @@ function newWatch() {
 function watchTick(s, w, before) {
   const messes = new Set(s.messes.map((m) => m[0]));
   for (const m of s.shoppers) {
-    if (m.st === ST.LEAVE) continue;
     const def = defOf(m);
+    const was = before.get(m.id);
+    if (m.st === ST.LEAVE) {
+      // A spray that uses up the last of his patience leaves no time for the dog to bolt.
+      if (def.bolts && was && was.st !== ST.LEAVE && !w.bolted.has(m.id)) {
+        for (let t = 0; t < s.grid.length; t++) {
+          const b = s.grid[t];
+          if (b && b.k === 'sprinkler' && (m.x - (t % s.w) - 0.5) ** 2 + (m.y - ((t / s.w) | 0) - 0.5) ** 2 <= statsOf(b).range ** 2) w.sprayedOut.add(m.id);
+        }
+      }
+      continue;
+    }
     const i = (m.y | 0) * s.w + (m.x | 0);
     const moved = Math.hypot(m.vx, m.vy);
     const walking = m.st === ST.WALK && moved > 0;
-    const was = before.get(m.id);
     if (walking && m.k !== 'teen' && messes.has(i) && !s.grid[i]) {
       w.puddleWade++;
       if (moved <= def.speed * DT * 0.51) w.puddleSlow++;
@@ -63,12 +73,12 @@ function watchTick(s, w, before) {
       w.steadyOnSign++;
       if (moved < def.speed * DT * 0.99) w.steadySlowed++;
     }
-    if (def.kid && m.kd > 0 && m.kx > 11 && m.x < 10) w.kidThroughLine = true;
+    if (def.kid && (m.kd === 1 || m.kd === 2) && m.kx > 11 && m.x < 10) w.kidThroughLine = true;
     if (def.kid && was && was.cr === 1 && m.cr === 1 && m.hp < was.hp) w.crawlHit++;
     if (def.kid && was && was.cr === 1 && m.cr !== 1 && m.hp > 0) w.gotUp++;
   }
   before.clear();
-  for (const m of s.shoppers) before.set(m.id, { cr: m.cr, hp: m.hp, i: (m.y | 0) * s.w + (m.x | 0) });
+  for (const m of s.shoppers) before.set(m.id, { cr: m.cr, hp: m.hp, st: m.st, i: (m.y | 0) * s.w + (m.x | 0) });
 }
 
 /**
@@ -137,24 +147,27 @@ function checkPartTwo(s, waves, seen, label) {
   assert.equal(waves[TEENS].escaped, 0, `${label}: the teenagers and hunters are all stopped`);
 
   // Karens: the sprinklers at the gap were in her reach; the new forklift never was, and it fired.
-  const fork = tileOf(s, 16, 13);
+  const fork = tileOf(s, 17, 12);
   assert.ok(seen[KARENS].karenNear.has(tileOf(s, 9, 13)) && seen[KARENS].karenNear.has(tileOf(s, 11, 13)), `${label}: a Karen slowed the sprinklers at the gap`);
   assert.ok(!seen[KARENS].karenNear.has(fork), `${label}: the forklift past the gap was never in a Karen's reach`);
   assert.ok(seen[KARENS].shots.get(fork) > 0, `${label}: the new forklift fired at them`);
   assert.deepEqual(waves[KARENS], { stopped: 3, escaped: 0 }, `${label}: three Karens stopped`);
 
-  // Guide dogs and scooters: every dog bolted, and the sign slowed nobody.
-  assert.equal(seen[STEADY].bolted.size, 2, `${label}: both guide dogs bolted when sprayed`);
+  // Guide dogs and scooters: every dog bolted when sprayed (unless that very spray finished his
+  // owner, who was worn down on the way in by the forklift on the dad short cut), and the sign
+  // slowed nobody.
+  assert.ok(seen[STEADY].bolted.size >= 1, `${label}: a guide dog bolted when sprayed`);
+  assert.equal(seen[STEADY].bolted.size + seen[STEADY].sprayedOut.size, 2, `${label}: both guide dogs bolted when sprayed, or the spray finished the man`);
   assert.ok(seen[STEADY].steadyOnSign > 0, `${label}: they crossed the wet floor sign`);
   assert.equal(seen[STEADY].steadySlowed, 0, `${label}: and it did not slow them`);
   assert.ok(seen[STEADY].shots.get(fork) > 0, `${label}: the upgraded forklift hit them`);
-  assert.equal(levelOf(s.grid[fork]), 3);
+  assert.equal(levelIn(s.grid[fork], 'dmg'), 2);
   assert.deepEqual(waves[STEADY], { stopped: 4, escaped: 0 }, `${label}: two guide dogs and two scooters stopped`);
 
   // Gym bro: he walked through a crate by the entrance, and Rebuild put everything back.
   const doorCrates = [[2, 7], [2, 8], [1, 9]].map(([x, y]) => tileOf(s, x, y));
   assert.ok(seen[GYM].smashes.some((e) => e.k === 'crate' && doorCrates.includes(e.i)), `${label}: the gym bro went through the crates by the entrance`);
-  for (const e of seen[GYM].smashes) if (e.down) assert.ok(s.grid[e.i], `${label}: upgraded security only lost a level`);
+  for (const e of seen[GYM].smashes) if (e.left > 0) assert.ok(s.grid[e.i], `${label}: a building with hits left is still standing`);
   assert.ok(seen[GYM].facts.rebuilt >= 1, `${label}: Rebuild put things back`);
   for (const i of doorCrates) assert.equal(s.grid[i].k, 'crate', `${label}: the crates are back`);
 
@@ -172,7 +185,7 @@ function checkPartTwo(s, waves, seen, label) {
   assert.deepEqual(waves[MOMS_FIX], { stopped: 3, escaped: 0 }, `${label}: three moms stopped`);
 
   // The gap cluster stays as part 1 left it, for the practice at the end.
-  for (const [x, y] of [[9, 13], [11, 13]]) assert.ok(levelOf(s.grid[tileOf(s, x, y)]) >= 3, `${label}: the sprinklers at the gap are still there`);
+  for (const [x, y] of [[9, 13], [11, 13]]) assert.ok(levelIn(s.grid[tileOf(s, x, y)], 'dmg') >= 3, `${label}: the sprinklers at the gap are still there`);
 }
 
 test('training mode: no timer, no losing, waves only when lined up', () => {
@@ -237,7 +250,7 @@ test('the wave lessons play out the same whatever the random seed', () => {
       onStep: (t, st) => {
         // "Your sprinklers cannot stop it on their own": without the forklift, the Turbo Scooter gets through.
         if (st.title === STEADY) {
-          const got = whatIf(session.state, [{ c: 'remove', x: 16, y: 13 }], st.wave);
+          const got = whatIf(session.state, [{ c: 'remove', x: 17, y: 12 }], st.wave);
           assert.ok(got.some((e) => e.k === 'scooter' && e.sup), `seed ${seed}: the sprinklers alone let the Turbo Scooter through`);
         }
       },
@@ -265,7 +278,7 @@ test('opening the doors too early lines the same shoppers up again', () => {
   assert.equal(tut.facts.waveEnds, 1);
   assert.equal(tut.check(), false, 'not done: the forklift is not there');
   assert.ok(session.state.nextWave, 'three more Karens are waiting');
-  session.send({ c: 'place', k: 'forklift', x: 16, y: 13, d: 0 });
+  session.send({ c: 'place', k: 'forklift', x: 17, y: 12, d: 0 });
   assert.equal(tut.check(), true, 'built now, after seeing a wave: done');
   // A lesson without shoppers leaves nobody waiting outside.
   tut.back();
@@ -323,7 +336,7 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   assert.equal(t3.index, PART_TWO);
   const quips = new Set(STEPS.map((st) => st.quip));
   assert.deepEqual(says.filter((t) => quips.has(t)), [STEPS[PART_TWO].quip]);
-  assert.ok(levelOf(third.state.grid[13 * third.state.w + 9]) >= 4, 'the upgraded sprinklers are in place');
+  assert.ok(levelIn(third.state.grid[13 * third.state.w + 9], 'dmg') >= 3, 'the upgraded sprinklers are in place');
 
   // The panel's jump keeps refusals off the screen; the "you cannot block the route" lesson
   // still counts its refusal.

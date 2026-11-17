@@ -60,7 +60,7 @@ export function readSave({ storage = browserStorage() } = {}) {
   try { save = JSON.parse(storage?.getItem(KEY) || 'null'); } catch { return null; }
   const s = save && save.state;
   // A save from a different version of the rules may not load properly: only trust what looks right.
-  if (!save || save.v !== 1 || !s || s.v !== 2 || !worthSaving(s)) return null;
+  if (!save || save.v !== 1 || !s || s.v !== 3 || !worthSaving(s)) return null;
   if (!Array.isArray(s.players) || !s.players.length || !Array.isArray(s.grid) || s.grid.length !== s.w * s.h) return null;
   const host = s.players[s.host | 0] || s.players[0];
   const design = MAP_DESIGNS[s.map?.design], size = MAP_SIZES[s.map?.size];

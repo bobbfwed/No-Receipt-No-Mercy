@@ -89,7 +89,7 @@ test('resuming makes the saver the host again, and the others get their places a
   assert.equal(host.state.host, 0);
   assert.deepEqual(host.state.players.map((p) => p.on), [true, false], 'Steve is away until he joins again');
   assert.equal(host.state.wave, 4);
-  assert.equal(host.state.grid[4 * host.state.w + 4].lv, 2, 'the upgraded sprinkler is still there');
+  assert.equal(host.state.grid[4 * host.state.w + 4].u.dmg, 1, 'the upgraded sprinkler is still there');
   // The game runs on while Steve is away, and however long he takes, his money is still his.
   for (let i = 0; i < (TUNE.graceSecs || 90) * 2 * TICK_HZ / 30; i++) host.fastForward(30);
   assert.equal(host.state.players[1].cash, 321);

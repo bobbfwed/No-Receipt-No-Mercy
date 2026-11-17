@@ -95,12 +95,17 @@ export function checksum(s) {
   mix(s.spawnQ.length); mix(s.messes.length); mix(s.rubble.length);
   mix(s.office ? s.office.pid + 1 : 0);
   for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
-  for (const sh of s.shoppers) { mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd); }
+  for (const sh of s.shoppers) {
+    mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);
+    mix(sh.kn); mix(sh.cd); mix(sh.pc); mix(sh.ru); dec(sh.sv);
+  }
   const g = s.grid;
   for (let i = 0; i < g.length; i++) {
     const b = g[i];
     if (!b) continue;
-    mix(i); mix(b.k.charCodeAt(0)); mix(b.o); mix(b.d); mix(b.lv); dec(b.cd); mix(b.t); mix(b.n);
+    mix(i); mix(b.k.charCodeAt(0)); mix(b.part ?? -1); mix(b.o); mix(b.d); dec(b.cd); mix(b.t); mix(b.n);
+    if (b.u) { mix(b.u.dmg); mix(b.u.spd); mix(b.u.rng); mix(b.u.dur); }
+    mix(b.hit); mix(b.off);
     if (b.it) mix(b.it.length);
   }
   return h >>> 0;

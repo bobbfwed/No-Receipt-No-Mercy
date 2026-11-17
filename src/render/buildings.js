@@ -1,9 +1,12 @@
 // Everything players build. Belts are drawn flat in the belt's own rotated frame; machines and
 // security are drawn upright (three-quarter view, like the mock-up) with a separate spout and
 // arrow showing the side they output to, so they look the same whichever way they face.
-import { DIRS, TUNE, TICK_HZ } from '../sim/index.js';
+// Buildings bigger than a tile (the Rail Gun, the TV Salesman) are drawn once, from their anchor
+// tile, across their whole footprint. On top of any building: the damage a gym bro has done this
+// wave, and, for security a stray dog has peed on, a puddle, drips and flies while it is off.
+import { DIRS, TUNE, TICK_HZ, BUILD, sizeOf, statsOf } from '../sim/index.js';
 import {
-  TILE, INK, C, rr, paint, box, circle, line, text, label, hazard, hash2,
+  TILE, INK, C, rr, paint, box, circle, line, text, label, hazard, hash2, burstPath,
 } from './paint.js';
 import { drawItem } from './items.js';
 
@@ -246,7 +249,14 @@ const ITEM_KINDS = [null, 'box', 'gadget', 'giftset'];
 /** Sprite box for one building, in logical pixels: a tile plus room for spouts, flags and tops. */
 const BOX = 56;
 /** Pose shared by look() and paint(), filled in fresh for every building. */
-const P = { d: 0, step: 0, on: false, n: 0, out: 0, inside: 0, light: -1, spray: false };
+const P = { d: 0, step: 0, on: false, n: 0, out: 0, inside: 0, light: -1, spray: false, off: 0 };
+/** The usual sprite box: [width, height, centre x, centre y] in logical pixels. */
+const BOX_1 = [BOX, BOX, BOX / 2, BOX / 2];
+/** Rail gun sprite boxes, lying along x (facing east or west) or along y. */
+const RAIL_X = [136, 64, 68, 34], RAIL_Y = [64, 136, 32, 70];
+const SALES_BOX = [104, 116, 52, 62];
+/** Rail gun charge shown in this many steps (0 empty .. RAIL_STEPS ready). */
+const RAIL_STEPS = 6;
 
 /** A dark steel spout from the machine body to the output edge, with a yellow arrow on it. */
 function spout(ctx, d) {
@@ -578,7 +588,232 @@ const KINDS = {
       }
     },
   },
+
+  // A long industrial gun on a skid, three tiles long, its barrel pointing the way it faces. Five
+  // coils on the barrel light up one by one as it charges (cd counts down to 0), and the meter on
+  // the generator fills; charged, the emitter at the muzzle glows (the pulse is drawn live).
+  railgun: {
+    box() { return P.d & 1 ? RAIL_Y : RAIL_X; },
+    look(b) {
+      P.d = b.d | 0;
+      const full = Math.max(1, Math.round(statsOf(b).cd * TICK_HZ));
+      const left = Math.max(0, b.cd || 0);
+      P.step = left <= 0 ? RAIL_STEPS : Math.min(RAIL_STEPS - 1, ((1 - left / full) * RAIL_STEPS) | 0);
+      return P.d * (RAIL_STEPS + 1) + P.step;
+    },
+    paint(ctx) {
+      // The shadow, cast the same way whichever way it faces.
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      if (P.d & 1) rr(ctx, -15, -54, 34, 116, 8); else rr(ctx, -55, -10, 116, 32, 8);
+      ctx.fill();
+      ctx.save();
+      // Drawn along +x; mirrored for west (so it is never upside down), turned for north and south.
+      if (P.d === 2) ctx.scale(-1, 1);
+      else if (P.d === 1) ctx.rotate(Math.PI / 2);
+      else if (P.d === 3) ctx.rotate(-Math.PI / 2);
+      railBody(ctx, P.step);
+      ctx.restore();
+    },
+  },
+
+  // A 2 x 2 stand: a red carpet, a big television on a pole showing knives and a barbecue, a man
+  // in a mustard check suit with a headset, chopping the air with a carving knife, and a counter
+  // with a smoking grill on it. Switched off (peed on), the television is dark.
+  salesman: {
+    box() { return SALES_BOX; },
+    look(b, F) {
+      P.step = b.off > 0 ? 0 : ((F.time * 4) | 0) & 7;
+      return P.step;
+    },
+    paint(ctx) { salesStand(ctx, P.step, !!P.off); },
+  },
 };
+
+/** The rail gun lying along +x, centred on (0, 0): x -60..60, y -20..20 is its footprint. */
+function railBody(ctx, step) {
+  const ready = step >= RAIL_STEPS;
+  // Skid: a long low steel platform with hazard stripes at both ends.
+  box(ctx, -58, 0, 116, 15, 3, '#3b4148', 2.4);
+  hazard(ctx, -54, 5, 14, 6, 4);
+  hazard(ctx, 40, 5, 14, 6, 4);
+  // Barrel supports.
+  box(ctx, -14, -6, 6, 9, 1, '#5b6168', 1.6);
+  box(ctx, 22, -6, 6, 9, 1, '#5b6168', 1.6);
+  // Generator at the back: vents and the charge meter.
+  box(ctx, -60, -20, 26, 25, 4, '#5f6873', 2.5);
+  box(ctx, -56, -15, 18, 7, 1.5, '#14181c', 1.5);
+  ctx.fillStyle = ready ? '#e0ffff' : '#38e1ff';
+  ctx.fillRect(-55, -14, (16 * step) / RAIL_STEPS, 5);
+  ctx.fillStyle = '#3b4148';
+  ctx.fillRect(-56, -5, 18, 1.6);
+  ctx.fillRect(-56, -2, 18, 1.6);
+  // Fat cable from the generator into the breech.
+  ctx.beginPath();
+  ctx.moveTo(-34, -6); ctx.quadraticCurveTo(-30, 2, -24, -4);
+  ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.strokeStyle = '#d9372b'; ctx.lineWidth = 2.6; ctx.stroke();
+  // Breech block, then the two rails of the barrel.
+  box(ctx, -30, -17, 12, 18, 3, '#4b5058', 2.2);
+  box(ctx, -20, -16, 66, 6, 2, '#d4d8dc', 2);
+  box(ctx, -20, -6, 66, 6, 2, '#8a9199', 2);
+  ctx.fillStyle = '#20252a';
+  ctx.fillRect(-19, -10.5, 64, 4.5);
+  // Coils round the barrel, lit one by one as it charges.
+  for (let k = 0; k < 5; k++) {
+    const x = -12 + k * 12;
+    const lit = ready || k < Math.round((step * 5) / RAIL_STEPS);
+    ctx.beginPath();
+    ctx.ellipse(x, -8, 3.6, 11, 0, 0, Math.PI * 2);
+    paint(ctx, lit ? '#5ff3ff' : '#3f464d', 2);
+    if (lit) { ctx.fillStyle = '#e0ffff'; ctx.fillRect(x - 1, -15, 2, 6); }
+  }
+  // Muzzle block with the emitter.
+  box(ctx, 44, -19, 14, 22, 3, '#2b2f34', 2.4);
+  circle(ctx, 54, -8, 4.2, ready ? '#e0ffff' : '#2e6f7a', 1.8);
+  // Warning beacon on the generator: red when charged.
+  circle(ctx, -47, -21, 3.2, ready ? '#ff3b30' : '#6b2a24', 1.6);
+}
+
+/** The TV Salesman's stand, centred on (0, 0): x -40..40, y -40..40 is its footprint. */
+function salesStand(ctx, step, off) {
+  // Shadow and the red carpet with a gold edge.
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  rr(ctx, -35, -22, 78, 64, 8);
+  ctx.fill();
+  box(ctx, -39, -28, 78, 66, 7, '#a61e3a', 2.5);
+  rr(ctx, -34, -23, 68, 56, 5);
+  ctx.strokeStyle = '#f2c21b'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash(NO_DASH);
+  // The television on a pole at the back left, glowing when on.
+  line(ctx, -18, -24, -18, 4, INK, 4);
+  line(ctx, -18, -24, -18, 4, '#6b7178', 2);
+  if (!off) {
+    ctx.fillStyle = 'rgba(150,235,255,0.35)';
+    rr(ctx, -46, -64, 56, 46, 12);
+    ctx.fill();
+  }
+  ctx.beginPath(); // rabbit ears
+  ctx.moveTo(-18, -53); ctx.lineTo(-28, -63); ctx.moveTo(-18, -53); ctx.lineTo(-8, -64);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.8; ctx.stroke();
+  box(ctx, -39, -55, 42, 33, 4, '#2b2f34', 2.5);
+  rr(ctx, -36, -52, 31, 26, 2);
+  ctx.fillStyle = off ? '#1d2a33' : '#c9f6ff';
+  ctx.fill();
+  if (!off) {
+    ctx.save();
+    rr(ctx, -36, -52, 31, 26, 2);
+    ctx.clip();
+    if (step < 4) {
+      // A knife going through a tomato.
+      ctx.beginPath(); ctx.arc(-24, -36, 6, 0, Math.PI * 2); paint(ctx, '#e8303a', 1.2);
+      ctx.fillStyle = '#3fae49'; ctx.fillRect(-25, -43, 3, 3);
+      const ky = step & 1 ? -36 : -46;
+      ctx.beginPath();
+      ctx.moveTo(-26, ky); ctx.lineTo(-10, ky - 4); ctx.lineTo(-10, ky + 2); ctx.closePath();
+      paint(ctx, '#e6ebef', 1.2);
+      box(ctx, -12, ky - 3, 6, 4, 1, '#3a2a20', 1);
+    } else {
+      // Barbecue flames.
+      ctx.fillStyle = '#2b2f34'; ctx.fillRect(-36, -32, 31, 6);
+      ctx.beginPath();
+      const h = step & 1 ? 0 : 3;
+      for (let k = 0; k < 4; k++) {
+        const x = -33 + k * 7.5;
+        ctx.moveTo(x, -32); ctx.quadraticCurveTo(x + 1, -42 - h - (k % 2) * 4, x + 3.5, -48 + h); ctx.quadraticCurveTo(x + 5, -40, x + 7, -32);
+      }
+      ctx.closePath();
+      paint(ctx, '#ff8c1a', 1);
+      ctx.fillStyle = '#ffe14a';
+      for (let k = 0; k < 4; k++) ctx.fillRect(-31 + k * 7.5, -38 + h * 0.5, 3, 5);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(-36, -52 + ((step * 7) % 26), 31, 2); // a scanline rolling down
+    ctx.restore();
+  }
+  circle(ctx, -1, -26, 1.6, off ? '#555' : '#ff3b30', 0.8); // standby light
+  // "As seen on TV" starburst on a stick, top right.
+  line(ctx, 36, -46, 36, -24, INK, 2);
+  burstPath(ctx, 36, -50, 9, 9, 0.3);
+  paint(ctx, '#ffd23f', 1.8);
+  text(ctx, 'TV!', 36, -50, 7.5, '#d9372b', 900);
+  // The salesman, behind the counter.
+  const chop = step & 1;
+  // Back arm, open hand toward the television.
+  limbB(ctx, 6, -18, -4, -24, '#c9a227', 3.6);
+  circle(ctx, -5.5, -25, 2.4, C.skin, 1.2);
+  // Mustard check suit jacket.
+  ctx.beginPath();
+  ctx.moveTo(1, 4); ctx.lineTo(0, -16); ctx.quadraticCurveTo(10, -27, 21, -16); ctx.lineTo(21, 4);
+  ctx.closePath();
+  paint(ctx, '#c9a227', 2.2);
+  ctx.beginPath();
+  for (let x = 4; x < 21; x += 5) { ctx.moveTo(x, -20); ctx.lineTo(x, 4); }
+  for (let y = -14; y < 4; y += 5) { ctx.moveTo(1, y); ctx.lineTo(21, y); }
+  ctx.strokeStyle = 'rgba(120,70,20,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+  // Shirt and a fat red tie.
+  ctx.beginPath(); ctx.moveTo(7, -21); ctx.lineTo(11, -10); ctx.lineTo(15, -21); ctx.closePath();
+  paint(ctx, '#ffffff', 1.2);
+  ctx.beginPath(); ctx.moveTo(10, -19); ctx.lineTo(12, -19); ctx.lineTo(13.5, -8); ctx.lineTo(11, -5); ctx.lineTo(8.5, -8); ctx.closePath();
+  paint(ctx, '#d9372b', 1.1);
+  // Head: slicked hair, eyebrows up, a huge white grin, a headset mic.
+  circle(ctx, 11, -31, 7.5, C.skin, 2);
+  ctx.beginPath();
+  ctx.arc(11, -32, 8, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.quadraticCurveTo(13, -35, 3.4, -30);
+  ctx.closePath();
+  paint(ctx, '#1d1a17', 1.5);
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(8, -38, 6, 1.4);
+  ctx.fillStyle = INK;
+  ctx.beginPath(); ctx.arc(9, -31.5, 1.2, 0, Math.PI * 2); ctx.arc(14, -31.5, 1.2, 0, Math.PI * 2); ctx.fill();
+  box(ctx, 7.5, -28.5, 8, 3.6, 1.5, '#ffffff', 1.2);
+  ctx.beginPath(); ctx.moveTo(3.6, -31); ctx.quadraticCurveTo(4, -26, 8, -26.5);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke();
+  // Front arm with the carving knife, chopping.
+  const hx = chop ? 30 : 29, hy = chop ? -16 : -32;
+  limbB(ctx, 18, -18, hx, hy, '#c9a227', 3.8);
+  ctx.save();
+  ctx.translate(hx, hy);
+  ctx.rotate(chop ? 0.35 : -0.9);
+  ctx.beginPath();
+  ctx.moveTo(1, -2); ctx.lineTo(17, -3.5); ctx.lineTo(1, 3);
+  ctx.closePath();
+  paint(ctx, '#e6ebef', 1.4);
+  box(ctx, -5, -2, 7, 4, 1, '#3a2a20', 1.2);
+  ctx.restore();
+  circle(ctx, hx, hy, 2.6, C.skin, 1.2);
+  // The counter: white top, yellow front with a red stripe and the price.
+  box(ctx, -32, 4, 66, 28, 3, '#ffd23f', 2.5);
+  ctx.fillStyle = '#d9372b';
+  ctx.fillRect(-31, 12, 64, 8);
+  text(ctx, 'ONLY $19.99', 1, 16.5, 7, '#ffffff', 900);
+  box(ctx, -34, 0, 70, 7, 2, '#f4f4f4', 2.2);
+  // A little kettle barbecue on the counter, smoking, with sausages.
+  ctx.beginPath();
+  ctx.ellipse(-20, 1, 9, 4.5, 0, Math.PI, Math.PI * 2);
+  ctx.closePath();
+  paint(ctx, '#2b2f34', 1.8);
+  ctx.fillStyle = off ? '#666' : '#ff8c1a';
+  for (let k = 0; k < 3; k++) ctx.fillRect(-26 + k * 5, -2 - ((step + k) % 2) * 2, 2.5, 3);
+  box(ctx, -27, -3.5, 13, 3, 1.5, '#a5522b', 1);
+  if (!off) {
+    ctx.beginPath();
+    ctx.moveTo(-20, -6); ctx.quadraticCurveTo(-24, -12 - (step % 3), -19, -17);
+    ctx.strokeStyle = 'rgba(230,230,230,0.8)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+}
+
+/** A limb (sleeve) with an ink outline, for the salesman. */
+function limbB(ctx, x1, y1, x2, y2, color, w) {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = w + 2.4;
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = w;
+  ctx.stroke();
+}
 const KIND_INDEX = {};
 Object.keys(KINDS).forEach((k, n) => { KIND_INDEX[k] = n; });
 const DASH_RING = [5, 4];
@@ -611,37 +846,96 @@ export function createBuildingSprites() {
   let scale = 1;
   return {
     setScale(s) { if (s !== scale) { scale = s; map.clear(); } },
-    get(kind, look, items) {
-      const key = KIND_INDEX[kind] * 4096 + look;
+    /**
+     * The sprite for a kind in a look (call the kind's look() first: big kinds take their box from
+     * the pose). off: the greyed-out version, for security a dog has peed on. The canvas carries
+     * its box ([w, h, centre x, centre y] in logical pixels) as `box`.
+     */
+    get(kind, look, items, off = 0) {
+      const key = (KIND_INDEX[kind] * 16384 + look) * 2 + (off ? 1 : 0);
       let c = map.get(key);
       if (c) return c;
       if (map.size > 3000) map.clear(); // never let an odd combination of states grow it forever
+      const K = KINDS[kind];
+      const bx = K.box ? K.box() : BOX_1;
       c = document.createElement('canvas');
-      c.width = c.height = Math.max(1, Math.ceil(BOX * scale));
+      c.width = Math.max(1, Math.ceil(bx[0] * scale));
+      c.height = Math.max(1, Math.ceil(bx[1] * scale));
       const g = c.getContext('2d');
-      const k = c.width / BOX;
-      g.setTransform(k, 0, 0, k, (BOX / 2) * k, (BOX / 2) * k);
-      KINDS[kind].paint(g, items);
+      const kx = c.width / bx[0], ky = c.height / bx[1];
+      g.setTransform(kx, 0, 0, ky, bx[2] * kx, bx[3] * ky);
+      P.off = off ? 1 : 0;
+      K.paint(g, items);
+      P.off = 0;
+      if (off) greyOut(c);
+      c.box = bx;
       map.set(key, c);
       return c;
     },
   };
 }
 
-/** Draws a non-belt building at tile index i (F.w is the map width). */
+/**
+ * Drains the colour out of a sprite and darkens it a little, keeping its shape: what is left of a
+ * piece of security that has been peed on. (Blend modes rather than a canvas filter, which not
+ * every browser has.)
+ */
+function greyOut(c) {
+  const g = c.getContext('2d');
+  const shape = document.createElement('canvas');
+  shape.width = c.width; shape.height = c.height;
+  shape.getContext('2d').drawImage(c, 0, 0);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'saturation';
+  g.fillStyle = '#808080';
+  g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = 'rgba(40,44,30,0.28)';
+  g.fillRect(0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'destination-in';
+  g.drawImage(shape, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+}
+
+/** Scratch footprint, in logical pixels: x, y, w, h. */
+const R = { x: 0, y: 0, w: T, h: T };
+/** Kinds bigger than a tile. */
+export const BIG = {};
+for (const [k, def] of Object.entries(BUILD)) if (def.size) BIG[k] = true;
+
+/**
+ * The footprint of a building whose anchor is tile i on a map w wide, in logical pixels. Returns a
+ * shared object, overwritten by the next call.
+ */
+export function rectOf(b, i, w) {
+  R.x = (i % w) * T; R.y = ((i / w) | 0) * T;
+  if (BIG[b.k]) {
+    const [fw, fh] = sizeOf(b.k, BUILD[b.k].rot ? b.d | 0 : 0);
+    R.w = fw * T; R.h = fh * T;
+  } else { R.w = T; R.h = T; }
+  return R;
+}
+
+/**
+ * Draws a non-belt building from its anchor tile i (F.w is the map width), across its footprint.
+ * A building that is switched off gets a puddle under it and is drawn greyed out.
+ */
 export function drawBuilding(ctx, b, i, F, sprites) {
   const K = KINDS[b.k];
   if (!K) return;
-  const cx = (i % F.w) * T + HALF, cy = ((i / F.w) | 0) * T + HALF;
-  const h = BOX / 2;
+  const r = rectOf(b, i, F.w);
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  const off = b.off > 0 ? 1 : 0;
+  if (off) puddle(ctx, r.x, r.y, r.w, r.h, F.time);
   if (b.k === 'forklift') {
+    const h = BOX / 2;
     P.step = 0;
-    ctx.drawImage(sprites.get('forklift', 0, F.sprites), cx - h, cy - h, BOX, BOX);
+    ctx.drawImage(sprites.get('forklift', 0, F.sprites, off), cx - h, cy - h, BOX, BOX);
     // The truck turns toward its target and kicks back a little when it fires.
     const since = F.now - F.fx.shotAt[i];
     const kick = since < 160 ? (1 - since / 160) * 4 : 0;
     P.step = since > 500 ? 1 : 2;
-    const img = sprites.get('forklift', P.step, F.sprites);
+    const img = sprites.get('forklift', P.step, F.sprites, off);
     const a = b.a || 0, c = Math.cos(a), s = Math.sin(a);
     ctx.save();
     ctx.transform(c, s, -s, c, cx - c * kick, cy - s * kick);
@@ -650,7 +944,175 @@ export function drawBuilding(ctx, b, i, F, sprites) {
     return;
   }
   const look = K.look(b, F, i);
-  ctx.drawImage(sprites.get(b.k, look, F.sprites), cx - h, cy - h, BOX, BOX);
+  const img = sprites.get(b.k, look, F.sprites, off);
+  const bx = img.box;
+  let kx = 0, ky = 0;
+  if (b.k === 'railgun') {
+    // It jolts back along its length when it fires.
+    const since = F.now - F.fx.railAt[i];
+    if (since >= 0 && since < 220) {
+      const kick = (1 - since / 220) * 7, d = DIRS[b.d | 0];
+      kx = -d[0] * kick; ky = -d[1] * kick;
+    }
+  }
+  ctx.drawImage(img, cx - bx[2] + kx, cy - bx[3] + ky, bx[0], bx[1]);
+  if (b.k === 'railgun' && P.step >= RAIL_STEPS && !off) {
+    // Charged: the emitter at the muzzle throbs.
+    const d = DIRS[b.d | 0], m = 54;
+    const pulse = 0.5 + 0.5 * Math.sin(F.time * 7 + i);
+    // The emitter sits a little above the barrel's centre line (to the side, when turned).
+    const ex = cx + d[0] * m + kx + (b.d === 1 ? 8 : b.d === 3 ? -8 : 0), ey = cy + d[1] * m + ky - (d[1] ? 0 : 8);
+    ctx.globalAlpha = 0.35 + 0.35 * pulse;
+    ctx.beginPath();
+    ctx.arc(ex, ey, 7 + pulse * 4, 0, TAU);
+    ctx.fillStyle = '#7df9ff';
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** A yellow puddle under a building a dog has peed on, wobbling a little. */
+function puddle(ctx, x, y, w, h, t) {
+  const cx = x + w / 2, cy = y + h - 7;
+  const wob = Math.sin(t * 3 + x) * 1.2;
+  ctx.beginPath();
+  ctx.ellipse(cx + 3, cy, w / 2 + 6 + wob, 10 + h * 0.04, 0, 0, TAU);
+  ctx.fillStyle = 'rgba(242,206,27,0.85)';
+  ctx.fill();
+  ctx.strokeStyle = '#a88a0a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(cx - w * 0.15, cy - 2, w * 0.14, 2.5, -0.15, 0, TAU);
+  ctx.fillStyle = 'rgba(255,255,220,0.8)';
+  ctx.fill();
+}
+
+/**
+ * What happens to a building over a wave, drawn on top of it every frame: damage from gym bro hits
+ * (cracks, then bandages, then smoke and sparks when one more hit will finish it) and, while a dog
+ * has it switched off, drips, stink lines and flies. Belts too. Nothing when it is untouched.
+ */
+export function drawWear(ctx, b, i, F) {
+  if (!(b.hit > 0) && !(b.off > 0)) return;
+  const r = rectOf(b, i, F.w);
+  const x = r.x, y = r.y, w = r.w, h = r.h;
+  if (b.hit > 0) damage(ctx, b, i, F.time, x, y, w, h);
+  // The drips and flies are too small to see when zoomed far out (F.zoom: screen pixels a tile);
+  // the grey and the puddle still say it.
+  if (b.off > 0 && !(F.zoom < 18)) peedOn(ctx, i, F.time, x, y, w, h);
+}
+
+function damage(ctx, b, i, t, x, y, w, h) {
+  const hits = statsOf(b).hits;
+  const hit = Math.min(b.hit, hits);
+  const left = hits - hit;
+  const sev = hits > 0 ? hit / hits : 1;
+  // Cracks: one for each hit, plus one when it is badly hurt. A pale edge under the ink line keeps
+  // them visible on dark steel as well as light.
+  const n = Math.min(5, hit + (sev >= 0.5 ? 1 : 0)) * (BIG[b.k] ? 2 : 1);
+  ctx.beginPath();
+  for (let k = 0; k < n; k++) {
+    let px = x + 6 + hash2(i, k * 5 + 1) * (w - 12), py = y + 6 + hash2(k * 5 + 2, i) * (h - 14);
+    const a = hash2(i + 7, k) * Math.PI * 2;
+    ctx.moveTo(px, py);
+    for (let s = 0; s < 3; s++) {
+      const zig = s % 2 ? 0.7 : -0.7;
+      px += Math.cos(a + zig) * 6; py += Math.sin(a + zig) * 6;
+      ctx.lineTo(px, py);
+    }
+  }
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 4.6;
+  ctx.stroke();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2.2;
+  ctx.stroke();
+  // Bandages once it is half gone: crossed strips of white tape.
+  if (sev >= 0.5) {
+    const bx = x + w * (0.3 + 0.4 * hash2(i, 31)), by = y + h * (0.35 + 0.2 * hash2(32, i));
+    for (const a of [0.6, -0.6]) {
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(a);
+      rr(ctx, -10, -3.5, 20, 7, 2.5);
+      paint(ctx, '#fbfbf4', 1.6);
+      ctx.fillStyle = '#e8b4b4';
+      ctx.fillRect(-3, -2.2, 6, 4.4);
+      ctx.restore();
+    }
+  }
+  // One hit left: smoke curling up and sparks spitting.
+  if (left === 1 && hits > 1) {
+    for (let k = 0; k < 3; k++) {
+      const p = (t * 0.7 + k / 3) % 1;
+      const sx = x + w * 0.5 + Math.sin(t * 2 + k * 2) * 5 + (k - 1) * 6, sy = y + 4 - p * 26;
+      ctx.globalAlpha = 0.85 * (1 - p);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4 + p * 7, 0, TAU);
+      ctx.fillStyle = '#3a3e44';
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = INK;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    if (((t * 6) | 0) % 3 !== 0) {
+      const sx = x + w * (0.25 + 0.5 * hash2((t * 6) | 0, i)), sy = y + h * 0.35;
+      ctx.beginPath();
+      for (let k = 0; k < 4; k++) {
+        const a = k * 1.6 + t * 9;
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(a) * 6, sy + Math.sin(a) * 6);
+      }
+      ctx.strokeStyle = '#ffe14a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+}
+
+function peedOn(ctx, i, t, x, y, w, h) {
+  // Drips running down the front into the puddle.
+  for (let k = 0; k < 2; k++) {
+    const p = (t * 1.1 + k * 0.5 + hash2(i, k)) % 1;
+    const dx = x + w * (0.3 + 0.4 * k), dy = y + h * 0.45 + p * h * 0.45;
+    ctx.globalAlpha = p < 0.85 ? 1 : (1 - p) / 0.15;
+    ctx.beginPath();
+    ctx.moveTo(dx, dy - 5);
+    ctx.quadraticCurveTo(dx + 3.5, dy + 1, dx, dy + 2.5);
+    ctx.quadraticCurveTo(dx - 3.5, dy + 1, dx, dy - 5);
+    paint(ctx, '#f2ce1b', 1.2);
+  }
+  ctx.globalAlpha = 1;
+  // Stink lines rising off it.
+  ctx.beginPath();
+  for (let k = 0; k < 2; k++) {
+    const sx = x + w / 2 + (k ? 9 : -9), sy = y + 2;
+    const p = (t * 0.8 + k * 0.5) % 1;
+    ctx.moveTo(sx, sy - p * 6);
+    for (let s = 1; s <= 6; s++) ctx.lineTo(sx + Math.sin(s * 1.4 + t * 5) * 3, sy - p * 6 - s * 3);
+  }
+  ctx.strokeStyle = 'rgba(132,204,22,0.9)';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  // Flies buzzing round the top.
+  for (let k = 0; k < 3; k++) {
+    const a = t * (6 + k) + k * 2.1;
+    const fx = x + w / 2 + Math.cos(a) * (10 + k * 3), fy = y - 2 + Math.sin(a * 1.7) * 6;
+    ctx.beginPath();
+    ctx.ellipse(fx - 1, fy - 2.2, 2, 1.2, -0.5, 0, TAU);
+    ctx.ellipse(fx + 1.5, fy - 2.2, 2, 1.2, 0.5, 0, TAU);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(fx, fy, 2, 0, TAU);
+    ctx.fillStyle = INK;
+    ctx.fill();
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -668,13 +1130,16 @@ export const KIND_COLOURS = {
   forklift: [C.yellow, '#2b2f34', '#9aa0a6'],
   wetfloor: [C.yellow, C.yellowDark, C.blue],
   samples: ['#ffffff', C.red, '#ff5fa8'],
+  railgun: ['#5f6873', '#d4d8dc', '#5ff3ff'],
+  salesman: ['#ffd23f', '#a61e3a', '#c9a227'],
 };
 
 /**
  * A small badge with the building's level (2 and up) at the top right of its tile. `k` scales it
- * up when zoomed out, so the number stays readable on small tiles.
+ * up when zoomed out, so the number stays readable on small tiles. `top`: every track it has is
+ * maxed out (the badge turns pink).
  */
-export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0) {
+export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0, top = false) {
   const str = String(lv);
   const w = (str.length > 1 ? 21 : 16) * k, h = 13 * k;
   const x = cx + HALF - w + 2 * k, y = cy - HALF - 2 * k;
@@ -682,7 +1147,7 @@ export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0) {
     // Cached as a sprite at the sprite resolution `res` (device pixels per logical pixel): a
     // floor full of upgraded towers would otherwise mean hundreds of text draws a frame.
     const pad = 2 * k;
-    const key = lv * 1e6 + Math.round(k * 10) * 1e4 + Math.round(res * 1000);
+    const key = (lv * 1e6 + Math.round(k * 10) * 1e4 + Math.round(res * 1000)) * 2 + (top ? 1 : 0);
     let c = badgeCache.get(key);
     if (!c) {
       if (badgeCache.size > 300) badgeCache.clear();
@@ -691,18 +1156,17 @@ export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0) {
       c.height = Math.max(1, Math.ceil((h + pad * 2) * res));
       const g = c.getContext('2d');
       g.setTransform(c.width / (w + pad * 2), 0, 0, c.height / (h + pad * 2), pad * c.width / (w + pad * 2), pad * c.height / (h + pad * 2));
-      paintBadge(g, 0, 0, w, h, k, lv);
+      paintBadge(g, 0, 0, w, h, k, lv, top);
       badgeCache.set(key, c);
     }
     ctx.drawImage(c, x - pad, y - pad, w + pad * 2, h + pad * 2);
     return;
   }
-  paintBadge(ctx, x, y, w, h, k, lv);
+  paintBadge(ctx, x, y, w, h, k, lv, top);
 }
 const badgeCache = new Map();
 
-function paintBadge(ctx, x, y, w, h, k, lv) {
-  const top = lv >= TUNE.maxLevel;
+function paintBadge(ctx, x, y, w, h, k, lv, top) {
   const str = String(lv);
   rr(ctx, x, y, w, h, 4 * k);
   paint(ctx, top ? '#ff4fa3' : '#ffd23f', 1.6 * k);
@@ -721,9 +1185,16 @@ function paintBadge(ctx, x, y, w, h, k, lv) {
 
 /**
  * What is left of a building a gym bro wrecked: a low heap of broken bits in its colours, with a
- * scorch of dust under it, so players can see the holes in their maze.
+ * scorch of dust under it, so players can see the holes in their maze. A big building leaves a
+ * heap on every tile of its footprint (i is its anchor tile, d its facing).
  */
-export function drawRubble(ctx, i, kind, w) {
+export function drawRubble(ctx, i, kind, w, d = 0) {
+  const def = BUILD[kind];
+  const [fw, fh] = def ? sizeOf(kind, def.rot ? d | 0 : 0) : [1, 1];
+  for (let dy = 0; dy < fh; dy++) for (let dx = 0; dx < fw; dx++) heap(ctx, i + dy * w + dx, kind, w);
+}
+
+function heap(ctx, i, kind, w) {
   const col = KIND_COLOURS[kind] || KIND_COLOURS.crate;
   const px = (i % w) * T, py = ((i / w) | 0) * T;
   ctx.beginPath();

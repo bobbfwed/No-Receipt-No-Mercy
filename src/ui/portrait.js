@@ -23,8 +23,10 @@ export function shopperPortrait(k, { sup = false, size = 72 } = {}) {
   canvas.style.height = `${size}px`;
   // The picture is a square box around the figure, in the drawing code's own units: bigger for
   // a super (who is drawn 1.3 times the size, with a crown) and for the two who bring company.
+  // The cosplayer's costume is half as tall again as anyone else, and his mech suit bigger still.
   const wide = k === 'mom' || k === 'blind' || k === 'scooter';
-  const box = (sup ? 82 : 58) + (wide ? 6 : 0);
+  const tall = k === 'cosplay';
+  const box = tall ? (sup ? 122 : 84) : (sup ? 82 : 58) + (wide ? 6 : 0);
   const z = (size * dpr) / box;
   const key = Math.round(z * 1000);
   if (!spriteSets.has(key)) { const made = createShopperSprites(); made.setScale(z); spriteSets.set(key, made); }
@@ -36,8 +38,9 @@ export function shopperPortrait(k, { sup = false, size = 72 } = {}) {
     kd: k === 'mom' ? 2 : 0, kx: 0, ky: 0, kvx: 0, kvy: 0, bt: 0,
   };
   const F = { time: 0.35, now: 350, alpha: 0 };
-  const x = box / 2 - (k === 'mom' ? 12 : k === 'blind' ? 5 : 0), y = box / 2 + (sup ? 17 : 10);
-  drawShopper(g, s, x, y, 1, F, sprites);
+  const x = box / 2 - (k === 'mom' ? 12 : k === 'blind' ? 5 : 0);
+  const y = box / 2 + (tall ? (sup ? 37 : 18) : sup ? 17 : 10);
+  drawShopper(g, s, x, y, 1, F, sprites, { noBar: true });
   // A mom is not herself without the kid she is chasing.
   if (k === 'mom') drawKid(g, s, x + 26, y + 4, -1, F, sprites);
   return canvas;

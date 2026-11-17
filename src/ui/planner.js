@@ -16,18 +16,21 @@ import { longPress, touchedLast } from './touch.js';
 const KINDS = Object.keys(OFFICE.kinds);
 /** Names short enough for a card; the tooltip has the full one. */
 const SHORT = {
-  hunter: 'Hunter', dad: 'Dad', clipper: 'Clipper', mom: 'Mom + Kid', teen: 'Teenager',
+  hunter: 'Hunter', dad: 'Dad', clipper: 'Clipper', mom: 'Mom+Kid', teen: 'Teenager',
   karen: 'Karen', blind: 'Guide Dog', gymbro: 'Gym Bro', scooter: 'Scooter',
+  drinker: 'Drinker', dog: 'Stray Dog', flasher: 'Flasher', cosplay: 'Cosplayer',
 };
 const SUP_SHORT = {
   hunter: 'Doorbuster', dad: 'Mission Dad', clipper: 'Ext. Couponer', mom: 'Soccer Mom', teen: 'Influencer',
   karen: 'Karen Supreme', blind: 'Two Dogs', gymbro: 'Roid Rager', scooter: 'Turbo Scooter',
+  drinker: 'Bruncher', dog: 'Great Dane', flasher: 'Nudist Nan', cosplay: 'Mech Suit',
 };
 /** Each shopper's trick in a few words (SHOPPER_HELP has the full sentence, shown in the tooltip). */
 const TRICK = {
   hunter: 'Grabs samples', dad: 'Hops belts', clipper: 'Fast and weak',
   mom: 'Kid runs off', teen: 'Spills mess', karen: 'Slows towers', blind: 'Dog bolts',
   gymbro: 'Smashes stuff', scooter: 'Never slowed',
+  drinker: 'Blocks aisles', dog: 'Pees on towers', flasher: 'Stops dads', cosplay: 'Soaks up shots',
 };
 /** How long after the last edit the host's copy of the plan may replace the one being edited. */
 const SYNC_MS = 1000;
@@ -48,7 +51,7 @@ const PORTRAIT = 44; // logical size of a portrait, in the shoppers' drawing uni
 const RES = 2; // backing pixels per CSS pixel at the size the cards use
 const spriteSets = new Map(); // scale -> sprite cache (each cache holds one scale)
 /** How much to shrink each kind so it fits the square (the dog and the scooter are wide). */
-const FIT = { blind: 0.62, scooter: 0.74, mom: 0.8, gymbro: 0.8 };
+const FIT = { blind: 0.62, scooter: 0.74, mom: 0.8, gymbro: 0.8, cosplay: 0.7 };
 
 /** A small canvas with one shopper standing still, as drawn on the floor. */
 function portrait(k, sup, cls) {

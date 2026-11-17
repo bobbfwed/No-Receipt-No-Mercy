@@ -2,13 +2,17 @@
 // Handbook in the game and the lists in README.md both read them from here, so neither can
 // drift from what the simulation actually does. No DOM; runs in Node too.
 import {
-  SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, upgradeCost, spentOn, priceOf,
+  SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, priceOf,
+  tracksOf, defaultTrack, maxIn, levelCost,
 } from '../sim/index.js';
 
 /** The order shoppers are listed in: the order they first turn up. */
-export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'blind', 'gymbro', 'scooter'];
+export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'flasher', 'cosplay'];
 export const FACTORY_ORDER = ['belt', 'unpacker', 'press', 'packer', 'chute', 'crate'];
-export const SECURITY_ORDER = ['sprinkler', 'forklift', 'wetfloor', 'samples'];
+export const SECURITY_ORDER = ['sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman'];
+
+/** What each upgrade track is called, for tables. */
+export const TRACK_NAMES = { dmg: 'Damage', spd: 'Speed', rng: 'Range', dur: 'Durability' };
 
 /** How much more patient shoppers are in wave n than in wave 1. */
 export const patienceGrowth = (n) => 1 + TUNE.hpGrowth * (n - 1) + TUNE.hpGrowth2 * (n - 1) ** 2;
@@ -61,12 +65,25 @@ export function shopperTraits(k, sup = 0) {
   if (d.nag) out.push(['Security near her', `within ${fmt(v('nagRange'))} tiles works at ${pct(v('nagRate'))} speed`]);
   if (d.messy) out.push(['Messes', `one every ${fmt(v('messEvery'))} s, each lasting ${fmt(v('messSecs'))} s`]);
   if (d.kid) {
-    out.push(['Kid escapes', `about once every ${fmt(1 / v('kidChance'))} s while in the cart; runs ${fmt(v('kidMin'))} to ${fmt(v('kidMax'))} tiles`]);
-    out.push(['Chasing speed', `${fmt(d.speed * v('chaseSpeed'))} tiles a second`]);
-    out.push(['Out of patience with the kid loose', `crawls to him, untouchable; gets up with ${pct(TUNE.crawlBack)} patience, up to ${TUNE.crawlTimes} times`]);
+    const runs = v('kidRuns'), times = v('crawlTimes');
+    out.push(['Kid escapes', `${runs === 1 ? 'once' : `up to ${runs} times`} (a ${pct(v('kidChance'))} chance each second in the cart); runs ${fmt(v('kidMin'))} to ${fmt(v('kidMax'))} tiles, never closer than ${TUNE.kidTill} to a till`]);
+    out.push(['Chasing speed', `${fmt(d.speed * v('chaseSpeed'))} tiles a second; no refund until she has him back`]);
+    out.push(['Out of patience with the kid loose', `crawls to him at ${pct(TUNE.crawlSpeed)} speed, untouchable; gets up with ${pct(TUNE.crawlBack)} patience, ${times === 1 ? 'once' : `up to ${times} times`}; the last time she leaves the cart and carries him`]);
   }
-  if (d.bolts) out.push(['Dog bolts when sprayed', `${fmt(v('boltSecs'))} s at ${fmt(d.speed * v('boltSpeed'))} tiles a second${d.boltsOnAny ? ' (forklift hits too)' : ''}`]);
-  if (d.smashes) out.push(['Wrecking', `every crate stack beside him; every ${fmt(v('smashEvery'))} s a ${pct(v('smashOther'))} chance of something else`]);
+  if (d.bolts) out.push(['Dog bolts when sprayed', `${fmt(v('boltSecs'))} s at ${fmt(d.speed * v('boltSpeed'))} tiles a second${d.boltsOnAny ? ' (forklift and rail gun hits too)' : ''}`]);
+  if (d.smashes) out.push(['Wrecking', `stops to hit any crate stack in his way, and every crate stack beside him; every ${fmt(v('smashEvery'))} s a ${pct(v('smashOther'))} chance of hitting something else`]);
+  if (d.sways) {
+    out.push(['Walking speed', `changes every ${fmt(TUNE.swayEvery)} s, between ${fmt(d.speed * v('swayMin'))} and ${fmt(d.speed * v('swayMax'))} tiles a second`]);
+    out.push(['Corners', `${pct(v('fallChance'))} chance to fall over for ${fmt(v('fallSecs'))} s; anyone crossing him goes at ${pct(TUNE.fallSlow)} speed`]);
+  }
+  if (d.pees) out.push(['Security he passes', `within ${fmt(v('peeRange'))} tiles (not wet floor signs): pees on it, switching it off for ${fmt(v('peeSecs'))} s; again after ${fmt(v('peeCool'))} s`]);
+  if (d.flashes) out.push(['Bathrobe', `opens it about every ${fmt(v('flashEvery'))} s; dads and teenagers within ${fmt(v('flashRange'))} tiles stop and stare for ${fmt(v('gawkSecs'))} s`]);
+  if (d.shields) out.push(['Costume', `shots at anyone within ${fmt(v('shield'))} tiles of him hit him instead${v('soak') < 1 ? `, for ${pct(v('soak'))} of the damage` : ''}`]);
+  if (d.gawks) out.push(['Exhibitionists', 'stops and stares']);
+  if (d.pitch) {
+    const [stop, rush] = d.pitch;
+    out.push(['TV Salesman', stop || rush ? `stops to watch ${pct(stop)}; hurries past ${pct(rush)}` : 'cannot see the television']);
+  }
   return out;
 }
 
@@ -81,29 +98,55 @@ export function shopperFacts(k) {
   };
 }
 
-/** One row per upgrade level of a security building: what it costs and what it does. */
-export function levelRows(k) {
+/**
+ * One row per level of one upgrade track of a building, from 0 (as built) to the most it can
+ * have: { lv, cost (what that level costs; 0 for level 0), total (spent on this track so far),
+ * ...the numbers that track changes }, with the other tracks at 0:
+ *   dmg  towers: dmg, dps, most · wet floor sign: slow, slip, slipDmg · samples: secs ·
+ *        salesman: secs, stopLeft, rushMul (see statsOf) · dps is damage a second to one shopper
+ *        (a Rail Gun does it to everyone in line); most is that times how many it can hit at once
+ *   spd  towers: cd, perSec (shots a second), dps, most · unpacker: period, perMin · press and
+ *        packer: time, perMin
+ *   rng  range
+ *   dur  hits (gym bro hits it survives in one wave)
+ * Empty if the kind lacks the track.
+ */
+export function trackRows(k, track) {
   const def = BUILD[k], rows = [];
-  for (let lv = 1; lv <= TUNE.maxLevel; lv++) {
-    const b = { k, lv }, st = statsOf(b, lv);
-    const row = { lv, next: upgradeCost(b), total: spentOn(b) };
-    if (def.tower) {
-      row.dmg = st.dmg;
-      row.range = st.range;
-      // Damage a second to one shopper; a sprinkler does that to each of up to `targets`.
-      row.dps = st.dmg / def.cd;
+  if (!tracksOf(k).includes(track)) return rows;
+  let total = 0;
+  for (let lv = 0; lv <= maxIn(k, track); lv++) {
+    const cost = lv ? levelCost(k, track, lv - 1) : 0;
+    total += cost;
+    const st = statsOf({ k, u: { [track]: lv } });
+    const row = { lv, cost, total };
+    const dps = () => {
+      row.dps = st.cd ? st.dmg / st.cd : 0;
       row.most = row.dps * (def.targets || 1);
-    } else if (k === 'wetfloor') {
-      row.slow = st.slow;
-      row.slip = st.slip;
-      row.slipDmg = st.slipDmg;
-    } else if (k === 'samples') {
-      row.secs = st.secs;
-      row.range = st.range;
-    }
+    };
+    if (track === 'dmg') {
+      if (def.tower) { row.dmg = st.dmg; dps(); }
+      else if (k === 'wetfloor') { row.slow = st.slow; row.slip = st.slip; row.slipDmg = st.slipDmg; }
+      else if (k === 'samples') row.secs = st.secs;
+      else if (k === 'salesman') { row.secs = st.secs; row.stopLeft = st.stopLeft; row.rushMul = st.rushMul; }
+    } else if (track === 'spd') {
+      if (def.tower) { row.cd = st.cd; row.perSec = 1 / st.cd; dps(); }
+      else if (k === 'unpacker') { row.period = st.period; row.perMin = 60 / st.period; }
+      else { row.time = st.time; row.perMin = 60 / st.time; }
+    } else if (track === 'rng') row.range = st.range;
+    else if (track === 'dur') row.hits = st.hits;
     rows.push(row);
   }
   return rows;
+}
+
+/**
+ * The old one-table-per-building view, kept so older screens still load: the rows of the kind's
+ * default track (damage where it has it), with `next` (the cost of the level after) as well.
+ */
+export function levelRows(k) {
+  const rows = trackRows(k, defaultTrack(k));
+  return rows.map((r, n) => ({ ...r, lv: r.lv + 1, next: n + 1 < rows.length ? rows[n + 1].cost : 0, total: BUILD[k].cost + r.total, range: r.range ?? statsOf({ k }).range }));
 }
 
 /** Plain facts about a factory building, as [label, value] pairs. `pay` is the difficulty's income multiplier. */
@@ -126,6 +169,6 @@ export function factoryFacts(k, pay = 1) {
     out.push(['Adds', `$${gain} an item; pays for itself after ${Math.ceil(def.cost / Math.max(1, gain))} items`]);
   }
   if (k === 'chute') out.push(['Sells', Object.keys(ITEMS).map((i) => `${ITEMS[i].name} $${worth(i)}`).join(', ')]);
-  if (k === 'crate') out.push(['Gym bros', 'walk through it and wreck it']);
+  if (k === 'crate') out.push(['Gym bros', 'stop and smash it, then walk through; each Durability level makes him swing once more']);
   return out;
 }

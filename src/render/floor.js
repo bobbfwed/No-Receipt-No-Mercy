@@ -854,29 +854,22 @@ function verticalSign(g, x, y1, y2, bg, fg, lines) {
 
 /**
  * Parts of the store that change: the sliding doors of the open entrances (open while shoppers
- * arrive), each framed in its owner's colour, and the till displays (flash red after a refund).
+ * arrive) and the till displays (flash red after a refund). Entrances belong to nobody: they are
+ * not marked with any player's name or colour.
  * @param {number} open 0 closed .. 1 open
  * @param {Float64Array} tillAt per-row time (ms) of the last refund at that row's till
- * @param {Array} players state.players, for the entrance colours
  */
-export function drawDynamic(ctx, info, players, open, tillAt, now) {
+export function drawDynamic(ctx, info, open, tillAt, now) {
   for (const d of info.doors) {
     if (!d.open) continue;
-    const p = players[d.n];
     ctx.save();
     ctx.transform(...d.frame);
-    // The owner's colour on the jambs and along the threshold.
-    if (p) {
-      ctx.fillStyle = p.color;
-      ctx.fillRect(0, -6, T, 6);
-      ctx.fillRect(0, 2 * T, T, 6);
-      ctx.fillRect(1, 0, 5, 2 * T);
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(0, -6, T, 6);
-      ctx.strokeRect(0, 2 * T, T, 6);
-      ctx.strokeRect(1, 0, 5, 2 * T);
-    }
+    // A plain steel threshold strip, the same for every entrance.
+    ctx.fillStyle = '#c9ced4';
+    ctx.fillRect(1, 0, 5, 2 * T);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(1, 0, 5, 2 * T);
     // Two sliding glass panels across the doorway; they slide into the walls either side while a
     // wave is on.
     const half = T;

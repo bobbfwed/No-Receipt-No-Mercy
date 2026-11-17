@@ -20,6 +20,10 @@ export const LEFT_ABOUT = {
   mom: ['Mom and Kid: an exasperated huff and the kid whining "muuum", a "come ON", or "tsk" and a huff.', 'Soccer Mom: blows her referee\'s whistle first.'],
   blind: ['Man with Guide Dog: a gruff "hmph" and the dog barks, or whines, or the white cane taps off and the dog barks.', 'Two Guide Dogs: a big dog and a small one barking over each other.'],
   gymbro: ['Gym Bro: a deep grunt, a long "brooo" or a lifting "hup-HAH", sometimes his protein shaker rattles.', 'Roid Rager: a roar and chest thumps.'],
+  dog: ['Stray Dog: "yip-yip" yelps, a long whine, or a bark and a yelp as it trots off.', 'Great Dane: a huge deep "WOOF" (or two, or a woof and a growl) and paws thumping off.'],
+  cosplay: ['Cosplayer: a muffled grumble from inside the foam head, the costume rustling and a plastic sword clattering.', 'Full Mech Suit: servo whirrs, a muffled "mmph" and a heavy clunking walk away.'],
+  flasher: ['Exhibitionist: an offended "well!" (or "hmph", or "oh!"), the robe pulled shut and slippers slapping away.', 'Nudist Nan: a cackling old lady and a cheeky slap.'],
+  drinker: ['Day Drinker: a hiccup, a slurred mumble and a bottle clinking.', 'Bottomless Bruncher: a champagne cork pops and she goes "woo!".'],
 };
 
 // ---------------------------------------------------------------- small props
@@ -76,6 +80,12 @@ function snip(v, t, peak = 0.16) {
 function shutter(v, t, peak = 0.2) {
   noise(v, { t, type: 'bandpass', f: 2800, q: 1, peak, a: 0.002, d: 0.025 });
   noise(v, { t: t + 0.06, type: 'bandpass', f: 2200, q: 1, peak: peak * 0.8, a: 0.002, d: 0.035 });
+}
+
+/** A glass clink (a bottle against a bottle). */
+export function glass(v, t, f, peak = 0.07) {
+  tone(v, { t, f, type: 'sine', peak, a: 0.002, d: 0.07 });
+  tone(v, { t, f: f * 2.4, type: 'triangle', peak: peak * 0.35, a: 0.002, d: 0.04 });
 }
 
 /** A tongue "tsk". */
@@ -320,6 +330,146 @@ const LEFT = {
       for (let i = 0; i < 3; i++) noise(v, { t: t + 0.3 + i * 0.07, type: 'bandpass', f: 4200, q: 1.5, peak: 0.12, a: 0.003, d: 0.03 });
     }
   },
+
+  // Stray Dog: "yip-yip", a long whine, or a bark and a yelp, claws pattering off. The Great Dane
+  // is a huge deep "WOOF" (or two, or a woof and a growl), paws thumping away.
+  dog(v, t, x, big) {
+    const p = x.j(0.08);
+    if (big) {
+      const lo = 0.42 * x.j(0.06);
+      bark(v, t, 0.62, lo);
+      tone(v, { t, f: 70 * p, f1: 40, glide: 0.2, peak: 0.3, a: 0.01, d: 0.2 }); // the chest of the thing
+      if (x.shape === 1) bark(v, t + 0.3, 0.5, lo * 1.08);
+      else if (x.shape === 2) say(v, { t: t + 0.25, vowel: 'uh', f: 62 * p, f1: 52 * p, peak: 0.4, a: 0.05, h: 0.2, d: 0.15, vib: { rate: 24, depth: 90 } }); // growl
+      [0.5, 0.64].forEach((dt, i) => thud(v, t + dt + (x.shape === 1 ? 0.12 : 0), 0.25 - i * 0.04, 70 * x.j(0.1)));
+      return;
+    }
+    const yelp = (at, f = 800) => tone(v, { t: at, f: f * p, f1: f * 2 * p, glide: 0.05, type: 'triangle', peak: 0.2, a: 0.004, h: 0.03, d: 0.05, vib: { rate: 22, depth: 70 } });
+    if (x.shape === 0) {
+      yelp(t); yelp(t + 0.13, 920);
+    } else if (x.shape === 1) {
+      tone(v, { t, f: 950 * p, f1: 600 * p, glide: 0.3, type: 'triangle', peak: 0.2, a: 0.04, h: 0.15, d: 0.1, vib: { rate: 9, depth: 50 } }); // whine
+      noise(v, { t: t + 0.4, type: 'bandpass', f: 1500, q: 1, peak: 0.07, a: 0.02, d: 0.06 }); // sniff
+    } else {
+      bark(v, t, 0.4, 1.2 * x.j(0.08));
+      yelp(t + 0.14, 1000);
+    }
+    for (let i = 0; i < 3; i++) noise(v, { t: t + 0.3 + i * 0.055, type: 'bandpass', f: 3500, q: 2, peak: 0.08, a: 0.002, d: 0.015 }); // claws on the lino
+  },
+
+  // Cosplayer: a muffled grumble from inside the foam head, costume rustling, a plastic sword
+  // clattering. The Full Mech Suit whirrs and clunks.
+  cosplay(v, t, x, big) {
+    const p = x.j(0.07);
+    if (big) {
+      const dir = x.shape === 1 ? -1 : 1;
+      const hi = x.shape === 2 ? 1.8 : 1;
+      tone(v, { t, f: (dir > 0 ? 160 : 420) * p * hi, f1: (dir > 0 ? 520 : 150) * p * hi, glide: 0.18, type: 'sawtooth', lp: 900, peak: 0.1, a: 0.02, h: 0.1, d: 0.05, vib: { rate: 28, depth: 80 } }); // servo
+      say(v, { t: t + 0.05, vowel: ['mm', 'oh', 'uh'][x.shape], scale: 0.8, f: [100, 62, 140][x.shape] * p, f1: [85, 50, 120][x.shape] * p, peak: 0.4, a: 0.02, h: 0.1, d: 0.1 });
+      const steps = [2, 4, 3][x.shape];
+      const gap = [0.17, 0.11, 0.24][x.shape];
+      for (let i = 0; i < steps; i++) {
+        const at = t + 0.34 + i * gap;
+        thud(v, at, 0.3, 65 * x.j(0.08));
+        tone(v, { t: at, f: 190 * x.j(0.1), type: 'square', lp: 700, peak: 0.05, a: 0.003, d: 0.06 }); // metal on tile
+        tone(v, { t: at + 0.03, f: 520 * p, f1: 300, glide: 0.1, type: 'sawtooth', lp: 900, peak: 0.03, a: 0.01, d: 0.08 }); // hydraulic
+      }
+      return;
+    }
+    if (x.shape === 0) {
+      babble(v, { scale: 0.8, sylls: [
+        { t, len: 0.08, f: 130 * p, vowel: 'uh', peak: 0.38 },
+        { t: t + 0.11, len: 0.16, f: 140 * p, f1: 105 * p, vowel: 'mm', peak: 0.42 },
+      ] });
+    } else if (x.shape === 1) {
+      babble(v, { scale: 0.85, sylls: [
+        { t, len: 0.07, f: 150 * p, vowel: 'uh', peak: 0.36 },
+        { t: t + 0.1, len: 0.05, f: 165 * p, vowel: 'eh', peak: 0.32 },
+        { t: t + 0.17, len: 0.05, f: 150 * p, vowel: 'eh', peak: 0.3 },
+        { t: t + 0.24, len: 0.1, f: 125 * p, f1: 105 * p, vowel: 'er', peak: 0.34 },
+      ] });
+    } else {
+      say(v, { t, vowel: 'oh', scale: 0.8, f: 175 * p, f1: 110 * p, glide: 0.2, peak: 0.4, a: 0.03, h: 0.08, d: 0.12 });
+      tone(v, { t: t + 0.32, f: 1900 * x.j(0.08), f1: 1400, glide: 0.04, peak: 0.05, a: 0.003, d: 0.05 }); // foam squeak
+    }
+    noise(v, { t, type: 'bandpass', f: 2800 * x.j(0.15), q: 0.8, peak: 0.06, a: 0.04, h: 0.2, d: 0.1 }); // rustling costume
+    knock(v, t + 0.3 * x.j(0.1), 1500 * x.j(0.08), 0.1); // the plastic sword
+    knock(v, t + 0.38 * x.j(0.1), 1250 * x.j(0.08), 0.08);
+    if (x.shape !== 2) noise(v, { t: t + 0.43, type: 'highpass', f: 5000, q: 0.7, peak: 0.06, a: 0.002, d: 0.05 }); // it hits the floor
+  },
+
+  // Exhibitionist: an offended "well!", "hmph" or "oh!", the robe pulled shut, slippers slapping
+  // away. Nudist Nan cackles, and gives herself a cheeky slap.
+  flasher(v, t, x, big) {
+    const p = x.j(0.06);
+    if (big) {
+      const n = x.shape === 1 ? 7 : 5;
+      const sylls = [];
+      for (let i = 0; i < n; i++) {
+        sylls.push({ t: t + i * 0.075 * x.j(0.08), len: 0.058, f: (i % 2 ? 560 : 470) * p * x.j(0.05), vowel: i % 2 ? 'ee' : 'eh', peak: 0.34 });
+      }
+      babble(v, { sylls, scale: 1.3 });
+      if (x.shape === 2) tone(v, { t: t + n * 0.075 + 0.02, f: 600 * p, f1: 380, glide: 0.2, type: 'sine', peak: 0.14, a: 0.01, h: 0.05, d: 0.1, vib: { rate: 8, depth: 60 } }); // wheeze
+      const s = t + n * 0.075 + (x.shape === 2 ? 0.22 : 0.06);
+      noise(v, { t: s, type: 'bandpass', f: 1800, q: 1.2, peak: 0.32, a: 0.002, d: 0.035 }); // the slap
+      tone(v, { t: s, f: 220, f1: 110, glide: 0.04, peak: 0.12, a: 0.002, d: 0.05 });
+      return;
+    }
+    if (x.shape === 0) {
+      babble(v, { scale: 1.2, sylls: [
+        { t, len: 0.05, f: 320 * p, vowel: 'oo', peak: 0.35 },
+        { t: t + 0.06, len: 0.14, f: 400 * p, f1: 300 * p, vowel: 'eh', peak: 0.5 },
+      ] });
+    } else if (x.shape === 1) {
+      say(v, { t, vowel: 'mm', scale: 1.2, f: 330 * p, f1: 250 * p, glide: 0.1, peak: 0.45, a: 0.008, h: 0.03, d: 0.08, breath: 0.4 });
+      noise(v, { t, type: 'bandpass', f: 1300, q: 0.9, peak: 0.08, a: 0.004, d: 0.07 }); // through the nose
+    } else {
+      say(v, { t, vowel: 'oh', scale: 1.2, f: 400 * p, f1: 520 * p, glide: 0.1, peak: 0.5, a: 0.01, h: 0.08, d: 0.1 });
+    }
+    noise(v, { t: t + 0.15, type: 'bandpass', f: 1500 * x.j(0.15), f1: 4200, glide: 0.1, q: 1, peak: 0.12, a: 0.01, d: 0.05 }); // the robe pulled shut
+    noise(v, { t: t - 0.0, type: 'bandpass', f: 1200, f1: 3200, glide: 0.1, q: 2, peak: 0.1, a: 0.02, d: 0.04 }); // a sharp gasp
+    for (let i = 0; i < 6; i++) noise(v, { t: t + 0.3 + i * 0.05 * x.j(0.1), type: 'lowpass', f: 700, q: 3, peak: 0.28 * (1 - i * 0.14), a: 0.003, d: 0.03 }); // flip-flops
+  },
+
+  // Day Drinker: a hiccup, a slurred mumble, a bottle clinking. The Bottomless Bruncher pops a
+  // champagne cork and goes "woo!".
+  drinker(v, t, x, big) {
+    const p = x.j(0.07);
+    const hic = (at) => {
+      tone(v, { t: at, f: 150 * p, f1: 260 * p, glide: 0.05, type: 'triangle', peak: 0.28, a: 0.004, h: 0.015, d: 0.04 });
+      noise(v, { t: at, type: 'bandpass', f: 800, q: 1.5, peak: 0.1, a: 0.002, d: 0.03 });
+    };
+    if (big) {
+      tone(v, { t, f: 330 * p, f1: 1400, glide: 0.05, peak: 0.25, a: 0.002, d: 0.06 }); // the cork
+      noise(v, { t, type: 'bandpass', f: 1600, q: 1, peak: 0.3, a: 0.002, d: 0.05 });
+      noise(v, { t: t + 0.04, type: 'highpass', f: 5500, q: 0.7, peak: 0.1, a: 0.01, h: 0.1, d: 0.25 }); // the fizz
+      const w = t + 0.2;
+      say(v, { t: w, vowel: 'oo', scale: 1.15, f: 300 * p, f1: x.shape === 1 ? 520 : 440 * p, glide: 0.18, peak: 0.5, a: 0.02, h: 0.12, d: 0.12, vib: { rate: 9, depth: 50, delay: 0.1 } }); // "woo!"
+      if (x.shape === 2) hic(t + 0.55);
+      glass(v, t + (x.shape === 0 ? 0.5 : 0.62), 3300 * x.j(0.08));
+      return;
+    }
+    if (x.shape === 0) {
+      hic(t);
+      babble(v, { scale: 0.95, sylls: [
+        { t: t + 0.12, len: 0.08, f: 140 * p, vowel: 'uh', peak: 0.38 },
+        { t: t + 0.22, len: 0.12, f: 125 * p, f1: 150 * p, vowel: 'oh', peak: 0.42 },
+        { t: t + 0.36, len: 0.1, f: 130 * p, f1: 100 * p, vowel: 'mm', peak: 0.4 },
+      ] });
+      glass(v, t + 0.52, 3100 * x.j(0.1));
+    } else if (x.shape === 1) {
+      say(v, { t, vowel: 'ah', f: 110 * p, f1: 70 * p, glide: 0.3, peak: 0.5, a: 0.03, h: 0.1, d: 0.12, vib: { rate: 7, depth: 70 }, breath: 0.3 }); // a long groan
+      hic(t + 0.36);
+    } else {
+      babble(v, { scale: 0.95, sylls: [
+        { t, len: 0.07, f: 150 * p, vowel: 'oh', peak: 0.36 },
+        { t: t + 0.1, len: 0.14, f: 120 * p, f1: 170 * p, vowel: 'ah', peak: 0.42 },
+      ] });
+      hic(t + 0.3);
+      glass(v, t + 0.45, 3400 * x.j(0.1));
+      glass(v, t + 0.53, 2700 * x.j(0.1), 0.05);
+    }
+  },
 };
 
 /** A shopper storms out with no refund: o.k is the kind, o.sup the super version. */
@@ -363,6 +513,33 @@ export function escapeVoice(v, t, o, x) {
       { t: b, len: 0.1, f: 250 * x.j(0.05), vowel: 'mm', peak: 0.45 },
       { t: b + 0.13, len: 0.16, f: 330 * x.j(0.05), f1: 360, vowel: 'mm', peak: 0.5 },
     ] });
+  }
+  if (o.k === 'dog') {
+    // A happy yelp (the Great Dane: a deep woof).
+    if (big) bark(v, b + 0.02, 0.5, 0.45);
+    else tone(v, { t: b + 0.02, f: 800 * x.j(0.08), f1: 1700, glide: 0.06, type: 'triangle', peak: 0.2, a: 0.004, h: 0.04, d: 0.06, vib: { rate: 22, depth: 70 } });
+  }
+  if (o.k === 'cosplay') {
+    // A muffled "yay" inside the foam head, the costume rustling (the mech suit whirrs).
+    babble(v, { scale: 0.8, sylls: [{ t: b, len: 0.14, f: 140 * x.j(0.06), f1: 175, vowel: 'ah', peak: 0.4 }] });
+    noise(v, { t: b, type: 'bandpass', f: 2800, q: 0.8, peak: 0.06, a: 0.03, h: 0.1, d: 0.08 });
+    if (big) tone(v, { t: b + 0.15, f: 180, f1: 600, glide: 0.2, type: 'sawtooth', lp: 900, peak: 0.07, a: 0.02, h: 0.1, d: 0.05, vib: { rate: 28, depth: 70 } });
+  }
+  if (o.k === 'flasher') {
+    // A smug "mm-hm" with the robe flapping (Nan cackles).
+    if (big) {
+      const sylls = [0, 1, 2, 3].map((i) => ({ t: b + i * 0.075, len: 0.058, f: (i % 2 ? 560 : 470) * x.j(0.05), vowel: i % 2 ? 'ee' : 'eh', peak: 0.32 }));
+      babble(v, { sylls, scale: 1.3 });
+    } else {
+      babble(v, { scale: 1.2, sylls: [{ t: b, len: 0.09, f: 330 * x.j(0.05), vowel: 'mm', peak: 0.4 }, { t: b + 0.12, len: 0.14, f: 420 * x.j(0.05), f1: 450, vowel: 'mm', peak: 0.42 }] });
+      noise(v, { t: b + 0.3, type: 'bandpass', f: 1500, f1: 3800, glide: 0.1, q: 1, peak: 0.1, a: 0.01, d: 0.05 });
+    }
+  }
+  if (o.k === 'drinker') {
+    // A hiccup and a bottle clink (the Bruncher: a cork).
+    tone(v, { t: b, f: 150 * x.j(0.07), f1: 260, glide: 0.05, type: 'triangle', peak: 0.26, a: 0.004, h: 0.015, d: 0.04 });
+    glass(v, b + 0.12, 3200 * x.j(0.1));
+    if (big) { tone(v, { t: b + 0.3, f: 330, f1: 1400, glide: 0.05, peak: 0.22, a: 0.002, d: 0.06 }); noise(v, { t: b + 0.3, type: 'bandpass', f: 1600, q: 1, peak: 0.25, a: 0.002, d: 0.05 }); }
   }
   if (big) {
     noise(v, { t: b + 0.2, type: 'bandpass', f: 1500, q: 1, peak: 0.25, a: 0.003, d: 0.06 }); // the drawer
