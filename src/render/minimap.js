@@ -1,8 +1,9 @@
 // The minimap: the whole store drawn small on its own canvas, for a corner of the interface.
 // Walls, floor, the machines' marked floor tinted in each kind's colour, tills, entrances (light
 // when open, dark when shut), buildings coloured by group over their whole footprint
-// (factory orange, security blue), shoppers as dots (dads light blue, supers bigger and gold),
-// wreckage, and a white frame showing what the main view shows.
+// (factory orange, security blue), shoppers as dots (dads light blue, supers bigger and gold, the
+// boss a big pink star), the food court's furniture in its own colours (tables white, stalls red,
+// the fountain blue...), wreckage, and a white frame showing what the main view shows.
 //
 //   const mini = createMinimap(canvas, session, renderer);
 //   mini.draw();                  a few times a second
@@ -13,9 +14,13 @@ import { INK } from './paint.js';
 
 const COL = {
   wall: [45, 52, 60], floor: [141, 144, 147], till: [217, 55, 43], shut: [70, 76, 84], open: [236, 240, 244],
-  factory: [245, 140, 30], security: [60, 150, 255], rubble: [110, 96, 80],
+  factory: [245, 140, 30], security: [60, 150, 255], rubble: [110, 96, 80], food: [190, 178, 154],
 };
-const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f';
+/** Food court furniture by decor character (state.decor): tables, benches, planters, bins, stalls, fountain. */
+const FURN = {
+  t: [242, 238, 228], b: [140, 50, 45], p: [35, 95, 45], n: [60, 70, 75], k: [215, 45, 60], f: [60, 170, 235],
+};
+const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f', BOSS_COL = '#ff2a6d';
 
 const rgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
@@ -69,10 +74,13 @@ export function createMinimap(canvas, session, renderer) {
       for (const i of door) doorCol.set(i, c);
     });
     const zones = s.zones && s.zones.length === n ? s.zones : '';
+    // The food court: its own floor colour, and its furniture in colours of its own.
+    const decor = typeof s.decor === 'string' && s.decor.length === n ? s.decor : '';
+    const floor = s.map && s.map.design === 'food' ? COL.food : COL.floor;
     for (let i = 0; i < n; i++) {
       const ch = tiles[i];
-      let c = ch === '#' ? COL.wall : ch === 'T' ? COL.till : ch === 'D' || ch === 'd' ? (doorCol.get(i) || COL.shut) : COL.floor;
-      if (zones && c === COL.floor && ZONE_COL[zones[i]]) c = ZONE_COL[zones[i]];
+      let c = ch === '#' ? (decor && FURN[decor[i]]) || COL.wall : ch === 'T' ? COL.till : ch === 'D' || ch === 'd' ? (doorCol.get(i) || COL.shut) : floor;
+      if (zones && c === floor && ZONE_COL[zones[i]]) c = ZONE_COL[zones[i]];
       const b = grid[i];
       if (b && BUILD[b.k]) c = BUILD[b.k].group === 'security' ? COL.security : COL.factory;
       const o = i * 4;
@@ -121,6 +129,29 @@ export function createMinimap(canvas, session, renderer) {
       ctx.fillStyle = pass === 2 ? SUPER : pass === 1 ? DAD : SHOPPER;
       ctx.fill();
       if (pass === 2) { ctx.lineWidth = 1; ctx.strokeStyle = INK; ctx.stroke(); }
+    }
+    // The boss: a big red star with a white rim, on top of everything, throbbing.
+    const pulse = 1 + 0.25 * Math.sin(performance.now() / 160);
+    for (const sh of s.shoppers) {
+      if (sh.k !== 'boss') continue;
+      const R = Math.max(4.5, k * 1.6) * pulse;
+      const cx = mx + sh.x * k, cy = my + sh.y * k;
+      ctx.beginPath();
+      for (let j = 0; j < 10; j++) {
+        const a = (j * Math.PI) / 5 - Math.PI / 2, rad = j % 2 ? R * 0.45 : R;
+        if (j) ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+        else ctx.moveTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+      }
+      ctx.closePath();
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      ctx.fillStyle = BOSS_COL;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = INK;
+      ctx.stroke();
     }
     // The main view.
     const v = renderer.viewRect();

@@ -65,7 +65,7 @@ export function centreOf(state, ai, b = state.grid[ai]) {
 /**
  * @typedef {Object} Shopper
  * @property {number} id
- * @property {string} k   kind, a key of SHOPPERS
+ * @property {string} k   kind, a key of SHOPPERS, or 'boss' (see BOSS in constants.js)
  * @property {number} [sup] 1 if this is the super version of its kind (see SUPERS in constants.js)
  * @property {number} x   position in tiles (tile centre is n + 0.5)
  * @property {number} y
@@ -107,6 +107,9 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [sh]  cosplayer: the tick of his last 'shield' event
  * @property {number} [sv]  day drinker: his speed multiplier right now
  * @property {number} [dr]  day drinker: the direction he last walked in, 0-3
+ * @property {number} [tr]  boss: his tier, 1 in wave 5, 2 in wave 10 ... (BOSS.titles[min(tr, 4) - 1]
+ *                          is what he is called)
+ * @property {number} [pp]  boss: ticks until his next pep talk
  *                          (a dog's `cd` is the ticks until it can pee again)
  */
 
@@ -166,6 +169,10 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     w: plan.w,
     h: plan.h,
     tiles: plan.tiles,
+    /** What each solid tile looks like (the food court's tables, stalls and so on), one character
+     *  per tile as listed in DECOR in maps.js, or '' for a design without furniture. Furniture is
+     *  '#' in `tiles`; this is only for drawing. */
+    decor: plan.decor,
     /** Marked floor for the factory machines: one character per tile, a key of ZONES or a
      *  space. An empty string means the map has no marked floor and machines go anywhere. */
     zones: zones ? makeZones(plan.w, plan.h, plan.tiles, plan.doors) : '',
@@ -179,6 +186,12 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     shoppers: [],
     /** Messes teenagers have left on the floor, as [tile index, ticks left]. */
     messes: [],
+    /** Carts moms have left behind this wave (when one goes down for the last time with her child
+     *  loose; see the shopper's `nc`), as [x, y, sup, face]: where she fell, in tiles as decimals;
+     *  1 if she was a Soccer Mom, else 0; 1 if she was facing right, else -1. Kept in the state so
+     *  a player who joins mid-wave sees them too. Emptied when the wave ends. (A save from before
+     *  it existed lacks it; the simulation makes it when first needed.) */
+    carts: [],
     /** What gym bros have destroyed and nobody has rebuilt yet, oldest first, as
      *  { i, k, d, o, u, spent }: anchor tile, kind, facing, owner, upgrade levels (as on a
      *  building, possibly {}), and what had been spent on it (spentOn). The 'rebuild' command, or
@@ -192,8 +205,8 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     /** Refunds that close the store. Grows with the number of players. */
     refundLimit: TUNE.refundLimit,
     wave: 0,
-    /** The host's settings: how many waves, each player's starting cash, and the difficulty
-     *  (a key of SETTINGS.difficulty). */
+    /** The host's settings: how many waves (0: endless, see isEndless), each player's starting
+     *  cash, and the difficulty (a key of SETTINGS.difficulty). */
     waves: set.waves,
     startCash: set.startCash,
     difficulty: set.difficulty,
@@ -269,6 +282,13 @@ export function setSettings(state, o) {
   return true;
 }
 
+/**
+ * True in an endless game (state.waves is 0): there is no last sales event, the game is never
+ * won, and it ends only when the refund limit is reached. A won game can be carried on as one with
+ * the 'endless' command.
+ */
+export const isEndless = (state) => state.waves === 0;
+
 /** The difficulty the game is played at: { hp, pay } multipliers. */
 export const difficultyOf = (state) => SETTINGS.difficulty[state.difficulty] || SETTINGS.difficulty.normal;
 
@@ -284,6 +304,7 @@ export function setMap(state, design, size) {
   state.w = plan.w;
   state.h = plan.h;
   state.tiles = plan.tiles;
+  state.decor = plan.decor;
   state.doors = plan.doors;
   state.open = 0;
   if (state.zones) state.zones = makeZones(plan.w, plan.h, plan.tiles, plan.doors);

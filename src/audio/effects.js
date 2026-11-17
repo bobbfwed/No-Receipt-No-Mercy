@@ -17,16 +17,20 @@
 // The shoppers' own voices are in shoppers.js.
 import { voice, tone, noise, bell, brass, formant, gain, mtof, rng, vary, say, babble } from './synth.js';
 import { SHAPES, LEFT_ABOUT, bark, thud, knock, leftVoice, escapeVoice, walkout } from './shoppers.js';
-import { rail, railWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, trackIntro, deflate, carryUp } from './newfx.js';
+import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, trackIntro, deflate, carryUp } from './newfx.js';
+import { bossWave, bossIn, pep, bossOut, bossEscape, endless } from './boss.js';
 
-/** The thirteen kinds of shopper (SHOPPERS in src/sim/constants.js), for the test page's rows. */
-export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker'];
+/**
+ * The thirteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
+ * in SHOPPERS), for the test page's rows. Only the boss has no super version.
+ */
+export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker', 'boss'];
 
 /** What a gym bro can wreck, grouped by what it sounds like. */
 const WRECK = {
   belt: 'belt', unpacker: 'machine', press: 'machine', packer: 'machine', chute: 'machine',
   crate: 'crate', sprinkler: 'sprinkler', forklift: 'forklift', wetfloor: 'wetfloor', samples: 'samples',
-  railgun: 'railgun', salesman: 'tv',
+  railgun: 'scanner', salesman: 'tv', // (the key 'railgun' is the Barcode Laser's)
 };
 
 /** A wrench ratchet: a few quick clicks. */
@@ -236,7 +240,7 @@ export const SOUNDS = {
     shapes: SHAPES,
     variants: KINDS.flatMap((k) => [
       { label: k, opts: { k }, about: LEFT_ABOUT[k][0] },
-      { label: k + ' super', opts: { k, sup: 1 }, max: 0.95, about: LEFT_ABOUT[k][1] },
+      ...(LEFT_ABOUT[k][1] ? [{ label: k + ' super', opts: { k, sup: 1 }, max: 0.95, about: LEFT_ABOUT[k][1] }] : []),
     ]),
     // (every kind of shopper above, normal and super; sound.js passes e.k and e.sup)
     play(ctx, dest, t, o = {}) {
@@ -472,7 +476,7 @@ export const SOUNDS = {
       { label: 'forklift', opts: { k: 'forklift' }, about: 'Forklift turret: a heavy crash, then its horn dying, its reversing beeper giving up, or a tyre going down.' },
       { label: 'wetfloor', opts: { k: 'wetfloor' }, about: 'Wet floor sign: plastic clattering flat.' },
       { label: 'samples', opts: { k: 'samples' }, about: 'Free samples: the table cracks and the plates smash (sometimes the cheese lands with a splat).' },
-      { label: 'rail gun', opts: { k: 'railgun' }, max: 1.2, about: 'Rail Gun: the casing cracks, a deep boom, bolts ringing down, the coil winding down (or steam and falling parts).' },
+      { label: 'barcode laser', opts: { k: 'railgun' }, max: 1.2, about: 'Barcode Laser: the casing cracks, then the scanner dies like a scanner: the lens shatters and the beep fails, an error buzzer, or sad slowing beeps with steam.' },
       { label: 'salesman', opts: { k: 'salesman' }, max: 1.0, about: 'TV Salesman: the television implodes: cracking glass, a "fwump", the tube whining down, sparks or tinkling or static.' },
       { label: 'hit (hits left)', opts: { k: 'forklift', left: 2 }, about: 'A building took a hit and can take more: one clang and a bolt bouncing away.' },
     ],
@@ -488,8 +492,8 @@ export const SOUNDS = {
         return v.end;
       }
       const kind = WRECK[o.k] || 'crate';
-      if (kind === 'railgun') {
-        railWreck(v, t, x);
+      if (kind === 'scanner') {
+        scannerWreck(v, t, x);
       } else if (kind === 'tv') {
         tvWreck(v, t, x);
       } else if (kind === 'belt') {
@@ -610,14 +614,14 @@ export const SOUNDS = {
   },
 
   rail: {
-    about: 'The Rail Gun fires: a heavy charging whine climbing for half a second, then a flat CRACK, a deep boom and the beam ringing away. Much heavier than the forklift. More sparkle when it hit a crowd.',
+    about: 'The Barcode Laser fires (a checkout scanner turned up far too high): a motor whine and a scanning buzz climbing for half a second, then a very loud checkout BEEP (one, a quick "bi-bip", or low-high) with a laser zap and a sizzle. More sparkle when it hit a crowd.',
     max: 1.3,
     shapes: 3,
     variants: [
       { label: 'hit 1', opts: { n: 1 } },
-      { label: 'hit 5', opts: { n: 5 }, about: 'The beam went through five shoppers: a few high sparkles on the end.' },
+      { label: 'hit 5', opts: { n: 5 }, about: 'The beam went through five shoppers: high sparkles and a bell on the end.' },
     ],
-    play: rail,
+    play: barcodeLaser,
   },
 
   pee: {
@@ -756,14 +760,17 @@ export const SOUNDS = {
   },
 
   waveStart: {
-    about: 'Store PA "ding-dong". With dads coming: a low ominous "dun... DUNNN" afterwards.',
+    about: 'Store PA "ding-dong". With dads coming: a low ominous "dun... DUNNN" afterwards. With a boss coming (boss = his tier): no ding-dong, but a funeral toll a tritone apart, a sour low brass chord and timpani.',
     max: 1.8,
     variants: [
       { label: 'plain', opts: { dads: 0 } },
       { label: 'dads', opts: { dads: 4 }, max: 2.9 },
+      { label: 'boss 1', opts: { boss: 1 }, max: 3.2, about: 'A boss event (Regional Manager): the funeral toll and a sour chord.' },
+      { label: 'boss 4', opts: { boss: 4, dads: 4 }, max: 3.2, about: 'The CEO event: the same, a little heavier (the boss toll replaces the dads\' dun-DUNNN).' },
     ],
     play(ctx, dest, t, o = {}) {
       const v = voice(ctx, dest, o.level);
+      if (o.boss > 0) return bossWave(v, t, { tier: o.boss });
       // Two vibraphone-like chimes, a major third apart, like a shop tannoy.
       [[mtof(76), 0], [mtof(72), 0.45]].forEach(([f, dt]) => {
         bell(v, { t: t + dt, f, peak: 0.32, d: 1.1, ratio: 4, index: 0.5 });
@@ -777,6 +784,60 @@ export const SOUNDS = {
       }
       return v.end;
     },
+  },
+
+  bossIn: {
+    about: 'The boss walks in: a pompous corporate fanfare that grows with his tier. 1 Regional Manager: brisk brass "ta-ta-ta-TAA" and a cymbal. 2: timpani and a bigger chord. 3: a choir, a harp run and a snare roll. 4 (the CEO): all that plus an air horn, kazoos, a slide whistle, a till and a cheering crowd.',
+    max: 1.6,
+    shapes: 1,
+    variants: [
+      { label: 'tier 1', opts: { tier: 1 }, max: 1.4 },
+      { label: 'tier 2', opts: { tier: 2 }, max: 2.2 },
+      { label: 'tier 3', opts: { tier: 3 }, max: 2.5 },
+      { label: 'tier 4 (the CEO)', opts: { tier: 4 }, max: 3.6 },
+    ],
+    play: bossIn,
+  },
+
+  pep: {
+    about: 'The boss gives a pep talk (every 7 seconds): a blustering baritone of four or five syllables ending in a bellow, then a referee whistle, an air horn or two claps; if n shoppers were encouraged, the crowd answers "yeah!" (up to three voices, with applause from five). Short and quiet.',
+    max: 1.1,
+    shapes: 3,
+    variants: [
+      { label: 'nobody', opts: { n: 0 }, about: 'Nobody was near enough to be encouraged: just him.' },
+      { label: '2 cheer', opts: { n: 2 }, about: 'One voice answers "yeah!".' },
+      { label: '8 cheer', opts: { n: 8 }, about: 'Three voices and applause.' },
+    ],
+    play: pep,
+  },
+
+  bossOut: {
+    about: 'The players drove the boss out: his outraged splutter (a strangled "buh-buh-BUH-bweh", a raspberry and "you\'ll hear from my lawyers", or a long "NNNGH" and a whimper), the shop door slammed, then the cash: a run of coins up the scale, a till "ka-CHING" (more for higher tiers). Plays instead of his ordinary walk-out voice.',
+    max: 1.9,
+    shapes: 3,
+    variants: [
+      { label: 'tier 1', opts: { tier: 1, bounty: 150 }, max: 1.9 },
+      { label: 'tier 4', opts: { tier: 4, bounty: 600 }, max: 2.4, about: 'The CEO: more coins, a second till and a cymbal.' },
+    ],
+    play: bossOut,
+  },
+
+  bossEscape: {
+    about: 'The boss reached the tills and counts as five refunds: a rubber stamp thump, five till drawers slamming open one after another, each with a cash-register bell, then a smug chuckle ("heh heh heh", a deep "hoo-hoo-hoo", or an evil "ha-HAAA"). From tier 3 a low rumble underneath.',
+    max: 2.1,
+    shapes: 3,
+    variants: [
+      { label: 'tier 1', opts: { tier: 1 } },
+      { label: 'tier 4', opts: { tier: 4 }, about: 'The CEO gets away with it: the same, with a rumble.' },
+    ],
+    play: bossEscape,
+  },
+
+  endless: {
+    about: 'A won game is carried on: a tape rewinding, then a weary low-brass "da-DUM, da-DUUUM" with timpani and a tannoy ding. "Here we go again."',
+    max: 1.8,
+    shapes: 1,
+    play: endless,
   },
 
   waveEnd: {

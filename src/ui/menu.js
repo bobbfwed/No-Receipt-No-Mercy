@@ -4,6 +4,7 @@ import { VERSION, RELEASE, versionText } from '../version.js';
 import { h, loadName, saveName } from './dom.js';
 import { createSettings } from './settings.js';
 import { whenSaved } from './save.js';
+import { recordLine } from './record.js';
 import { openHandbook } from './handbook.js';
 import { howToPlay } from './overlays.js';
 
@@ -82,7 +83,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   const save = opts.save || null;
   const btnResume = save ? h('button', { type: 'button', class: 'btn-big btn-resume' },
     'Resume saved game',
-    h('small', null, `Sales event ${save.wave} of ${save.waves} · ${save.store} · ${save.players.join(', ')} · saved ${whenSaved(save.at)}`)) : null;
+    h('small', null, `Sales event ${save.waves > 0 ? `${save.wave} of ${save.waves}` : `${save.wave}, endless`} · ${save.store} · ${save.players.join(', ')} · saved ${whenSaved(save.at)}`)) : null;
   const btnForget = save ? h('button', { type: 'button', class: 'btn-forget', title: 'Throw the saved game away' }, 'Delete this save') : null;
   const resumeBox = save ? h('div', { class: 'resume-box' }, btnResume, btnForget,
     save.players.length > 1 ? h('p', { class: 'resume-note' }, 'You will be the host. A new room code appears at the top: send it to the others, and each gets his place and money back by joining under the same name.') : null) : null;
@@ -131,6 +132,8 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   });
   // The handbook is reading, not a way into a game, so it sits last and looks quieter than the
   // buttons above it. (It used to head the HOW TO PLAY column, where it read as a title.)
+  // The best endless run in this browser, if there has been one (src/ui/record.js).
+  const record = recordLine();
   const btnBook = h('button', { type: 'button', class: 'btn-handbook', onclick: () => openHandbook(null) },
     '📖 Employee Handbook', h('small', null, 'Every shopper, machine and piece of security, with its numbers'));
 
@@ -159,6 +162,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
         btnHost,
         h('div', { class: 'join' }, h('label', { for: 'code', class: 'join-label' }, 'Got a room code?'), joinForm),
         btnBook),
+      record ? h('p', { class: 'menu-record' }, record) : null,
       status),
     h('aside', { class: 'menu-help' }, h('h2', null, 'HOW TO PLAY'), howToPlay()));
 

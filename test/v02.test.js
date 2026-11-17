@@ -1,5 +1,5 @@
 // Tests for the rules changed after the owner's playtest: easier difficulty, buildings bigger than
-// one tile, upgrades in separate tracks, durability and half-price rebuilding, the Rail Gun, the
+// one tile, upgrades in separate tracks, durability and half-price rebuilding, the Barcode Laser, the
 // TV Salesman, the longer forklift, the new rules for moms, four new shoppers, and the painted
 // floor kept off the walls. Run with: node --test
 import test from 'node:test';
@@ -276,7 +276,7 @@ test('canUpgrade gives every reason, and a faster tower really fires more often'
 test('a gym bro takes two hits to destroy a big building, and its rubble remembers everything', (t) => {
   tune(t, { smashOther: 1 });
   const s = stage(4);
-  // A corridor along row 7 lined with rail guns, one with upgrades.
+  // A corridor along row 7 lined with barcode lasers, one with upgrades.
   for (let x = 3; x <= 24; x += 3) { place(s, 'railgun', x, 6, 0); place(s, 'railgun', x, 8, 0); }
   applyCommand(s, 0, { c: 'upgrade', x: 9, y: 6, t: 'dmg' });
   applyCommand(s, 0, { c: 'upgrade', x: 9, y: 6, t: 'dmg' });
@@ -289,7 +289,7 @@ test('a gym bro takes two hits to destroy a big building, and its rubble remembe
     (byGun.get(e.i) || byGun.set(e.i, []).get(e.i)).push(e.left);
   }
   const destroyed = [...byGun.entries()].filter(([, lefts]) => lefts.includes(0));
-  assert.ok(destroyed.length >= 2, `${destroyed.length} rail guns destroyed`);
+  assert.ok(destroyed.length >= 2, `${destroyed.length} barcode lasers destroyed`);
   for (const [i, lefts] of destroyed) {
     assert.deepEqual(lefts, [1, 0], 'one hit to spare, then gone');
     for (let x = 0; x < 3; x++) assert.equal(s.grid[i + x], 0, 'every tile is cleared');
@@ -357,7 +357,7 @@ test('rebuilding costs half of what was spent, with upgrades; short of that, the
   assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1, short: 1 }]);
   assert.deepEqual(s.grid[at(5, 5)].u, { rng: 1, dmg: 1 }, 'the forklift came back with what he could afford');
   assert.equal(s.players[0].cash, 39);
-  assert.equal(s.grid[at(9, 5)], 0, 'not enough left for the rail gun');
+  assert.equal(s.grid[at(9, 5)], 0, 'not enough left for the barcode laser');
   assert.equal(s.rubble.length, 2);
   s.players[0].cash = 350;
   assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, short: 0 });
@@ -396,9 +396,9 @@ test('placing the same kind on its rubble brings it back as it was, at the rebui
   assert.equal(s.grid[at(5, 9)].u, undefined);
 });
 
-// ---------------------------------------------------------------- rail gun
+// ---------------------------------------------------------------- barcode laser
 
-test('the rail gun fires down the line it faces, through everything, and hits every shopper in line', () => {
+test('the barcode laser fires down the line it faces, through everything, and hits every shopper in line', () => {
   const s = stage(3);
   // Facing south from the top wall: its beam crosses the shoppers' route along rows 7 and 8.
   assert.ok(place(s, 'railgun', 14, 1, 1).ok);
@@ -434,7 +434,7 @@ test('the rail gun fires down the line it faces, through everything, and hits ev
   assert.equal(b.hp, b.mhp);
 });
 
-test('a Karen near the rail gun slows its reload', () => {
+test('a Karen near the barcode laser slows its reload', () => {
   const s = stage(3);
   place(s, 'railgun', 14, 1, 1);
   const gun = s.grid[at(14, 1)];

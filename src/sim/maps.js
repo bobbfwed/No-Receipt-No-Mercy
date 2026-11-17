@@ -2,7 +2,8 @@
 // design is available in every size.
 //
 // Tile characters:
-//   '#' wall, pillar or shelf (nothing walks or builds here)
+//   '#' wall, pillar, shelf or furniture (nothing walks or builds here; what furniture looks
+//       like is in the separate `decor` string, see DECOR)
 //   '.' floor (the only tiles that can be built on)
 //   'T' till (shoppers want to reach one)
 //   'D' open entrance (shoppers appear here)   'd' entrance that is still shut
@@ -37,6 +38,10 @@ export const MAP_DESIGNS = {
     name: 'Supermarket Aisles',
     desc: 'Rows of shelving with a wide main aisle down the middle. The shelves are free walls; the main aisle is your problem.',
   },
+  food: {
+    name: 'Food Court',
+    desc: 'Little tables, sticky booths, kebab stalls and a fountain full of pennies. The crowd weaves through it all; so do your belts.',
+  },
 };
 
 /** The size that suits a number of players. */
@@ -50,8 +55,10 @@ export function recommendedSize(players) {
  * @param {string} design a key of MAP_DESIGNS
  * @param {string} size a key of MAP_SIZES
  * @param {number} [slots] how many entrances the map has, up to seven (they start shut)
- * @returns {{w: number, h: number, tiles: string, doors: number[][]}} `doors` lists each
- *   entrance's tile indexes, in the order the entrances open
+ * @returns {{w: number, h: number, tiles: string, doors: number[][], decor: string}} `doors`
+ *   lists each entrance's tile indexes, in the order the entrances open. `decor` says what each
+ *   solid tile looks like, one character per tile (see DECOR); it is '' for designs without
+ *   furniture.
  */
 export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
   const { w, h } = MAP_SIZES[size] || MAP_SIZES.xs;
@@ -65,7 +72,7 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
 
   if (design === 'showroom') rooms(w, h, wall, set);
   else if (design === 'aisles') shelves(w, h, mid, wall);
-  else pillars(w, h, wall);
+  else if (design !== 'food') pillars(w, h, wall);
 
   // Tills: a band in the middle of the right-hand wall.
   const tillRows = Math.max(6, Math.round(h * 0.375) & ~1);
@@ -103,7 +110,211 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
     }
     doors.push(door);
   }
-  return { w, h, tiles: g.join(''), doors };
+  // The food court's furniture goes in last, around the tills, the entrances (all seven, so the
+  // layout is the same however many are in use) and the marked floor.
+  const decor = design === 'food' ? furnish(w, h, g, spots) : '';
+  return { w, h, tiles: g.join(''), doors, decor };
+}
+
+/**
+ * What a solid tile of the food court looks like (the `decor` string from makeMap). Every one of
+ * them is an ordinary '#' in the tiles, so the rules treat furniture exactly like a wall.
+ */
+export const DECOR = {
+  ' ': 'nothing special: floor, or a plain wall',
+  t: 'a small table with chairs',
+  b: 'a bench or booth seat (a run of them is one bench)',
+  p: 'a planter or potted palm',
+  n: 'a bin and tray return',
+  k: 'a food stall (a block of several tiles)',
+  f: 'the fountain (a block of several tiles)',
+};
+
+/** A small, fixed scramble of a few numbers, used in place of dice so a map is the same every time. */
+function hash(a, b, c) {
+  let t = Math.imul(a + 0x9e37, 0x85ebca6b) ^ Math.imul(b + 0x7f4a, 0xc2b2ae35) ^ Math.imul(c + 0x1234, 0x27d4eb2f);
+  t ^= t >>> 15;
+  t = Math.imul(t, 0x2c1b3c6d);
+  t ^= t >>> 12;
+  t = Math.imul(t, 0x297a2d39);
+  t ^= t >>> 15;
+  return t >>> 0;
+}
+
+/**
+ * Food court: furniture scattered over the floor. The columns that hold marked floor (and one
+ * either side, for belts) get only the odd single table, never beside a patch, so production
+ * lines still fit but have something to go round; the strips between them are filled with
+ * clusters of single tables, booths, stalls, benches, planters and bins, with a fountain in the
+ * middle on the bigger maps.
+ *
+ * Nothing is sealed off because no two pieces of furniture touch, not even corner to corner, and
+ * none touches the outer wall: separate solid blocks in an open room can always be walked round.
+ * Shoppers have to weave through the gaps, which are one tile wide.
+ * @param {string[]} g the tiles, changed in place
+ * @returns {string} the decor string
+ */
+function furnish(w, h, g, spots) {
+  const d = new Array(w * h).fill(' ');
+  const keep = new Uint8Array(w * h); // 1 = no furniture on this tile
+  const clear = (x0, y0, x1, y1) => {
+    for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) {
+      for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x++) keep[y * w + x] = 1;
+    }
+  };
+  // A walkway all round the outer wall, and the three columns in front of the tills.
+  clear(0, 0, w - 1, 1);
+  clear(0, h - 2, w - 1, h - 1);
+  clear(0, 0, 1, h - 1);
+  clear(w - 4, 0, w - 1, h - 1);
+  // The floor in front of every entrance, three deep and a tile wider each side.
+  const allDoors = [];
+  for (const sp of spots) {
+    if (sp.side === 'L') clear(1, sp.at - 1, 3, sp.at + 2);
+    else if (sp.side === 'T') clear(sp.at - 1, 1, sp.at + 2, 3);
+    else clear(sp.at - 1, h - 4, sp.at + 2, h - 2);
+    const door = [];
+    for (let j = 0; j < 2; j++) {
+      const x = sp.side === 'L' ? 0 : sp.at + j;
+      const y = sp.side === 'L' ? sp.at + j : sp.side === 'T' ? 0 : h - 1;
+      door.push(y * w + x);
+    }
+    allDoors.push(door);
+  }
+  // The marked floor and a tile all round it. The columns it is in, and one either side, are the
+  // bands where production lines run: only the odd table goes there, never a big piece.
+  // (A patch can sit a row further in when an entrance faces it, so this is worked out for every
+  // number of entrances in use, and the furniture stays clear of all of them.)
+  const banded = new Uint8Array(w);
+  const tiles = g.join('');
+  for (let n = 1; n <= allDoors.length; n++) {
+    const zones = makeZones(w, h, tiles, allDoors.slice(0, n));
+    for (let i = 0; i < zones.length; i++) {
+      if (zones[i] === ' ') continue;
+      const x = i % w, y = (i / w) | 0;
+      clear(x - 1, y - 1, x + 1, y + 1);
+      for (let k = -1; k <= 1; k++) if (x + k >= 0 && x + k < w) banded[x + k] = 1;
+    }
+  }
+
+  /** True if a block of furniture fits here: free floor, and nothing else touching it. */
+  const fits = (x0, y0, rows) => {
+    const pw = rows[0].length, ph = rows.length;
+    for (let y = y0 - 1; y <= y0 + ph; y++) {
+      for (let x = x0 - 1; x <= x0 + pw; x++) {
+        if (x < 0 || y < 0 || x >= w || y >= h) return false;
+        const i = y * w + x;
+        if (d[i] !== ' ') return false;
+        const inside = x >= x0 && y >= y0 && x < x0 + pw && y < y0 + ph;
+        if (inside && (keep[i] || g[i] !== '.')) return false;
+      }
+    }
+    return true;
+  };
+  const put = (x0, y0, rows) => {
+    if (!fits(x0, y0, rows)) return false;
+    for (let y = 0; y < rows.length; y++) {
+      for (let x = 0; x < rows[y].length; x++) {
+        const i = (y0 + y) * w + x0 + x;
+        g[i] = '#';
+        d[i] = rows[y][x];
+      }
+    }
+    return true;
+  };
+  const block = (ch, bw, bh) => Array.from({ length: bh }, () => ch.repeat(bw));
+
+  // The strips of floor furniture may go in: runs of columns between the marked floor.
+  const runs = [];
+  for (let x = 2; x <= w - 5; x++) {
+    if (banded[x]) continue;
+    if (runs.length && runs[runs.length - 1][1] === x - 1) runs[runs.length - 1][1] = x;
+    else runs.push([x, x]);
+  }
+
+  // The fountain: in the strip nearest the middle, half way down, on the middle-sized maps and up.
+  if (h >= 24 && runs.length) {
+    const [c0, c1] = runs.filter((r) => r[1] - r[0] >= 3).concat([runs[0]])
+      .reduce((a, r) => (Math.abs((r[0] + r[1]) / 2 - w / 2) < Math.abs((a[0] + a[1]) / 2 - w / 2) ? r : a));
+    const fw = Math.min(4, c1 - c0 + 1), fh = h >= 30 ? 4 : 3;
+    const fx = c0 + ((c1 - c0 + 1 - fw) >> 1), fy = (h - fh) >> 1;
+    if (put(fx, fy, block('f', fw, fh))) {
+      // Benches facing it, above and below, with a gap to walk through between.
+      const bench = fw >= 4 ? ['p' + 'b'.repeat(fw - 2) + 'p'] : ['b'.repeat(fw)];
+      put(fx, fy - 2, bench);
+      put(fx, fy + fh + 1, bench);
+    }
+  }
+
+  // Everything else, a block of strip at a time, six rows tall. Each block is little tables, and
+  // may also have a stall, a row of booths, or planters and a bench. The blocks take turns from
+  // a fixed list rather than by chance, so even the smallest map gets one of each.
+  const BH = 6;
+  const TURNS = 'tktbtltkbtl';
+  let turn = hash(w, h, 5) % TURNS.length;
+  for (const [c0, c1] of runs) {
+    const rw = c1 - c0 + 1;
+    for (let by = 2; by <= h - 3; by += BH) {
+      const kind = TURNS[turn++ % TURNS.length];
+      const r2 = hash(by, c0, w + h * 977);
+      // A piece that would land in front of an entrance (or off the end of the strip) shuffles
+      // along and down the block until it fits. Returns where it went, as [x, y], or null.
+      const settle = (x0, rows) => {
+        const pw = rows[0].length, ph = rows.length;
+        const xs = [];
+        for (let x = c0; x + pw - 1 <= c1; x++) xs.push(x);
+        xs.sort((a, b) => Math.abs(a - x0) - Math.abs(b - x0) || a - b);
+        for (const dy of [1, 2, 3, 0, 4]) {
+          if (dy + ph > BH) continue;
+          for (const x of xs) if (put(x, by + dy, rows)) return [x, by + dy];
+        }
+        return null;
+      };
+      if (kind === 'k' && rw >= 2) {
+        // A food stall, two or three tiles each way, with a bin by it.
+        const shapes = rw >= 3 ? [[3, 2], [2, 3], [2, 2]] : [[2, 2], [2, 3]];
+        const [kw, kh] = shapes[r2 % shapes.length];
+        const at = settle(c0 + ((rw - kw) >> 1) + (rw - kw >= 2 ? (r2 >> 4) % 2 : 0), block('k', kw, kh));
+        if (at) {
+          const [x, y] = at;
+          [[x + kw + 1, y], [x - 2, y + kh - 1], [x, y + kh + 1], [x + kw - 1, y - 2]].some(([bx, by2]) => put(bx, by2, ['n']));
+        }
+      } else if (kind === 'b' && rw >= 3) {
+        // Booths: a table between two benches, in rows with a gap between, staggered.
+        for (let k = 0; k < 3; k++) {
+          const off = rw > 3 ? (k + (r2 & 1)) % 2 : 0;
+          put(c0 + off, by + 2 * k, ['btb']);
+          if (rw >= 7) put(c0 + off + 4, by + 2 * k, ['btb']);
+        }
+      } else if (kind === 'l' && rw >= 2) {
+        // Planters with a bench between them, and a palm.
+        const len = Math.min(rw, 4 + ((r2 >> 3) % 2));
+        const row = len >= 3 ? 'p' + 'b'.repeat(len - 2) + 'p' : 'pp';
+        const at = settle(c0 + ((rw - len) >> 1), [row]);
+        if (at) put(c0 + ((rw - 1) >> 1), at[1] + 3, ['p']);
+      }
+      // Little tables in whatever room is left, every fourth tile along a row and shifted two
+      // along on the next row, so each row of tables blocks a straight walk and makes the crowd
+      // step round. A few are left out, and a few are a bin or a palm instead.
+      for (let y = by; y < by + BH && y <= h - 3; y++) {
+        for (let x = c0; x <= c1; x++) {
+          if (((x - c0) + 2 * (y - by)) % 4 !== 0) continue;
+          const r = hash(x, y, w * 7 + h) % 100;
+          if (r < 25) continue;
+          put(x, y, [r < 30 ? 'n' : r < 36 ? 'p' : 't']);
+        }
+      }
+    }
+  }
+  // The odd table in the bands too, in the rows between the patches, so belts have something to
+  // go round. Each is on its own, and none is beside marked floor.
+  for (let x = 2; x <= w - 5; x++) {
+    if (!banded[x]) continue;
+    for (let y = 2; y <= h - 3; y++) {
+      if ((x + 2 * y) % 4 === 0 && hash(y, x, w * 31 + h) % 100 < 15) put(x, y, ['t']);
+    }
+  }
+  return d.join('');
 }
 
 /** Open warehouse: a pillar every dozen tiles or so. */

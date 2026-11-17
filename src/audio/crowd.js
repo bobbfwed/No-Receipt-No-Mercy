@@ -92,6 +92,15 @@ export const RULES = {
   upgraded: { gap: 0.1, soft: 3, per: 3 },
   rebuilt: { gap: 0.3, soft: 2, per: 2 },
   gave: { gap: 0.2, soft: 2, per: 2 },
+  // The boss. There is only ever one of him, so these are rare; they are `always` (never thinned
+  // or dropped for being busy: they are what the players must hear in a storm) but still spaced.
+  // The boss's pep talk comes every 7 s and his walk-out voice (`left`, k 'boss') is skipped by
+  // sound.js when `bossOut` (which carries the sound) arrives in the same tick.
+  bossIn: { gap: 2, delay: 0, always: true },
+  pep: { gap: 1.5, delay: 0, always: true },
+  bossOut: { gap: 1, delay: 0, always: true },
+  bossEscape: { gap: 0.8, delay: 0, always: true },
+  endless: { gap: 3, delay: 0, always: true },
   // The merged crowd sounds stand in for many single ones, so they skip the caps (`always`).
   kerching: { gap: 1.0, delay: 0, always: true },
   walkout: { gap: 1.2, delay: 0, always: true },

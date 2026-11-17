@@ -1,5 +1,5 @@
 // Customer review toasts (top right) and short notices such as players joining (top centre).
-import { SHOPPERS } from '../sim/index.js';
+import { SHOPPERS, BOSS, bossTier, bossTitle } from '../sim/index.js';
 import { h } from './dom.js';
 import { SUNGLASSES } from './icons.js';
 
@@ -7,7 +7,11 @@ const REVIEW_MS = 6000;
 const NOTICE_MS = 4500;
 const MAX_REVIEWS = 3;
 
-export function createToasts() {
+/**
+ * @param {Object} [o]
+ * @param {() => Object|null} [o.getState] the game state, to tell which title a boss's review is signed with
+ */
+export function createToasts({ getState = () => null } = {}) {
   const reviews = h('div', { class: 'reviews', 'aria-live': 'polite', 'aria-label': 'Customer reviews' });
   const notices = h('div', { class: 'notices', 'aria-live': 'polite' });
   const live = []; // { el, until }
@@ -27,11 +31,24 @@ export function createToasts() {
     setTimeout(() => item.el.remove(), 250);
   }
 
+  /**
+   * The boss is not one of SHOPPERS: he signs with the title he has now. The review does not
+   * carry his tier, so take it from the boss in the store, or from the sales event.
+   */
+  function bossName(m) {
+    const s = getState();
+    let tier = m.tier | 0;
+    if (!tier && s) tier = s.shoppers?.find((x) => x.k === 'boss')?.tr || bossTier(s.wave) || 0;
+    if (!tier) return BOSS.name;
+    const title = bossTitle(tier);
+    return /^The /.test(title) ? title : `The ${title}`;
+  }
+
   /** { stars, text, kind } */
   function review(m) {
     const stars = Math.max(0, Math.min(5, Math.round(Number(m.stars) || 0)));
     const five = stars >= 5;
-    const who = SHOPPERS[m.kind]?.name || 'A shopper';
+    const who = m.kind === 'boss' ? bossName(m) : SHOPPERS[m.kind]?.name || 'A shopper';
     const starEls = [];
     for (let i = 0; i < 5; i++) starEls.push(h('span', { class: i < stars ? 'st on' : 'st' }, i < stars ? '★' : '☆'));
     const el = h('article', { class: `review-toast ${five ? 'five' : 'low'}` },

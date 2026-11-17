@@ -1,9 +1,11 @@
 // Plays whole solo games with scripted players and prints how each went, to judge difficulty
 // without a human.
-// Usage: node tools/balance.mjs [seed] [size] [design] [-v]
-//   size    a key of MAP_SIZES (default: s, the size recommended for one player), or "all"
-//   design  a key of MAP_DESIGNS (default: warehouse; the bots' layout suits an open floor)
-//   -v      also print every wave
+// Usage: node tools/balance.mjs [seed] [size] [design] [-v] [--endless]
+//   size       a key of MAP_SIZES (default: s, the size recommended for one player), or "all"
+//   design     a key of MAP_DESIGNS (default: warehouse; the bots' layout suits an open floor)
+//   -v         also print every wave (a boss wave says how the boss did: "boss out", or "boss
+//              through" with the share of his patience he had left)
+//   --endless  play endless games (no last sales event) and print the sales event each lost in
 //
 // Bots:
 //   nothing   builds nothing (the game should be lost quickly)
@@ -14,7 +16,7 @@
 //             spends everything on upgrades (damage, speed and range of its towers), cheapest first
 //   focus     like keen, but pours its upgrade money into the sprinklers nearest the entrance,
 //             one at a time, as far as each will go, cheapest track first (how the owner plays)
-// None of them builds the Rail Gun or the TV Salesman, or buys durability.
+// None of them builds the Barcode Laser or the TV Salesman, or buys durability.
 import {
   createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, BUILD, TICK_HZ, MAP_SIZES,
 } from '../src/sim/index.js';
@@ -81,8 +83,8 @@ function extras(s) {
   return out;
 }
 
-function play(bot, seed, map) {
-  const s = createGame({ seed, map });
+function play(bot, seed, map, endless = false) {
+  const s = createGame({ seed, map, settings: endless ? { waves: 0 } : null });
   addPlayer(s, 'Bot');
   const me = s.players[0];
   const buyer = bot !== 'nothing';
@@ -95,7 +97,9 @@ function play(bot, seed, map) {
   let bought = 0, upgrades = 0, rebuilt = 0, wrecked = 0;
   const rows = [];
   let byKind = {};
-  const limit = 90 * 60 * TICK_HZ; // an hour and a half of game time
+  // An hour and a half of game time; an endless game gets six hours.
+  const limit = (endless ? 6 * 60 : 90) * 60 * TICK_HZ;
+  let boss = null, bossLeft = 0; // the boss in the store, and the share of his patience he has left
 
   function shop() {
     // Patch holes first: put back whatever gym bros have wrecked.
@@ -172,8 +176,13 @@ function play(bot, seed, map) {
       if (buyer && bought === 0) { shop(); if (bought === 0) { step(s); continue; } }
       if (!buyer) applyCommand(s, 0, { c: 'start' });
     }
-    for (const e of step(s)) {
+    const evs = step(s);
+    if (boss) bossLeft = boss.hp / boss.mhp;
+    for (const e of evs) {
       if (e.e === 'waveStart') byKind = {};
+      if (e.e === 'bossIn') boss = s.shoppers.find((m) => m.k === 'boss');
+      if (e.e === 'bossOut') { byKind['boss out'] = 1; boss = null; }
+      if (e.e === 'escape' && e.k === 'boss') { byKind[`boss through (${Math.round(bossLeft * 100)}% left)`] = 1; boss = null; continue; }
       if (e.e === 'escape') { const k = (e.sup ? 'SUPER ' : '') + e.k; byKind[k] = (byKind[k] || 0) + 1; }
       if (e.e === 'smash') wrecked++;
       if (e.e === 'waveEnd' || e.e === 'lost') {
@@ -193,17 +202,20 @@ function play(bot, seed, map) {
 
 const args = process.argv.slice(2);
 const verbose = args.includes('-v');
-const [seedArg, sizeArg, designArg] = args.filter((a) => a !== '-v');
+const endless = args.includes('--endless');
+const [seedArg, sizeArg, designArg] = args.filter((a) => !a.startsWith('-'));
 const seed = Number(seedArg) || 11;
 const sizes = sizeArg === 'all' ? Object.keys(MAP_SIZES) : [sizeArg || 's'];
 const design = designArg || 'warehouse';
 
 for (const size of sizes) {
   const z = MAP_SIZES[size];
-  console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player`);
+  console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player${endless ? ', ENDLESS' : ''}`);
   for (const bot of ['nothing', 'honest', 'keen', 'focus']) {
-    const r = play(bot, seed, { design, size });
-    console.log(`== ${bot.padEnd(7)} ${r.result.toUpperCase().padEnd(5)} wave ${String(r.wave).padStart(2)}, `
+    const r = play(bot, seed, { design, size }, endless);
+    // (An endless game is never won: it is lost, or still going when the time limit ran out.)
+    const result = r.result === 'lost' ? 'LOST' : endless ? 'ALIVE' : r.result.toUpperCase();
+    console.log(`== ${bot.padEnd(7)} ${result.padEnd(5)} wave ${String(r.wave).padStart(2)}, `
       + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
       + `${r.upgrades} upgrades, ${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.minutes} min`);
     if (!verbose) continue;

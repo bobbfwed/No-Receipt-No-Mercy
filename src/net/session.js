@@ -92,12 +92,12 @@ export function checksum(s) {
   mix(s.tick); mix(s.rng); mix(s.gridVer); mix(s.refunds); mix(s.refundLimit); mix(s.wave);
   mix(s.nextId); mix(s.open); mix(s.phaseT); mix(s.speed); mix(s.waveAt);
   mix(s.phase.charCodeAt(0)); mix(s.phase.length);
-  mix(s.spawnQ.length); mix(s.messes.length); mix(s.rubble.length);
+  mix(s.spawnQ.length); mix(s.messes.length); mix(s.rubble.length); mix(s.carts ? s.carts.length : 0); mix(s.waves);
   mix(s.office ? s.office.pid + 1 : 0);
   for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);
-    mix(sh.kn); mix(sh.cd); mix(sh.pc); mix(sh.ru); dec(sh.sv);
+    mix(sh.kn); mix(sh.cd); mix(sh.pc); mix(sh.ru); dec(sh.sv); mix(sh.pp);
   }
   const g = s.grid;
   for (let i = 0; i < g.length; i++) {

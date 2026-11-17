@@ -213,6 +213,7 @@ kbd {
 .join-row .code-in { text-transform: uppercase; letter-spacing: 0.25em; font-family: Consolas, "Courier New", monospace; text-align: center; font-size: 1.25rem; }
 
 .menu-status { min-height: 1.4em; margin: 0.8rem 0 0.4rem; font-weight: 700; }
+.menu-record { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--muted); }
 .menu-status.busy { color: var(--yellow); }
 .menu-status.busy::before { content: ""; display: inline-block; width: 0.8em; height: 0.8em; margin-right: 0.5em; border: 0.18em solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -0.1em; animation: spin 0.8s linear infinite; }
 .menu-status.error { color: #fff; background: var(--red-2); border: 0.13rem solid var(--line); border-radius: 0.4rem; padding: 0.4rem 0.6rem; }
@@ -336,6 +337,10 @@ kbd {
 .hud-event .ev-sub:empty { display: none; }
 .hud-event.is-build { background: var(--yellow); color: var(--ink); border-color: var(--line); }
 .hud-event.is-over { background: #374151; }
+/* The next sales event brings the boss: the build-phase heading turns into a warning. */
+.hud-event.is-build.is-boss { background: #7f1d1d; color: #fff; border-color: var(--yellow); animation: boss-warn 1.6s ease-in-out infinite; }
+.hud-event.is-boss .ev-title { color: var(--yellow); }
+@keyframes boss-warn { 50% { border-color: #fff; } }
 
 .hud-phase { display: flex; align-items: center; gap: 0.6rem; }
 .hud-stat { display: flex; flex-direction: column; line-height: 1.05; }
@@ -915,6 +920,12 @@ kbd {
 .end-deb-face svg { width: 100%; height: 100%; display: block; }
 .end-deb p { margin: 0; padding: 0.55rem 0.8rem; background: #fff; border: 0.18rem solid var(--ink); border-radius: 0.7rem; font-weight: 700; font-size: 1rem; }
 .overlay.closed .end-stamp { font-size: 2.8rem; }
+.end-btns { display: flex; justify-content: center; flex-wrap: wrap; gap: 0 0.8rem; }
+.end-record { display: inline-block; margin: 0 0 0.8rem; padding: 0.35rem 0.9rem; background: #fff; border: 0.15rem dashed #78716c; border-radius: 0.5rem; font-weight: 700; }
+.end-record b { margin-right: 0.3rem; font: 900 0.95rem var(--font-heavy); color: #57534e; }
+.end-record.is-new { background: #fef08a; border: 0.18rem solid var(--ink); transform: rotate(-1deg); }
+.end-record.is-new b { color: var(--red); }
+.guide dt.guide-boss { margin-top: 0.6rem; color: var(--red-2, #b91c1c); }
 .help .ov-card { text-align: left; }
 .help h2 { margin: 0 0 0.6rem; font: 900 1.4rem var(--font-heavy); }
 .help .btn-big { display: block; margin: 1rem auto 0; }
@@ -1164,7 +1175,7 @@ kbd {
 .bb-hints { min-width: 0; overflow: hidden; }
 @media (max-width: 1700px) { .bb-hints { display: none; } }
 @media (max-width: 1280px) { .bb-btn { width: 4.8rem; } }
-/* Fifteen buttons since the Rail Gun and the TV Salesman: narrower ones on all but wide screens,
+/* Fifteen buttons since the Barcode Laser and the TV Salesman: narrower ones on all but wide screens,
    so the Tools group stays on screen. */
 @media (max-width: 1500px) { .bb-btn { width: 5.1rem; } }
 @media (max-width: 1380px) { .bb-btn { width: 4.95rem; } }
@@ -1618,6 +1629,61 @@ kbd {
 }
 .zone-hint .btn-small { flex: none; }
 
+/* ---------------------------------------------------------------- the boss bar (src/ui/bossbar.js) */
+
+/* Floats over the top of the floor, so it moves nothing. Fixed height whatever it says. */
+.boss-bar {
+  position: absolute;
+  z-index: 9;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(44rem, calc(100% - 26rem));
+  min-width: 26rem;
+  height: 3.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.7rem 0 0.4rem;
+  background: #1a0b0b;
+  border: 0.2rem solid var(--yellow);
+  border-radius: 0.55rem;
+  box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.55), 0 0 1.2rem rgba(220, 38, 38, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+  animation: drop-in 0.25s ease-out;
+}
+.boss-tag {
+  flex: none;
+  padding: 0.2rem 0.45rem;
+  background: var(--red);
+  border: 0.13rem solid var(--line);
+  border-radius: 0.35rem;
+  color: #fff;
+  font: 900 0.85rem var(--font-heavy);
+  letter-spacing: 0.06em;
+  transform: rotate(-4deg);
+}
+.boss-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.18rem; }
+.boss-line { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; line-height: 1; }
+.boss-title { overflow: hidden; text-overflow: ellipsis; font: 900 0.98rem var(--font-heavy); color: var(--yellow); letter-spacing: 0.03em; }
+.boss-num { flex: none; font-size: 0.76rem; font-weight: 800; color: #fecaca; font-variant-numeric: tabular-nums; }
+.boss-meter { height: 0.75rem; background: #3b0d0d; border: 0.12rem solid var(--line); border-radius: 0.4rem; overflow: hidden; }
+.boss-meter i { display: block; height: 100%; width: 100%; background: linear-gradient(#f87171, #dc2626); transition: width 0.15s linear; }
+.boss-note { flex: none; max-width: 15rem; overflow: hidden; text-overflow: ellipsis; font-size: 0.74rem; font-weight: 800; color: #fde68a; text-transform: uppercase; }
+.boss-bar.pep { border-color: #fff; }
+.boss-bar.pep .boss-note { color: #fff; }
+.boss-bar.pep .boss-meter i { background: linear-gradient(#fde047, #f59e0b); }
+/* Before he walks in: a warning, the bar full and striped. */
+.boss-bar.is-next, .boss-bar.is-coming { background: #241a06; box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.55); }
+.boss-bar.is-next .boss-meter i, .boss-bar.is-coming .boss-meter i { background: repeating-linear-gradient(-45deg, #b91c1c 0 0.5rem, #7f1d1d 0.5rem 1rem); }
+.boss-bar.is-out { border-color: var(--green-2, #22c55e); }
+.boss-bar.is-out .boss-note { color: #86efac; }
+.boss-bar.is-through .boss-note { color: #fca5a5; }
+/* Whatever else sits at the top of the floor moves down out of its way. */
+.game.boss-up .notices { top: 4.1rem; }
+.game.boss-up .zone-hint { top: 4.1rem; }
+
 /* ---------------------------------------------------------------- chat */
 
 .chat {
@@ -1950,6 +2016,29 @@ html, body { overscroll-behavior: none; }
     padding: 0.3rem 0.5rem;
     font-size: 0.76rem;
   }
+  /* On a small screen the top of the floor is crowded (players, DEB, reviews): the boss bar takes
+     the very top, above them, and they move down out of its way while it shows. */
+  .boss-bar {
+    top: 0.4rem;
+    z-index: 11;
+    left: calc(0.4rem + env(safe-area-inset-left));
+    right: calc(0.4rem + env(safe-area-inset-right));
+    transform: none;
+    width: auto;
+    min-width: 0;
+    max-width: 34rem;
+    margin-inline: auto;
+    height: 2.7rem;
+    gap: 0.4rem;
+    padding: 0 0.5rem 0 0.3rem;
+  }
+  .boss-tag { font-size: 0.68rem; padding: 0.15rem 0.3rem; }
+  .boss-title { font-size: 0.8rem; }
+  .boss-num { font-size: 0.66rem; }
+  .boss-meter { height: 0.6rem; }
+  .boss-note { max-width: 6.5rem; font-size: 0.6rem; white-space: normal; line-height: 1.1; }
+  .game.boss-up .zone-hint { top: 6.1rem; }
+  .game.boss-up .notices, .game.boss-up .players, .game.boss-up .reviews, .game.boss-up .deb { top: 3.4rem; }
 
   /* DEB talks from the top of the floor, where nothing is being built. */
   .deb { top: 0.4rem; bottom: auto; right: calc(0.4rem + env(safe-area-inset-right)); width: min(30rem, calc(100% - 0.8rem)); }
@@ -2233,6 +2322,7 @@ html, body { overscroll-behavior: none; }
 .set-pick select:disabled { opacity: 0.75; }
 .set-pick select:focus { border-color: var(--yellow); outline: none; }
 .set-note { grid-column: 1 / -1; margin: 0.1rem 0 0; font-size: 0.82rem; line-height: 1.35; color: #c3cad3; }
+.set-note.set-endless { color: var(--yellow); font-weight: 700; }
 .lobby .set-pick { grid-template-columns: 1fr; }
 @media (max-width: 520px) { .set-pick { grid-template-columns: 1fr; } }
 
@@ -2266,6 +2356,9 @@ html, body { overscroll-behavior: none; }
 .hb-note { margin: 0 0 0.7rem; font-size: 0.82rem; line-height: 1.4; color: #44403c; }
 .hb-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(27rem, 1fr)); gap: 0.8rem; align-items: start; }
 .hb-body[data-tab="security"] { grid-template-columns: repeat(auto-fill, minmax(34rem, 1fr)); }
+/* The boss gets a whole row of his own at the end of the shoppers, and looks like trouble. */
+.hb-card.hb-boss { grid-column: 1 / -1; border: 0.2rem solid var(--red); background: #fff7f5; box-shadow: inset 0 0.35rem 0 var(--red); }
+.hb-boss .hb-head h3 { color: var(--red-2, #b91c1c); }
 .hb-card { padding: 0.7rem 0.9rem; background: #fffdf6; border: 0.15rem solid var(--line); border-radius: 0.6rem; font-size: 0.84rem; line-height: 1.35; }
 .hb-card p { margin: 0.3rem 0; }
 .hb-card h3 { margin: 0; font: 900 1.1rem var(--font-heavy); }

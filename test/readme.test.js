@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { fill, generated, pictures } from '../tools/readme.mjs';
 import { versionText } from '../src/version.js';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, SHOPPERS, SUPERS, BUILD, TUNE, MAP_DESIGNS, SETTINGS,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, SHOPPERS, SUPERS, BUILD, TUNE, MAP_DESIGNS, SETTINGS, BOSS,
 } from '../src/sim/index.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, firstWave, countIn,
@@ -24,6 +24,10 @@ test('README.md shows the current version, every store design and every shopper'
     assert.ok(readme.includes(`**${SHOPPERS[k].name}**`), SHOPPERS[k].name);
     assert.ok(readme.includes(SUPERS[k].name), SUPERS[k].name);
   }
+  // The boss is not one of SHOPPERS, but he is in the list, with every title he goes by.
+  assert.ok(readme.includes(`**${BOSS.name}** (the boss)`));
+  for (const t of BOSS.titles) assert.ok(readme.includes(t), t);
+  assert.ok(readme.includes('docs/img/shopper-boss.png'));
   // Every picture the README shows is in the repository.
   for (const [file] of pictures()) assert.ok(fs.existsSync(new URL(`../${file}`, import.meta.url)), `${file} is missing: run "node tools/readme.mjs --shots"`);
   for (const m of readme.matchAll(/\]\((docs\/img\/[^)]+)\)/g)) assert.ok(fs.existsSync(new URL(`../${m[1]}`, import.meta.url)), m[1]);
@@ -44,6 +48,7 @@ test('the handbook covers every shopper and building', () => {
   assert.deepEqual(sampleWaves(20), [1, 5, 10, 15, 20]);
   assert.deepEqual(sampleWaves(10), [1, 5, 10]);
   assert.deepEqual(sampleWaves(30), [1, 5, 10, 15, 20, 25, 30]);
+  assert.deepEqual(sampleWaves(0), [1, 5, 10, 20, 30, 40], 'an endless game has no last one to stop at');
 });
 
 test('every shopper and building has help text', () => {

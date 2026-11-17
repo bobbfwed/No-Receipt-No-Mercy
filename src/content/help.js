@@ -83,7 +83,16 @@ export const SHOPPER_HELP = {
   drinker: { trick: 'Weaves along at a speed that keeps changing. At corners of the route he may fall over and lie there for 4 seconds, and everyone else has to squeeze past him at a third of their speed.', beat: 'Corners near your security: when he goes down, the queue behind him stands in the spray.' },
   dog: { trick: 'Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.', beat: 'Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.' },
   flasher: { trick: 'A woman in a bathrobe who opens it every few seconds. Dads and teenagers within 2.5 tiles stop and stare for 2 seconds.', beat: 'She helps you: let her walk with the dad line, in range of something that hurts.' },
-  cosplay: { trick: 'A big costume and a lot of patience. Shots from sprinklers, forklifts and rail guns that would hit a shopper standing next to him hit him instead.', beat: 'Wear him down while he is alone, or separate him from the crowd: free samples and salesmen stop the others while he walks on.' },
+  cosplay: { trick: 'A big costume and a lot of patience. Shots from sprinklers, forklifts and barcode lasers that would hit a shopper standing next to him hit him instead.', beat: 'Wear him down while he is alone, or separate him from the crowd: free samples and salesmen stop the others while he walks on.' },
+};
+
+/**
+ * The boss (BOSS in constants.js; not one of SHOPPERS). His numbers are added where he is shown,
+ * from src/content/facts.js, so this text has none.
+ */
+export const BOSS_HELP = {
+  trick: 'Head Office sends a manager to find out why refunds are down. He walks in a little after the doors open, slowly, with enormous patience, and nothing slows or stops him: not wet floors, messes, free samples, a drunk on the floor, the TV Salesman or a naked woman. Every few seconds he gives a pep talk, and every shopper near him gets some patience back. He gets a grander title, and more patience, every time he comes back.',
+  beat: 'Raw damage along a long route. Get him away from the crowd, so his pep talks have nobody to cheer up, and do not let him reach a till: he counts as several refunds at once and takes a huge one. Drive him out and the store gets a bounty.',
 };
 
 /**

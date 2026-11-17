@@ -73,8 +73,22 @@ export function readSave({ storage = browserStorage() } = {}) {
 }
 
 /**
+ * What keeping a game saved should do with it now: 'write' it, 'clear' the save (a won game is
+ * over unless somebody carries it on as an endless one, which makes it worth saving again), or
+ * 'stop' for good (the store closed: nothing can carry that on).
+ * @returns {'write'|'clear'|'stop'|'skip'}
+ */
+export function saveStep(state) {
+  if (!state) return 'skip';
+  if (state.phase === 'lost') return 'stop';
+  if (state.phase === 'won') return 'clear';
+  return 'write';
+}
+
+/**
  * Keeps a host's game saved while it runs: every few seconds, when a wave ends, and when the
- * page is closed. Stops saving, and throws the save away, once the game is won or lost.
+ * page is closed. Throws the save away once the game is won (and saves it again if it is carried
+ * on as an endless game), and stops for good once it is lost.
  * @param {Object} session a HostSession
  * @param {Object} [o]
  * @param {'solo'|'online'|'local'} [o.kind]
@@ -82,15 +96,16 @@ export function readSave({ storage = browserStorage() } = {}) {
  */
 export function keepSaved(session, { kind = 'solo' } = {}) {
   if (!session.isHost) return () => {};
-  let done = false;
+  let done = false, cleared = false;
   const save = () => {
-    const s = session.state;
-    if (done || !s) return;
-    if (s.phase === 'won' || s.phase === 'lost') { done = true; clearSave(); return; }
-    writeSave(s, { kind });
+    if (done) return;
+    const what = saveStep(session.state);
+    if (what === 'stop') { done = true; clearSave(); }
+    else if (what === 'clear') { if (!cleared) { cleared = true; clearSave(); } }
+    else if (what === 'write') { cleared = false; writeSave(session.state, { kind }); }
   };
   const timer = setInterval(save, EVERY_MS);
-  const offFx = session.on('fx', (events) => { if (events.some((e) => e.e === 'waveEnd' || e.e === 'won' || e.e === 'lost')) save(); });
+  const offFx = session.on('fx', (events) => { if (events.some((e) => e.e === 'waveEnd' || e.e === 'won' || e.e === 'lost' || e.e === 'endless')) save(); });
   addEventListener('pagehide', save);
   return () => {
     clearInterval(timer);

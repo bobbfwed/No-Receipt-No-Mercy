@@ -16,6 +16,8 @@ import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
+import { createBossBar } from './bossbar.js';
+import { noteRecord } from './record.js';
 import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
 import { BUILD, ZONES } from '../sim/index.js';
@@ -75,7 +77,7 @@ export function startGame(session, {
   const touchUi = createTouchControls({ input, session, renderer, playSound });
   bar.el.append(touchUi.bar);
   const deb = createDeb();
-  const toasts = createToasts();
+  const toasts = createToasts({ getState: () => session.state });
   const training = tutorial && session.isHost
     ? createTutorialPanel(session, { onExit, highlight: bar.highlight, playSound })
     : null;
@@ -133,6 +135,9 @@ export function startGame(session, {
   const chat = createChat(session, { playSound });
   stage.append(chat.el);
 
+  const bossBar = createBossBar(session);
+  stage.append(bossBar.el);
+
   // Before the game starts: pick the store and press Ready. It sits where the players list goes.
   const lobby = createLobby(session, { renderer, playSound });
   stage.append(lobby.el);
@@ -172,6 +177,13 @@ export function startGame(session, {
     if (!e || !(e.cash > 0)) return;
     const several = session.state.players.filter((p) => p.on && p.side !== 'office').length > 1;
     toasts.notice(`Doors opened ${e.secs} seconds early. The factory was paid for that time: +$${Math.round(e.cash).toLocaleString('en-US')}${several ? ', split between you' : ''}.`);
+  });
+  // A won game carried on as an endless one: say who decided it.
+  session.on('fx', (events) => {
+    const e = events.find((x) => x.e === 'endless');
+    if (!e || replaying) return;
+    const who = session.state?.players[e.by];
+    toasts.notice(`${e.by === session.me ? 'You' : who ? who.name : 'Somebody'} kept the doors open. Endless mode: it ends when the refunds close the store.`);
   });
   session.on('report', (m) => {
     if (replaying) pendingReport = m;
@@ -241,7 +253,8 @@ export function startGame(session, {
 
   // ---- Drawing loop --------------------------------------------------------------------------------
   const touchWords = isTouch();
-  let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false;
+  let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false, wasBoss = false;
+  let endEl = null; // the end screen, while it is up
   function frame(now) {
     if (dead) return;
     requestAnimationFrame(frame);
@@ -293,9 +306,26 @@ export function startGame(session, {
       root.classList.add('ended');
       review.close();
       input.setTool(null);
+      // A lost endless game may be a record (Head Office's win is not the store's record).
+      const record = s.players[session.me]?.side === 'office' ? null : noteRecord(s);
       // Give DEB's verdict a moment to arrive with the final update before the curtain drops.
-      setTimeout(() => root.append(endScreen(session.state, lastDeb, session.me)), session.isHost ? 600 : 1200);
+      const shownFor = s.phase;
+      setTimeout(() => {
+        const now = session.state;
+        if (dead || !ended || !now || now.phase !== shownFor) return;
+        endEl = endScreen(now, lastDeb, session.me, { onEndless: () => session.send({ c: 'endless' }), record });
+        root.append(endEl);
+      }, session.isHost ? 600 : 1200);
+    } else if (ended && (s.phase === 'build' || s.phase === 'wave')) {
+      // Somebody pressed "Keep going (endless)": the game is on again, for everyone.
+      ended = false;
+      root.classList.remove('ended');
+      endEl?.remove();
+      endEl = null;
     }
+    // The boss: a strip over the top of the floor while he is coming or in the store.
+    const bossUp = bossBar.update(s);
+    if (bossUp !== wasBoss) { wasBoss = bossUp; root.classList.toggle('boss-up', bossUp); }
     const view = input.view();
     // Show where shoppers will walk whenever the player is planning: between waves, while
     // holding something to build, and all through training. Head Office always sees them: the

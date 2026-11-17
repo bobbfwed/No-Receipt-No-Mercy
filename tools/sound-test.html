@@ -101,8 +101,8 @@ import { built } from '../src/audio/synth.js';
 
 const SR = 44100;
 /** Sounds that can happen many times in a few seconds: each must vary from play to play. */
-const OFTEN = ['sale', 'spray', 'shot', 'escape', 'left', 'slip', 'grab', 'sample', 'mess', 'kid', 'caught', 'bolt', 'smash', 'place', 'remove', 'upgraded', 'pitch', 'shield', 'pee', 'flash', 'fall', 'kidtv', 'rail'];
-const FREQUENT = ['sale', 'spray', 'shot', 'mess', 'pitch', 'shield'];
+const OFTEN = ['sale', 'spray', 'shot', 'escape', 'left', 'slip', 'grab', 'sample', 'mess', 'kid', 'caught', 'bolt', 'smash', 'place', 'remove', 'upgraded', 'pitch', 'shield', 'pee', 'flash', 'fall', 'kidtv', 'rail', 'pep', 'bossOut', 'bossEscape'];
+const FREQUENT = ['sale', 'spray', 'shot', 'mess', 'pitch', 'shield', 'pep'];
 const RARE = ['waveStart', 'won', 'lost'];
 let failures = 0;
 const results = [];
@@ -339,7 +339,7 @@ const tEffects = performance.now();
       }
     }
   }
-  check(worst && differs(worst.d), `the thirteen shoppers do not sound alike: closest pair of any versions ${worst.a} / ${worst.b}: spectrum ${worst.d.spec.toFixed(1)} dB apart, shape over time ${worst.d.env.toFixed(2)}`);
+  check(worst && differs(worst.d), `the thirteen shoppers and the boss do not sound alike: closest pair of any versions ${worst.a} / ${worst.b}: spectrum ${worst.d.spec.toFixed(1)} dB apart, shape over time ${worst.d.env.toFixed(2)}`);
 }
 
 // ------------------------------------------------------------------ crowds
@@ -373,6 +373,7 @@ function crowdTimes(n = 30, secs = 2, seed = 3) {
   const r = (() => { let a = seed; return () => ((a = (a * 1103515245 + 12345) >>> 0) / 4294967296); })();
   return Array.from({ length: n }, () => r() * secs).sort((p, q) => p - q);
 }
+// The thirteen shoppers (SHOPPERS); the boss is added to the mixed crowds separately.
 const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker'];
 const CROWDS = [
   { label: 'left (hunter) x30 in 2 s', list: crowdTimes().map((t) => ({ name: 'left', opts: { k: 'hunter' }, t })) },
@@ -391,7 +392,8 @@ const CROWDS = [
     { label: `${name} x30 in 2 s`, list: crowdTimes(30, 2, 19 + i).map((t) => ({ name, opts: {}, t })) })),
 ];
 // A late-wave storm: every frequent event, 30 ticks a second for 3 s, all through one gate.
-{
+// `extra(n, t, list)` adds more events on tick n (the boss cases below).
+const stormList = (extra) => {
   const list = [];
   for (let n = 0; n < 90; n++) {
     const t = n / 30;
@@ -402,9 +404,49 @@ const CROWDS = [
     list.push({ name: 'pitch', opts: { r: n % 3 ? 'stop' : 'rush' }, t }, { name: 'pitch', opts: { r: 'stop' }, t });
     if (n % 4 === 0) list.push({ name: 'shield', t }, { name: 'shield', t });
     if (n % 15 === 0) list.push({ name: 'rail', opts: { n: 3 }, t }, { name: 'pee', t }, { name: 'fall', t }, { name: 'kidtv', t }, { name: 'flash', opts: { n: 2 }, t });
+    if (extra) extra(n, t, list);
   }
+  return list;
+};
+{
+  const list = stormList();
   CROWDS.push({ label: 'late-wave storm: 3 s, ' + list.length + ' events', list, storm: true });
 }
+// The boss in the same storm. Pep talks come every 7 s in the game; here two fall inside 3 s
+// (several times as often as the real thing, 1.5 s apart, the closest the gate allows), the first
+// with nobody encouraged. He walks in (CEO fanfare) at the start. In the second storm the players
+// drive him out at 1.5 s: `bossOut` alone, because sound.js drops the `left` that arrives in the
+// same tick. In the third he reaches the tills.
+{
+  const list = stormList((n, t, l) => {
+    if (n === 0) l.push({ name: 'bossIn', opts: { tier: 4 }, t });
+    if (n === 10) l.push({ name: 'pep', opts: { n: 0 }, t });
+    if (n === 55) l.push({ name: 'pep', opts: { n: 8 }, t });
+  });
+  CROWDS.push({ label: 'pep talks and the CEO coming in, in a late-wave storm: 3 s, ' + list.length + ' events', list, storm: true });
+}
+{
+  const list = stormList((n, t, l) => {
+    if (n === 45) l.push({ name: 'bossOut', opts: { tier: 3, bounty: 450 }, t });
+  });
+  CROWDS.push({ label: 'a boss given up in a busy moment (storm, bossOut at 1.5 s; the left is dropped): 3 s, ' + list.length + ' events', list, storm: true });
+}
+{
+  const list = stormList((n, t, l) => {
+    if (n === 45) l.push({ name: 'bossEscape', opts: { tier: 2 }, t }, { name: 'escape', opts: { k: 'hunter' }, t }, { name: 'escape', opts: { k: 'karen' }, t });
+  });
+  CROWDS.push({ label: 'the boss reaches the tills in a busy moment (storm, 1.5 s): 3 s, ' + list.length + ' events', list, storm: true });
+}
+// A busy store without the extra noise: the boss's sounds on their own, hammered.
+CROWDS.push(
+  { label: 'left (boss, when not driven out) x30 in 2 s', list: crowdTimes(30, 2, 53).map((t) => ({ name: 'left', opts: { k: 'boss' }, t })) },
+  { label: 'left (mixed kinds and the boss) x30 in 2 s', list: crowdTimes(30, 2, 59).map((t, i) => ({ name: 'left', opts: { k: [...KINDS, 'boss'][(i * 5) % 14], sup: i % 5 === 0 ? 1 : 0 }, t })) },
+  { label: 'pep (3 cheering) x30 in 2 s', list: crowdTimes(30, 2, 61).map((t) => ({ name: 'pep', opts: { n: 3 }, t })) },
+  { label: 'bossIn (CEO) x6 in 2 s', list: crowdTimes(6, 2, 67).map((t) => ({ name: 'bossIn', opts: { tier: 4 }, t })) },
+  { label: 'bossOut (tier 4) x10 in 2 s', list: crowdTimes(10, 2, 71).map((t) => ({ name: 'bossOut', opts: { tier: 4 }, t })) },
+  { label: 'bossEscape x10 in 2 s', list: crowdTimes(10, 2, 73).map((t) => ({ name: 'bossEscape', opts: { tier: 4 }, t })) },
+  { label: 'endless x4 in 2 s', list: crowdTimes(4, 2, 79).map((t) => ({ name: 'endless', opts: {}, t })) },
+);
 const tb3 = document.querySelector('#tbl3 tbody');
 /** The loudest 100 ms (RMS) between two times. */
 function loudest(y, from, to) {
@@ -452,7 +494,9 @@ for (const cr of CROWDS) {
   const limit = cr.storm ? 3.2 : 2.3;
   if (loud > limit * oneLoud && !cr.storm) problems.push('too loud');
   if (cr.storm && loud > 0.45) problems.push('too loud');
-  if (span > 1 && late > 1.3 * early) problems.push('builds up');
+  // (Needs a crowd to mean anything: a rare sound the gate lets through only once or twice, like a
+  // boss's fanfare, has its play in one half or the other.)
+  if (span > 1 && stats.played >= 6 && late > 1.3 * early) problems.push('builds up');
   if (nodesPerSec > 200) problems.push('too many nodes');
   results.push({ name: 'crowd: ' + cr.label, crowd: true, played: stats.played, merged: stats.merged, asked: cr.list.length, peak: m.peak, loud, oneLoud, rawLoud, early, late, nodesPerSec, problems });
   tb3.appendChild(addRow(tb3, [
@@ -920,6 +964,23 @@ btn(modBox, 'new events: rail, pee, flash, fall, pitch, kidtv, shield, mom carri
     { e: 'kidtv', x: 1, y: 1 }, { e: 'shield', x: 1, y: 1 }, { e: 'caught', x: 1, y: 1, carry: 1 }];
   seq.forEach((ev, i) => setTimeout(() => fake.emit('fx', [ev]), i * 1400));
 });
+btn(modBox, 'boss event: start, he walks in (tiers 1 to 4)', () => {
+  fake.emit('fx', [{ e: 'waveStart', wave: 5, boss: 1, dads: 0 }]);
+  [1, 2, 3, 4].forEach((tier, i) => setTimeout(() => fake.emit('fx', [{ e: 'bossIn', tier, x: 5, y: 5 }]), 4000 + i * 4200));
+});
+btn(modBox, 'boss pep talks: nobody, 2 cheer, 8 cheer', () => {
+  [0, 2, 8].forEach((n, i) => setTimeout(() => fake.emit('fx', [{ e: 'pep', x: 5, y: 5, n }]), i * 1800));
+});
+btn(modBox, 'boss driven out (left + bossOut together): tier 1, tier 4', () => {
+  fake.emit('fx', [{ e: 'left', k: 'boss', x: 5, y: 5 }, { e: 'bossOut', tier: 1, x: 5, y: 5, bounty: 150 }]);
+  setTimeout(() => fake.emit('fx', [{ e: 'left', k: 'boss', x: 5, y: 5 }, { e: 'bossOut', tier: 4, x: 5, y: 5, bounty: 600 }]), 3500);
+});
+btn(modBox, 'boss walks out on his own (left alone)', () => fake.emit('fx', [{ e: 'left', k: 'boss', x: 5, y: 5 }]));
+btn(modBox, 'boss reaches the tills: tier 1, tier 4', () => {
+  fake.emit('fx', [{ e: 'escape', k: 'boss', n: 5, tier: 1 }]);
+  setTimeout(() => fake.emit('fx', [{ e: 'escape', k: 'boss', n: 5, tier: 4 }]), 3000);
+});
+btn(modBox, 'endless mode', () => fake.emit('fx', [{ e: 'endless', by: 0 }]));
 btn(modBox, 'rebuilt 1 / 4 / 9', () => {
   [1, 4, 9].forEach((n, i) => setTimeout(() => fake.emit('fx', [{ e: 'rebuilt', n, by: 99 }]), i * 1300));
 });

@@ -29,9 +29,9 @@ const DEFAULTS = { sfx: true, music: true, voice: true, volume: 0.7 };
 const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']);
 
 /** Big moments: never dropped for being busy, and DEB's blips step aside for them. */
-const BIG = new Set(['waveStart', 'waveEnd', 'won', 'lost', 'report', 'begun']);
+const BIG = new Set(['waveStart', 'waveEnd', 'won', 'lost', 'report', 'begun', 'bossIn', 'bossOut', 'bossEscape', 'endless']);
 /** Never thinned out or dropped for being busy (rare, and they mean something). */
-const VIP = new Set([...BIG, ...UI_SOUNDS, 'ready', 'side', 'gave', 'crawl']);
+const VIP = new Set([...BIG, ...UI_SOUNDS, 'ready', 'side', 'gave', 'crawl', 'pep']);
 /** Someone else's upgrade, rebuild or gift: still heard, but quieter than your own. */
 const OTHERS = 0.6;
 /**
@@ -147,14 +147,29 @@ export function createSound() {
     const has = (type) => list.some((e) => e && e.e === type);
     const won = has('won');
     const lost = has('lost');
+    // A boss driven out sends `left` and `bossOut` in the same tick; bossOut carries the sound
+    // (his splutter, the door, the cash), so his ordinary walk-out voice would only muddy it.
+    const bossOut = has('bossOut');
     for (const e of list) {
       if (!e || typeof e !== 'object') continue;
       switch (e.e) {
         case 'sale': fire('sale', { kind: e.kind }, { sub: e.kind }); break;
         case 'spray': fire('spray'); break;
         case 'shot': fire('shot'); break;
-        case 'escape': if (!lost) fire('escape', { k: e.k, sup: e.sup | 0 }, { sub: e.k }); break;
-        case 'left': fire('left', { k: e.k, sup: e.sup | 0 }, { sub: e.k }); break;
+        case 'escape':
+          if (lost) break;
+          // The boss at the tills (five refunds) is a disaster of his own, not one more refund.
+          if (e.k === 'boss') fire('bossEscape', { tier: e.tier | 0 });
+          else fire('escape', { k: e.k, sup: e.sup | 0 }, { sub: e.k });
+          break;
+        case 'left':
+          if (e.k === 'boss' && bossOut) break;
+          fire('left', { k: e.k, sup: e.sup | 0 }, { sub: e.k });
+          break;
+        case 'bossIn': fire('bossIn', { tier: e.tier | 0 }); break;
+        case 'pep': fire('pep', { n: e.n | 0 }); break;
+        case 'bossOut': fire('bossOut', { tier: e.tier | 0, bounty: e.bounty | 0 }); break;
+        case 'endless': fire('endless'); break;
         case 'slip': fire('slip'); break;
         case 'grab': fire('grab'); break;
         case 'sample': fire('sample'); break;
@@ -163,6 +178,7 @@ export function createSound() {
         case 'crawl': fire('crawl'); break;
         case 'bolt': fire('bolt'); break;
         case 'caught': fire('caught', { carry: e.carry | 0 }); break;
+        // The Barcode Laser fired (the building's key is still 'railgun', the event still 'rail').
         case 'rail': fire('rail', { n: e.n | 0 }); break;
         // The doors opened early and the factory's takings for the skipped time arrived at once.
         case 'early': if (e.sold > 0) fire('kerching'); break;
@@ -188,7 +204,7 @@ export function createSound() {
         case 'begun': fire('begun'); break;
         case 'ready': fire('ready', { side: e.side }); break;
         case 'side': fire('side', { side: e.side }); break;
-        case 'waveStart': fire('waveStart', { dads: e.dads | 0 }); break;
+        case 'waveStart': fire('waveStart', { dads: e.dads | 0, boss: e.boss | 0 }); break;
         case 'waveEnd': if (!won) fire('waveEnd'); break;
         case 'won': fire('won'); break;
         case 'lost': fire('lost'); break;

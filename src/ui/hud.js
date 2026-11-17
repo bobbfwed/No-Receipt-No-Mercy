@@ -1,5 +1,6 @@
 // The top bar (cash, sales event, doors, refunds, speed, room code) and the players panel.
-import { TUNE, ROLES, officePlayer } from '../sim/index.js';
+import { TUNE, ROLES, officePlayer, isEndless, bossTier, bossTitle } from '../sim/index.js';
+import { eventOf } from '../content/facts.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } from './dom.js';
 
 const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
@@ -121,7 +122,11 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
       // With company, also show what the whole team has.
       setText(teamVal, s.players.length > 1 ? `team ${money(storeCash(s))}` : '');
     }
-    const total = s.waves;
+    // An endless game (waves 0) has no last sales event to count towards.
+    const endless = isEndless(s);
+    // The next sales event brings the boss: the heading says so, and who.
+    const bossNext = s.phase === 'build' && !s.training ? bossTier(s.wave + 1) : 0;
+    let evTip = '';
     if (s.training) {
       setText(evTitle, 'TRAINING SHIFT');
       setText(evSub, s.phase === 'wave' ? 'doors open' : 'you cannot lose here');
@@ -129,16 +134,20 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
       setText(evTitle, 'NOT OPEN YET');
       setText(evSub, 'waiting for everyone to be ready');
     } else if (s.phase === 'wave') {
-      setText(evTitle, `SALES EVENT ${s.wave} / ${total}`);
-      setText(evSub, '');
+      setText(evTitle, `SALES EVENT ${eventOf(s.wave, s.waves)}`);
+      setText(evSub, endless ? 'endless' : '');
     } else if (s.phase === 'build') {
-      setText(evTitle, 'BUILD PHASE');
-      setText(evSub, `next: sales event ${s.wave + 1} / ${total}`);
+      setText(evTitle, bossNext ? 'BOSS EVENT NEXT' : 'BUILD PHASE');
+      setText(evSub, bossNext ? `event ${eventOf(s.wave + 1, s.waves)} · ${bossTitle(bossNext)}`
+        : `next: sales event ${eventOf(s.wave + 1, s.waves)}${endless ? ' · endless' : ''}`);
+      if (bossNext) evTip = `Sales event ${s.wave + 1} brings the boss: the ${bossTitle(bossNext)}. He walks in about ${TUNE.bossAt} seconds after the doors open, and nothing slows him down. Details in the Employee Handbook.`;
     } else {
       setText(evTitle, s.phase === 'won' ? 'STORE SURVIVED' : 'STORE CLOSED');
-      setText(evSub, `sales event ${s.wave} / ${total}`);
+      setText(evSub, `sales event ${eventOf(s.wave, s.waves)}`);
     }
+    if (event.title !== evTip) event.title = evTip;
     setClass(event, 'is-build', s.phase === 'build' || s.phase === 'lobby');
+    setClass(event, 'is-boss', !!bossNext);
     setClass(event, 'is-over', s.phase === 'won' || s.phase === 'lost');
 
     const build = s.phase === 'build';

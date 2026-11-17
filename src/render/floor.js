@@ -1,9 +1,12 @@
 // The store itself: concrete floor, walls, pillars, partition walls, shelving, the entrances and
-// the tills. Maps run from 30 x 16 to 99 x 55 tiles, and three designs:
+// the tills. Maps run from 30 x 16 to 121 x 67 tiles, and four designs:
 //   warehouse  open floor with a few hazard-striped pillars
 //   showroom   rooms divided by plasterboard partitions with framed two-tile doorways; each room
 //              has its own floor tint, like the display rooms of a flat-pack shop
 //   aisles     supermarket shelving units full of products, with sale signs on the end caps
+//   food       a food court: cream tiled floor, shop-front awnings on the walls, and furniture
+//              where state.decor says (tables, booths, benches, planters, bins, food stalls and a
+//              fountain), each kind drawn in its own function below
 // Most games also have marked floor for the factory machines (state.zones): tinted patches with a
 // painted border and their name stencilled on, one colour per kind (ZONES in the rules).
 // Almost all of it never changes, so it is painted into cached chunks (createFloorCache); only the
@@ -16,8 +19,8 @@ import {
 
 const T = TILE;
 
-/** What a wall tile is, for drawing. */
-export const OUTER = 1, PILLAR = 2, PARTITION = 3, SHELF = 4;
+/** What a wall tile is, for drawing. FURN: the food court's furniture (see state.decor). */
+export const OUTER = 1, PILLAR = 2, PARTITION = 3, SHELF = 4, FURN = 5;
 
 /** Floor tints for the showroom's rooms (one is picked per room). */
 const ROOM_TINTS = [
@@ -46,13 +49,16 @@ export function analyzeMap(s) {
   const design = (s.map && s.map.design) || 'warehouse';
   const hashAt = (x, y) => x >= 0 && y >= 0 && x < w && y < h && tiles[y * w + x] === '#';
   const border = (x, y) => x === 0 || y === 0 || x === w - 1 || y === h - 1;
+  const decor = decorOf(s);
 
-  // Wall kinds. An inner wall tile with no inner wall next to it is a pillar whatever the design.
+  // Wall kinds. An inner wall tile with no inner wall next to it is a pillar whatever the design;
+  // a tile the decor string says is furniture is furniture.
   const wall = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     if (tiles[i] !== '#') continue;
     const x = i % w, y = (i / w) | 0;
     if (border(x, y)) { wall[i] = OUTER; continue; }
+    if (decor && decor[i] !== ' ') { wall[i] = FURN; continue; }
     let inner = 0;
     if (hashAt(x - 1, y) && !border(x - 1, y)) inner++;
     if (hashAt(x + 1, y) && !border(x + 1, y)) inner++;
@@ -150,15 +156,50 @@ export function analyzeMap(s) {
 
   const zones = typeof s.zones === 'string' && s.zones.length === n ? s.zones : '';
   const patches = zones ? findPatches(w, h, zones, doorway) : [];
+  const blocks = decor ? findBlocks(w, h, decor) : [];
 
-  return { w, h, tiles, design, wall, doorway, tint, shelves, tills, tillTop, tillBot, doors, zones, patches };
+  return { w, h, tiles, design, wall, doorway, tint, shelves, tills, tillTop, tillBot, doors, zones, patches, decor, blocks };
 }
+
+/** The state's decor string if it fits the map, else '' (other designs, and saves from before it). */
+const decorOf = (s) => (typeof s.decor === 'string' && s.decor.length === s.w * s.h ? s.decor : '');
 
 /** True if the analysed map no longer matches the state (a new game, or an entrance opened). */
 export function mapChanged(info, s) {
   return !info || info.w !== s.w || info.h !== s.h || info.tiles !== s.tiles ||
     info.design !== ((s.map && s.map.design) || 'warehouse') ||
-    info.zones !== (typeof s.zones === 'string' && s.zones.length === s.w * s.h ? s.zones : '');
+    info.zones !== (typeof s.zones === 'string' && s.zones.length === s.w * s.h ? s.zones : '') ||
+    info.decor !== decorOf(s);
+}
+
+/**
+ * The food court's pieces bigger than a tile: each connected block of food stall ('k') or
+ * fountain ('f') tiles, drawn as one. @returns {Array} { ch, x0, y0, x1, y1 } (exclusive end)
+ */
+function findBlocks(w, h, decor) {
+  const seen = new Uint8Array(w * h);
+  const blocks = [];
+  for (let i = 0; i < w * h; i++) {
+    const ch = decor[i];
+    if (seen[i] || (ch !== 'k' && ch !== 'f')) continue;
+    let x0 = w, y0 = h, x1 = 0, y1 = 0;
+    const stack = [i];
+    seen[i] = 1;
+    while (stack.length) {
+      const j = stack.pop();
+      const x = j % w, y = (j / w) | 0;
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1);
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const k = ny * w + nx;
+        if (seen[k] || decor[k] !== ch) continue;
+        seen[k] = 1;
+        stack.push(k);
+      }
+    }
+    blocks.push({ ch, x0, y0, x1, y1 });
+  }
+  return blocks;
 }
 
 /**
@@ -386,6 +427,7 @@ export function drawChunk(g, info, x0, y0, x1, y1, zoom = 40) {
   drawConcrete(g, info, r, x0, y0, x1, y1, zoom);
   drawWalls(g, info, r);
   drawInnerWalls(g, info, r);
+  if (info.decor) drawFurniture(g, info, r, zoom);
   const { tiles, w } = info;
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
@@ -399,11 +441,13 @@ export function drawChunk(g, info, x0, y0, x1, y1, zoom = 40) {
 
 function drawConcrete(g, info, r, x0, y0, x1, y1, zoom) {
   const { w, h, tiles, tint } = info;
-  g.fillStyle = info.design === 'aisles' ? '#979a9c' : C.floor;
+  const food = info.design === 'food';
+  g.fillStyle = food ? FOOD.floor : info.design === 'aisles' ? '#979a9c' : C.floor;
   g.fillRect(x0 * T, y0 * T, (x1 - x0) * T, (y1 - y0) * T);
 
+  if (food) foodFloor(g, info, r);
   // Slightly lighter and darker concrete slabs, and the odd oil spot, so the floor is not flat.
-  for (let y = Math.max(1, r.y0); y < Math.min(h - 1, r.y1); y++) {
+  else for (let y = Math.max(1, r.y0); y < Math.min(h - 1, r.y1); y++) {
     for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
       const v = hash2(x, y);
       if (v < 0.18) {
@@ -433,18 +477,18 @@ function drawConcrete(g, info, r, x0, y0, x1, y1, zoom) {
   g.beginPath();
   for (let x = r.x0; x <= r.x1; x++) { g.moveTo(x * T + 0.5, Y0); g.lineTo(x * T + 0.5, Y1); }
   for (let y = r.y0; y <= r.y1; y++) { g.moveTo(X0, y * T + 0.5); g.lineTo(X1, y * T + 0.5); }
-  g.strokeStyle = C.floorLine;
+  g.strokeStyle = food ? FOOD.grout : C.floorLine;
   g.lineWidth = 1.5;
   g.stroke();
   // Expansion joints every five tiles across and four down, a little darker.
   g.beginPath();
   for (let x = Math.ceil(r.x0 / 5) * 5; x <= r.x1; x += 5) { if (x > 0 && x < w) { g.moveTo(x * T + 0.5, Y0); g.lineTo(x * T + 0.5, Y1); } }
   for (let y = Math.ceil(r.y0 / 4) * 4; y <= r.y1; y += 4) { if (y > 0 && y < h) { g.moveTo(X0, y * T + 0.5); g.lineTo(X1, y * T + 0.5); } }
-  g.strokeStyle = C.joint;
+  g.strokeStyle = food ? FOOD.joint : C.joint;
   g.lineWidth = 2.5;
   g.stroke();
   // A small dot in the middle of every floor tile helps judge positions.
-  g.fillStyle = C.floorDot;
+  g.fillStyle = food ? FOOD.dot : C.floorDot;
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
       if (tiles[y * w + x] === '.') g.fillRect(x * T + 19, y * T + 19, 3, 3);
@@ -618,6 +662,23 @@ function drawWalls(g, info, r) {
   g.lineWidth = 3;
   g.stroke();
 
+  // The food court has shop fronts along the top and bottom walls: striped awnings.
+  if (info.design === 'food') {
+    for (const wy of [0, h - 1]) {
+      if (wy < r.y0 || wy >= r.y1) continue;
+      for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
+        if (tiles[wy * w + x] !== '#') continue;
+        const col = FOOD.awnings[((x / 4) | 0) % FOOD.awnings.length];
+        const px = x * T, py = wy === 0 ? wy * T + 18 : wy * T + 4;
+        g.fillStyle = (x & 1) ? col : '#fbf4e4';
+        g.fillRect(px, py, T, 14);
+        g.beginPath();
+        g.moveTo(px, py + 14); g.lineTo(px + T, py + 14);
+        g.strokeStyle = INK; g.lineWidth = 1.5; g.stroke();
+      }
+    }
+    return;
+  }
   // Pallet racking along the top and bottom walls: orange beams and boxes, purely decoration.
   for (const wy of [0, h - 1]) {
     if (wy < r.y0 || wy >= r.y1) continue;
@@ -766,6 +827,441 @@ function drawShelf(g, sh) {
     box(g, px + 3, bot - 13, T - 6, 10, 2, C.yellow, 1.8);
     text(g, '50%', px + T / 2, bot - 7.5, 8, INK, 900);
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The food court: a tiled floor, and the furniture in state.decor (see DECOR in the rules): tables,
+// benches and booths, planters, bins, food stalls and the fountain. Every piece is solid ('#').
+
+const FOOD = {
+  floor: '#cdbfa6', check: 'rgba(120,96,60,0.10)', grout: '#ae9f85', joint: '#a39377', dot: '#b5a68b',
+  awnings: ['#e8303a', '#2f8fe0', '#3fae49', '#ff8c1a', '#9b59b6'],
+  // Furniture colours are kept a little muted, so a crowd of shoppers still stands out against it.
+  chairs: ['#d98d4e', '#5fa79c', '#c4675c', '#cfb052', '#6f93bd'],
+  tables: ['#f4f1e8', '#d6a467', '#c9cdd1', '#e9e2d0'],
+};
+
+/** Stall names, by a hash of where the stall is. */
+const STALLS = [
+  ['PHO KING GOOD', 'noodles'], ['WOK THIS WAY', 'noodles'], ["BIG DICK'S DOGS", 'hotdog'], ['NICE BUNS', 'burger'],
+  ['TACO BELLEND', 'taco'], ['KEBAB DREAMZ', 'kebab'], ['THE SAUSAGE FEST', 'hotdog'], ['CURRY IN A HURRY', 'noodles'],
+  ['MEAT YOUR MAKER', 'kebab'], ['BURGER OFF', 'burger'], ['FRIES BEFORE GUYS', 'fries'], ['DEEP FRIED REGRET', 'fries'],
+];
+
+/**
+ * The food court floor: big cream tiles in a faint checker, flecked like terrazzo, with the odd
+ * thing dropped on it (ketchup, a spilled cola, a lost chip).
+ */
+function foodFloor(g, info, r) {
+  const { w, h } = info;
+  g.fillStyle = FOOD.check;
+  for (let y = Math.max(1, r.y0); y < Math.min(h - 1, r.y1); y++) {
+    for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
+      if ((x + y) & 1) g.fillRect(x * T, y * T, T, T);
+    }
+  }
+  for (let y = Math.max(1, r.y0); y < Math.min(h - 1, r.y1); y++) {
+    for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
+      // Terrazzo flecks.
+      for (let k = 0; k < 4; k++) {
+        const a = hash2(x * 4 + k, y + 300), b = hash2(y * 4 + k, x + 700);
+        g.fillStyle = k & 1 ? 'rgba(90,70,50,0.22)' : 'rgba(255,255,255,0.35)';
+        g.fillRect(x * T + 3 + a * 33, y * T + 3 + b * 33, 2, 2);
+      }
+      const v = hash2(x + 99, y);
+      if (v < 0.018) {
+        // A ketchup splat.
+        g.fillStyle = 'rgba(200,30,30,0.55)';
+        g.beginPath();
+        g.ellipse(x * T + 14, y * T + 26, 5, 3.4, 0.3, 0, Math.PI * 2);
+        g.ellipse(x * T + 20, y * T + 23, 2.2, 1.6, 0, 0, Math.PI * 2);
+        g.fill();
+      } else if (v < 0.06) {
+        // Spilled cola.
+        g.fillStyle = 'rgba(80,40,20,0.3)';
+        g.beginPath();
+        g.ellipse(x * T + 24, y * T + 15, 8, 5, -0.2, 0, Math.PI * 2);
+        g.fill();
+      } else if (v < 0.08) {
+        // A lost chip.
+        g.save();
+        g.translate(x * T + 10 + v * 200, y * T + 12);
+        g.rotate(v * 40);
+        box(g, -4, -1.2, 8, 2.4, 0.6, '#f2c94c', 0.8);
+        g.restore();
+      }
+    }
+  }
+}
+
+/**
+ * Every piece of furniture in [r], back to front (so a palm's fronds or a stall's sign, which
+ * stand up above their tile, are overlapped by what is in front of them).
+ */
+function drawFurniture(g, info, r, zoom) {
+  const { w, decor, wall } = info;
+  const items = [];
+  for (let y = r.y0; y < r.y1; y++) {
+    for (let x = r.x0; x < r.x1; x++) {
+      const i = y * w + x;
+      if (wall[i] !== FURN) continue;
+      const ch = decor[i];
+      if (ch === 'k' || ch === 'f') continue;
+      items.push(y * 1e4 + x, ch, x, y);
+    }
+  }
+  // Blocks that reach into [r] (one may start well outside it).
+  for (const b of info.blocks) {
+    if (b.x1 <= r.x0 - 1 || b.x0 >= r.x1 + 1 || b.y1 <= r.y0 - 1 || b.y0 >= r.y1 + 1) continue;
+    items.push((b.y1 - 1) * 1e4 + b.x0 + 0.5, b, 0, 0);
+  }
+  const order = [];
+  for (let k = 0; k < items.length; k += 4) order.push(k);
+  order.sort((a, b) => items[a] - items[b]);
+  for (const k of order) {
+    const it = items[k + 1];
+    if (typeof it === 'object') {
+      if (it.ch === 'k') drawStall(g, it, zoom);
+      else drawFountain(g, it);
+      continue;
+    }
+    const x = items[k + 2], y = items[k + 3];
+    if (it === 't') drawTable(g, info, x, y);
+    else if (it === 'b') drawBench(g, info, x, y);
+    else if (it === 'p') drawPlanter(g, x, y);
+    else if (it === 'n') drawBin(g, x, y);
+    else drawPillar(g, x * T, y * T); // a character we do not know: draw a plain pillar
+  }
+}
+
+/** The decor character at (x, y), or ' ' off the map. */
+const decorAt = (info, x, y) => (x < 0 || y < 0 || x >= info.w || y >= info.h ? ' ' : info.decor[y * info.w + x]);
+
+/**
+ * A little table with chairs round it. What is on it, the colour of the chairs and how askew they
+ * are come from a hash of where it is: a tray with a burger, cups, a pizza box, chips. A table that
+ * is part of a booth (benches either side) gets no chairs.
+ */
+function drawTable(g, info, x, y) {
+  const px = x * T, py = y * T, cx = px + 20, cy = py + 20;
+  const hv = (k) => hash2(x * 7 + k, y * 13 + k * 3);
+  const booth = decorAt(info, x - 1, y) === 'b' || decorAt(info, x + 1, y) === 'b' ||
+    decorAt(info, x, y - 1) === 'b' || decorAt(info, x, y + 1) === 'b';
+  const chair = FOOD.chairs[(hv(1) * FOOD.chairs.length) | 0];
+  const square = hv(2) < 0.45 || booth;
+  // Shadow.
+  g.fillStyle = 'rgba(0,0,0,0.2)';
+  g.beginPath(); g.ellipse(cx + 2, cy + 5, 15, 11, 0, 0, Math.PI * 2); g.fill();
+  // Chairs (behind the table first, then the ones in front after it).
+  const chairs = [];
+  if (!booth) {
+    for (let d = 0; d < 4; d++) {
+      if (hv(10 + d) < 0.22) continue; // taken away to another table
+      const a = (d * Math.PI) / 2 + (hv(20 + d) - 0.5) * 0.7;
+      const out = 13 + hv(30 + d) * 4 + (hv(40 + d) < 0.15 ? 4 : 0); // one pushed right back
+      chairs.push([cx + Math.cos(a) * out, cy + Math.sin(a) * out * 0.85, a]);
+    }
+  }
+  const seat = (c) => {
+    g.save();
+    g.translate(c[0], c[1]);
+    g.rotate(c[2]);
+    box(g, -4.5, -5.5, 9, 11, 2.5, chair, 1.6);
+    g.fillStyle = 'rgba(0,0,0,0.18)';
+    g.fillRect(2.5, -5, 2, 10); // the back rest, on the far side
+    g.restore();
+  };
+  for (const c of chairs) if (c[1] <= cy) seat(c);
+  // Table: a pedestal foot, then the top.
+  const top = FOOD.tables[(hv(3) * FOOD.tables.length) | 0];
+  if (square) box(g, cx - 12, cy - 12, 24, 22, 3, top, 2.2);
+  else { g.beginPath(); g.ellipse(cx, cy - 1, 12.5, 11, 0, 0, Math.PI * 2); paint(g, top, 2.2); }
+  g.fillStyle = 'rgba(0,0,0,0.12)';
+  g.fillRect(cx - 10, cy + 6, 20, 2.5);
+  // What has been left on it.
+  const pick = (hv(4) * 5) | 0;
+  if (pick === 0 || pick === 3) {
+    // A tray with a half-eaten burger and a cola.
+    g.save(); g.translate(cx - 1, cy - 1); g.rotate((hv(5) - 0.5) * 0.6);
+    box(g, -8, -6, 16, 11, 1.5, '#e8761a', 1.3);
+    g.beginPath(); g.arc(-2.5, -0.5, 3.6, Math.PI, 0); paint(g, '#d9a24a', 1);
+    g.fillStyle = '#6b3a1e'; g.fillRect(-6.2, -0.4, 7.4, 1.6);
+    box(g, 2.5, -4.5, 4, 6, 1, '#e8303a', 1);
+    g.restore();
+  } else if (pick === 1 && square) {
+    // A pizza box, lid open, one slice left.
+    g.save(); g.translate(cx, cy - 1); g.rotate((hv(6) - 0.5) * 0.5);
+    box(g, -9, -9, 18, 8, 1, '#c8924f', 1.2);
+    box(g, -9, -1, 18, 9, 1, '#e8c88a', 1.2);
+    g.beginPath(); g.moveTo(-5, 1); g.lineTo(3, 3); g.lineTo(-4, 6.5); g.closePath(); paint(g, '#f2c21b', 0.9);
+    g.fillStyle = '#d9372b'; g.fillRect(-3, 3, 1.6, 1.6);
+    g.restore();
+  } else if (pick === 2) {
+    // Two cups and a crumpled napkin.
+    box(g, cx - 6, cy - 7, 5, 7, 1.2, '#ffffff', 1.1);
+    g.fillStyle = '#e8303a'; g.fillRect(cx - 6, cy - 4.5, 5, 1.6);
+    g.beginPath(); g.moveTo(cx - 3, cy - 7); g.lineTo(cx - 1.5, cy - 10.5); g.strokeStyle = INK; g.lineWidth = 1; g.stroke();
+    box(g, cx + 2, cy - 5, 5, 7, 1.2, '#2f8fe0', 1.1);
+    g.beginPath(); g.arc(cx + 4, cy + 4.5, 2.6, 0, Math.PI * 2); paint(g, '#f6f6f0', 0.9);
+  } else {
+    // A carton of chips spilling over the table.
+    box(g, cx - 3, cy - 7, 7, 8, 1, '#e8303a', 1.1);
+    g.fillStyle = '#f2c94c';
+    for (let k = 0; k < 4; k++) g.fillRect(cx - 2.5 + k * 1.6, cy - 10 + (k % 2), 1.2, 4);
+    for (let k = 0; k < 3; k++) g.fillRect(cx - 9 + k * 4, cy + 2 + (k % 2) * 2, 3.4, 1.2);
+  }
+  for (const c of chairs) if (c[1] > cy) seat(c);
+}
+
+/**
+ * A bench tile. Beside a table it is a booth seat (red vinyl, its back on the side away from the
+ * table); otherwise part of a slatted bench with its back along the top, its ends rounded off where
+ * the run of bench stops.
+ */
+function drawBench(g, info, x, y) {
+  const px = x * T, py = y * T;
+  const L = decorAt(info, x - 1, y), R = decorAt(info, x + 1, y);
+  const U = decorAt(info, x, y - 1), D = decorAt(info, x, y + 1);
+  g.fillStyle = 'rgba(0,0,0,0.2)';
+  g.fillRect(px + 4, py + 9, T - 4, T - 10);
+  if (L === 't' || R === 't' || U === 't' || D === 't') {
+    // Booth: the seat, and a tall padded back on the far side from the table.
+    const side = L === 't' ? 0 : R === 't' ? 2 : U === 't' ? 1 : 3; // where the back goes: 0 right, 2 left...
+    const vert = side === 0 || side === 2;
+    box(g, px + 4, py + 6, T - 8, T - 10, 4, '#c0392b', 2.2);
+    g.fillStyle = 'rgba(255,255,255,0.25)';
+    g.fillRect(px + 8, py + 9, T - 16, 3);
+    if (vert) {
+      const bx = side === 0 ? px + T - 13 : px + 3;
+      box(g, bx, py + 1, 10, T - 4, 4, '#a5281d', 2.2);
+      g.fillStyle = 'rgba(0,0,0,0.2)';
+      g.fillRect(bx + 4, py + 6, 1.5, T - 14);
+    } else {
+      const by = side === 1 ? py + T - 13 : py + 1;
+      box(g, px + 2, by, T - 4, 11, 4, '#a5281d', 2.2);
+    }
+    return;
+  }
+  // A slatted bench along the row: legs, seat slats, back rest along the top.
+  const l = L === 'b' ? 0 : 4, rgt = R === 'b' ? 0 : 4;
+  g.fillStyle = '#4b5058';
+  if (l) g.fillRect(px + 7, py + 26, 3, 9);
+  if (rgt) g.fillRect(px + T - 10, py + 26, 3, 9);
+  box(g, px + l, py + 14, T - l - rgt, 15, l || rgt ? 3 : 0, '#c8894a', 2);
+  g.fillStyle = '#9c6b33';
+  for (let k = 0; k < 3; k++) g.fillRect(px + l + 1, py + 18 + k * 4, T - l - rgt - 2, 1.2);
+  box(g, px + l, py + 5, T - l - rgt, 8, l || rgt ? 3 : 0, '#b5793e', 2);
+  // Hide the seams between tiles of one bench.
+  if (!l) { g.fillStyle = '#c8894a'; g.fillRect(px - 1, py + 15.2, 2.4, 12.6); g.fillStyle = '#b5793e'; g.fillRect(px - 1, py + 6.2, 2.4, 5.6); }
+}
+
+/** A square planter with a potted palm (or a round bush), by a hash of where it is. */
+function drawPlanter(g, x, y) {
+  const px = x * T, py = y * T;
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.fillRect(px + 6, py + 10, T - 6, T - 9);
+  box(g, px + 4, py + 12, T - 8, T - 15, 3, '#b0623b', 2.2);
+  g.fillStyle = '#8f4a2a';
+  g.fillRect(px + 5, py + T - 9, T - 10, 5);
+  box(g, px + 7, py + 13, T - 14, 7, 2, '#5a3a1e', 1.2);
+  const cx = px + 20, cy = py + 14;
+  if (hash2(x, y + 77) < 0.6) {
+    // A palm: a trunk and fronds fanning out above the tile.
+    g.beginPath(); g.moveTo(cx - 1, cy + 2); g.quadraticCurveTo(cx + 3, cy - 8, cx + 1, cy - 16);
+    g.strokeStyle = INK; g.lineWidth = 5; g.lineCap = 'round'; g.stroke();
+    g.strokeStyle = '#8a6a3e'; g.lineWidth = 3; g.stroke();
+    for (let k = 0; k < 6; k++) {
+      const a = -Math.PI / 2 + (k - 2.5) * 0.55;
+      const ex = cx + 1 + Math.cos(a) * 17, ey = cy - 16 + Math.sin(a) * 11 + 6;
+      g.beginPath();
+      g.moveTo(cx + 1, cy - 16);
+      g.quadraticCurveTo((cx + ex) / 2 + Math.cos(a + 1.2) * 4, (cy - 16 + ey) / 2 - 5, ex, ey);
+      g.quadraticCurveTo((cx + ex) / 2 - Math.cos(a + 1.2) * 2, (cy - 16 + ey) / 2 + 1, cx + 1, cy - 16);
+      paint(g, k & 1 ? '#3fae49' : '#2f8f3c', 1.4);
+    }
+  } else {
+    // A round clipped bush.
+    for (const [dx, dy, rr2] of [[-6, -2, 8], [6, -2, 8], [0, -8, 9]]) {
+      g.beginPath(); g.arc(cx + dx, cy + dy, rr2, 0, Math.PI * 2); paint(g, '#3fae49', 1.8);
+    }
+    g.fillStyle = '#e84393';
+    for (let k = 0; k < 4; k++) g.fillRect(cx - 8 + k * 5, cy - 9 + (k % 2) * 6, 2.4, 2.4);
+  }
+}
+
+/** A bin with a swing flap, and a tray-return rack with dirty trays stacked in it. */
+function drawBin(g, x, y) {
+  const px = x * T, py = y * T;
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.fillRect(px + 5, py + 10, T - 6, T - 10);
+  // Tray rack on the right.
+  box(g, px + 20, py + 6, 16, 28, 2, '#9aa0a6', 2);
+  for (let k = 0; k < 4; k++) box(g, px + 22, py + 9 + k * 6, 12, 3.6, 1, k % 2 ? '#e8761a' : '#2f8fe0', 1);
+  // The bin, overflowing.
+  box(g, px + 4, py + 12, 15, 22, 3, '#3f6b4a', 2.2);
+  box(g, px + 3, py + 8, 17, 6, 2, '#2f5238', 2);
+  box(g, px + 7, py + 16, 9, 6, 1, '#1d2a20', 1.2);
+  g.fillStyle = '#fbf4e4';
+  g.font = `900 3.6px ${FONT_FAMILY}`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('THANK', px + 11.5, py + 26);
+  g.fillText('YOU', px + 11.5, py + 30);
+  // Rubbish piled on the lid: a cup, a wrapper, and now and then a rat.
+  box(g, px + 6, py + 3, 4, 6, 1, '#e8303a', 1);
+  g.beginPath(); g.ellipse(px + 14, py + 7, 4, 2.4, 0.3, 0, Math.PI * 2); paint(g, '#f2c21b', 1);
+  if (hash2(x + 5, y + 9) < 0.4) {
+    g.beginPath(); g.ellipse(px + 13, py + 3.5, 3.6, 2.4, 0, 0, Math.PI * 2); paint(g, '#8a8f96', 1.1);
+    g.fillStyle = INK; g.fillRect(px + 15, py + 2.6, 1, 1);
+    g.beginPath(); g.moveTo(px + 9.5, py + 4); g.quadraticCurveTo(px + 6, py + 7, px + 3, py + 3);
+    g.strokeStyle = '#e8a0a8'; g.lineWidth = 1; g.stroke();
+  }
+}
+
+/**
+ * A food stall over its whole block: a kitchen behind, a menu board, a striped awning, a counter
+ * at the front, and a big sign on top with its name and a giant fibreglass version of what it sells.
+ */
+function drawStall(g, b, zoom) {
+  const X0 = b.x0 * T, Y0 = b.y0 * T, W = (b.x1 - b.x0) * T, H = (b.y1 - b.y0) * T;
+  const n = ((hash2(b.x0 * 7 + 31, b.y0 * 13 + 17) * 9973) | 0) % STALLS.length;
+  const [name, food] = STALLS[n];
+  const col = FOOD.awnings[n % FOOD.awnings.length];
+  g.fillStyle = 'rgba(0,0,0,0.25)';
+  g.fillRect(X0 + 6, Y0 + 8, W - 4, H - 6);
+  // Kitchen: back wall with a menu board, a dark floor.
+  box(g, X0 + 2, Y0 + 2, W - 4, H - 4, 4, '#3a3f45', 2.5);
+  box(g, X0 + 6, Y0 + 8, W - 12, Math.min(18, H * 0.3), 2, '#1d2125', 1.6);
+  for (let k = 0; k < 3; k++) {
+    g.fillStyle = ['#ffd23f', '#ffffff', '#ff8c1a'][k];
+    g.fillRect(X0 + 10, Y0 + 11 + k * 4.5, (W - 26) * (0.5 + 0.5 * hash2(n, k)), 2);
+  }
+  // Counter at the front: a coloured front, a steel top, a till and the food.
+  const cy = Y0 + H - 26;
+  box(g, X0 + 3, cy, W - 6, 23, 3, col, 2.4);
+  g.fillStyle = 'rgba(255,255,255,0.35)';
+  g.fillRect(X0 + 6, cy + 13, W - 12, 3);
+  box(g, X0 + 1, cy - 4, W - 2, 7, 2, '#d4d8dc', 2);
+  box(g, X0 + W - 22, cy - 12, 12, 9, 2, '#2b2f34', 1.6);
+  g.fillStyle = '#7CFC00'; g.fillRect(X0 + W - 20, cy - 10, 8, 3);
+  foodIcon(g, food, X0 + 18, cy - 5, 0.9);
+  // Awning across the front of the kitchen, scalloped.
+  const ay = Y0 + Math.max(24, H * 0.42);
+  const stripes = Math.max(4, Math.round(W / 10));
+  const sw = (W + 6) / stripes;
+  for (let k = 0; k < stripes; k++) {
+    g.fillStyle = k & 1 ? '#fbf4e4' : col;
+    g.beginPath();
+    g.moveTo(X0 - 3 + k * sw, ay - 10);
+    g.lineTo(X0 - 3 + (k + 1) * sw, ay - 10);
+    g.lineTo(X0 - 3 + (k + 1) * sw, ay);
+    g.arc(X0 - 3 + (k + 0.5) * sw, ay, sw / 2, 0, Math.PI);
+    g.closePath();
+    g.fill();
+  }
+  g.beginPath();
+  g.moveTo(X0 - 3, ay - 10); g.lineTo(X0 + W + 3, ay - 10);
+  for (let k = stripes - 1; k >= 0; k--) g.arc(X0 - 3 + (k + 0.5) * sw, ay, sw / 2, 0, Math.PI, false);
+  g.strokeStyle = INK; g.lineWidth = 2; g.stroke();
+  // The sign on top, sticking up above the block, and the giant food on it.
+  const sh = 17;
+  box(g, X0 + 4, Y0 - 10, W - 8, sh, 4, '#fbf4e4', 2.4);
+  g.fillStyle = col;
+  g.fillRect(X0 + 7, Y0 - 7, W - 14, 2);
+  let size = 9;
+  g.font = `900 ${size}px ${FONT_FAMILY}`;
+  const room = W - 20;
+  const tw = g.measureText(name).width;
+  if (tw > room) size = Math.max(5, (size * room) / tw);
+  text(g, name, X0 + W / 2, Y0 - 10 + sh / 2 + 1.5, size, INK, 900);
+  foodIcon(g, food, X0 + W - 6, Y0 - 12, 1.15);
+}
+
+/** A cartoon food item centred on (x, y), scale s: the giant one on a stall's sign, or on its counter. */
+function foodIcon(g, food, x, y, s) {
+  g.save();
+  g.translate(x, y);
+  g.scale(s, s);
+  if (food === 'hotdog') {
+    box(g, -11, -3, 22, 8, 4, '#e0a050', 1.4);
+    box(g, -12, -4.5, 24, 5, 2.5, '#b8452c', 1.4);
+    g.beginPath(); g.moveTo(-8, -2); for (let k = 0; k < 5; k++) g.lineTo(-6 + k * 3.5, k % 2 ? -3.5 : -1);
+    g.strokeStyle = '#f2c21b'; g.lineWidth = 1.4; g.stroke();
+  } else if (food === 'burger') {
+    g.beginPath(); g.arc(0, -1, 9, Math.PI, 0); g.closePath(); paint(g, '#d9a24a', 1.4);
+    box(g, -9.5, -1, 19, 3, 1, '#3fae49', 1);
+    box(g, -9, 1.5, 18, 3.5, 1.5, '#6b3a1e', 1.2);
+    box(g, -9, 4.5, 18, 3.5, 1.5, '#d9a24a', 1.2);
+  } else if (food === 'taco') {
+    g.beginPath(); g.arc(0, 4, 10, Math.PI, 0); g.closePath(); paint(g, '#f2c94c', 1.4);
+    g.fillStyle = '#3fae49'; g.fillRect(-7, -4, 4, 3); g.fillRect(-1, -5, 4, 3);
+    g.fillStyle = '#e8303a'; g.fillRect(3.5, -4, 3, 3);
+  } else if (food === 'kebab') {
+    g.beginPath(); g.moveTo(-5, -11); g.lineTo(5, -11); g.lineTo(7, 7); g.lineTo(-7, 7); g.closePath();
+    paint(g, '#9c5a2a', 1.4);
+    g.fillStyle = '#c87a3a';
+    for (let k = 0; k < 4; k++) g.fillRect(-5 + (k % 2), -8 + k * 4, 10, 1.4);
+    g.beginPath(); g.moveTo(0, -14); g.lineTo(0, 10); g.strokeStyle = INK; g.lineWidth = 1.6; g.stroke();
+  } else if (food === 'fries') {
+    g.fillStyle = '#f2c94c';
+    for (let k = 0; k < 5; k++) { g.fillRect(-6 + k * 2.6, -10 + (k % 2) * 2, 2, 9); }
+    g.beginPath(); g.moveTo(-8, -3); g.lineTo(8, -3); g.lineTo(6, 8); g.lineTo(-6, 8); g.closePath();
+    paint(g, '#e8303a', 1.4);
+  } else {
+    // A bowl of noodles with chopsticks.
+    g.beginPath(); g.arc(0, 0, 9, 0, Math.PI); g.closePath(); paint(g, '#ffffff', 1.4);
+    g.fillStyle = '#e8303a'; g.fillRect(-7, 2, 14, 1.6);
+    g.beginPath(); g.ellipse(0, 0, 9, 2.6, 0, 0, Math.PI * 2); paint(g, '#f2d58a', 1.1);
+    g.beginPath(); g.moveTo(2, -1); g.lineTo(8, -12); g.moveTo(4, -1); g.lineTo(11, -11);
+    g.strokeStyle = INK; g.lineWidth = 1.6; g.stroke();
+  }
+  g.restore();
+}
+
+/**
+ * The fountain over its whole block: a stone basin of murky water full of pennies, and in the
+ * middle a little cherub on a pedestal, peeing into it.
+ */
+function drawFountain(g, b) {
+  const X0 = b.x0 * T, Y0 = b.y0 * T, W = (b.x1 - b.x0) * T, H = (b.y1 - b.y0) * T;
+  const cx = X0 + W / 2, cy = Y0 + H / 2 + 2;
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.beginPath(); g.ellipse(cx + 4, cy + 6, W / 2 - 2, H / 2 - 3, 0, 0, Math.PI * 2); g.fill();
+  // Rim, then the water.
+  g.beginPath(); g.ellipse(cx, cy, W / 2 - 3, H / 2 - 4, 0, 0, Math.PI * 2); paint(g, '#c9c4ba', 2.6);
+  g.beginPath(); g.ellipse(cx, cy + 2, W / 2 - 12, H / 2 - 12, 0, 0, Math.PI * 2); paint(g, '#4aa8d8', 2);
+  g.save();
+  g.beginPath(); g.ellipse(cx, cy + 2, W / 2 - 12, H / 2 - 12, 0, 0, Math.PI * 2); g.clip();
+  g.fillStyle = 'rgba(30,80,120,0.25)';
+  g.fillRect(X0, cy + 2, W, H);
+  // Ripples and pennies.
+  g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1.4;
+  for (let k = 0; k < 3; k++) {
+    g.beginPath(); g.ellipse(cx, cy + 6, 14 + k * 12, 6 + k * 5, 0, Math.PI * 0.1, Math.PI * 0.9); g.stroke();
+  }
+  for (let k = 0; k < 14; k++) {
+    const a = hash2(b.x0 + k, b.y0) * Math.PI * 2, d = 0.3 + 0.65 * hash2(k, b.y0 + b.x0);
+    const px = cx + Math.cos(a) * (W / 2 - 16) * d, py = cy + 2 + Math.sin(a) * (H / 2 - 16) * d;
+    g.fillStyle = k % 3 ? '#e0a33a' : '#d4d8dc';
+    g.beginPath(); g.ellipse(px, py, 2, 1.3, 0, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+  // The rim's top edge catching the light.
+  g.beginPath(); g.ellipse(cx, cy, W / 2 - 7, H / 2 - 8, 0, Math.PI * 1.1, Math.PI * 1.9);
+  g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.stroke();
+  // Pedestal and cherub.
+  box(g, cx - 7, cy - 6, 14, 14, 3, '#d8d3c8', 2);
+  const sy = cy - 6;
+  g.beginPath(); g.ellipse(cx, sy - 7, 6, 7, 0, 0, Math.PI * 2); paint(g, '#e9e4da', 1.8); // body
+  g.beginPath(); g.arc(cx + 0.5, sy - 17, 5, 0, Math.PI * 2); paint(g, '#e9e4da', 1.8); // head
+  g.fillStyle = INK;
+  g.fillRect(cx + 1.5, sy - 18, 1.2, 1.2); g.fillRect(cx + 4, sy - 18, 1.2, 1.2);
+  g.beginPath(); g.ellipse(cx - 5.5, sy - 9, 3.4, 2, -0.6, 0, Math.PI * 2); paint(g, '#ffffff', 1.2); // a wing
+  // His stream, arcing into the water.
+  g.beginPath(); g.moveTo(cx + 5, sy - 4); g.quadraticCurveTo(cx + 16, sy - 12, cx + 22, cy + 6);
+  g.strokeStyle = '#2f7fb0'; g.lineWidth = 3; g.lineCap = 'round'; g.stroke();
+  g.strokeStyle = '#dff4ff'; g.lineWidth = 1.4; g.stroke();
+  g.beginPath(); g.ellipse(cx + 22, cy + 7, 5, 2, 0, 0, Math.PI * 2);
+  g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1.2; g.stroke();
 }
 
 /** A red checkout till facing into the store. */

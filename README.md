@@ -3,7 +3,7 @@
 *The customer is always a prick.*
 
 <!-- gen:version -->
-**Version 0.2.05** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
+**Version 0.2.06** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
 <!-- /gen:version -->
 
 **Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
@@ -29,6 +29,11 @@ Rows of shelving with a wide main aisle down the middle. The shelves are free wa
 
 ![Supermarket Aisles](docs/img/map-aisles.png)
 
+### Food Court
+Little tables, sticky booths, kebab stalls and a fountain full of pennies. The crowd weaves through it all; so do your belts.
+
+![Food Court](docs/img/map-food.png)
+
 | Size | Tiles | Suits |
 |---|---|---|
 | Corner Shop | 30 x 16 | the original; cramped |
@@ -43,7 +48,7 @@ Rows of shelving with a wide main aisle down the middle. The shelves are free wa
 
 ## The shoppers
 <!-- gen:shoppers -->
-Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund.
+Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund. The boss, last in the list, walks in with the crowd every 5th sales event.
 
 | | Shopper |
 |---|---|
@@ -59,10 +64,11 @@ Patience is what security wears down; when it runs out the shopper storms off an
 | <img src="docs/img/shopper-scooter.png" alt="Mobility Scooter and Turbo Scooter" width="200"> | **Mobility Scooter** · from sales event 7 · patience 95, speed 1.2, refund $20<br>Cannot be slowed by anything.<br>**Beat it with:** Raw damage over a long route.<br>**Super: Turbo Scooter** (from sales event 13). Two and a half times the patience and nearly twice the speed. |
 | <img src="docs/img/shopper-dog.png" alt="Stray Dog and Great Dane" width="200"> | **Stray Dog** · from sales event 7 · patience 22, speed 2.6, refund $5<br>Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.<br>**Beat it with:** Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.<br>**Super: Great Dane** (from sales event 13). Two and a half times the patience and faster. Switches security off for 12 seconds, from further away, and more often. |
 | <img src="docs/img/shopper-flasher.png" alt="Exhibitionist and Nudist Nan" width="200"> | **Exhibitionist** · from sales event 8 · patience 60, speed 1, refund $15<br>A woman in a bathrobe who opens it every few seconds. Dads and teenagers within 2.5 tiles stop and stare for 2 seconds.<br>**Beat it with:** She helps you: let her walk with the dad line, in range of something that hurts.<br>**Super: Nudist Nan** (from sales event 14). Two and a half times the patience. No robe at all: stops dads and teenagers within 4 tiles for 3 seconds, every few seconds. |
-| <img src="docs/img/shopper-cosplay.png" alt="Cosplayer and Full Mech Suit" width="200"> | **Cosplayer** · from sales event 9 · patience 150, speed 1.3, refund $30<br>A big costume and a lot of patience. Shots from sprinklers, forklifts and rail guns that would hit a shopper standing next to him hit him instead.<br>**Beat it with:** Wear him down while he is alone, or separate him from the crowd: free samples and salesmen stop the others while he walks on.<br>**Super: Full Mech Suit** (from sales event 15). Two and a half times the patience. Shields shoppers within 1.6 tiles and takes only half of what he soaks up. |
+| <img src="docs/img/shopper-cosplay.png" alt="Cosplayer and Full Mech Suit" width="200"> | **Cosplayer** · from sales event 9 · patience 150, speed 1.3, refund $30<br>A big costume and a lot of patience. Shots from sprinklers, forklifts and barcode lasers that would hit a shopper standing next to him hit him instead.<br>**Beat it with:** Wear him down while he is alone, or separate him from the crowd: free samples and salesmen stop the others while he walks on.<br>**Super: Full Mech Suit** (from sales event 15). Two and a half times the patience. Shields shoppers within 1.6 tiles and takes only half of what he soaks up. |
+| <img src="docs/img/shopper-boss.png" alt="The boss, Regional Manager" width="200"> | **Regional Manager** (the boss) · every 5th sales event · patience 160, more for each rank, speed 0.8, refund $150 times his rank<br>Head Office sends a manager to find out why refunds are down. He walks in a little after the doors open, slowly, with enormous patience, and nothing slows or stops him: not wet floors, messes, free samples, a drunk on the floor, the TV Salesman or a naked woman. Every few seconds he gives a pep talk, and every shopper near him gets some patience back. He gets a grander title, and more patience, every time he comes back.<br>Every 7 seconds his pep talk gives every shopper within 3.5 tiles 20% of their patience back. If he reaches a till he counts as 5 refunds; if he storms out the store gets a bounty of $150 times his rank.<br>**Beat him with:** Raw damage along a long route. Get him away from the crowd, so his pep talks have nobody to cheer up, and do not let him reach a till: he counts as several refunds at once and takes a huge one. Drive him out and the store gets a bounty.<br>**Ranks:** Regional Manager (event 5), Area Director (event 10), Vice President of Returns (event 15), The CEO (event 20 on). |
 <!-- /gen:shoppers -->
 
-The game's own **Employee Handbook** (the book button, on the menu and in the game) has every shopper, machine and piece of security with its full numbers: patience event by event, how many turn up, and what each upgrade level costs and does.
+The game's own **Employee Handbook** (the book button, on the menu and in the game) has every shopper (and the boss), machine and piece of security with its full numbers: patience event by event, how many turn up, and what each upgrade level costs and does.
 
 ## Play on this computer without the internet
 The link above is the easy way. To run your own copy instead (for example to try changes), you need Node.js (any recent version) to serve the files.
@@ -73,7 +79,9 @@ Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chro
 
 - **Training shift** teaches every building hands on in about ten minutes, then every awkward kind of shopper in about ten more ("Jump to part 2" skips straight to those). Start here.
 - **Painted floor:** Unpackers, Presses, Packers and Shipping Chutes each only go on their own named patch of floor (Loading Bay, Press Shop, Gift Wrap, Shipping). The patches are apart, so belts carry the goods between them, and those belts are your maze.
-- **The store** on the menu picks the map for Play solo and Host a game: a design (open warehouse, showroom of walled rooms, supermarket aisles) and a size. Each size says how many players it suits; every player gets his own shopper entrance.
+- **The store** on the menu picks the map for Play solo and Host a game: a design (open warehouse, showroom of walled rooms, supermarket aisles, food court) and a size. Each size says how many players it suits; every player gets his own shopper entrance.
+- **The game** on the menu sets its length (10, 15, 20 or 30 sales events, or **Endless**), the difficulty and each player's starting cash. An endless game has no last sales event: it goes on until the refunds close the store, and the browser remembers the furthest sales event reached on each difficulty. A game that has been won can also be carried on as an endless one with **Keep going (endless)** on the win screen.
+- **The boss** walks in every fifth sales event, a little after the doors open: slow, very patient, and nothing slows or stops him. His pep talks give the shoppers around him patience back. If he reaches a till he counts as five refunds; drive him out and the store gets a bounty. He comes back with a grander title each time (Regional Manager, Area Director, Vice President of Returns, The CEO). A bar across the top of the floor shows his patience while he is in the store.
 - **Play solo** starts a real game straight away.
 - The speaker button at the top right turns sound effects, music and DEB's voice on or off.
 - To try multiplayer alone, open http://localhost:5173/tools/two-player.html : a host and a second player side by side.
@@ -84,7 +92,7 @@ The game is online multiplayer for up to seven players, wherever they are. Nobod
 1. Everyone opens https://bobbfwed.github.io/No-Receipt-No-Mercy/ . (The site is this repository published with GitHub Pages from the `main` branch; every push to `main` updates it within a minute or two.)
 2. The host enters a name and presses **Host a game**. A five-letter room code appears at the top.
 3. The host presses **Copy link** and sends it to his friends (or reads them the code). They open the link, enter a name and press **Join a game**.
-4. Everyone lands in the lobby, with the store drawn whole on the right. The host can change its design and size there, and the game's settings (how many sales events, the difficulty, and each player's starting cash), and everyone sees it change. The same settings can be chosen on the menu before hosting. Each player presses **READY**; the game starts when all of them have.
+4. Everyone lands in the lobby, with the store drawn whole on the right. The host can change its design and size there, and the game's settings (how many sales events or endless, the difficulty, and each player's starting cash), and everyone sees it change. The same settings can be chosen on the menu before hosting. Each player presses **READY**; the game starts when all of them have.
 5. Friends can also join after the game has started, even mid-wave, and play at once. If someone drops out he can rejoin with the same name and gets his place back.
 6. A player whose connection drops keeps his money for 90 seconds (real time, whatever the game speed); if he is back by then nothing is lost, and if not it is shared between the others. If the host leaves, the game carries on: another player's browser takes over as host within a few seconds (up to a minute), and everyone else reconnects by themselves. The player who left can come back with the same link and gets his place back. Only when the last player leaves is the game gone.
 7. Once a game is under way, the browser asks before the page is closed, refreshed or left, so a stray Back button does not end it.
@@ -94,15 +102,15 @@ The game is online multiplayer for up to seven players, wherever they are. Nobod
 The first connection goes through the free public PeerJS service, which only introduces the browsers to each other; the game data then travels directly between you. If that service is down, online games cannot start (solo still works).
 
 ## Head Office: one of you plays the shoppers
-With two or more players, one can stop defending and run the other side. Between sales events, press **Run the shoppers** next to your name in the players list. Each build phase you then get a budget and buy the coming crowd: which kinds of shopper, how many, which entrance each group uses and when it arrives. Buy nothing and the usual crowd comes. You win if the store reaches its refund limit; the others win if it survives all 20 sales events. Somebody must always be left running the store.
+With two or more players, one can stop defending and run the other side. Between sales events, press **Run the shoppers** next to your name in the players list. Each build phase you then get a budget and buy the coming crowd: which kinds of shopper, how many, which entrance each group uses and when it arrives. Buy nothing and the usual crowd comes. You win if the store reaches its refund limit; the others win if it survives every sales event (in an endless game, the store can only lose). The boss comes in every fifth sales event whatever you buy, free of charge; you cannot buy him. Somebody must always be left running the store.
 
 ## Controls
 | Key or mouse | Does |
 |---|---|
-| 1 to 9, 0, - and = | Pick a building (or click it in the bar). - is the Rail Gun, = the TV Salesman |
+| 1 to 9, 0, - and = | Pick a building (or click it in the bar). - is the Barcode Laser, = the TV Salesman |
 | Click | Build |
 | Drag | Build a line; belts follow the drag |
-| R | Rotate what you are holding, or the building under the mouse when holding nothing. The Rail Gun fires the way it faces, so turn it before you place it |
+| R | Rotate what you are holding, or the building under the mouse when holding nothing. The Barcode Laser fires the way it faces, so turn it before you place it |
 | Click a building with nothing picked | Opens its upgrades. Each kind (damage, speed, range, durability) is bought on its own; each level costs more than the last |
 | U | Buy the next level of the first upgrade of the building under the mouse (or pick the Upgrade tool and click a building to open its upgrades) |
 | B | Rebuild everything of yours that gym bros have wrecked, at half price, upgrades included |
@@ -117,7 +125,7 @@ With two or more players, one can stop defending and run the other side. Between
 | Give $50 / $200 / $1,000 (players list) | Hand a colleague some of your cash |
 
 ## Carrying a game on another day
-The host's browser saves the game by itself every few seconds while it is under way. Next time the host opens the game on the same device and browser, the menu offers **Resume saved game**, showing the sales event, the store, who was playing and when it was saved. Resuming makes him the host again. If others were in the game, a new room code appears: he sends it to them, and each gets his place and his money back by joining under the same name. There is one save per browser; a finished game clears it, and **Delete this save** throws it away. It is not saved online, so it cannot be resumed from a different device.
+The host's browser saves the game by itself every few seconds while it is under way. Next time the host opens the game on the same device and browser, the menu offers **Resume saved game**, showing the sales event, the store, who was playing and when it was saved. Resuming makes him the host again. If others were in the game, a new room code appears: he sends it to them, and each gets his place and his money back by joining under the same name. There is one save per browser; a finished game clears it (a won game carried on as an endless one is saved again), and **Delete this save** throws it away. It is not saved online, so it cannot be resumed from a different device.
 
 ## On a phone or tablet
 The game works by touch, in either orientation (a tablet, or a phone held sideways, is more comfortable).

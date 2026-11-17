@@ -8,7 +8,7 @@ import {
 } from '../src/content/lines.js';
 import { HostSession, ClientSession } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
-import { createGame, addPlayer, setPlayerOnline, TICK_HZ, TUNE } from '../src/sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, TICK_HZ, TUNE, bossTier, bossTitle } from '../src/sim/index.js';
 
 /** A seeded random number generator, so every run of these tests sees the same numbers. */
 function seeded(seed = 1) {
@@ -45,7 +45,8 @@ const VARS = {
   removedOther: 'p', placed: 'p', firstSale: 'p', sale: 'p', buildEnding: 'p', joined: 'p', quit: 'p',
   won: 'p', lost: 'p', nearLimit: 'pn', report: 'p', reportNoStops: 'p', reportNoShips: 'p',
   reportPerfect: 'p', pee: 'pk', flash: 'pn', fall: 'p', pitchStop: 'pk', pitchRush: 'pk',
-  kidtv: 'p', rail: 'pn', shield: 'p',
+  kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
+  pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', early: 'pnm',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -56,7 +57,10 @@ const AT_LEAST = {
   superArrive: 3, mess: 6, bolt: 6, removed: 12, removedOther: 6, firstSale: 6, buildEnding: 6,
   joined: 6, quit: 6, won: 6, lost: 6, report: 21, reportNoStops: 3, reportNoShips: 3,
   reportPerfect: 3, dented: 9, caught: 6, caughtCarry: 6, rebuiltShort: 6, sale: 9, nearLimit: 9,
-  pee: 9, flash: 9, fall: 9, pitchStop: 6, pitchRush: 6, kidtv: 6, rail: 9, shield: 9,
+  pee: 9, flash: 9, fall: 9, pitchStop: 6, pitchRush: 6, kidtv: 6, rail: 12, shield: 9,
+  // Version 0.2.06: the boss, endless games, the Food Court and opening early.
+  'bossIn.manager': 8, 'bossIn.director': 8, 'bossIn.vp': 8, 'bossIn.ceo': 10, bossOut: 8,
+  bossEscape: 12, pep: 12, endless: 8, endlessMark: 10, foodCourt: 12, early: 6,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
@@ -83,7 +87,8 @@ function allBanks() {
   for (const [k, v] of Object.entries(STAMPS)) out.push([`STAMPS.${k}`, v, '', 22]);
   out.push(['EMPLOYEES_OF_THE_WAVE', EMPLOYEES_OF_THE_WAVE, '', 50]);
   for (const [who, banks] of Object.entries(FRIENDS)) {
-    for (const [k, v] of Object.entries(banks)) out.push([`FRIENDS.${who}.${k}`, v, 'p', 200]);
+    // A friend's boss lines stand in for the boss's announcement, which fills in his title.
+    for (const [k, v] of Object.entries(banks)) out.push([`FRIENDS.${who}.${k}`, v, k === 'boss' ? 'pk' : 'p', 200]);
   }
   return out;
 }
@@ -91,13 +96,20 @@ function allBanks() {
 test('every bank has about three times the lines it had, and every new event and shopper has some', () => {
   for (const [name, key, list] of lineBanks()) {
     assert.ok(VARS[key], `${name}: add it to VARS in this test, with the placeholders the director fills`);
-    const want = key === 'placed' || key === 'upgradedBy' ? 3 : AT_LEAST[key];
+    // A bank inside a group (placed, upgradedBy, bossOutBy) wants 3 unless it is listed by name.
+    const want = AT_LEAST[name] ?? (name !== key ? 3 : AT_LEAST[key]);
     assert.ok(want, `${name}: add it to AT_LEAST in this test`);
     assert.ok(list.length >= want, `${name} has ${list.length} lines, wants ${want}`);
   }
   const placed = Object.values(LINES.placed).reduce((n, l) => n + l.length, 0);
   assert.ok(placed >= 24, `${placed} lines for buildings placed`);
   for (const k of ['railgun', 'salesman']) assert.ok(LINES.placed[k]?.length >= 3, `placed ${k}`);
+  assert.ok(LINES.placed.railgun.length >= 6, 'the Barcode Laser lost lines when it was renamed');
+  // Every title gets at least 12 ways of storming off, and the boss has the shoppers' extras.
+  assert.deepEqual(Object.keys(LINES.bossIn), Object.keys(LINES.bossOutBy));
+  for (const [t, extra] of Object.entries(LINES.bossOutBy)) assert.ok(LINES.bossOut.length + extra.length >= 12, `bossOut for ${t}`);
+  assert.ok(INTRO.boss && ESCAPE_REVIEWS.boss?.length >= 5 && LEFT_REVIEWS.boss?.length >= 3 && SHOPPER_NOUNS.boss);
+  for (const [who, banks] of Object.entries(FRIENDS)) assert.ok(banks.boss?.length >= 3, `${who} has boss lines`);
   for (const t of ['dmg', 'spd', 'rng', 'dur', 'factory']) assert.ok(LINES.upgradedBy[t]?.length >= 3, `upgrade lines for ${t}`);
 
   for (const [k, n] of Object.entries(OLD_ESCAPES)) assert.ok(ESCAPE_REVIEWS[k].length >= 3 * n, `escape reviews for ${k}`);
@@ -140,7 +152,10 @@ test('no line is repeated, every placeholder gets filled, and nothing is too lon
 });
 
 test('banks whose number or name can be missing still have lines that need neither', () => {
-  const optional = { smashOther: 'k', dented: 'kn', upgraded: 'kn', maxed: 'kn', pee: 'k', flash: 'n', pitchStop: 'k', pitchRush: 'k', superArrive: 'k' };
+  const optional = {
+    smashOther: 'k', dented: 'kn', upgraded: 'kn', maxed: 'kn', pee: 'k', flash: 'n', pitchStop: 'k', pitchRush: 'k', superArrive: 'k',
+    bossOut: 'n', bossEscape: 'nm', pep: 'kn', early: 'm',
+  };
   for (const [key, ks] of Object.entries(optional)) {
     const without = LINES[key].filter((l) => !placeholders(textOf(l)).some((k) => ks.includes(k)));
     assert.ok(without.length >= 1, `${key} needs a line without {${[...ks].join('}, {')}}`);
@@ -150,7 +165,8 @@ test('banks whose number or name can be missing still have lines that need neith
 });
 
 test('every bank has common, uncommon and rare lines, and the friends have lines for every situation', () => {
-  for (const key of ['waveStart', 'dadLine', 'manyEscapes', 'report', 'removed', 'smashOther']) {
+  for (const key of ['waveStart', 'dadLine', 'manyEscapes', 'report', 'removed', 'smashOther', 'bossOut', 'bossEscape',
+    'pep', 'endless', 'endlessMark', 'foodCourt', 'early', 'rail']) {
     const ws = LINES[key].map(weightOf);
     assert.ok(ws.some((w) => w === 1) && ws.some((w) => w < 0.5 && w > 0.2) && ws.some((w) => w <= 0.15), key);
   }
@@ -412,6 +428,14 @@ test('the director handles every new event, with all its fields or none, and ign
     { e: 'caught', x: 1, y: 1, carry: 0 },
     { e: 'escape', k: 'dog', sup: 0 },
     { e: 'left', k: 'cosplay', sup: 1 },
+    { e: 'bossIn', tier: 2, x: 1, y: 1 },
+    { e: 'bossOut', tier: 3, x: 1, y: 1, bounty: 450 },
+    { e: 'escape', k: 'boss', sup: 0, x: 1, y: 1, refund: 600, n: 5, tier: 4 },
+    { e: 'left', k: 'boss', sup: 0, x: 1, y: 1, by: 0, why: 'shot' },
+    { e: 'pep', x: 1, y: 1, n: 3 },
+    { e: 'pep', x: 1, y: 1, n: 0 },
+    { e: 'endless', by: 1 },
+    { e: 'early', secs: 40, cash: 320, sold: 9 },
   ];
   // With a random function that always says yes, every one of them is commented on.
   for (const e of full) {
@@ -423,8 +447,11 @@ test('the director handles every new event, with all its fields or none, and ign
       assert.ok(!/\{\w\}/.test(text) && !/undefined|null|NaN/.test(text), `${e.e}: "${text}"`);
     }
   }
-  // A small rail gun hit is not worth a word.
+  // A small barcode laser hit is not worth a word, and nor is a factory that earned next to nothing.
   assert.deepEqual(createDirector(() => 0).handle([{ e: 'rail', n: 2 }], game('Dave')), []);
+  assert.deepEqual(createDirector(() => 0).handle([{ e: 'early', secs: 3, cash: 4, sold: 0 }], game('Dave')), []);
+  // A shopper walking over to the TV Salesman's stand needs nothing said.
+  assert.deepEqual(createDirector(() => 0).handle([{ e: 'watching', x: 1, y: 1, k: 'dad', i: 4 }], game('Dave')), []);
   // Destroyed and dented get different lines.
   const destroyed = says(createDirector(() => 0).handle([{ e: 'smash', k: 'forklift', owner: 0, left: 0 }], game('Dave')))[0];
   const dented = says(createDirector(() => 0).handle([{ e: 'smash', k: 'forklift', owner: 0, left: 1 }], game('Dave')))[0];
@@ -437,7 +464,8 @@ test('the director handles every new event, with all its fields or none, and ign
   // Every event with its fields missing, plus nonsense, and nothing breaks.
   const names = ['pee', 'flash', 'fall', 'pitch', 'kidtv', 'rail', 'shield', 'smash', 'upgraded', 'rebuilt', 'caught',
     'waveStart', 'crawl', 'kid', 'begun', 'side', 'ready', 'gave', 'mess', 'bolt', 'escape', 'left', 'grab', 'slip', 'sale',
-    'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'somethingNew', undefined];
+    'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'bossIn', 'bossOut', 'pep', 'endless', 'early',
+    'watching', 'somethingNew', undefined];
   for (const random of [() => 0, () => 0.999, seeded(1)]) {
     const director = createDirector(random);
     const state = game('Dave', 'Bobb');
@@ -446,9 +474,170 @@ test('the director handles every new event, with all its fields or none, and ign
       const out = director.handle([{ e }], state);
       for (const m of out) if (m.t === 'say') assert.ok(!/\{\w\}|undefined/.test(m.text), `${e}: "${m.text}"`);
     }
-    director.handle([null, 'x', 7, { e: 'smash', k: 'constructor', owner: 99 }, { e: 'pitch', k: '__proto__' }, { e: 'placed', k: 'toString' }], state);
+    director.handle([null, 'x', 7, { e: 'smash', k: 'constructor', owner: 99 }, { e: 'pitch', k: '__proto__' }, { e: 'placed', k: 'toString' },
+      { e: 'escape', k: 'boss', tier: 'big', n: -1 }, { e: 'bossIn', tier: 1e9 }, { e: 'bossOut', tier: NaN, bounty: 'lots' },
+      { e: 'endless', by: 99 }], state);
+    for (const m of director.handle([{ e: 'bossIn', tier: -3 }, { e: 'pep', n: 'x' }], state)) {
+      if (m.t === 'say') assert.ok(!/\{\w\}|undefined|NaN/.test(m.text), m.text);
+    }
     director.handle(undefined, state);
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The boss, endless games, the Food Court
+
+/** The boss's title as the lines say it ("CEO", not "The CEO"). */
+const titleIn = (wave) => bossTitle(bossTier(wave)).replace(/^the /i, '');
+
+/** One boss wave: the doors open, then he walks in. Returns everything DEB said. */
+function bossWave(director, state, wave) {
+  state.wave = wave;
+  state.tick += 200 * TICK_HZ;
+  const said = says(director.handle([{ e: 'waveStart', wave, kinds: ['hunter', 'boss'], supers: [], dads: 0, boss: bossTier(wave) }], state));
+  state.tick += 12 * TICK_HZ;
+  said.push(...says(director.handle([{ e: 'bossIn', tier: bossTier(wave), x: 1, y: 1 }], state)));
+  return said;
+}
+
+test('the boss is announced once each visit, by the right title, and his trick is explained the first time', () => {
+  for (const seed of [1, 2, 3]) {
+    const director = createDirector(seeded(seed));
+    const state = game('Dave', 'Steve');
+    for (const wave of [5, 10, 15, 20, 25, 30, 35]) {
+      const said = bossWave(director, state, wave);
+      const title = titleIn(wave);
+      const naming = said.filter((t) => t.toLowerCase().includes(title.toLowerCase()));
+      assert.equal(naming.length, 1, `wave ${wave}: ${JSON.stringify(said)}`);
+      // The opening itself does not name him: it is said before he walks in.
+      assert.ok(!said[0].toLowerCase().includes(title.toLowerCase()), said[0]);
+      assert.equal(said.includes(fill(INTRO.boss, {})), wave === 5, `wave ${wave}: the explanation`);
+    }
+  }
+  assert.equal(titleIn(20), 'CEO');
+  assert.equal(titleIn(45), 'CEO');
+  // Each title's own bank names him in every line.
+  for (const [bank, wave] of [['manager', 5], ['director', 10], ['vp', 15], ['ceo', 20]]) {
+    for (const l of LINES.bossIn[bank]) assert.ok(textOf(l).includes(titleIn(wave)), `${bank}: "${textOf(l)}"`);
+  }
+  // A friend's stand-in line names him too.
+  let friendLine = 0;
+  for (let seed = 1; seed < 30; seed++) {
+    const said = bossWave(createDirector(seeded(seed)), game('Tusker'), 10);
+    const mine = new Set(FRIENDS.tusker.boss.map((l) => fill(textOf(l), { p: 'Tusker', k: 'Area Director' })));
+    if (said.some((t) => mine.has(t))) friendLine++;
+    assert.equal(said.filter((t) => t.includes('Area Director')).length, 1, JSON.stringify(said));
+  }
+  assert.ok(friendLine >= 3, `Tusker got his own boss line ${friendLine} times in 29`);
+});
+
+test('the boss storming off and the boss getting through are always remarked on, with the money', () => {
+  const director = createDirector(seeded(6));
+  const state = game('Dave', 'Steve');
+  // A long, chatty game first, so DEB is as quiet as she gets.
+  playGame(director, state, 1, 20);
+  for (const wave of [25, 30, 35, 40]) {
+    bossWave(director, state, wave);
+    state.tick += 1;
+    const out = director.handle([{ e: 'left', k: 'boss', sup: 0, by: 0 }, { e: 'bossOut', tier: bossTier(wave), x: 1, y: 1, bounty: 1234 }], state);
+    const off = says(out);
+    assert.equal(off.length, 1, `wave ${wave}: ${off}`);
+    assert.ok(off[0].includes('CEO') && (off[0].includes('$1234') || !/\$/.test(off[0])), off[0]);
+    assert.ok(out.some((m) => m.t === 'review' && m.kind === 'boss'), 'his review of the staff');
+  }
+  let withCash = 0;
+  for (let i = 0; i < 12; i++) {
+    state.tick += 1;
+    state.refundLimit = 1000;
+    const out = director.handle([{ e: 'escape', k: 'boss', sup: 0, x: 1, y: 1, refund: 750, n: 5, tier: 3 }], state);
+    const through = says(out);
+    assert.equal(through.length, 1, JSON.stringify(through));
+    assert.ok(through[0].includes('Vice President of Returns'), through[0]);
+    if (through[0].includes('$750') || /\b5\b/.test(through[0])) withCash++;
+    assert.ok(out.some((m) => m.t === 'review' && m.kind === 'boss'));
+  }
+  assert.ok(withCash >= 9, `${withCash} of 12 said what it cost`);
+});
+
+test('the pep talk, every 7 seconds, gets only a handful of remarks in a game', () => {
+  const director = createDirector(seeded(13));
+  const state = game('Dave', 'Steve');
+  bossWave(director, state, 5);
+  let said = 0;
+  for (let i = 0; i < 200; i++) {
+    state.tick += 7 * TICK_HZ;
+    const out = says(director.handle([{ e: 'pep', x: 1, y: 1, n: i % 4 }], state));
+    said += out.length;
+    for (const t of out) assert.ok(!/\{\w\}|undefined/.test(t), t);
+  }
+  assert.ok(said >= 1 && said <= 6, `${said} remarks about 200 pep talks`);
+});
+
+test('an endless game never mentions a last event, and marks the round numbers', () => {
+  const lastEvent = /last (one|sales event|event)|final (sales )?event|every sales event|\bof 0\b/i;
+  // Nothing anywhere that DEB can say in an endless game names a last event...
+  const endlessBanks = ['waveStart', 'endless', 'endlessMark', 'foodCourt', 'bossOut', 'bossEscape', 'pep', 'early', 'report', 'nearLimit', 'lost'];
+  for (const key of endlessBanks) for (const l of LINES[key]) assert.ok(!lastEvent.test(textOf(l)), `${key}: "${textOf(l)}"`);
+  for (const l of Object.values(LINES.bossIn).flat()) assert.ok(!lastEvent.test(textOf(l)), textOf(l));
+
+  // ...and in a long endless game she never says one.
+  const director = createDirector(seeded(17));
+  const state = game('Dave', 'Steve');
+  state.waves = 0;
+  const said = [];
+  said.push(...says(director.handle([{ e: 'endless', by: 1 }], state)));
+  assert.equal(said.length, 1, 'carrying a won game on is always remarked on');
+  assert.ok(said[0].includes('Steve') || LINES.endless.some((l) => !textOf(l).includes('{p}') && textOf(l) === said[0]), said[0]);
+  const marks = [];
+  for (let wave = 1; wave <= 80; wave++) {
+    state.wave = wave;
+    state.tick += 200 * TICK_HZ;
+    const out = says(director.handle([{ e: 'waveStart', wave, kinds: [], supers: [], dads: 2, boss: bossTier(wave) }], state));
+    said.push(...out);
+    if (LINES.endlessMark.some((l) => fill(textOf(l), { w: wave, p: 'Dave' }) === out[0] || fill(textOf(l), { w: wave, p: 'Steve' }) === out[0])) marks.push(wave);
+    if (bossTier(wave)) {
+      state.tick += 12 * TICK_HZ;
+      said.push(...says(director.handle([{ e: 'bossIn', tier: bossTier(wave) }, { e: 'pep', n: 3 }], state)));
+      state.tick += 30 * TICK_HZ;
+      said.push(...says(director.handle([{ e: 'bossOut', tier: bossTier(wave), bounty: 600 }], state)));
+    }
+    said.push(...director.handle([{ e: 'waveEnd', wave, bonus: 100 }], state).filter((m) => m.t === 'report').map((m) => m.deb));
+  }
+  for (const t of said) assert.ok(!lastEvent.test(t), t);
+  // Important, not must: the first always, about half of the later ones.
+  assert.ok(marks.length >= 2 && marks.every((w) => w >= 20 && w % 10 === 0), `remarks at ${marks}`);
+  assert.ok(marks.includes(20), 'the first round number is always marked');
+  // A game with a set number of events gets no such remarks.
+  const fixed = createDirector(seeded(17));
+  const st = game('Dave');
+  st.waves = 30;
+  st.wave = 20;
+  const t = says(fixed.handle([{ e: 'waveStart', wave: 20, kinds: [], supers: [] }], st))[0];
+  assert.ok(LINES.waveStart.some((l) => fill(textOf(l), { w: 20, p: 'Dave' }) === t), t);
+});
+
+test('the Food Court lines come up on the Food Court and nowhere else', () => {
+  const food = new Set();
+  for (const name of ['Dave', 'Steve']) for (const l of LINES.foodCourt) for (let w = 1; w <= 30; w++) food.add(fill(textOf(l), { p: name, w }));
+  const openings = (design) => {
+    const director = createDirector(seeded(23));
+    const state = game('Dave', 'Steve');
+    state.map = { ...state.map, design };
+    const said = [];
+    for (let wave = 1; wave <= 30; wave++) {
+      state.wave = wave;
+      state.tick += 200 * TICK_HZ;
+      said.push(...says(director.handle([{ e: 'waveStart', wave, kinds: [], supers: [], dads: 0 }], state)));
+    }
+    return said;
+  };
+  for (const design of ['warehouse', 'showroom', 'aisles', undefined]) {
+    assert.deepEqual(openings(design).filter((t) => food.has(t)), [], `${design}`);
+  }
+  const there = openings('food');
+  const n = there.filter((t) => food.has(t)).length;
+  assert.equal(there.length, 30);
+  assert.ok(n >= 5 && n <= 18, `${n} of 30 openings on the Food Court were its own`);
 });
 
 test('refusals: the same rules, and a refusal does not repeat straight away', () => {

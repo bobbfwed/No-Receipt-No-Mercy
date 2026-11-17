@@ -24,6 +24,9 @@ export const LEFT_ABOUT = {
   cosplay: ['Cosplayer: a muffled grumble from inside the foam head, the costume rustling and a plastic sword clattering.', 'Full Mech Suit: servo whirrs, a muffled "mmph" and a heavy clunking walk away.'],
   flasher: ['Exhibitionist: an offended "well!" (or "hmph", or "oh!"), the robe pulled shut and slippers slapping away.', 'Nudist Nan: a cackling old lady and a cheeky slap.'],
   drinker: ['Day Drinker: a hiccup, a slurred mumble and a bottle clinking.', 'Bottomless Bruncher: a champagne cork pops and she goes "woo!".'],
+  // The boss has no super version. (When the players drive him out, boss.js plays the bigger
+  // payoff instead and this one is skipped; this is for a boss who leaves on his own.)
+  boss: ['The boss: a pompous "HAR-rumph", "well, I NEVER" or an "ahem", then his briefcase snaps shut.'],
 };
 
 // ---------------------------------------------------------------- small props
@@ -59,7 +62,7 @@ function heel(v, t, peak = 0.2) {
 }
 
 /** A glass shop door slammed: a thump and the glass rattling in its frame. */
-function slam(v, t, peak = 0.4) {
+export function slam(v, t, peak = 0.4) {
   thud(v, t, peak, 95);
   noise(v, { t: t + 0.01, type: 'bandpass', f: 2200, q: 5, peak: peak * 0.35, a: 0.003, d: 0.14 });
 }
@@ -472,6 +475,40 @@ const LEFT = {
   },
 };
 
+/** A briefcase snapped shut: two sharp clasp clacks. */
+export function briefcase(v, t, peak = 0.22) {
+  noise(v, { t, type: 'bandpass', f: 2000, q: 3, peak, a: 0.002, d: 0.018 });
+  tone(v, { t, f: 650, f1: 330, glide: 0.02, type: 'square', lp: 1500, peak: peak * 0.2, a: 0.002, d: 0.025 });
+  noise(v, { t: t + 0.07, type: 'bandpass', f: 2600, q: 3, peak: peak * 0.85, a: 0.002, d: 0.02 });
+}
+
+/** The boss's own voice (leaving, and in boss.js): a pompous baritone. */
+LEFT.boss = function boss(v, t, x) {
+  const p = x.j(0.07);
+  if (x.shape === 0) {
+    // "HAR-rumph": a loud open syllable, then a closed-mouth snort.
+    babble(v, { scale: 0.95, sylls: [
+      { t, len: 0.14, f: 128 * p, f1: 150 * p, vowel: 'ah', peak: 0.6 },
+      { t: t + 0.17, len: 0.2, f: 118 * p, f1: 90 * p, vowel: 'mm', peak: 0.55 },
+    ] });
+    noise(v, { t: t + 0.2, type: 'bandpass', f: 900, q: 0.8, peak: 0.12, a: 0.01, h: 0.08, d: 0.08 });
+  } else if (x.shape === 1) {
+    // "Well, I NEVER": quick, climbing to a stressed last word.
+    babble(v, { scale: 0.95, sylls: [
+      { t, len: 0.07, f: 125 * p, vowel: 'eh', peak: 0.4 },
+      { t: t + 0.09, len: 0.05, f: 130 * p, vowel: 'ih', peak: 0.35 },
+      { t: t + 0.16, len: 0.07, f: 160 * p, vowel: 'eh', peak: 0.55 },
+      { t: t + 0.25, len: 0.18, f: 150 * p, f1: 110 * p, vowel: 'er', peak: 0.6 },
+    ] });
+  } else {
+    // "Ahem": a dry throat-clear, then a disapproving hum.
+    noise(v, { t, type: 'bandpass', f: 1100 * x.j(0.1), q: 1.2, peak: 0.2, a: 0.01, h: 0.04, d: 0.08 });
+    say(v, { t: t + 0.04, vowel: 'eh', scale: 0.95, f: 110 * p, f1: 135 * p, peak: 0.45, a: 0.02, h: 0.05, d: 0.08, breath: 0.4 });
+    say(v, { t: t + 0.25, vowel: 'mm', f: 120 * p, f1: 100 * p, peak: 0.5, a: 0.02, h: 0.06, d: 0.1 });
+  }
+  briefcase(v, t + 0.46 * x.j(0.06));
+};
+
 /** A shopper storms out with no refund: o.k is the kind, o.sup the super version. */
 export function leftVoice(v, t, o, x) {
   (LEFT[o.k] || LEFT.hunter)(v, t, x, !!o.sup);
@@ -548,7 +585,7 @@ export function escapeVoice(v, t, o, x) {
 }
 
 /** Coins tumbling down a pentatonic scale, skipping notes at random. Returns how many. */
-function coins(v, t, x, n) {
+export function coins(v, t, x, n) {
   const scale = [72, 74, 76, 79, 81, 84, 86, 88];
   let i = scale.length - 1 - Math.floor(x.r() * 2);
   for (let c = 0; c < n; c++) {
