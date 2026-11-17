@@ -12,6 +12,8 @@
 //           and how many seconds after the doors open the first one arrives
 //   ready   he has said the doors may open early
 // If he has bought nothing when the doors open, the usual automatic wave comes instead.
+// The boss (every fifth wave) cannot be bought: he is not in SHOPPERS, so a plan naming him is
+// refused as 'bad', and he walks in on top of whatever was bought.
 import { SHOPPERS, SUPERS, OFFICE } from './constants.js';
 import { shareCount } from './state.js';
 import { waveSpec } from './step.js';
@@ -22,10 +24,17 @@ export function priceOf(k, sup = 0) {
   return Math.max(1, Math.round((def.hp * def.speed * OFFICE.kinds[k].weight) / 10));
 }
 
-/** What the automatic wave n would cost at those prices. */
+/**
+ * What the automatic wave n would cost at those prices. The boss is left out: he has no price,
+ * since Head Office can neither buy him nor keep him out (he comes every fifth wave regardless;
+ * see beginWave). The smaller crowd of a boss wave does make that wave's budget smaller.
+ */
 export function waveValue(n, players = 1) {
   let sum = 0;
-  for (const g of waveSpec(n, players)) sum += (g.n - g.sup) * priceOf(g.k, 0) + g.sup * priceOf(g.k, 1);
+  for (const g of waveSpec(n, players)) {
+    if (g.k === 'boss') continue;
+    sum += (g.n - g.sup) * priceOf(g.k, 0) + g.sup * priceOf(g.k, 1);
+  }
   return sum;
 }
 

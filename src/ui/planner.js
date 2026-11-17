@@ -7,7 +7,7 @@
 // checkPlan() is disabled, and every change is checked before it is sent. If the host's copy
 // differs and he has not touched the plan for a second (a refused command, a new build phase),
 // the host's copy wins.
-import { OFFICE, SHOPPERS, SUPERS, ST, TUNE, priceOf, planCost, canBuy, checkPlan } from '../sim/index.js';
+import { OFFICE, SHOPPERS, SUPERS, ST, TUNE, priceOf, planCost, canBuy, checkPlan, isEndless, bossTier, bossTitle } from '../sim/index.js';
 import { SHOPPER_HELP, SUPER_HELP } from '../content/help.js';
 import { drawShopper, createShopperSprites } from '../render/shoppers.js';
 import { h, setText, setClass, setStyle, money, safeColor } from './dom.js';
@@ -332,7 +332,7 @@ export function createPlanner(session, { playSound = () => {} } = {}) {
     const doors = [];
     for (let i = 0; i < s.open; i++) doors.push(doorOwner(s, i));
     const room = axisRoom();
-    const sig = JSON.stringify([editing, groups, doors, left(s), span, room]);
+    const sig = JSON.stringify([editing, groups, doors, left(s), span, room, s.phase, s.wave]);
     if (sig === rowsSig) return;
     rowsSig = sig;
 
@@ -346,14 +346,19 @@ export function createPlanner(session, { playSound = () => {} } = {}) {
     scrollToEnd = false;
 
     const count = groups.reduce((n, g) => n + g.n, 0);
+    // A boss event: he comes whatever is bought, and costs Head Office nothing.
+    const tier = bossTier(s.phase === 'build' ? s.wave + 1 : s.wave);
+    const boss = tier ? ` · + THE ${bossTitle(tier).toUpperCase()}, FREE` : '';
     setText(planLabel, s.phase === 'build'
-      ? `YOUR PLAN · ${groups.length} ${groups.length === 1 ? 'GROUP' : 'GROUPS'} · ${count} SHOPPERS`
-      : `SENT THIS SALES EVENT · ${count} SHOPPERS`);
+      ? `YOUR PLAN · ${groups.length} ${groups.length === 1 ? 'GROUP' : 'GROUPS'} · ${count} SHOPPERS${boss}`
+      : `SENT THIS SALES EVENT · ${count} SHOPPERS${boss}`);
+    planLabel.title = tier ? `Sales event ${s.phase === 'build' ? s.wave + 1 : s.wave} is a boss event: the ${bossTitle(tier)} walks in about ${TUNE.bossAt} seconds after the doors open, whatever you buy, free of charge. You cannot buy him or choose his entrance.` : '';
     setClass(head, 'hidden', !groups.length);
     setClass(empty, 'hidden', groups.length > 0);
     if (!groups.length) {
       empty.replaceChildren(s.phase === 'build'
-        ? h('p', null, h('b', null, 'Nothing bought yet. '), 'Click a shopper on the left to add a group, then choose its entrance and when it starts. If the plan is empty when the doors open, the usual crowd comes instead and your whole budget carries over at half.')
+        ? h('p', null, h('b', null, 'Nothing bought yet. '), 'Click a shopper on the left to add a group, then choose its entrance and when it starts. If the plan is empty when the doors open, the usual crowd comes instead and your whole budget carries over at half.',
+          tier ? ` This is a boss event: the ${bossTitle(tier)} comes as well, whatever you buy, free of charge.` : '')
         : wavePlan
           ? h('p', null, h('b', null, 'You bought nothing, '), 'so the usual crowd came this time. Half your budget carries over.')
           : h('p', null, 'Your plan for this sales event was sent before you arrived.'));
@@ -509,7 +514,9 @@ export function createPlanner(session, { playSound = () => {} } = {}) {
       setStyle(liveFill, 'width', `${(share * 100).toFixed(1)}%`);
       setStyle(liveFill, 'background', `hsl(${Math.round(48 - 48 * share)} 90% ${Math.round(52 - 6 * share)}%)`);
       const auto = wavePlan && !wavePlan.length;
-      setText(liveNote, auto ? 'You bought nothing, so this is the usual crowd.' : s.phase === 'wave' ? `${s.waves - s.wave} sales events after this one.` : '');
+      const after = isEndless(s) ? 'Endless: there is no last sales event.' : `${Math.max(0, s.waves - s.wave)} sales events after this one.`;
+      const boss = s.phase === 'wave' && bossTier(s.wave) ? ` The ${bossTitle(bossTier(s.wave))} came along too, on the house.` : '';
+      setText(liveNote, auto ? `You bought nothing, so this is the usual crowd.${boss}` : s.phase === 'wave' ? `${after}${boss}` : '');
     }
 
     render(s);

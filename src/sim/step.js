@@ -1,7 +1,7 @@
 // One tick of the simulation. Deterministic: the same state always produces the same next state,
 // which lets every player's browser predict the game between updates from the host.
-import { DIRS, BUILD, ITEMS, SHOPPERS, SUPERS, defOf, ST, TUNE, TICK_HZ, DT } from './constants.js';
-import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf } from './state.js';
+import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, shopperDef, defOf, ST, TUNE, TICK_HZ, DT } from './constants.js';
+import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless } from './state.js';
 import { getField, getFieldTo, modeOf, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
@@ -11,10 +11,35 @@ const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
 /** A shopper kind's own number if it has one (supers do), otherwise the general one from TUNE. */
 const tv = (def, key) => def[key] ?? TUNE[key];
 
+/** How much more patient shoppers are in wave n than in wave 1: gentle early, steep late. */
+export const patienceGrowth = (n) => 1 + TUNE.hpGrowth * (n - 1) + TUNE.hpGrowth2 * (n - 1) ** 2;
+
+/** The boss's tier in wave n: 1 in wave 5, 2 in wave 10 and so on; 0 in a wave without him. */
+export const bossTier = (n) => (n >= TUNE.bossEvery && n % TUNE.bossEvery === 0 ? n / TUNE.bossEvery : 0);
+
+/** What the boss is called at a tier (tier 4 and above are all the last title). */
+export const bossTitle = (tier) => BOSS.titles[Math.max(0, Math.min(BOSS.titles.length, tier | 0) - 1)];
+
+/** The boss's group in a wave's list (he walks in through any open entrance). */
+const bossGroup = (tier) => ({ k: 'boss', n: 1, gap: 1, at: TUNE.bossAt, sup: 0, tr: tier });
+
+/**
+ * The boss's patience when he walks in during wave n (at his tier for that wave; tier 1 if the
+ * wave has none). `hpMul` is the difficulty's multiplier.
+ */
+export function bossPatience(n, hpMul = 1) {
+  const tier = bossTier(n) || 1;
+  return BOSS.hp * patienceGrowth(n) * hpMul * (1 + TUNE.bossTierHp * (tier - 1));
+}
+
 /**
  * Who turns up in wave n (1-based). Each group is { k: shopper kind, n: how many, gap: seconds
  * between arrivals, at: seconds after the doors open, sup: how many of them are super }.
  * Dads arrive as a "dad line": a tight single file of men who want to be done.
+ * Every fifth wave ends the list with the boss: { k: 'boss', n: 1, gap: 1, at, sup: 0, tr: tier },
+ * and every other group is TUNE.bossCrowd of its usual size, so he stands out.
+ * However late the wave, the crowd is at most TUNE.maxCrowd shoppers per player's worth (the boss
+ * aside); beyond that only patience keeps growing.
  * @param {number} [players] how many players share the store; more players, more shoppers
  */
 export function waveSpec(n, players = 1) {
@@ -37,17 +62,39 @@ export function waveSpec(n, players = 1) {
 
   // Later waves bring bigger crowds, and so do more players. A bigger group arrives over the
   // same length of time, just closer together.
-  const grow = (1 + TUNE.lateGrowth * Math.max(0, n - TUNE.lateFrom + 1))
-    * (1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1));
+  const crowd = 1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1);
+  const tier = bossTier(n);
+  let grow = (1 + TUNE.lateGrowth * Math.max(0, n - TUNE.lateFrom + 1)) * crowd * (tier ? TUNE.bossCrowd : 1);
+  // An endless game goes on for ever and the crowd would grow without limit (wave 100 would send
+  // over 10,000 shoppers to a solo player). Past the cap, every group shrinks by the same share.
+  const most = Math.round(TUNE.maxCrowd * crowd);
+  let total = 0;
+  for (const grp of g) total += Math.max(1, Math.round(grp.n * grow));
+  const capped = total > most;
+  if (capped) grow *= most / total;
+  total = 0;
   for (const grp of g) {
-    const many = Math.max(1, Math.round(grp.n * grow));
+    const many = Math.max(1, capped ? Math.floor(grp.n * grow) : Math.round(grp.n * grow));
     grp.gap = (grp.gap * grp.n) / many;
     grp.n = many;
+    total += many;
     // Once a kind's super version has arrived, a growing share of every group is super.
     const from = SHOPPERS[grp.k].sup.from;
+    // (The share passes all of them in about wave 83 of an endless game: from then on, all are.)
     grp.sup = n < from ? 0
-      : Math.max(1, Math.floor(grp.n * (TUNE.superShare + TUNE.superShareStep * (n - from))));
+      : Math.min(grp.n, Math.max(1, Math.floor(grp.n * (TUNE.superShare + TUNE.superShareStep * (n - from)))));
   }
+  // (Very small groups never go below one, which can leave the cap a few over: take them off the
+  // biggest groups.)
+  while (total > most) {
+    let big = g[0];
+    for (const grp of g) if (grp.n > big.n) big = grp;
+    big.gap = (big.gap * big.n) / (big.n - 1);
+    big.n--;
+    big.sup = Math.min(big.sup, big.n);
+    total--;
+  }
+  if (tier) g.push(bossGroup(tier));
   return g;
 }
 
@@ -107,6 +154,9 @@ export function beginWave(state, ev) {
   const bought = state.training ? null : takeOfficeWave(state);
   state.storeReady = false;
   const groups = state.training ? state.nextWave || [] : bought || waveSpec(state.wave, shareCount(state));
+  // Head Office cannot buy the boss, and cannot keep him out either: he comes whatever was planned.
+  const tier = state.training ? 0 : bossTier(state.wave);
+  if (bought && tier) groups.push(bossGroup(tier));
   state.nextWave = null;
   const supers = new Set();
   for (const g of groups) {
@@ -124,12 +174,14 @@ export function beginWave(state, ev) {
   ev.push({
     e: 'waveStart', wave: state.wave, total: q.length, dads,
     kinds: [...new Set(groups.map((g) => g.k))], supers: [...supers], office: bought ? 1 : 0,
+    boss: groups.some((g) => g.k === 'boss') ? tier || 1 : 0,
   });
 }
 
 function endWave(state, ev) {
   // Gym bro damage only counts within a wave: every building is whole again for the next.
   for (const b of state.grid) if (b && b.hit) delete b.hit;
+  state.carts = [];
   if (state.training) {
     // Back to an untimed build phase; the lesson decides what happens next.
     state.phase = 'build';
@@ -141,7 +193,7 @@ function endWave(state, ev) {
   const bonus = Math.round((TUNE.waveBonus + TUNE.waveBonusStep * state.wave) * difficultyOf(state).pay);
   earn(state, bonus * shareCount(state));
   ev.push({ e: 'waveEnd', wave: state.wave, bonus });
-  if (state.wave >= state.waves) {
+  if (!isEndless(state) && state.wave >= state.waves) {
     state.phase = 'won';
     ev.push({ e: 'won' });
   } else {
@@ -151,22 +203,22 @@ function endWave(state, ev) {
   }
 }
 
-function spawn(state) {
+function spawn(state, ev) {
   const q = state.spawnQ;
   if (!q.length || q[0][0] > state.tick) return;
   const W = state.w;
   const anyDoor = state.doors.slice(0, state.open).flat();
   while (q.length && q[0][0] <= state.tick) {
     const [, k, sup, at] = q.shift();
-    const def = sup ? SUPERS[k] : SHOPPERS[k];
+    const def = shopperDef(k, sup);
     // Head Office picks the entrance for his groups; otherwise any open one.
     const doors = at >= 0 && at < state.open ? state.doors[at] : anyDoor;
     const door = doors[(rand(state) * doors.length) | 0];
     // Dads walk in a strict single file. In training everyone does, so a lesson plays out the
     // same way every time.
     const single = k === 'dad' || state.training;
-    const n = state.wave - 1;
-    const hp = def.hp * (1 + TUNE.hpGrowth * n + TUNE.hpGrowth2 * n * n) * (state.training ? 1 : difficultyOf(state).hp);
+    const hpMul = state.training ? 1 : difficultyOf(state).hp;
+    const hp = def.boss ? bossPatience(state.wave, hpMul) : def.hp * patienceGrowth(state.wave) * hpMul;
     const s = {
       id: state.nextId++, k,
       x: (door % W) + 0.5, y: ((door / W) | 0) + 0.5, vx: 0, vy: 0,
@@ -183,7 +235,13 @@ function spawn(state) {
     if (def.smashes) s.sm = 0;
     if (def.flashes) { s.m = secs(tv(def, 'flashEvery') * (0.4 + 0.6 * rand(state))); s.fl = 0; }
     if (def.sways) s.sv = 1;
+    if (def.boss) {
+      s.tr = bossTier(state.wave) || 1;
+      // His first pep talk comes sooner than the rest, so it is seen before he is in the thick of it.
+      s.pp = secs(def.pepEvery * 0.5);
+    }
     state.shoppers.push(s);
+    if (def.boss) ev.push({ e: 'bossIn', tier: s.tr, x: s.x, y: s.y });
   }
 }
 
@@ -242,6 +300,24 @@ function giveUp(state, s, by, why, ev) {
   state.ws.stopped++;
   if (by >= 0) bump(state, by, 'stopped');
   ev.push({ e: 'left', k: s.k, sup: s.sup | 0, x: s.x, y: s.y, by, why });
+  // Driving the boss out pays a bounty, shared like any other income.
+  if (s.k === 'boss') {
+    const tier = s.tr || 1;
+    const bounty = Math.max(1, Math.round(TUNE.bossBounty * tier * difficultyOf(state).pay));
+    earn(state, bounty);
+    ev.push({ e: 'bossOut', tier, x: s.x, y: s.y, bounty });
+  }
+}
+
+/** Most abandoned carts remembered in one wave; beyond this the oldest is forgotten. */
+const CARTS_MAX = 200;
+
+/** A mom has gone down for the last time and left her cart where she fell (see state.carts). */
+function dropCart(state, s) {
+  const r = (v) => Math.round(v * 1000) / 1000;
+  const carts = (state.carts ||= []);
+  carts.push([r(s.x), r(s.y), s.sup ? 1 : 0, s.vx < 0 ? -1 : 1]);
+  if (carts.length > CARTS_MAX) carts.shift();
 }
 
 /** True while a mom's child is out of her hands: running away, or waiting to be fetched. */
@@ -262,7 +338,7 @@ function hurt(state, s, dmg, by, ev) {
     s.hp = 0;
     s.st = ST.WALK;
     s.t = 0;
-    if ((s.crn | 0) + 1 >= tv(def, 'crawlTimes')) s.nc = 1;
+    if ((s.crn | 0) + 1 >= tv(def, 'crawlTimes')) { s.nc = 1; dropCart(state, s); }
     ev.push({ e: 'crawl', x: s.x, y: s.y });
     return;
   }
@@ -319,8 +395,9 @@ function stepBuildings(state, fields, ev, only = null) {
   const karens = [], cosplayers = [];
   for (const s of S) {
     if (s.st === ST.LEAVE) continue;
-    if (SHOPPERS[s.k].nag) karens.push(s);
-    if (SHOPPERS[s.k].shields) cosplayers.push(s);
+    const d = defOf(s);
+    if (d.nag) karens.push(s);
+    if (d.shields) cosplayers.push(s);
   }
   const beltAdv = TUNE.beltSpeed * DT;
   const way = (s) => fields[modeOf(s.k)][((s.y | 0) * W) + (s.x | 0)];
@@ -426,7 +503,8 @@ function stepBuildings(state, fields, ev, only = null) {
           for (const s of near) {
             const who = strike(state, s, st.dmg, b.o, cosplayers, ev);
             // Pepper spray panics a guide dog.
-            if (SHOPPERS[who.k].bolts) bolt(who, defOf(who), ev);
+            const wdef = defOf(who);
+            if (wdef.bolts) bolt(who, wdef, ev);
           }
           if (near.length) { b.cd = secs(st.cd); ev.push({ e: 'spray', i }); }
         } else {
@@ -453,12 +531,20 @@ function stepBuildings(state, fields, ev, only = null) {
   return { stands, salesmen, posts };
 }
 
+/**
+ * A shopper reached a till and takes his refund. The boss takes his refund times his tier and
+ * counts as TUNE.bossRefunds refunds toward the limit.
+ */
 function escape(state, s, ev) {
-  const paid = lose(state, defOf(s).refund);
-  state.refunds++;
+  const def = defOf(s), boss = def.boss ? 1 : 0;
+  const n = boss ? TUNE.bossRefunds : 1;
+  const paid = lose(state, def.refund * (boss ? s.tr || 1 : 1));
+  state.refunds += n;
   state.ws.escaped++;
   state.ws.refunded += paid;
-  ev.push({ e: 'escape', k: s.k, sup: s.sup | 0, x: s.x, y: s.y, refund: paid });
+  const e = { e: 'escape', k: s.k, sup: s.sup | 0, x: s.x, y: s.y, refund: paid, n };
+  if (boss) e.tier = s.tr || 1;
+  ev.push(e);
   if (state.refunds >= state.refundLimit && state.phase !== 'lost' && !state.training) {
     state.phase = 'lost';
     ev.push({ e: 'lost' });
@@ -706,6 +792,24 @@ function postNear(state, posts, s, range) {
   return best;
 }
 
+/**
+ * The boss's pep talk: every other shopper within his reach gets a share of his own full patience
+ * back, never above full. A mom crawling to her child is not listening (and her patience is set
+ * when she gets up). The 'pep' event is sent even when nobody needed it, so his shouting is seen
+ * every time; n says how many it helped.
+ */
+function pepTalk(state, s, def, ev) {
+  const r2 = def.pepRange * def.pepRange;
+  let n = 0;
+  for (const o of state.shoppers) {
+    if (o === s || o.st === ST.LEAVE || o.cr === 1 || o.hp >= o.mhp) continue;
+    if ((o.x - s.x) ** 2 + (o.y - s.y) ** 2 > r2) continue;
+    o.hp = Math.min(o.mhp, o.hp + o.mhp * def.pepHeal);
+    n++;
+  }
+  ev.push({ e: 'pep', x: s.x, y: s.y, n });
+}
+
 function stepShoppers(state, fields, sec, ev) {
   const { stands, salesmen, posts } = sec;
   const S = state.shoppers, grid = state.grid, W = state.w;
@@ -714,7 +818,7 @@ function stepShoppers(state, fields, sec, ev) {
   let messAt = null, downAt = null;
   if (state.messes.length) { messAt = new Set(); for (const m of state.messes) messAt.add(m[0]); }
   for (const s of S) {
-    if (s.st === ST.STUN && SHOPPERS[s.k].sways) (downAt ||= new Set()).add((s.y | 0) * W + (s.x | 0));
+    if (s.st === ST.STUN && defOf(s).sways) (downAt ||= new Set()).add((s.y | 0) * W + (s.x | 0));
   }
 
   for (let n = 0; n < S.length; n++) {
@@ -730,6 +834,10 @@ function stepShoppers(state, fields, sec, ev) {
       if (s.hp <= 0) { giveUp(state, s, -1, 'bored', ev); continue; }
     }
     if (def.kid) stepKid(state, s, def, dist, salesmen, ev);
+    if (def.boss && --s.pp <= 0) {
+      s.pp = secs(def.pepEvery);
+      pepTalk(state, s, def, ev);
+    }
     if (s.cd > 0) s.cd--;
     if (s.pc > 0) s.pc--;
     if (s.ru > 0) s.ru--;
@@ -940,10 +1048,15 @@ function stepShoppers(state, fields, sec, ev) {
  * Advances the game by one tick.
  * @returns {Array<Object>} events that happened this tick, each with an `e` type:
  *   begun the lobby is over, everyone was ready · map {design,size} the host changed the store
- *   waveStart {wave,total,dads,kinds,supers} · waveEnd {wave,bonus} · won · lost
- *   escape {k,sup,x,y,refund} a shopper reached the tills · left {k,sup,x,y,by,why} one gave up
+ *   waveStart {wave,total,dads,kinds,supers,office,boss} (boss: the boss's tier if he comes this
+ *     wave, else 0) · waveEnd {wave,bonus} · won (never in an endless game) · lost
+ *   escape {k,sup,x,y,refund,n,tier?} a shopper reached the tills; n is how many refunds it
+ *     counted as (TUNE.bossRefunds for the boss, who also has tier) · left {k,sup,x,y,by,why} one gave up
+ *   bossIn {tier,x,y} the boss walked in · bossOut {tier,x,y,bounty} he stormed off (after his
+ *     'left' event) and the store was paid `bounty`, before it is split
+ *   pep {x,y,n} the boss gave a pep talk; n shoppers near him got patience back (may be 0)
  *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind}
- *   rail {i,d,len,n} the Rail Gun on anchor tile i fired facing d, a beam len tiles long, hitting n
+ *   rail {i,d,len,n} the Barcode Laser on anchor tile i fired facing d, a beam len tiles long, hitting n
  *   mess {i} a teenager dropped a mess on tile i · kid {x,y} a child escaped
  *   caught {x,y,carry} a mom has her child back (carry 1: in her arms, as she has no cart)
  *   kidtv {x,y} a running child stopped to watch a salesman's television
@@ -961,7 +1074,7 @@ function stepShoppers(state, fields, sec, ev) {
  *   early {secs,cash,sold} the doors were opened that many seconds early; the factory sold `sold`
  *     items for `cash` (the whole store's takings, before it is split) in the time skipped
  * (Commands add: placed {k,x,y,d,by,rebuilt?,short?}, removed, upgraded {k,x,y,by,t,lv},
- *  gave {by,to,n}, rebuilt {by,n,short}.)
+ *  gave {by,to,n}, rebuilt {by,n,short}, endless {by} a won game carries on as an endless one.)
  */
 export function step(state) {
   const ev = [];
@@ -983,7 +1096,7 @@ export function step(state) {
   if (state.phase === 'build') {
     if (state.phaseT > 0 && --state.phaseT === 0) beginWave(state, ev);
   } else {
-    spawn(state);
+    spawn(state, ev);
   }
   if (waiting) return ev;
   for (let k = state.messes.length - 1; k >= 0; k--) {

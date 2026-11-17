@@ -1,7 +1,7 @@
 // Everything players build. Belts are drawn flat in the belt's own rotated frame; machines and
 // security are drawn upright (three-quarter view, like the mock-up) with a separate spout and
 // arrow showing the side they output to, so they look the same whichever way they face.
-// Buildings bigger than a tile (the Rail Gun, the TV Salesman) are drawn once, from their anchor
+// Buildings bigger than a tile (the Barcode Laser, the TV Salesman) are drawn once, from their anchor
 // tile, across their whole footprint. On top of any building: the damage a gym bro has done this
 // wave, and, for security a stray dog has peed on, a puddle, drips and flies while it is off.
 import { DIRS, TUNE, TICK_HZ, BUILD, sizeOf, statsOf } from '../sim/index.js';
@@ -80,8 +80,11 @@ export function createBeltSprites() {
       const k = c.width / T;
       g.setTransform(k, 0, 0, k, HALF * k, HALF * k);
       const phase = (step * SP) / PHASES;
-      if (type === 4) cornerBelt(g, phase);
-      else straightBelt(g, phase, !(type & 1), !(type & 2));
+      // Zoomed out (under about 28 screen pixels a tile), fatter chevrons, or they blur into a
+      // stripe and the direction is lost.
+      const bold = scale < 0.7;
+      if (type === 4) cornerBelt(g, phase, bold);
+      else straightBelt(g, phase, !(type & 1), !(type & 2), bold);
       map.set(key, c);
       return c;
     },
@@ -111,7 +114,7 @@ export function drawBelt(ctx, s, x, y, d, shape, phase, sprites, base) {
   ctx.setTransform(k, 0, 0, k, base.ox, base.oy);
 }
 
-function straightBelt(ctx, phase, backOpen, frontOpen) {
+function straightBelt(ctx, phase, backOpen, frontOpen, bold) {
   ctx.fillStyle = C.belt;
   ctx.fillRect(-HALF, -13, T, 26);
   // Moving chevrons, clipped to the belt surface.
@@ -120,14 +123,15 @@ function straightBelt(ctx, phase, backOpen, frontOpen) {
   ctx.rect(-HALF, -13, T, 26);
   ctx.clip();
   ctx.beginPath();
+  const a = bold ? 7 : 5, b = bold ? 10 : 8;
   for (let k = -1; k <= 3; k++) {
     const px = -HALF + k * SP + phase;
-    ctx.moveTo(px - 5, -8);
+    ctx.moveTo(px - a, -b);
     ctx.lineTo(px + 2, 0);
-    ctx.lineTo(px - 5, 8);
+    ctx.lineTo(px - a, b);
   }
-  ctx.strokeStyle = C.chevron;
-  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = bold ? '#ffd23f' : C.chevron;
+  ctx.lineWidth = bold ? 5 : 3.5;
   ctx.lineCap = 'butt';
   ctx.lineJoin = 'miter';
   ctx.stroke();
@@ -160,7 +164,7 @@ function endRoller(ctx, x) {
 }
 
 /** A quarter-circle belt from the bottom edge (local +y) to the right edge (local +x). */
-function cornerBelt(ctx, phase) {
+function cornerBelt(ctx, phase, bold) {
   const cx = HALF, cy = HALF, A0 = Math.PI, A1 = Math.PI * 1.5;
   // Outer rail, belt surface, inner rail.
   ctx.beginPath();
@@ -185,12 +189,13 @@ function cornerBelt(ctx, phase) {
     const px = cx + 20 * Math.cos(a), py = cy + 20 * Math.sin(a);
     const tx = -Math.sin(a), ty = Math.cos(a); // direction of travel
     const nx = -ty, ny = tx; // across the belt
-    ctx.moveTo(px - tx * 5 - nx * 8, py - ty * 5 - ny * 8);
+    const al = bold ? 7 : 5, ac = bold ? 10 : 8;
+    ctx.moveTo(px - tx * al - nx * ac, py - ty * al - ny * ac);
     ctx.lineTo(px + tx * 2, py + ty * 2);
-    ctx.lineTo(px - tx * 5 + nx * 8, py - ty * 5 + ny * 8);
+    ctx.lineTo(px - tx * al + nx * ac, py - ty * al + ny * ac);
   }
-  ctx.strokeStyle = C.chevron;
-  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = bold ? '#ffd23f' : C.chevron;
+  ctx.lineWidth = bold ? 5 : 3.5;
   ctx.stroke();
   ctx.restore();
   ctx.beginPath();
@@ -252,25 +257,125 @@ const BOX = 56;
 const P = { d: 0, step: 0, on: false, n: 0, out: 0, inside: 0, light: -1, spray: false, off: 0 };
 /** The usual sprite box: [width, height, centre x, centre y] in logical pixels. */
 const BOX_1 = [BOX, BOX, BOX / 2, BOX / 2];
-/** Rail gun sprite boxes, lying along x (facing east or west) or along y. */
+/** Barcode laser sprite boxes, lying along x (facing east or west) or along y. */
 const RAIL_X = [136, 64, 68, 34], RAIL_Y = [64, 136, 32, 70];
 const SALES_BOX = [104, 116, 52, 62];
-/** Rail gun charge shown in this many steps (0 empty .. RAIL_STEPS ready). */
+/** Barcode laser charge shown in this many steps (0 empty .. RAIL_STEPS ready). */
 const RAIL_STEPS = 6;
 
-/** A dark steel spout from the machine body to the output edge, with a yellow arrow on it. */
+/** A dark steel spout from the machine body toward the output edge (the flow arrow covers its end). */
 function spout(ctx, d) {
   ctx.save();
   ctx.rotate(ROT[d]);
-  rr(ctx, 6, -7, 14, 14, 2);
+  rr(ctx, 6, -7, 12, 14, 2);
   paint(ctx, C.steelDark, 2);
-  ctx.beginPath();
-  ctx.moveTo(12.5, -6);
-  ctx.lineTo(20, 0);
-  ctx.lineTo(12.5, 6);
-  ctx.closePath();
-  paint(ctx, C.yellow, 1.8);
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Flow arrows
+//
+// The owner found it hard to tell which way some machines send their goods, so every factory
+// building carries a mark drawn over everything else on it (cracks, bandages; the level badge
+// moves out of its way): a big yellow arrow on the side the goods come out of, small white
+// arrows pointing in on the sides a machine takes goods from, and on the Shipping Chute, which
+// takes from every side, four white arrows pointing in. Yellow means out, white means in.
+
+/** Kinds with a flow mark: 0 out only (unpacker, belt preview), 1 out plus in-marks, 2 in from every side. */
+export const FLOW = { unpacker: 0, press: 1, packer: 1, chute: 2 };
+
+/** The yellow "out" arrow along +x: a short stub and a big head whose tip just passes the tile edge. */
+function outArrowPath(ctx) {
+  ctx.beginPath();
+  ctx.moveTo(4, -4.5);
+  ctx.lineTo(10.5, -4.5);
+  ctx.lineTo(10.5, -11);
+  ctx.lineTo(22, 0);
+  ctx.lineTo(10.5, 11);
+  ctx.lineTo(10.5, 4.5);
+  ctx.lineTo(4, 4.5);
+  ctx.closePath();
+}
+
+/** One flow mark, centred on the tile (sprite painter): type as FLOW, d the output side. */
+function paintFlow(ctx, type, d) {
+  ctx.lineJoin = 'round';
+  if (type === 2) {
+    // Four white arrows on the rim, all pointing into the hole.
+    for (let e = 0; e < 4; e++) {
+      ctx.save();
+      ctx.rotate(ROT[e]);
+      ctx.beginPath();
+      ctx.moveTo(20.5, -7.5); ctx.lineTo(11, 0); ctx.lineTo(20.5, 7.5);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fill();
+      ctx.translate(-1, -1);
+      paint(ctx, '#ffffff', 2);
+      ctx.restore();
+    }
+    return;
+  }
+  if (type === 1) {
+    // Quieter "in" marks on the three sides goods may come in from.
+    for (let e = 0; e < 4; e++) {
+      if (e === d) continue;
+      ctx.save();
+      ctx.rotate(ROT[e]);
+      ctx.beginPath();
+      ctx.moveTo(20, -5); ctx.lineTo(13.5, 0); ctx.lineTo(20, 5);
+      ctx.closePath();
+      ctx.globalAlpha = 0.85;
+      paint(ctx, '#ffffff', 1.5);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+  ctx.save();
+  ctx.rotate(ROT[d]);
+  // A dark copy underneath, a little down and to the side, so it stands off any machine's colour.
+  ctx.save();
+  ctx.rotate(-ROT[d]);
+  ctx.translate(1.5, 2.2);
+  ctx.rotate(ROT[d]);
+  outArrowPath(ctx);
+  ctx.fillStyle = 'rgba(0,0,0,0.38)';
+  ctx.fill();
+  ctx.restore();
+  outArrowPath(ctx);
+  paint(ctx, '#ffe14a', 2.6);
+  // A white glint along one edge of the head.
+  ctx.beginPath();
+  ctx.moveTo(12.5, -7.5); ctx.lineTo(18, -2.2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Draws the flow mark of a factory building (anchor tile i; F.w is the map width), if its kind
+ * has one. `kind` overrides b.k (the placement preview of a belt shows the out arrow too).
+ */
+export function drawFlow(ctx, b, i, F, sprites, kind = b.k) {
+  const type = kind === 'belt' ? 0 : FLOW[kind];
+  if (type === undefined) return;
+  const d = type === 2 ? 0 : b.d & 3;
+  P.step = type * 4 + d;
+  const img = sprites.get('flow', P.step, F.sprites, 0);
+  const cx = (i % F.w) * T + HALF, cy = ((i / F.w) | 0) * T + HALF;
+  ctx.drawImage(img, cx - BOX / 2, cy - BOX / 2, BOX, BOX);
+}
+
+/**
+ * Which corner of its tile a building's level badge goes in, so it never sits on the flow arrow:
+ * 0 top right (the usual place), 1 top left (output to the east), 2 bottom right (output north).
+ */
+export function badgeCorner(b) {
+  if (FLOW[b.k] === undefined || FLOW[b.k] === 2) return 0;
+  const d = b.d & 3;
+  return d === 0 ? 1 : d === 3 ? 2 : 0;
 }
 
 /** A soft drop shadow under an upright building. */
@@ -282,7 +387,8 @@ function shadow(ctx, w = 34, h = 30) {
 
 /** A finished item waiting at the spout of a press or packer. */
 function outItem(ctx, S) {
-  if (P.out) drawItem(ctx, S, ITEM_KINDS[P.out], DIRS[P.d][0] * 15, DIRS[P.d][1] * 15, 15);
+  // Just inside the body: the flow arrow drawn over the output side would hide it at the edge.
+  if (P.out) drawItem(ctx, S, ITEM_KINDS[P.out], DIRS[P.d][0] * 3, DIRS[P.d][1] * 3 - 2, 15);
 }
 
 const KINDS = {
@@ -321,14 +427,7 @@ const KINDS = {
       ctx.fillStyle = C.cardboardLight;
       ctx.fillRect(-2, -6, 4, 12);
       ctx.restore();
-      // White arrow on the box front, pointing to the output side.
-      ctx.save();
-      ctx.rotate(ROT[P.d]);
-      ctx.beginPath();
-      ctx.moveTo(-6, -2); ctx.lineTo(1, -2); ctx.lineTo(1, -5); ctx.lineTo(7, 0); ctx.lineTo(1, 5); ctx.lineTo(1, 2); ctx.lineTo(-6, 2);
-      ctx.closePath();
-      paint(ctx, '#ffffff', 1.4);
-      ctx.restore();
+      // (The side it outputs to is shown by the flow arrow drawn over it: drawFlow.)
     },
   },
 
@@ -422,16 +521,7 @@ const KINDS = {
     paint(ctx) {
       const flash = P.step / 5;
       box(ctx, -18, -18, 36, 36, 6, flash ? '#6fdc7a' : C.green, 2.5);
-      // Little arrows on the rim: anything pushed in from any side is sold.
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      for (let d = 0; d < 4; d++) {
-        const dx = DIRS[d][0], dy = DIRS[d][1];
-        ctx.moveTo(-dx * 16 - dy * 3, -dy * 16 + dx * 3);
-        ctx.lineTo(-dx * 13, -dy * 13);
-        ctx.lineTo(-dx * 16 + dy * 3, -dy * 16 - dx * 3);
-      }
-      ctx.fill();
+      // (Anything pushed in from any side is sold: the white arrows on the rim are drawFlow's.)
       box(ctx, -12, -12, 24, 24, 4, '#123d1c', 2);
       box(ctx, -8, -8, 16, 16, 3, '#06180b', 0);
       label(ctx, '$', 0, 1, 15 + flash * 7, flash ? '#ffffff' : '#7CFC00', '#06180b', 3);
@@ -589,9 +679,11 @@ const KINDS = {
     },
   },
 
-  // A long industrial gun on a skid, three tiles long, its barrel pointing the way it faces. Five
-  // coils on the barrel light up one by one as it charges (cd counts down to 0), and the meter on
-  // the generator fills; charged, the emitter at the muzzle glows (the pulse is drawn live).
+  // The Barcode Laser (key `railgun`): a supermarket barcode scanner the size of a canoe, turned up
+  // far too high, on a steel skid, its red window at the end it faces. The barcode on its label
+  // turns red bar by bar as it charges (cd counts down to 0); charged, the window glows (the pulse
+  // is drawn live). Facing east or west it is seen from the side; facing south you look into its
+  // window, facing north at its back end and cable.
   railgun: {
     box() { return P.d & 1 ? RAIL_Y : RAIL_X; },
     look(b) {
@@ -604,14 +696,13 @@ const KINDS = {
     paint(ctx) {
       // The shadow, cast the same way whichever way it faces.
       ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      if (P.d & 1) rr(ctx, -15, -54, 34, 116, 8); else rr(ctx, -55, -10, 116, 32, 8);
+      if (P.d & 1) rr(ctx, -15, -56, 34, 118, 8); else rr(ctx, -55, -8, 116, 28, 8);
       ctx.fill();
+      if (P.d & 1) { scannerV(ctx, P.step, P.d === 1 ? 1 : -1); return; }
       ctx.save();
-      // Drawn along +x; mirrored for west (so it is never upside down), turned for north and south.
+      // Drawn facing east; mirrored for west.
       if (P.d === 2) ctx.scale(-1, 1);
-      else if (P.d === 1) ctx.rotate(Math.PI / 2);
-      else if (P.d === 3) ctx.rotate(-Math.PI / 2);
-      railBody(ctx, P.step);
+      scannerH(ctx, P.step);
       ctx.restore();
     },
   },
@@ -627,51 +718,175 @@ const KINDS = {
     },
     paint(ctx) { salesStand(ctx, P.step, !!P.off); },
   },
+
+  // Not a building: the flow marks on factory buildings, cached the same way (look = type * 4 + d,
+  // set in P.step by drawFlow).
+  flow: {
+    look() { return P.step; },
+    paint(ctx) { paintFlow(ctx, P.step >> 2, P.step & 3); },
+  },
 };
 
-/** The rail gun lying along +x, centred on (0, 0): x -60..60, y -20..20 is its footprint. */
-function railBody(ctx, step) {
-  const ready = step >= RAIL_STEPS;
-  // Skid: a long low steel platform with hazard stripes at both ends.
-  box(ctx, -58, 0, 116, 15, 3, '#3b4148', 2.4);
-  hazard(ctx, -54, 5, 14, 6, 4);
-  hazard(ctx, 40, 5, 14, 6, 4);
-  // Barrel supports.
-  box(ctx, -14, -6, 6, 9, 1, '#5b6168', 1.6);
-  box(ctx, 22, -6, 6, 9, 1, '#5b6168', 1.6);
-  // Generator at the back: vents and the charge meter.
-  box(ctx, -60, -20, 26, 25, 4, '#5f6873', 2.5);
-  box(ctx, -56, -15, 18, 7, 1.5, '#14181c', 1.5);
-  ctx.fillStyle = ready ? '#e0ffff' : '#38e1ff';
-  ctx.fillRect(-55, -14, (16 * step) / RAIL_STEPS, 5);
-  ctx.fillStyle = '#3b4148';
-  ctx.fillRect(-56, -5, 18, 1.6);
-  ctx.fillRect(-56, -2, 18, 1.6);
-  // Fat cable from the generator into the breech.
-  ctx.beginPath();
-  ctx.moveTo(-34, -6); ctx.quadraticCurveTo(-30, 2, -24, -4);
-  ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.stroke();
-  ctx.strokeStyle = '#d9372b'; ctx.lineWidth = 2.6; ctx.stroke();
-  // Breech block, then the two rails of the barrel.
-  box(ctx, -30, -17, 12, 18, 3, '#4b5058', 2.2);
-  box(ctx, -20, -16, 66, 6, 2, '#d4d8dc', 2);
-  box(ctx, -20, -6, 66, 6, 2, '#8a9199', 2);
-  ctx.fillStyle = '#20252a';
-  ctx.fillRect(-19, -10.5, 64, 4.5);
-  // Coils round the barrel, lit one by one as it charges.
-  for (let k = 0; k < 5; k++) {
-    const x = -12 + k * 12;
-    const lit = ready || k < Math.round((step * 5) / RAIL_STEPS);
-    ctx.beginPath();
-    ctx.ellipse(x, -8, 3.6, 11, 0, 0, Math.PI * 2);
-    paint(ctx, lit ? '#5ff3ff' : '#3f464d', 2);
-    if (lit) { ctx.fillStyle = '#e0ffff'; ctx.fillRect(x - 1, -15, 2, 6); }
+/** Scanner colours: the charcoal plastic housing, its lighter top, the red of the laser. */
+const SCAN = '#2f343a', SCAN_TOP = '#4a5159', SCAN_EDGE = '#5d6670', LASER = '#ff2d2d', LASER_DIM = '#6e1c1c';
+/** Bar widths of the barcode on the scanner's label (it doubles as the charge meter). */
+const BARS = [2, 1, 1, 3, 1, 2, 1, 1, 2, 3, 1, 2];
+const BARS_LEN = BARS.reduce((a, b) => a + b, 0) + BARS.length - 1;
+
+/**
+ * The scanner's label, lying along +x from x0, `len` long and `h` tall: a white sticker with a
+ * barcode whose bars turn red one by one from the scanner's back end as it charges.
+ * `fromEnd`: the back end is at the far end of the label (+x) instead.
+ */
+function barcodeLabel(ctx, x0, y0, len, h, step, fromEnd) {
+  box(ctx, x0, y0, len, h, 1.5, '#f4f1e6', 1.6);
+  const k = (len - 6) / BARS_LEN;
+  const lit = step >= RAIL_STEPS ? BARS.length : Math.round((step / RAIL_STEPS) * BARS.length);
+  let x = x0 + 3;
+  for (let n = 0; n < BARS.length; n++) {
+    const order = fromEnd ? BARS.length - 1 - n : n;
+    ctx.fillStyle = order < lit ? LASER : INK;
+    ctx.fillRect(x, y0 + 2, BARS[n] * k, h - 4);
+    x += (BARS[n] + 1) * k;
   }
-  // Muzzle block with the emitter.
-  box(ctx, 44, -19, 14, 22, 3, '#2b2f34', 2.4);
-  circle(ctx, 54, -8, 4.2, ready ? '#e0ffff' : '#2e6f7a', 1.8);
-  // Warning beacon on the generator: red when charged.
-  circle(ctx, -47, -21, 3.2, ready ? '#ff3b30' : '#6b2a24', 1.6);
+}
+
+/** A coiled phone-style cable from (x1, y1) to (x2, y2), in loops. */
+function coilCable(ctx, x1, y1, x2, y2, loops) {
+  ctx.beginPath();
+  for (let n = 0; n <= loops * 8; n++) {
+    const t = n / (loops * 8), a = t * loops * TAU;
+    const x = x1 + (x2 - x1) * t + Math.cos(a) * 2.6, y = y1 + (y2 - y1) * t + Math.sin(a) * 2.6;
+    if (n) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = INK; ctx.lineWidth = 3.4; ctx.stroke();
+  ctx.strokeStyle = '#4b5058'; ctx.lineWidth = 1.6; ctx.stroke();
+}
+
+/** A little yellow laser-warning triangle sticker centred on (x, y). */
+function laserSticker(ctx, x, y, r) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r); ctx.lineTo(x + r * 1.05, y + r * 0.75); ctx.lineTo(x - r * 1.05, y + r * 0.75);
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  paint(ctx, '#ffd23f', 1.3);
+  // The laser symbol: a dot with rays.
+  ctx.fillStyle = INK;
+  ctx.beginPath(); ctx.arc(x, y + r * 0.2, r * 0.18, 0, TAU); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - r * 0.45, y + r * 0.2); ctx.lineTo(x + r * 0.45, y + r * 0.2);
+  ctx.moveTo(x, y - r * 0.25); ctx.lineTo(x, y + r * 0.6);
+  ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.stroke();
+}
+
+/** The steel skid it sits on, along +x: x -58..58, with hazard stripes at both ends. */
+function scanSkid(ctx) {
+  box(ctx, -58, 2, 116, 13, 3, '#3b4148', 2.4);
+  hazard(ctx, -54, 6, 13, 5, 4);
+  hazard(ctx, 41, 6, 13, 5, 4);
+}
+
+/**
+ * The Barcode Laser from the side, facing +x, centred on (0, 0): x -60..60, y -20..20 is its
+ * footprint. A long charcoal housing flaring into a big head with a red window at the front, on two
+ * cradles on the skid, a coiled cable from its back end, the barcode charge label on its side.
+ */
+function scannerH(ctx, step) {
+  const ready = step >= RAIL_STEPS;
+  scanSkid(ctx);
+  coilCable(ctx, -50, -8, -56, 8, 5);
+  // Cradles.
+  box(ctx, -32, -6, 8, 11, 1.5, '#5b6168', 1.6);
+  box(ctx, 18, -6, 8, 11, 1.5, '#5b6168', 1.6);
+  // Housing: a rounded back end, a straight body, a head that flares up and down.
+  ctx.beginPath();
+  ctx.moveTo(-46, -22);
+  ctx.lineTo(22, -22);
+  ctx.quadraticCurveTo(30, -22, 34, -31);
+  ctx.lineTo(55, -31);
+  ctx.quadraticCurveTo(58, -31, 58, -27);
+  ctx.lineTo(58, 0);
+  ctx.quadraticCurveTo(58, 4, 54, 4);
+  ctx.lineTo(36, 4);
+  ctx.quadraticCurveTo(30, 4, 26, -4);
+  ctx.lineTo(-46, -4);
+  ctx.quadraticCurveTo(-54, -4, -54, -13);
+  ctx.quadraticCurveTo(-54, -22, -46, -22);
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  paint(ctx, SCAN, 2.6);
+  // Light catching its top edge.
+  ctx.fillStyle = SCAN_EDGE;
+  ctx.fillRect(-46, -20.5, 66, 2.6);
+  ctx.beginPath();
+  ctx.moveTo(35, -29); ctx.lineTo(54, -29);
+  ctx.strokeStyle = SCAN_EDGE; ctx.lineWidth = 2.4; ctx.stroke();
+  // A rubber grip band, then the label.
+  ctx.fillStyle = '#1f2327';
+  ctx.fillRect(-49, -19, 5, 13);
+  barcodeLabel(ctx, -40, -18.5, 52, 11.5, step, false);
+  // The head: a warning sticker, a status LED, and the window down its front.
+  laserSticker(ctx, 44, -14, 6.5);
+  circle(ctx, 30, -10, 2, ready ? '#4ade80' : '#3a5a40', 1.1);
+  box(ctx, 55, -28, 5, 29, 2, ready ? LASER : LASER_DIM, 1.8);
+  if (ready) { ctx.fillStyle = '#ffd0d0'; ctx.fillRect(56.3, -25, 1.6, 22); }
+  // A trigger under the head, as on the real thing.
+  ctx.beginPath();
+  ctx.moveTo(24, -3); ctx.quadraticCurveTo(25, 4, 20, 5);
+  ctx.strokeStyle = INK; ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.strokeStyle = C.yellow; ctx.lineWidth = 1.6; ctx.stroke();
+}
+
+/**
+ * The Barcode Laser lying along y, centred on (0, 0): x -20..20, y -60..60 is its footprint. Seen
+ * from above and in front: the top of the housing (narrow back end, wide head), the label along
+ * it, and the end nearest the viewer. head 1: the head is at the bottom (facing south), so its red
+ * window faces the viewer; head -1: the head is at the top (facing north), and the back end with its
+ * cable socket is nearest.
+ */
+function scannerV(ctx, step, head) {
+  const ready = step >= RAIL_STEPS;
+  const H = 9; // how far the top of the housing stands above the floor, in the drawing
+  // The skid, seen from above.
+  box(ctx, -16, -56, 32, 114, 3, '#3b4148', 2.4);
+  hazard(ctx, -12, head > 0 ? 47 : -52, 24, 6, 4);
+  hazard(ctx, -12, head > 0 ? -52 : 47, 24, 6, 4);
+  // The top of the housing: u runs from the back end (-54) to the head (+57); y = head * u - H.
+  const Y = (u) => head * u - H;
+  const outline = [[-54, 6], [-50, 9], [22, 9], [34, 15], [57, 15]];
+  ctx.beginPath();
+  outline.forEach(([u, hw], n) => (n ? ctx.lineTo(hw, Y(u)) : ctx.moveTo(hw, Y(u))));
+  for (let n = outline.length - 1; n >= 0; n--) ctx.lineTo(-outline[n][1], Y(outline[n][0]));
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  paint(ctx, SCAN_TOP, 2.6);
+  // A ridge down the middle, and the grip band near the back.
+  ctx.fillStyle = SCAN_EDGE;
+  ctx.fillRect(-1.5, Math.min(Y(-46), Y(20)), 3, Math.abs(Y(20) - Y(-46)));
+  ctx.fillStyle = '#1f2327';
+  ctx.fillRect(-9, Math.min(Y(-48), Y(-43)), 18, 5);
+  // The label along the top, its bars running across.
+  ctx.save();
+  ctx.translate(0, Y(-36));
+  ctx.rotate(head > 0 ? Math.PI / 2 : -Math.PI / 2);
+  barcodeLabel(ctx, 0, -6, 52, 12, step, false);
+  ctx.restore();
+  laserSticker(ctx, 0, Y(42), 7);
+  // The end nearest the viewer, standing H tall.
+  if (head > 0) {
+    // The head's front face with the window, looking straight at you.
+    box(ctx, -15, Y(57), 30, H + 3, 2.5, SCAN, 2.4);
+    box(ctx, -12, Y(57) + 2, 24, H - 2, 2, ready ? LASER : LASER_DIM, 1.6);
+    if (ready) { ctx.fillStyle = '#ffd0d0'; ctx.fillRect(-9, Y(57) + 3.5, 18, 1.6); }
+  } else {
+    // The back end: a socket and the coiled cable to the floor; the window glows up at the far end.
+    box(ctx, -6, Y(-54), 12, H + 2, 2.5, SCAN, 2.2);
+    circle(ctx, 0, Y(-54) + H / 2 + 1, 2.2, '#14181c', 1.2);
+    coilCable(ctx, 0, Y(-54) + H / 2 + 1, 13, 58, 4);
+    box(ctx, -13, Y(57) - 2, 26, 5, 2, ready ? LASER : LASER_DIM, 1.6);
+  }
+  circle(ctx, 9, Y(26), 2, ready ? '#4ade80' : '#3a5a40', 1.1);
 }
 
 /** The TV Salesman's stand, centred on (0, 0): x -40..40, y -40..40 is its footprint. */
@@ -957,15 +1172,16 @@ export function drawBuilding(ctx, b, i, F, sprites) {
   }
   ctx.drawImage(img, cx - bx[2] + kx, cy - bx[3] + ky, bx[0], bx[1]);
   if (b.k === 'railgun' && P.step >= RAIL_STEPS && !off) {
-    // Charged: the emitter at the muzzle throbs.
-    const d = DIRS[b.d | 0], m = 54;
+    // Charged: the red window throbs (where it is in each drawing: see scannerH and scannerV).
+    const dd = b.d | 0;
     const pulse = 0.5 + 0.5 * Math.sin(F.time * 7 + i);
-    // The emitter sits a little above the barrel's centre line (to the side, when turned).
-    const ex = cx + d[0] * m + kx + (b.d === 1 ? 8 : b.d === 3 ? -8 : 0), ey = cy + d[1] * m + ky - (d[1] ? 0 : 8);
-    ctx.globalAlpha = 0.35 + 0.35 * pulse;
+    const ex = cx + kx + (dd === 0 ? 57 : dd === 2 ? -57 : 0);
+    const ey = cy + ky + (dd === 1 ? 53 : dd === 3 ? -66 : -13);
+    ctx.globalAlpha = 0.3 + 0.3 * pulse;
     ctx.beginPath();
-    ctx.arc(ex, ey, 7 + pulse * 4, 0, TAU);
-    ctx.fillStyle = '#7df9ff';
+    if (dd & 1) ctx.ellipse(ex, ey, 15 + pulse * 4, 6 + pulse * 3, 0, 0, TAU);
+    else ctx.ellipse(ex, ey, 5 + pulse * 3, 17 + pulse * 4, 0, 0, TAU);
+    ctx.fillStyle = '#ff4d4d';
     ctx.fill();
     ctx.globalAlpha = 1;
   }
@@ -1130,19 +1346,21 @@ export const KIND_COLOURS = {
   forklift: [C.yellow, '#2b2f34', '#9aa0a6'],
   wetfloor: [C.yellow, C.yellowDark, C.blue],
   samples: ['#ffffff', C.red, '#ff5fa8'],
-  railgun: ['#5f6873', '#d4d8dc', '#5ff3ff'],
+  railgun: [SCAN, '#f4f1e6', LASER],
   salesman: ['#ffd23f', '#a61e3a', '#c9a227'],
 };
 
 /**
  * A small badge with the building's level (2 and up) at the top right of its tile. `k` scales it
  * up when zoomed out, so the number stays readable on small tiles. `top`: every track it has is
- * maxed out (the badge turns pink).
+ * maxed out (the badge turns pink). `corner` (see badgeCorner): 0 top right, 1 top left, 2 bottom
+ * right of the tile centred on (cx, cy).
  */
-export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0, top = false) {
+export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0, top = false, corner = 0) {
   const str = String(lv);
   const w = (str.length > 1 ? 21 : 16) * k, h = 13 * k;
-  const x = cx + HALF - w + 2 * k, y = cy - HALF - 2 * k;
+  const x = corner === 1 ? cx - HALF - 2 * k : cx + HALF - w + 2 * k;
+  const y = corner === 2 ? cy + HALF - h + 2 * k : cy - HALF - 2 * k;
   if (res > 0) {
     // Cached as a sprite at the sprite resolution `res` (device pixels per logical pixel): a
     // floor full of upgraded towers would otherwise mean hundreds of text draws a frame.

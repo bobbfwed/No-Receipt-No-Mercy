@@ -16,10 +16,10 @@
 <!--
   Test page for the canvas renderer. URL options:
     ?seed=7        random seed (default 7)
-    &design=showroom  map design: warehouse, showroom or aisles (giving design or size makes a
+    &design=showroom  map design: warehouse, showroom, aisles or food (giving design or size makes a
                    map with six entrances, as a real game does; without either it is the original
                    30 x 16 warehouse with one entrance, which the demo layout is made for)
-    &size=m        map size: xs, s, m, l, xl, xxl, huge
+    &size=m        map size: xs, s, m, l, xl, xxl, huge, titan
     &zones=1       mark out the floor the factory machines must go on (loading bay, press shop,
                    gift wrap, shipping). Maps chosen with design or size have it already; zones=0
                    takes it away. On the small default map the demo layout's machines will mostly
@@ -29,7 +29,7 @@
     &fitview=1     start fully zoomed out
     &mini=1        show the minimap in the bottom-right corner (click it to move the view)
     &demo=0        do not build the demo layout (on other maps it is placed where it fits)
-    &extra=1       also build belt corners and spare machines, two Rail Guns (one lying east-west,
+    &extra=1       also build belt corners and spare machines, two Barcode Lasers (one lying east-west,
                    one north-south) and a TV Salesman (to see every building kind)
     &upgrades=1    upgrade every building, a different mix of tracks on each (damage, speed,
                    range, durability), so badges show on factory machines and crates too
@@ -44,7 +44,7 @@
     &nostart=1     stay in the build phase
     &ff=600        run that many ticks before the first frame
     &tool=belt&hx=10&hy=5&dir=1   placement preview (tool may be 'remove' or 'upgrade');
-                   no hx/hy = follow the mouse. dir is the facing (it turns a Rail Gun's footprint)
+                   no hx/hy = follow the mouse. dir is the facing (it turns a Barcode Laser's footprint)
     &track=rng     with tool=upgrade: the upgrade track being bought (dmg, spd, rng or dur;
                    left out, the building's default track)
     &cash=5000     the player's money (previews of expensive things show red without it)
@@ -54,7 +54,7 @@
     &stats=1       show frame timing (and every 60 frames the average draw time)
     &null=1        a session with no state (should draw only the background)
     &showcase=1    the new rules on the small map, through the real renderer, frozen (the clock
-                   still runs for the animations): Rail Guns facing all four ways (one charged,
+                   still runs for the animations): Barcode Lasers facing all four ways (one charged,
                    one half charged, one just fired), TV Salesmen (one switched off), upgraded,
                    damaged and switched-off buildings, rubble of a big building, and a crowd of
                    every new shopper and super in every state: dogs walking, peeing on switched-off
@@ -62,23 +62,28 @@
                    exhibitionist with her robe shut and open (with a dad and a teenager staring),
                    Nudist Nan, the day drinker walking and lying face down, the Bottomless
                    Bruncher, and every mom state (cart, chasing, child waiting, carrying him,
-                   crawling with and without her cart, the cart she left behind). Add &allfx=1
-                   for the effects there too.
+                   crawling with and without her cart, the cart she left behind, from
+                   state.carts), and the boss at all four tiers (the CEO mid pep talk). Add
+                   &allfx=1 for the effects there too (the boss's included).
     &lineup=1      every shopper kind in every state, large (fitted to the window, or &zoom=2),
                    with the super version of each in the columns on the right, plus messes,
                    wreckage and every effect at &fxage=350 ms old; &pan=x,y scrolls it (logical
                    pixels) for close-ups with a big &zoom. Columns: walking right, walking left,
                    browsing (or watching, for the newer kinds), stunned, leaving, then each kind's
-                   own extra poses (listed in the code), then the super versions.
+                   own extra poses (listed in the code), then the super versions. The last row is
+                   the boss at his four ranks (walking, standing, pep talk, storming off), with
+                   his effects to the right of it.
     &allfx=1       inject one of every effect event every &every=1200 ms at fixed places
     &zoom=1.6&at=24,7   close-up: that many times the whole-map zoom, centred on that tile
+    &magnify=3     draw the game into a window a third the size and show it three times bigger,
+                   pixel for pixel, to judge small zooms (cam=x,y,16) by eye in a screenshot
   Debugging and stress tests:
     &freeze=1      do not run the game after the fast-forward (still drawn every frame)
     &frames=N      stop the game and drawing after N frames
     &keep=dad,karen  keep only these shopper kinds; &fx=sale,shot  keep only these pending events
     &clone=150     copy shoppers up to this many; &fill=300  scatter buildings up to this many
     &bench=N       draw N frames back to back (forcing rasterisation) and print ms per frame
-  Keys: 1-9,0 pick a building, g Rail Gun, t TV Salesman, x remove, u upgrade (then 1-4 pick the
+  Keys: 1-9,0 pick a building, g Barcode Laser, t TV Salesman, x remove, u upgrade (then 1-4 pick the
         track: damage, speed, range, durability), Esc no tool, r rotate. Click places.
         WASD or arrow keys pan, mouse wheel or +/- zooms, f fits the whole map, m toggles the minimap.
   Errors are printed in big red text on the page. Note: headless Edge screenshots (tools/shot.ps1)
@@ -88,6 +93,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
+<canvas id="mag" style="display:none; position:fixed; left:0; top:0; width:100vw; height:100vh; image-rendering:pixelated"></canvas>
 <canvas id="mini"></canvas>
 <div id="err"></div>
 <div id="stats"></div>
@@ -110,6 +116,23 @@ import { createMinimap } from '../src/render/minimap.js';
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) && q.get(k) !== '' ? Number(q.get(k)) : d);
 const canvas = document.getElementById('c');
+// &magnify=N: the game canvas is 1/N of the window, copied N times bigger onto #mag every frame.
+const MAG = Math.max(1, num('magnify', 1) | 0);
+const magCanvas = document.getElementById('mag');
+if (MAG > 1) {
+  canvas.style.width = `${100 / MAG}vw`;
+  canvas.style.height = `${100 / MAG}vh`;
+  canvas.style.visibility = 'hidden';
+  magCanvas.style.display = 'block';
+}
+function magnify() {
+  if (MAG <= 1) return;
+  magCanvas.width = canvas.width * MAG;
+  magCanvas.height = canvas.height * MAG;
+  const m = magCanvas.getContext('2d');
+  m.imageSmoothingEnabled = false;
+  m.drawImage(canvas, 0, 0, magCanvas.width, magCanvas.height);
+}
 /** &showcase=1, and the mom in it who leaves her cart behind a moment after it starts. */
 const SHOW = { on: q.get('showcase') === '1', lateMom: null };
 
@@ -146,7 +169,7 @@ if (q.get('null') === '1') {
       ['unpacker', 1, 1, S], ['belt', 1, 2, S], ['belt', 1, 3, E], ['belt', 2, 3, E], ['belt', 3, 3, N],
       ['belt', 3, 2, N], ['chute', 3, 1, 0],
       ['samples', 17, 12, 0], ['packer', 2, 13, E], ['press', 3, 13, E],
-      // The big ones: a Rail Gun lying east-west, one north-south, and a TV Salesman.
+      // The big ones: a Barcode Laser lying east-west, one north-south, and a TV Salesman.
       ['railgun', 15, 11, E], ['railgun', 24, 10, N], ['salesman', 17, 1, 0],
     ];
     for (const [k, x, y, d] of extra) {
@@ -358,6 +381,11 @@ if (q.get('allfx') === '1' && session.fx) {
     { e: 'smash', i: 2 * W + 21, x: 21.5, y: 3.5, k: 'crate', owner: 0, left: 1 },
     { e: 'crawl', x: 21.6, y: 14.3 },
     { e: 'caught', x: 25, y: 12.4, carry: 1 },
+    // The boss: walking in at the first entrance, a pep talk, driven out, and reaching a till.
+    { e: 'bossIn', tier: 2, x: 0.5, y: (session.state.doors[0][0] / W | 0) + 1 },
+    { e: 'pep', x: 19.6, y: 7.7, n: 4 },
+    { e: 'bossOut', tier: 1, x: 8.6, y: 7.7, bounty: 150 },
+    { e: 'escape', k: 'boss', sup: 0, x: W - 1.2, y: 9.5, refund: 600, n: 5, tier: 4 },
   );
   inject();
   setInterval(inject, num('every', 1200));
@@ -369,8 +397,12 @@ const showT0 = performance.now(), showTick0 = session.state ? session.state.tick
 function frame(t) {
   if (SHOW.on && session.state) {
     session.state.tick = showTick0 + Math.floor((performance.now() - showT0) / (1000 / TICK_HZ));
-    // A moment in, the last mom goes down for good and leaves her cart where she was.
-    if (drawn === 3 && SHOW.lateMom) SHOW.lateMom.nc = 1;
+    // A moment in, the last mom goes down for good and leaves her cart where she was (the rules
+    // keep it in state.carts as [x, y, sup, face]; a Soccer Mom's cart lies by the fountain end).
+    if (drawn === 3 && SHOW.lateMom) {
+      SHOW.lateMom.nc = 1;
+      (session.state.carts ||= []).push([SHOW.lateMom.x, SHOW.lateMom.y, 0, 1], [26.4, 14.4, 1, -1]);
+    }
     if (drawn === 5 && SHOW.lateMom) SHOW.lateMom.x += 1.4; // she has crawled on a bit since
   }
   if (q.get('cursors') === '1') {
@@ -381,6 +413,7 @@ function frame(t) {
   const t0 = performance.now();
   try {
     renderer.draw(view);
+    magnify();
   } catch (err) {
     showErr('ERROR in draw: ' + (err.stack || err));
     return;
@@ -404,7 +437,7 @@ if (q.get('lineup') === '1') {
   // watching, stunned, leaving; the newer kinds use them for their own poses, see ROWS), then each
   // kind's extra poses, then its super version in the columns on the right.
   // To the right of that: messes, wreckage, badges and one of each effect, frozen part way.
-  const { drawShopper, drawKid, drawCart, createShopperSprites } = await import('../src/render/shoppers.js');
+  const { drawShopper, drawKid, drawCart, createShopperSprites, drawBossTag } = await import('../src/render/shoppers.js');
   const { createMessSprites, drawMesses } = await import('../src/render/messes.js');
   const { drawRubble, drawBadge } = await import('../src/render/buildings.js');
   const sprites = createShopperSprites();
@@ -430,7 +463,7 @@ if (q.get('lineup') === '1') {
     ['mom', base, [
       { ...R, kd: 1, kid: 1 }, { ...R, vx: 0, kd: 2, kid: 2 }, { ...R, kd: 3, nc: 1 },
       { ...R, cr: 1, kd: 2, hp: 0, kid: 2 }, { ...R, cr: 1, kd: 2, nc: 1, hp: 0, cart: 1 },
-    ], [R, { ...R, kd: 1, kid: 1 }, { ...R, cr: 1, kd: 2, hp: 0 }, { ...R, cr: 1, kd: 2, nc: 1, hp: 0 }]],
+    ], [R, { ...R, kd: 1, kid: 1 }, { ...R, cr: 1, kd: 2, hp: 0 }, { ...R, cr: 1, kd: 2, nc: 1, hp: 0, cart: 1 }]],
     ['blind', base, [{ ...R, vx: 0.08, bt: 20 }, { ...L, vx: -0.08, bt: 20 }], sup3],
     ['gymbro', base, [], sup3],
     ['dog', [R, L, TV, PEE, LEAVE], [{ ...PEE, f: -1 }], [R, PEE, TV]],
@@ -440,16 +473,21 @@ if (q.get('lineup') === '1') {
       [R, { st: ST.WATCH, f: 1, vx: 0, fl: 30 }, L]],
     ['drinker', [{ ...R, sv: 1.7 }, { ...L, sv: 0.6 }, TV, { ...STUN, t: 100 }, LEAVE], [{ ...STUN, f: -1, t: 30 }],
       [{ ...R, sv: 1.6 }, { ...STUN, t: 150 }, { ...L, sv: 0.6 }]],
+    // The boss (no super): the four tiers walking, then tier 1 walking left, tier 2 standing,
+    // tier 3 giving a pep talk, tier 4 pep talk, and tier 1 and 4 storming off. Spaced wider.
+    ['boss', [{ ...R, tr: 1 }, { ...R, tr: 2 }, { ...R, tr: 3 }, { ...R, tr: 4 }],
+      [{ ...L, tr: 1 }, { ...BROWSE, st: ST.WALK, tr: 2 }, { ...R, tr: 3, pp: 9999 }, { ...BROWSE, st: ST.WALK, tr: 4, pp: 9999 },
+        { ...LEAVE, tr: 1, t: 30 }, { ...LEAVE, tr: 4, t: 30 }], []],
   ];
   const colX = (c) => 36 + c * 64;
   const extraX = (n) => 362 + n * 66;
   const supX = (n) => 712 + n * 82;
-  const rowH = (k) => (k === 'cosplay' ? 96 : 66);
+  const rowH = (k) => (k === 'cosplay' ? 96 : k === 'dog' ? 76 : 66);
   const rowYs = [];
-  { let y = 54; for (const [k] of ROWS) { if (k === 'cosplay') y += 26; rowYs.push(y); y += rowH(k); } }
+  { let y = 54; for (const [k] of ROWS) { if (k === 'cosplay') y += 26; if (k === 'boss') y += 70; rowYs.push(y); y += rowH(k); } }
   canvas.width = innerWidth; canvas.height = innerHeight;
-  // Logical size of the line-up is about 1460 x 1020; fit it unless &zoom is given.
-  const z = num('zoom', Math.min(canvas.width / 1460, canvas.height / 1020));
+  // Logical size of the line-up is about 1460 x 1240; fit it unless &zoom is given.
+  const z = num('zoom', Math.min(canvas.width / 1460, canvas.height / 1240));
   sprites.setScale(z);
   messSprites.setScale(z);
   // One of each effect, frozen at &fxage ms old (default 350).
@@ -460,9 +498,9 @@ if (q.get('lineup') === '1') {
   const life = Math.round(TUNE.messSecs * TICK_HZ);
   const LW = 40; // the line-up pretends to be a map this wide, for tile-indexed effects
   const ti = (x, y) => y * LW + x;
-  // What the effects look up in it: a rail gun facing east, a sprinkler, a salesman, and the
-  // rubble of a rail gun that faced south.
-  const fakeState = { w: LW, h: 26, grid: [], rubble: [{ i: ti(35, 20), k: 'railgun', d: 1 }] };
+  // What the effects look up in it: a barcode laser facing east, a sprinkler, a salesman, and the
+  // rubble of a barcode laser that faced south.
+  const fakeState = { w: LW, h: 31, grid: [], rubble: [{ i: ti(35, 20), k: 'railgun', d: 1 }] };
   fakeState.grid[ti(26, 18)] = { k: 'railgun', d: 0, o: 0 };
   fakeState.grid[ti(27, 19)] = { k: 'sprinkler', o: 0 };
   fakeState.grid[ti(30, 21)] = { k: 'salesman', o: 0 };
@@ -476,7 +514,7 @@ if (q.get('lineup') === '1') {
     const F = { time: t / 1000, now: t, alpha: 0 };
     // Messes: fresh (splashing in), settled (both flavours), fading out.
     drawMesses(g, [[ti(27, 14), life - 2], [ti(29, 14), 200], [ti(31, 14), 150], [ti(33, 14), 14]], 0, messSprites, LW);
-    // Wreckage of each kind (a rail gun's and a salesman's over their footprints), and badges.
+    // Wreckage of each kind (a barcode laser's and a salesman's over their footprints), and badges.
     ['crate', 'press', 'sprinkler', 'belt', 'forklift'].forEach((k, n) => drawRubble(g, ti(26 + n, 15), k, LW));
     drawRubble(g, ti(31, 15), 'railgun', LW, 0);
     drawRubble(g, ti(34, 15), 'salesman', LW, 0);
@@ -492,7 +530,8 @@ if (q.get('lineup') === '1') {
       extra.forEach((c, n) => cells.push({ ...c, x: extraX(n) }));
       sups.forEach((c, n) => cells.push({ ...c, x: supX(n), sup: 1 }));
       cells.forEach((c, n) => {
-        const { st, f, vx, how, kid, cart, post, x, v, ...rest } = c;
+        const { st, f, vx, how, kid, cart, post, x: cx, v, ...rest } = c;
+        const x = k === 'boss' ? 60 + n * 105 : cx; // he is much wider than anyone else
         const sh = {
           id: k === 'cosplay' ? 200 + (v | 0) : r * 16 + n, k, sup: 0, x: 0, y: 0, vx, vy: 0,
           hp: n === 0 ? 30 : 15, mhp: 30, st, t: 20, cd: 0, kd: 0, kx: 0, ky: 0, kvx: 0, kvy: 0, bt: 0, ...rest,
@@ -509,8 +548,9 @@ if (q.get('lineup') === '1') {
           g.fillStyle = '#d9372b'; g.beginPath(); g.arc(px, y - 4, 6, 0, Math.PI * 2); g.fill(); g.stroke();
           hw = { pee: [(px + f * 8) / 40, (y + 2) / 40] };
         }
-        if (cart) drawCart(g, x - 34, y + 2, 1, sprites);
+        if (cart) drawCart(g, x - 34, y + 2, 1, sprites, c.sup ? 1 : 0);
         drawShopper(g, sh, x, y, f, F, sprites, hw);
+        if (k === 'boss') drawBossTag(g, sh, x, y, { ...F, zoom: 40 });
         // The loose child, out ahead of her (drawKid is told where; the renderer uses kx, ky).
         if (kid) drawKid(g, { ...sh, kd: kid }, x + 40, y + 4, kid === 2 ? -1 : 1, F, sprites);
       });
@@ -550,6 +590,12 @@ if (q.get('lineup') === '1') {
       { e: 'crawl', x: 27, y: 25.2 }, { e: 'caught', x: 31, y: 25.4, carry: 1 },
     ]);
     run(['dmg', 'spd', 'rng', 'dur'].map((tr, n) => ({ e: 'upgraded', k: 'sprinkler', x: 26 + n * 2, y: 23, t: tr, lv: n + 2 })));
+    // The boss's effects, beside his row: walking in, a pep talk, driven out, reaching a till.
+    run([
+      { e: 'bossIn', tier: 3, x: 29, y: 26.6 }, { e: 'pep', x: 27.5, y: 29.5, n: 3 },
+      { e: 'bossOut', tier: 2, x: 31.5, y: 29.8, bounty: 300 },
+      { e: 'escape', k: 'boss', sup: 0, x: 35.5, y: 29.8, refund: 600, n: 5, tier: 4 },
+    ]);
   };
   const loop = (t) => { lineup(t); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
@@ -584,15 +630,14 @@ function buildShowcase(s, me) {
     Object.assign(b, set);
     return b;
   };
-  const full = (b) => Math.round(statsOf(b).cd * TICK_HZ);
-  // Rail Guns facing each way: charged, half charged, just fired, switched off.
+  // Barcode Lasers facing each way: charged, half charged, just fired, switched off. (Their charge
+  // is set again after the doors open, by showcaseCrowd: opening early plays the build timer
+  // through, which charges everything.)
   put('railgun', 2, 1, E, { cd: 0 });
-  const half = put('railgun', 2, 3, Wd);
-  if (half) half.cd = full(half) / 2;
-  const fired = put('railgun', 6, 1, N);
-  if (fired) fired.cd = full(fired) - 3;
+  SHOW.half = put('railgun', 2, 3, Wd);
+  SHOW.fired = put('railgun', 6, 1, N);
   put('railgun', 8, 1, S, { off: 99999 });
-  // Rail Gun with one hit left (smoke), upgraded in range and damage.
+  // Barcode Laser with one hit left (smoke), upgraded in range and damage.
   put('railgun', 2, 5, E, { cd: 0, u: { rng: 2, dmg: 1 }, hit: 1 });
   // TV Salesmen: working, switched off, and damaged once.
   put('salesman', 11, 1);
@@ -609,7 +654,7 @@ function buildShowcase(s, me) {
   put('chute', 21, 5, 0, { u: { dur: 1 } });
   put('forklift', 24, 5, 0, { off: 99999 });
   put('samples', 26, 5, 0, { off: 99999, u: { rng: 1 } });
-  // Rubble of a Rail Gun that faced north, and of a salesman.
+  // Rubble of a Barcode Laser that faced north, and of a salesman.
   s.rubble.push({ i: at(10, 4), k: 'railgun', d: N, o: 0, u: {}, spent: BUILD.railgun.cost });
   s.rubble.push({ i: at(12, 5), k: 'salesman', d: 0, o: 0, u: {}, spent: BUILD.salesman.cost });
   me.cash = 400;
@@ -617,6 +662,9 @@ function buildShowcase(s, me) {
 
 /** Every new shopper in every state, in the bottom half (after the wave has started). */
 function showcaseCrowd(s) {
+  const full = (b) => Math.round(statsOf(b).cd * TICK_HZ);
+  if (SHOW.half) SHOW.half.cd = full(SHOW.half) / 2;
+  if (SHOW.fired) SHOW.fired.cd = full(SHOW.fired) - 3;
   s.shoppers.length = 0;
   s.spawnQ.length = 0;
   let id = 100;
@@ -627,12 +675,17 @@ function showcaseCrowd(s) {
   };
   const walkR = { vx: 0.05 }, walkL = { vx: -0.05 };
   const watch = { st: ST.WATCH, t: 9999 };
-  // Dogs: walking, peeing on the switched-off sprinkler (17,2) and rail gun (8,1-3), watching TV.
+  // Dogs: walking, peeing on the switched-off sprinkler (17,2) and barcode laser (8,1-3), watching TV.
   add('dog', 2.5, 7.6, walkR);
   add('dog', 18.75, 2.75, watch);
   add('dog', 10.1, 3.6, { ...watch, sup: 1 });
   add('dog', 12.6, 4.4, watch);
   add('dog', 5.5, 7.6, { ...walkL, sup: 1 });
+  // The boss at all four tiers (the CEO in the middle of a pep talk).
+  add('boss', 8.6, 7.7, { ...walkR, tr: 1, pp: 100, mhp: 400, hp: 300 });
+  add('boss', 11.8, 7.7, { ...walkR, tr: 2, pp: 100, mhp: 600, hp: 200 });
+  add('boss', 15.2, 7.7, { ...walkL, tr: 3, pp: 100, mhp: 800, hp: 700 });
+  add('boss', 19.6, 7.7, { tr: 4, pp: 99999, mhp: 1000, hp: 450 });
   // A hunter watching the salesman's television, one hurrying past him.
   add('hunter', 13.6, 3.6, watch);
   add('hunter', 23.5, 7.4, { ...walkR, ru: 40 });

@@ -19,7 +19,7 @@ try { const v = localStorage.getItem(FOLD_KEY); if (v !== null) folded = v === '
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
 /** Names short enough for a button; the tooltip has the full one. */
-const SHORT = { chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman' };
+const SHORT = { chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {

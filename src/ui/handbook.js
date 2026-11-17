@@ -4,10 +4,10 @@
 // Opened from the menu and from the game (the book button, or the ? screen). In a game it uses
 // that game's length, difficulty and number of players; from the menu, the standard game.
 import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
-import { HOW, SHOPPER_HELP, SUPER_HELP } from '../content/help.js';
+import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  trackRows, factoryFacts, fmt,
+  trackRows, factoryFacts, fmt, bossFacts, lengthText, patienceGrowth,
 } from '../content/facts.js';
 import { trackName } from './upgradetext.js';
 import { worded } from '../content/touch.js';
@@ -95,6 +95,39 @@ function shopperCard(k, ctx) {
     h('p', { class: 'hb-small' }, `Head Office price: $${f.price} each (super: $${f.superPrice}).`));
 }
 
+/** The boss: not one of the shoppers, but he walks in with them every few sales events. */
+function bossCard(ctx) {
+  const b = bossFacts({ hpMul: ctx.hp, pay: ctx.pay, waves: ctx.waves });
+  const pct0 = (m) => `${Math.round(m * 100)}%`;
+  const rows = [
+    ['Title', ...b.waves.map((w) => w.title)],
+    ['Patience', ...b.waves.map((w) => fmt(w.hp))],
+    ['Refund if he gets through', ...b.waves.map((w) => money(w.refund))],
+    [`Bounty${ctx.players > 1 ? ' (split)' : ''}`, ...b.waves.map((w) => money(w.bounty))],
+  ];
+  return h('article', { class: 'hb-card hb-wide hb-boss' },
+    h('header', { class: 'hb-head' }, shopperPortrait('boss'),
+      h('div', null, h('h3', null, `The boss: ${b.name}`), h('p', { class: 'hb-when' }, `Every ${b.every}th sales event, about ${fmt(b.at)} s after the doors open`)),
+      h('div', { class: 'hb-stats' },
+        stat('Patience', `${fmt(b.waves[0]?.hp ?? b.hp)} (event ${b.every})`),
+        stat('Speed', `${fmt(b.speed)} tiles/s`),
+        stat('Refund', `${money(b.refund)} × rank`))),
+    h('p', null, BOSS_HELP.trick),
+    h('p', { class: 'hb-beat' }, h('b', null, 'Beat him with: '), BOSS_HELP.beat),
+    facts([
+      ['Ranks', b.titles.map((t) => `${t.title} (from event ${t.from})`).join(' · ')],
+      ['Patience', `grows every sales event like everyone's, and each rank above the first adds ${pct0(b.tierHp)} of his own`],
+      ['Slowed or stopped by', 'nothing: wet floors, messes, free samples, goods on belts, a fallen drunk, the TV Salesman and the exhibitionist all fail'],
+      ['Pep talk', `every ${fmt(b.pepEvery)} s: every other shopper within ${fmt(b.pepRange)} tiles gets ${pct0(b.pepHeal)} of his patience back (never above full)`],
+      ['If he gets through', `counts as ${b.refunds} refunds at once, and takes ${money(b.refund)} times his rank`],
+      ['If he storms out', `the store gets a bounty of ${money(TUNE.bossBounty)} times his rank${ctx.pay !== 1 ? ` (times ${ctx.name} pay)` : ''}, split like any income`],
+      ['The rest of the crowd', `${pct0(b.crowd)} of its usual size in a boss event`],
+      ['Head Office', 'cannot buy him, and cannot stop him coming'],
+    ]),
+    h('h4', null, ctx.waves > 0 ? 'Every boss event in this game' : 'Boss events in an endless game'),
+    table('hb-waves', ['Sales event', ...b.waves.map((w) => String(w.n))], rows));
+}
+
 function buildingHead(k) {
   const def = BUILD[k];
   return h('header', { class: 'hb-head' }, h('span', { class: 'hb-icon', html: buildingIcon(k) }),
@@ -158,9 +191,9 @@ export function handbook({ state = null, onClose }) {
     for (const t of tabs) { const on = t.dataset.tab === id; t.classList.toggle('on', on); t.setAttribute('aria-selected', String(on)); }
     const game = state ? 'this game' : 'a standard game';
     if (id === 'shoppers') {
-      note.textContent = `Numbers are for ${game}: ${ctx.name} difficulty, ${ctx.waves} sales events, ${ctx.players} player${ctx.players > 1 ? 's' : ''}. `
-        + `Every shopper's patience grows each sales event: ×${fmt(1 + TUNE.hpGrowth + TUNE.hpGrowth2)} in the second, ×${fmt(1 + TUNE.hpGrowth * 9 + TUNE.hpGrowth2 * 81)} by the tenth, ×${fmt(1 + TUNE.hpGrowth * 19 + TUNE.hpGrowth2 * 361)} by the twentieth. Speed and refunds never change. A super shopper takes a double refund.`;
-      body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)));
+      note.textContent = `Numbers are for ${game}: ${ctx.name} difficulty, ${lengthText(ctx.waves).toLowerCase()}, ${ctx.players} player${ctx.players > 1 ? 's' : ''}. `
+        + `Every shopper's patience grows each sales event: ×${fmt(patienceGrowth(2))} in the second, ×${fmt(patienceGrowth(10))} by the tenth, ×${fmt(patienceGrowth(20))} by the twentieth${ctx.waves > 0 ? '' : `, ×${fmt(patienceGrowth(40))} by the fortieth`}. Speed and refunds never change. A super shopper takes a double refund. The boss is at the end.`;
+      body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
       note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price; everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
       body.replaceChildren(...FACTORY_ORDER.map((k) => factoryCard(k, ctx)));

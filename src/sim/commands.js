@@ -8,7 +8,7 @@ import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
-const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild']);
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'endless']);
 
 /** Seconds of build time before wave 1, counted from the first thing placed. */
 const FIRST_BUILD_SECS = 90;
@@ -172,6 +172,9 @@ function lift(state, ai) {
  *                               (see office.js for the shape); replaces the plan so far
  *   { c: 'start' }              open the doors now instead of waiting for the timer. With a Head
  *                               Office player, both sides must ask before they open early
+ *   { c: 'endless' }            only once the game is won, by a connected store player: carry on
+ *                               as an endless game (state.waves becomes 0), starting with the
+ *                               usual build pause before the next sales event
  *   { c: 'role', role }         change your job title (cosmetic)
  *   { c: 'speed', n }           game speed 1, 2 or 3
  * @param {Array} ev events are appended here
@@ -348,6 +351,18 @@ export function applyCommand(state, pid, cmd, ev = []) {
       // Opening early must not cost the players what the factory would have sold meanwhile.
       skipBuild(state, ev);
       beginWave(state, ev);
+      return { ok: true };
+    }
+    case 'endless': {
+      if (state.phase !== 'won') return { ok: false, why: 'phase' };
+      if (!player.on) return { ok: false, why: 'bad' };
+      state.waves = 0;
+      state.phase = 'build';
+      state.phaseT = Math.max(1, Math.round(TUNE.buildSecs * TICK_HZ));
+      state.storeReady = false;
+      // Head Office's budget was not worked out for a next wave that was not coming.
+      refreshBudget(state);
+      ev.push({ e: 'endless', by: pid });
       return { ok: true };
     }
     case 'role': {

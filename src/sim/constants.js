@@ -16,7 +16,9 @@ export const PLAYER_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d8f', '#eab3
  *   and the end-of-wave bonus.
  */
 export const SETTINGS = {
-  waves: [10, 15, 20, 30],
+  // 0 means endless: there is no last sales event, and the game ends only when the refund limit
+  // is reached (see isEndless in state.js). 0 rather than Infinity so the state stays JSON-safe.
+  waves: [10, 15, 20, 30, 0],
   startCash: [300, 500, 800, 1200],
   // Every level was made 10% easier after playtesting (patience x0.9, pay x1.1 on the old numbers).
   difficulty: {
@@ -60,7 +62,7 @@ export const ZONES = {
  * size: [w, h] tiles when facing east or west; facing north or south it is [h, w]. Absent: 1 x 1.
  *   The top-left tile of the footprint holds the building; the others point at it (see state.js).
  * hits: how many gym bro hits it survives in one wave (1 if absent), before durability upgrades.
- * beam: fires straight out of its front end and hits everyone along the line (the Rail Gun).
+ * beam: fires straight out of its front end and hits everyone along the line (the Barcode Laser).
  * up: the upgrade tracks it has, each bought separately (see upgrades.js):
  *   dmg  damage, or the building's main effect    spd  speed (fires more often, works faster)
  *   rng  range                                     dur  durability (one more gym bro hit a wave)
@@ -118,7 +120,7 @@ export const BUILD = {
   },
   // A 3 x 1 gun that fires down the line it faces, through everything, and hits every shopper on it.
   railgun: {
-    name: 'Rail Gun', cost: 700, group: 'security', blocks: true, tower: true, rot: true, size: [3, 1], hits: 2,
+    name: 'Barcode Laser', cost: 700, group: 'security', blocks: true, tower: true, rot: true, size: [3, 1], hits: 2,
     range: 10, dmg: 60, cd: 4.5, beam: true, width: 0.6,
     up: { dmg: { mul: 1.3, cost: 0.5 }, spd: { mul: 1.12, cost: 0.5 }, rng: { add: 1, cost: 0.25 }, dur: { add: 1, cost: 0.2 } },
     desc: 'Fires a beam straight out of its front end, through walls and everything else, hitting every shopper in line. Slow to reload.',
@@ -202,7 +204,7 @@ export const SHOPPERS = {
   // bolts: pepper spray makes the guide dog bolt, dragging him along fast for a moment. The dog
   // also steers him around puddles and messes (steady), and he cannot see free samples, or the
   // salesman's television.
-  // The super one's dogs bolt from forklift and rail gun hits too, for longer and faster.
+  // The super one's dogs bolt from forklift and barcode laser hits too, for longer and faster.
   blind: {
     name: 'Man with Guide Dog', hp: 70, speed: 1.1, refund: 20, steady: true, bolts: true, pitch: [0, 0],
     sup: { name: 'Man with Two Guide Dogs', from: 14, hp: 2.5, boltSecs: 3.2, boltSpeed: 3.2, boltsOnAny: true },
@@ -248,8 +250,38 @@ for (const [k, def] of Object.entries(SHOPPERS)) {
   SUPERS[k] = { ...def, ...rest, hp: def.hp * hp, speed: def.speed * speed, refund: def.refund * 2, base: def.name, isSuper: true };
 }
 
+/**
+ * The boss: one comes in every TUNE.bossEvery-th sales event (5, 10, 15 ...), never in training.
+ * He is kept out of SHOPPERS on purpose: everything that lists the shopper kinds (the handbook,
+ * Head Office's shop, the line banks, the tests that every kind has a super) would otherwise list
+ * him by accident, and he has no super version, no Head Office price and nothing to buy. Shoppers
+ * in the state still have `k: 'boss'`; `defOf()` and `shopperDef()` give this definition for him.
+ * titles: what he is called by tier (his tier is the wave number / 5; tier 4 and above are all the
+ *   last title). `name` is the first.
+ * hp is his base patience, grown by wave and difficulty like everyone's, then multiplied by
+ *   1 + TUNE.bossTierHp * (tier - 1) (see bossPatience in step.js).
+ * refund: what he takes at a till, times his tier; he also counts as TUNE.bossRefunds refunds.
+ * steady, no browses, no gawks, pitch [0, 0]: nothing slows or stops him (wet floor signs, messes,
+ *   a fallen day drinker, free samples, goods on belts, the TV Salesman, an exhibitionist).
+ * pepEvery, pepRange, pepHeal: every pepEvery seconds he gives a pep talk; every other shopper
+ *   within pepRange tiles gets pepHeal of his own full patience back (never above full).
+ */
+export const BOSS = {
+  name: 'Regional Manager',
+  titles: ['Regional Manager', 'Area Director', 'Vice President of Returns', 'The CEO'],
+  boss: true,
+  // hp 160 (four Bargain Hunters) was tuned with tools/balance.mjs: the scripted players' wave-5
+  // defence only just drives him out, and the results moved by at most one sales event. Towers
+  // shoot whoever is nearest the tills, so a slow man at the back of the crowd is hit late.
+  hp: 160, speed: 0.8, refund: 150, steady: true, pitch: [0, 0],
+  pepEvery: 7, pepRange: 3.5, pepHeal: 0.2,
+};
+
+/** The definition of a kind of shopper: SHOPPERS[k], SUPERS[k] if sup, or BOSS for 'boss'. */
+export const shopperDef = (k, sup = 0) => (k === 'boss' ? BOSS : sup ? SUPERS[k] : SHOPPERS[k]);
+
 /** The definition a shopper plays by: s is a shopper from the game state. */
-export const defOf = (s) => (s.sup ? SUPERS[s.k] : SHOPPERS[s.k]);
+export const defOf = (s) => (s.k === 'boss' ? BOSS : s.sup ? SUPERS[s.k] : SHOPPERS[s.k]);
 
 /**
  * Head Office: a player who runs the shoppers instead of the store (see office.js).
@@ -301,6 +333,17 @@ export const TUNE = {
   // Super shoppers: the share of a group that is super once its kind has them (see SHOPPERS.sup.from).
   superShare: 0.08, // in the wave they first appear...
   superShareStep: 0.012, // ...growing by this each wave after
+  // The most shoppers one automatic wave sends for one player (each player after the first adds
+  // crowdPerPlayer of it, like the crowd itself). Waves up to 30 stay under it; beyond that, in an
+  // endless game, the crowd stops growing but patience does not, so the store still falls in the end.
+  maxCrowd: 1100,
+  // The boss (see BOSS): every bossEvery-th wave, bossAt seconds after the doors open.
+  bossEvery: 5,
+  bossAt: 12,
+  bossCrowd: 0.75, // in his wave every other group is this share of its usual size
+  bossTierHp: 0.5, // each tier above the first adds this share of his patience
+  bossRefunds: 5, // reaching a till, he counts as this many refunds toward the limit
+  bossBounty: 150, // driving him out pays the store this much per tier (times the difficulty's pay)
   // Upgrades: each track's next level costs upGrowth times its last (unless the track has its own
   // `grow`), up to maxLevel levels per track (unless it has its own `max`). See BUILD[k].up.
   upGrowth: 1.6,

@@ -11,8 +11,8 @@
 //   director handles that (see TALK in director.js). Repeating text in two banks counts as the
 //   same line for that.
 // - Placeholders the director fills: {p} a player's name, {n} a number, {m} a second number,
-//   {w} the wave number, {k} the name of a building (or a kind of shopper, for the TV salesman),
-//   {q} a second player's name. Which bank gets which is noted beside the bank. A line using a
+//   {w} the wave number, {k} the name of a building (or a kind of shopper, for the TV salesman,
+//   or the boss's title without "The", so write "the {k}"), {q} a second player's name. Which bank gets which is noted beside the bank. A line using a
 //   placeholder the director has no value for is simply skipped, so a bank whose {k} or {n} can
 //   be missing should have some lines without it.
 // - Keep lines short enough to read at a glance: DEB's bubble is small.
@@ -462,10 +462,14 @@ export const LINES = {
       u('A chute, from {p}. Everything that goes down it gets sold. {p}, stay away from the edge.'),
       r("{p} placed a shipping chute. I've been asked to remind staff not to throw each other down it. I was asked by {p}'s colleagues. Unanimously."),
     ],
+    // The Barcode Laser: a supermarket scanner turned up far too high (its key is still railgun).
     railgun: [
-      '{p} built a rail gun. In a returns department. I want it noted that I was never consulted and I fully approve.',
-      u('A rail gun from {p}. Slow to fire, goes through everyone in a line. {p} finally owns something that penetrates.'),
-      r('{p} bought a rail gun. When it fires, the lights dim in three counties. Somewhere a man returning a toaster is about to have a very bad day.'),
+      '{p} built a barcode laser. A checkout scanner turned up until it cuts people. In a returns department. I fully approve.',
+      "{p} has a barcode laser. It goes 'beep', and then a man in line goes 'ow'. That's retail.",
+      '{p} built a barcode laser. It scans the whole line at once. Unexpected item in the bagging area: a hole.',
+      u('A barcode laser from {p}. Slow to fire, but it goes through everyone in a line. {p} finally owns something that penetrates.'),
+      u('{p} built a barcode laser. Price check on aisle five. The price is pain.'),
+      r("{p} bought a barcode laser. It used to be a self-checkout. Then it got angry. Like {p}, nobody ever asked it to help, and it's taking that out on strangers."),
     ],
     salesman: [
       '{p} has hired a TV salesman. He sells knives and barbecues. Shoppers stop to watch. So does {p}. Every time.',
@@ -657,17 +661,21 @@ export const LINES = {
     u("The kid found the TV. A man is selling a barbecue and the child is in love. Mom's going to have words."),
     r('A small boy is standing in front of the TV, mouth open, completely still. Thirty years from now his wife will find him exactly like this.'),
   ],
-  // The rail gun hit {n} shoppers in one shot (5 or more). {p} anyone
+  // The barcode laser hit {n} shoppers in one shot (5 or more). {p} anyone
   rail: [
-    "Rail gun. {n} in one line. That was beautiful. I'd cry if I had a face.",
-    'That rail gun shot just went through {n} shoppers. Forgive me, I need a moment.',
-    "{n} with one shot. That's the most anyone here has scored in one go. Ever.",
-    "The rail gun hit {n} people. One of them was mid-sentence. It wasn't a good sentence.",
-    "{n} in a row. Somebody tell the rail gun it's employee of the month.",
-    u("The rail gun went through {n} shoppers like a dad through a buffet. And it's slow to reload. Which also tracks."),
-    u("{n} shoppers, one shot. {p}, I'd hold your hand if you weren't sticky."),
-    r('{n} people in one shot. The rail gun is the only thing in this building that has ever lived up to its promises. Look at it. Learn from it.'),
-    r("Rail gun, {n} hits. Corporate will ask why a returns department has military hardware. I'll say 'loss prevention'. Nobody has prevented a loss like that."),
+    "Beep. {n} shoppers scanned in one line. That was beautiful. I'd cry if I had a face.",
+    'The barcode laser just rang up {n} shoppers at once. Unexpected item in the bagging area. Several.',
+    "{n} with one beam. That's the most anyone here has scored in one go. Ever.",
+    'Price check on {n} shoppers. The price was everything they had.',
+    "{n} in a row. Somebody tell the barcode laser it's employee of the month.",
+    "The barcode laser scanned {n} people. One had a barcode tattooed on his lower back. It came up as 'clearance'.",
+    'Beep. Beep. Beep. {n} beeps. Every one a man who will never return a toaster again.',
+    u("{n} shoppers through the scanner like a dad through a buffet. And it's slow to reload. Which also tracks."),
+    u("{n} shoppers, one beam. {p}, I'd hold your hand if you weren't sticky."),
+    u("The barcode laser just scanned {n} shoppers in places a scanner should never go. They'll walk funny. Hopefully out."),
+    r('{n} people in one beam. The barcode laser is the only thing in this building that has ever lived up to its promises. Look at it. Learn from it.'),
+    r("Barcode laser, {n} hits. The self-checkouts saw that. They've seen what one of them can become. They're beeping in solidarity."),
+    r("{n} shoppers scanned. One of them came up 'please wait for assistance'. Assistance isn't coming. Assistance is {p}."),
   ],
   // A cosplayer soaked up shots meant for the shoppers around him. {p} anyone
   shield: [
@@ -680,6 +688,192 @@ export const LINES = {
     u('Your security is shooting a foam robot. The robot is winning. The man inside is sweating so much he is losing weight.'),
     r("The cosplayer has shielded the crowd again. He's built for this. He's spent twenty years being hit by things meant for other people. Mostly balls. At school."),
     r("Huge costume, soaking up everything you've got. {p}, you've spent years trying to impress women. He's impressed six shoppers in one afternoon by being a wall."),
+  ],
+  // The boss walks in, every fifth sales event. One bank per title; every line names him, so the
+  // players know which one they are facing. {k} his title without "The" (write "the {k}"), {p} anyone
+  bossIn: {
+    // Tier 1, sales event 5.
+    manager: [
+      'The Regional Manager just walked in. Clipboard, lanyard, a tie he thinks is fun. Nothing slows him down. Wear him out.',
+      "Regional Manager on the floor. He's here to 'touch base'. He will touch more than base. Backs to the wall, boys.",
+      'The Regional Manager is here. He drove four hours to tell you to smile more. He will not stop walking until somebody does.',
+      "Heads up: the Regional Manager. He calls everyone 'champ' and he's slept with two of the cashiers. Keep him off the tills.",
+      'The Regional Manager has arrived. If he gets a refund it counts as five. He is management. Even his failures count extra.',
+      'Regional Manager inbound. Polo shirt tucked into khakis, tucked into a man who peaked at a sales conference in 2008.',
+      'The Regional Manager. Wet floors, free samples, the TV, the flasher: he ignores all of it. Like he ignores his kids.',
+      u("The Regional Manager is in the building. He has a clipboard with all your names on it. Next to {p}'s he's drawn a small penis."),
+      u('Regional Manager on site. His pep talks give the shoppers near him a second wind. {p}, you never even got a first.'),
+      r("The Regional Manager just walked in, smelling of airport cologne and divorce. He wants 'a quick five minutes' with you all. Nobody survives the five minutes."),
+    ],
+    // Tier 2, sales event 10.
+    director: [
+      'The Area Director is here. The Regional Manager answers to him, and cries in his car about it.',
+      'Area Director on the floor. Two phones, a Bluetooth earpiece and no idea what this store sells.',
+      'The Area Director just walked in. Same suit as the last guy, more expensive, worse personality. Wear him down.',
+      "Area Director inbound. He's here to 'drive efficiencies'. That means firing {p}. Stop him before the tills and he can't.",
+      "The Area Director has arrived. He calls this 'one of my stores'. He has never been in it. He's not sure which state it's in.",
+      'The Area Director. Bigger bonus, bigger gut, same clipboard. If he gets through, that is five refunds and your Christmas party.',
+      u('Area Director on site. He has a vasectomy, a boat and a mistress called Brenda. Only the boat makes him happy.'),
+      u("The Area Director is here with his clipboard. He's read your numbers. He laughed. Out loud. In a meeting."),
+      r("The Area Director walked in, said 'let's take this offline' to nobody, and kept walking. He's taken everything offline since 1997. Including his marriage."),
+    ],
+    // Tier 3, sales event 15.
+    vp: [
+      'The Vice President of Returns is in the building. A man whose whole job is taking things back. Mostly promises.',
+      'Vice President of Returns on the floor. He flew in by private jet to stand in your aisle and sigh.',
+      "The Vice President of Returns has arrived. He's returned three wives. Full refund every time.",
+      'Vice President of Returns inbound. Every pep talk he gives, the shoppers near him perk up. So does his secretary.',
+      "The Vice President of Returns is here. Nobody has told him no since 1989. {p}, you're up. Use your whole chest.",
+      'The Vice President of Returns. Tanned in November. Teeth like a bathroom. Patience like a glacier. Shoot him a lot.',
+      u('Vice President of Returns on site. His golf handicap is lower than your IQ, {p}, and he cheats at both.'),
+      u("The Vice President of Returns just walked in wearing loafers worth more than {p}'s car. No socks. He's that kind of prick."),
+      r("The Vice President of Returns is here. He once returned a yacht because the sunset 'underperformed'. He got the refund. He always gets the refund."),
+    ],
+    // Tier 4 and every visit after (an endless game sees him again and again).
+    ceo: [
+      'The CEO is here. Personally. The man who signs your paychecks, if he ever learned your names.',
+      "The CEO just walked in. He made forty million last year and he's still here for a refund. That's how he made forty million.",
+      "The CEO is on the floor. If he gets his refund it counts as five, and he'll still call it a soft quarter.",
+      'The CEO again. He keeps coming back, like herpes with a stock portfolio.',
+      'The CEO. Nothing slows him down. Not wet floors, not samples, not the law.',
+      'Here comes the CEO. Golden parachute, silver spoon, brass neck. Make him use all three.',
+      'The CEO has entered the building. Everyone look busy. {p}, look busier. No, that is just sweating.',
+      u('The CEO is back. He fired your whole department last time. Now he is here to fire the replacements. Which is also you.'),
+      u("The CEO just walked in. His pep talks work. That's the scary part. He once talked a man out of a kidney."),
+      u('The CEO again. He has more houses than {p} has friends, and {p} is counting the dog.'),
+      r("The CEO is here. He has never paid for a meal, a flight or a woman. Today he wants a refund on a toaster. Make him pay in patience."),
+      r('The CEO has returned. Again. A boomerang made of money and cholesterol. Every fifth event, until one of you dies.'),
+    ],
+  },
+  // The boss gave up and stormed off. {k} his title without "The", {n} the bounty paid to the store
+  // (may be missing), {p} anyone
+  bossOut: [
+    'The {k} has stormed off. The store gets ${n} for your trouble. First bonus any of you has earned.',
+    "The {k} is gone, purple in the face, muttering about 'synergy'. ${n} in the till. Don't spend it on crates.",
+    "You broke the {k}. He's crying in his Lexus. ${n} bounty. I'd frame it, but you'll only spend it.",
+    "The {k} has left the building. ${n} for the store. He's going to give you all a terrible review. On LinkedIn.",
+    'The {k}, driven out. ${n} for the store. He will be back. Management always comes back. Like gonorrhea.',
+    '${n} bounty. The {k} walked out mid-sentence. It was a sentence about you, {p}.',
+    "The {k} has given up. He's never given up on anything before. Except his first family.",
+    u("The {k} gave up. He's on the phone to his therapist, his lawyer and his mother, in that order. ${n} for the store."),
+    u("You wore out the {k}. ${n} to the store. {p}, wipe that grin off. You had it on your wedding night and look how that went."),
+    r("The {k} stormed out and walked into the automatic door. It didn't open for him. Best employee we've got. ${n} for the store."),
+  ],
+  // Extra lines for each title, added to the general ones above. Same placeholders.
+  bossOutBy: {
+    manager: [
+      "The Regional Manager has stormed off. ${n}. He'll tell the Area Director it went 'great'. They always say great.",
+      u("Regional Manager gone. He left his clipboard behind. On it: 'smile more', and a sad face. ${n} for the store."),
+      r('The Regional Manager stormed off. He will be demoted to Assistant Regional Manager, which is the same job with a sadder parking space. ${n}.'),
+    ],
+    director: [
+      "The Area Director walked out swearing into two phones at once. ${n} bounty. He's not angry. He's 'disappointed'.",
+      'The Area Director has left the area. Directed himself right out. ${n} for the store.',
+      u('Area Director, gone. ${n}. He will tell his mistress all about it. She will not be listening.'),
+    ],
+    vp: [
+      "The Vice President of Returns has given up. He couldn't return himself fast enough. ${n} for the store.",
+      "The Vice President of Returns stormed off without his refund. First thing he's ever left without. ${n} bounty.",
+      u('The Vice President of Returns, defeated. He is flying home by private jet to cry at altitude. ${n}.'),
+    ],
+    ceo: [
+      "The CEO stormed off. ${n} bounty. He'll make it back in the time it takes him to sneeze.",
+      'The CEO has given up. First time in his life. The stock market felt it. ${n} for the store.',
+      u('You broke the CEO. ${n} bounty. Tonight he will lay off four thousand people just to feel something.'),
+      r("The CEO has left. He'll be back next time, younger, richer, with a new wife. ${n} bounty. The old wife got the house."),
+    ],
+  },
+  // The boss reached the tills. {k} his title without "The", {n} how many refunds he counted as,
+  // {m} the cash he took (either number may be missing), {p} anyone
+  bossEscape: [
+    "The {k} got his refund. That counts as {n}. One man, {n} refunds. That's management maths.",
+    "The {k} reached the tills. {n} refunds and ${m} out of the drawer. He didn't say thank you. They never do.",
+    'The {k} got through. ${m} refunded, and he counts as {n}. {p}, you count as about half of one.',
+    "The {k} walked straight through you. {n} refunds. He'll put it in a slideshow. You'll be the slide with the sad clip art.",
+    "The {k} has his refund. ${m}. He's already expensing the parking.",
+    '{n} refunds in one go. The {k} got through. Corporate would like a word. Corporate IS the word.',
+    'The {k} got through, {p}. He shook your hand on the way past. Count your fingers.',
+    'That was the {k}. That was ${m}. That was {n} refunds. That was your weekend.',
+    u("The {k} made it to the tills. He's giving the cashier a pep talk now. She's quitting. ${m} gone."),
+    u('The {k} got his refund, a free coffee, a parking validation and a little bit of your soul, {p}. {n} refunds.'),
+    u('The {k} is through. He is writing your performance reviews on the drive home. With his knees. On the phone.'),
+    r('The {k} walked out with ${m} and {n} refunds on your record. He will mention it to the shareholders, between the jokes about the cleaners.'),
+    r("The {k} got through. In his honor, the stockroom is now called 'Where {p}'s Career Went'. {n} refunds. Hang your heads."),
+  ],
+  // The boss gave a pep talk (every few seconds, so DEB mentions it only rarely). {k} his title
+  // without "The" (may be missing), {n} how many shoppers it perked up (missing if under 2), {p} anyone
+  pep: [
+    "The {k} is giving a pep talk. 'There's no I in team.' There's an I in 'fired', {p}.",
+    'Pep talk from the {k}. {n} shoppers just got their second wind. You never got your first.',
+    "The {k} said 'let's circle back on this refund'. {n} shoppers circled back. Shoot the circle.",
+    "Motivational speech in the aisle. 'Failure is not an option.' He has never met {p}.",
+    "The {k} is telling the shoppers to give a hundred and ten percent. They are. You're giving about forty.",
+    "Pep talk. 'Teamwork makes the dream work.' Shoot him in the dream.",
+    "The {k} just said 'synergy' with his whole chest. {n} shoppers feel refreshed. I feel sick.",
+    "'Let's move the needle, people!' {p}, move YOUR needle. At him.",
+    'Every few seconds he gives a pep talk and the shoppers round him get their patience back. {p}, separate him from his fans.',
+    u("The {k} is doing his TED talk again. 'Be the refund you want to see in the world.' The crowd loves it. Kill the crowd."),
+    u("'Work smarter, not harder,' says the {k}, who has never done either. {n} shoppers believe him."),
+    u('The {k} just gave everyone near him a fist bump and a lanyard. They feel valued. Nobody here has ever felt valued, {p}.'),
+    r("The {k} is giving his 'be an eagle, not a turkey' speech. Every shopper near him thinks he's an eagle. They're turkeys. Carve them."),
+    r("Pep talk: 'When I was your age I had nothing but a dream and my dad's money.' The shoppers are inspired. I'm getting a restraining order."),
+  ],
+  // A won game is carried on with no last event. {p} who pressed the button
+  endless: [
+    "{p} wants to keep going. You won, gentlemen. It was over. And {p} said 'one more'. Like at the bar. Like at the buffet.",
+    'Endless mode. No end. No finish line. The only way out is the refund limit. Welcome to retail, boys.',
+    '{p} has chosen to keep going. Forever. The shoppers will never stop. Neither will the CEO. Neither, sadly, will I.',
+    "You won, and {p} said 'nah'. The doors open again. There is no end now. There is only the void, and the void wants a refund.",
+    'Back to work. {p} has signed you all up for overtime. Unpaid. Endless. You are welcome.',
+    "{p} couldn't leave it on a win. Some men can't leave anything on a win. Ask his bookie.",
+    "{p} pressed 'keep going'. First time he's ever said that to anyone and meant it.",
+    u("{p} has unlocked endless mode. It's like marriage: no end, it only gets harder, and eventually you all lose."),
+    u('No finish line any more. {p} saw the finish line and asked if it came in a bigger size.'),
+    r("Endless mode. I've been told to keep insulting you until the store collapses. I'm prepared. I have ten thousand more. {p}, eight hundred are about you."),
+  ],
+  // A round-numbered sales event in an endless game (20, 30, 40 ...). {w} the event, {p} anyone
+  endlessMark: [
+    'Sales event {w}. Still alive. Like a cockroach with a lanyard.',
+    "Event {w}. You've been here so long the shoppers think you're fixtures. One of them just tried to return {p}.",
+    "Sales event {w}. Most teams are dead by now. You're not dead. You just smell like it.",
+    'Event {w}. Corporate has stopped asking how you are doing and started asking how you are still doing it.',
+    "Sales event {w}. I've run out of disappointment. I'm on reserve disappointment now. It's stronger.",
+    'Event {w}. The CEO knows your names now. He said them in a meeting. In the past tense.',
+    "Event {w}. No finish line is coming, gentlemen. It never was. Much like {p}'s hairline.",
+    u('Sales event {w}. {p}, your kids grew up while you were in here. One of them is a shopper now. He wants a refund on you.'),
+    u("Event {w}. You've outlasted three managers, two marriages and a plague of gym bros. Don't let it go to your head, {p}."),
+    u('Sales event {w}. The milk in the staff fridge has evolved. It has opinions. They are about {p}.'),
+    r("Event {w}. Scientists have asked to study you. Not because you're good. Because nothing this stubborn should still be breathing."),
+    r('Sales event {w}. I run a betting pool on when you finally lose. The pot is huge. The CEO is in it. He picked yesterday.'),
+  ],
+  // Doors opening in the Food Court store, used in place of waveStart a share of the time on that
+  // map only. {w} wave, {p} anyone
+  foodCourt: [
+    'Sales event {w}, in the Food Court. The floor is sticky. Not all of it is soda.',
+    'Doors open on the Food Court. The kebab stall has been here since 1994. So has the kebab.',
+    'Event {w}. Shoppers are weaving round the tables like a buffet line. {p}, you know all about buffet lines.',
+    'Food Court, event {w}. Keep the goods away from the booths. The booths have seen things. The booths are damp.',
+    "Sales event {w}. The Food Court smells of grease, bleach and broken dreams. Mostly {p}'s.",
+    'Event {w}. Somewhere in this Food Court a man is eating a pretzel the size of his regrets. Shoppers incoming.',
+    'Doors open on the Food Court. Every table wobbles. Fold a napkin under {p}. He wobbles too.',
+    'Food Court, event {w}. The meat on that spit has been turning since the Clinton administration. It has seen more action than {p}.',
+    'Event {w}. The fountain is full of pennies. Every one is a wish that {p} would get better at this.',
+    u("Event {w}. A shopper is walking through the Food Court eating a corn dog while making eye contact. {p}, look away. Too late."),
+    u("Doors open. The Food Court bins are full. The booths are full. {p}'s pants are full. It was the kebab."),
+    u('Sales event {w}. Someone left half a burrito on a Food Court bench. It is the most productive thing on the floor.'),
+    r('Food Court, event {w}. The kebab man asked if {p} was single. Not for a date. For the spit.'),
+    r("Event {w}. I fished the fountain for pennies to pay your wages. Eleven dollars and a hearing aid. {p}, it's yours. You'll need it."),
+  ],
+  // The doors were opened early and the factory was paid for the time skipped. {n} the cash,
+  // {m} the seconds skipped (may be missing), {p} anyone
+  early: [
+    'Doors opened {m} seconds early. The factory made ${n} while you were impatient. Impatience: finally profitable.',
+    "${n} for the time skipped. Opening early. Something {p} has done in every relationship he's ever had.",
+    "Early start. The belts made ${n} anyway. The machines don't need you. Remember that.",
+    'Opened early, and the factory still banked ${n}. Finishing early and getting paid for it. {p} has dreamed of this.',
+    u("Opened {m} seconds early and still got ${n}. Corporate calls that 'agile'. I call it premature."),
+    u("${n} from the factory for the time you skipped. {p}, if only the bedroom worked like that."),
+    r('Doors open early, ${n} in the bank. The factory did {m} seconds of overtime in a blink. It wants a union. It is not getting one.'),
   ],
 };
 
@@ -700,6 +894,8 @@ export const INTRO = {
   cosplay: 'New today: cosplayers. His huge costume soaks up shots meant for the shoppers next to him. Twenty years of being ignored, and now everyone wants to stand near him.',
   flasher: 'New today: the exhibitionist. A woman in a bathrobe. When she opens it, dads and teenagers stop dead to stare. She is on your side. Put your security where she works.',
   drinker: 'New today: the day drinker. He weaves about at all speeds and falls over at corners, and everyone behind him has to squeeze past. Corners are your friend. So is he, nine beers in.',
+  // Said once, straight after the first boss is announced (when he walks in, not at the doors).
+  boss: 'About management: nothing slows him. His pep talks give shoppers near him their patience back. At the tills he counts as five refunds. Wear him out and the store gets a bounty. Every fifth event.',
 };
 
 /** What DEB says the first time the super version of a kind turns up. {p} is anyone. */
@@ -862,6 +1058,16 @@ export const ESCAPE_REVIEWS = {
     [1, 'Wobbly floors in this place. Get them fixed. Hic.', U],
     [5, "Came in to return a beer glass to the wrong store entirely. They gave me nine bucks for it. I'll be back tomorrow. And the day after.", R],
   ],
+  // The boss: written by management, about the staff who could not stop him.
+  boss: [
+    [1, 'Got my refund. Store team showed no initiative, no synergy and no backbone. Circling back to fire everyone.'],
+    [1, "Walked straight through security. I've seen tighter operations at a lemonade stand. I own the lemonade stand."],
+    [5, 'Five stars. Nobody stopped me. As it should be. I pay these people. Allegedly.'],
+    [1, "A staff member called {p} tried to stop me. I've made a note. The note says 'who?'"],
+    [1, 'Refund processed. The team needs to lean in, step up and get out. Mostly get out.'],
+    [5, 'Walked in, walked out, took the money. Like every merger I have ever done.', U],
+    [1, 'A staff member wished me a nice day. Unacceptable. I decide what kind of day I have.', R],
+  ],
 };
 
 /** Reviews from shoppers who gave up and left without a refund. [stars, text, weight?] */
@@ -961,6 +1167,13 @@ export const LEFT_REVIEWS = {
     [1, 'Got lost. Found a bench. Slept. Left.'],
     [1, 'Gave up. The bar opens at eleven. Had to be there. For my health.', U],
   ],
+  boss: [
+    [1, 'Left without my refund. I have never left anywhere without something. Escalating this to myself.'],
+    [1, 'The store team showed hostility, aggression and pepper spray. I respect it. I am still firing them.'],
+    [1, "Stormed out. Walked into the door. Nobody saw. If anyone saw, they're fired. {p} saw."],
+    [1, 'Wore me down. Took a while. I am having my assistant cry about it for me.', U],
+    [1, 'I did not give up. I delegated giving up. To my legs.', R],
+  ],
 };
 
 /** The stamp on each player's row of the end-of-wave report. Plain strings only. */
@@ -983,7 +1196,7 @@ export const STAMPS = {
 export const EMPLOYEES_OF_THE_WAVE = [
   'Nobody', 'Nobody (again)', 'The forklift', 'A wet floor sign', 'The vending machine', 'A dad who left',
   'The fire exit', 'A dropped hot dog', 'The parking lot', 'The stray dog', 'A mop', 'Gary from Accounts',
-  'The rail gun', 'The TV salesman', 'A pigeon that got in', 'The coffee machine',
+  'The barcode laser', 'The TV salesman', 'A pigeon that got in', 'The coffee machine',
   u('The exhibitionist (for services to stopping)'), r('DEB (me)'),
 ];
 
@@ -1122,6 +1335,8 @@ export const NOPE = {
  *   joined, quit: he arrives or leaves. built: he places or upgrades something. sold: he sells
  *   something back. losing, winning: how the store is doing. report: the end-of-wave review.
  *   idle: DEB has a go at him between waves, unprompted. any: fits whenever a line names him.
+ *   boss: the boss walks in. These stand in for his announcement, so each one names him with
+ *   {k}, his title without "The" (write "the {k}").
  */
 export const FRIENDS = {
   // 41, fat, married with two children, too nice, cannot say no to anyone. He wrote the game.
@@ -1180,6 +1395,12 @@ export const FRIENDS = {
       "{p}, I'd go easy on you since you built me, but you also built me to never go easy. Lose-lose, chief.",
       '{p}, nice shirt. Big shirt. Brave shirt.',
     ],
+    boss: [
+      'The {k} is here, and he has asked {p} to stay late. {p} said yes before the man finished the sentence.',
+      'The {k} just walked in. {p} has already offered him a coffee, a chair and his refund. Somebody hold {p} down.',
+      '{p}, the {k} is coming. You wrote him. You gave him pep talks. You gave the boss a pep talk, {p}. Of course you did.',
+      r("The {k} has arrived. {p} is going to ask how his day was, and then listen. For an hour. Shoot the {k} before {p} hugs him."),
+    ],
   },
   // 41, unmarried, tall and skinny, same girlfriend for years and will not marry her. Probably the
   // only one of them getting laid regularly.
@@ -1236,6 +1457,12 @@ export const FRIENDS = {
     any: [
       '{p}, stand up straight. Oh. You are.',
       "{p}, you've been with her longer than this store has been open and still no ring. Put a crate on it. Something.",
+    ],
+    boss: [
+      'The {k} is here. He wants a five-year commitment from every one of you. {p} has gone pale. Paler.',
+      "The {k} just walked in. Taller than {p}? No. Nobody is. More committed? Everybody is.",
+      "{p}, the {k} wants to know where you see yourself in five years. 'Still not married', apparently.",
+      u("The {k} has arrived. He's been married three times. {p} has been 'nearly ready' once, for a decade. Who's the real failure here?"),
     ],
   },
   // 37, bald, married almost twenty years with two children, and the only one who does not own a
@@ -1294,11 +1521,17 @@ export const FRIENDS = {
       "{p}, stop polishing your head on the shoppers' pants.",
       "{p}, you've been married longer than some of these teenagers have been alive, and you still need permission to put a nail in the wall.",
     ],
+    boss: [
+      "The {k} is here. He saw {p}'s head and assumed he was upper management. It's the shine.",
+      "The {k} just walked in. He owns four houses. {p} owns a security deposit he's never getting back.",
+      '{p}, the {k} is coming. Word is he is also your landlord. Do not let him reach the tills.',
+      u('The {k} has arrived with a full head of hair and three mortgages. {p} is staring at both like a dog at a steak.'),
+    ],
   },
 };
 
 /** Names for buildings that may not be in BUILD yet (the director prefers BUILD's own name). */
-export const BUILDING_NAMES = { railgun: 'Rail Gun', salesman: 'TV Salesman' };
+export const BUILDING_NAMES = { railgun: 'Barcode Laser', salesman: 'TV Salesman' };
 
 /**
  * Each kind of shopper as a plain noun, for lines like "the salesman stopped a {k}". Every noun
@@ -1307,7 +1540,7 @@ export const BUILDING_NAMES = { railgun: 'Rail Gun', salesman: 'TV Salesman' };
 export const SHOPPER_NOUNS = {
   hunter: 'bargain hunter', clipper: 'coupon clipper', dad: 'dad', karen: 'Karen', scooter: 'scooter driver',
   teen: 'teenager', mom: 'mom', blind: 'blind man', gymbro: 'gym bro', dog: 'stray dog', cosplay: 'cosplayer',
-  flasher: 'flasher', drinker: 'day drinker',
+  flasher: 'flasher', drinker: 'day drinker', boss: 'boss',
 };
 
 /** The text of a line from any bank: a string, { t, w } or a review [stars, text, w]. */

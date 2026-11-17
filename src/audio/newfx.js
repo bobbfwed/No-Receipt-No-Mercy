@@ -1,4 +1,4 @@
-// Sounds for the second round of rules: the Rail Gun, a dog peeing on security, the exhibitionist,
+// Sounds for the second round of rules: the Barcode Laser, a dog peeing on security, the exhibitionist,
 // the day drinker falling over, the TV Salesman's patter, a child watching his television, the
 // cosplayer's foam armour, and the wreck sounds of the two newest buildings. Each is a play
 // function with the same shape as the entries in effects.js (ctx, dest, t, opts) and returns the
@@ -12,48 +12,68 @@ function clang(v, t, f, peak = 0.14, d = 0.35, index = 2.5) {
   bell(v, { t, f, ratio: 1.41, index, peak, d });
 }
 
-// ------------------------------------------------------------------------- Rail Gun
+// ------------------------------------------------------------------------- Barcode Laser
 
 /**
- * The Rail Gun fires: a heavy charging whine that climbs for about half a second ("vwooooom"),
- * then a flat CRACK, a deep boom and a long ringing zing as the beam goes down the line. `n`
- * (how many it hit) adds a few high sparkles when the beam went through a crowd.
+ * The Barcode Laser fires. It is a supermarket checkout scanner turned up far too high: a motor
+ * whine climbs for about half a second while the red line "scans" (a rising buzz), then the
+ * checkout BEEP, very loud, with a laser zap going away down the line and a sizzle behind it.
+ * The three versions are a single beep, a quick "bi-bip" and a low-high beep. `n` (how many it
+ * hit) adds sparkles: a few high ticks, and a bell when the beam went through a crowd.
  */
-export function rail(ctx, dest, t, o = {}) {
+export function barcodeLaser(ctx, dest, t, o = {}) {
   const v = voice(ctx, dest, o.level);
   const x = vary(o.seed, 3);
-  const p = x.j(0.06);
-  const charge = [0.5, 0.42, 0.6][x.shape] * x.j(0.08);
-  tone(v, { t, f: 70 * p, f1: 520 * p, glide: charge, type: 'sawtooth', lp: 1500, peak: 0.12, a: 0.06, h: charge - 0.06, d: 0.03,
-    vib: x.shape === 2 ? { rate: 14, depth: 70, delay: 0.1 } : undefined });
-  tone(v, { t, f: 42 * p, f1: 170 * p, glide: charge, peak: 0.2, a: 0.06, h: charge - 0.06, d: 0.03 });
-  noise(v, { t, type: 'bandpass', f: 300, f1: 3500, glide: charge, q: 3, peak: 0.08, a: 0.1, h: charge - 0.1, d: 0.03 });
-  if (x.shape === 1) tone(v, { t: t + 0.1, f: 400 * p, f1: 1700 * p, glide: charge - 0.1, type: 'square', lp: 2200, peak: 0.04, a: 0.05, h: charge - 0.17, d: 0.03, vib: { rate: 9, depth: 40 } });
+  const p = x.j(0.05);
+  const charge = [0.46, 0.38, 0.52][x.shape] * x.j(0.08);
+  // The motor climbing, the scanning line's buzz speeding up, and a hiss of air through the lens.
+  tone(v, { t, f: 110 * p, f1: 900 * p, glide: charge, type: 'sawtooth', lp: 1800, peak: 0.1, a: 0.05, h: charge - 0.05, d: 0.03,
+    vib: x.shape === 2 ? { rate: 12, depth: 60, delay: 0.1 } : undefined });
+  tone(v, { t, f: 600 * p, f1: 3000 * p, glide: charge, type: 'square', lp: 3500, peak: 0.035, a: 0.05, h: charge - 0.05, d: 0.03, vib: { rate: 26, depth: 120 } });
+  noise(v, { t, type: 'bandpass', f: 500, f1: 5000, glide: charge, q: 4, peak: 0.07, a: 0.08, h: charge - 0.08, d: 0.03 });
   const c = t + charge + 0.03;
-  noise(v, { t: c, type: 'highpass', f: 2200, q: 0.7, peak: 0.3, a: 0.002, d: 0.08 }); // the CRACK
-  noise(v, { t: c, type: 'bandpass', f: 1200 * x.j(0.15), q: 0.8, peak: 0.25, a: 0.002, d: 0.16 });
-  tone(v, { t: c, f: 125 * p, f1: 34, glide: 0.25, peak: 0.3, a: 0.003, d: 0.32 }); // the boom
-  clang(v, c, 880 * x.j(0.1), 0.1, 0.55, 3.2);
-  noise(v, { t: c + 0.02, type: 'bandpass', f: 6000, f1: 800, glide: 0.45, q: 1.5, peak: 0.1, a: 0.01, d: 0.3 }); // the beam going away
-  const sparks = Math.min(3, (o.n | 0) - 1);
-  for (let i = 0; i < sparks; i++) tone(v, { t: c + 0.1 + i * 0.06 * x.j(0.2), f: x.between(2600, 4200), type: 'triangle', peak: 0.05, a: 0.002, d: 0.08 });
+  // The BEEP.
+  const f = [2700, 3150, 2450][x.shape] * p;
+  const beep = (at, hz, len, peak) => {
+    tone(v, { t: at, f: hz, type: 'sine', peak, a: 0.002, h: len, d: 0.03 });
+    tone(v, { t: at, f: hz, type: 'square', lp: 5000, peak: peak * 0.42, a: 0.002, h: len, d: 0.03 });
+  };
+  if (x.shape === 0) beep(c, f, 0.2, 0.28);
+  else if (x.shape === 1) { beep(c, f, 0.07, 0.26); beep(c + 0.11, f * 1.26, 0.1, 0.28); }
+  else { beep(c, f * 0.78, 0.08, 0.26); beep(c + 0.12, f * 1.25, 0.14, 0.28); }
+  // The laser zap, a thump of air and the sizzle of the beam going away.
+  tone(v, { t: c, f: 5600 * p, f1: 260, glide: 0.16, type: 'sawtooth', lp: 6500, peak: 0.13, a: 0.003, d: 0.06 });
+  tone(v, { t: c, f: 80 * p, f1: 40, glide: 0.2, peak: 0.2, a: 0.003, d: 0.2 });
+  noise(v, { t: c, type: 'highpass', f: 4500, q: 0.7, peak: 0.12, a: 0.004, h: 0.06, d: 0.28 });
+  for (let i = 0; i < 4; i++) noise(v, { t: c + 0.05 + i * 0.06 * x.j(0.3), type: 'bandpass', f: x.between(5000, 8000), q: 4, peak: 0.08, a: 0.002, d: 0.015 });
+  const n = o.n | 0;
+  const sparks = Math.min(4, n - 1);
+  for (let i = 0; i < sparks; i++) tone(v, { t: c + 0.14 + i * 0.055 * x.j(0.2), f: x.between(3200, 5200), type: 'triangle', peak: 0.05, a: 0.002, d: 0.08 });
+  if (n >= 4) bell(v, { t: c + 0.22, f: 3900 * x.j(0.05), peak: 0.07, d: 0.35, ratio: 3.1, index: 0.6 });
   return v.end;
 }
 
-/** The Rail Gun wrecked: the casing cracks, a deep boom, bolts ringing down, the coil dying. */
-export function railWreck(v, t, x) {
-  noise(v, { t, type: 'lowpass', f: 1500 * x.j(0.2), q: 0.7, peak: 0.36, a: 0.002, d: 0.14 });
-  tone(v, { t, f: 85 * x.j(0.12), f1: 30, glide: 0.25, peak: 0.3, a: 0.003, d: 0.32 });
-  clang(v, t, 140 * x.j(0.12), 0.16, 0.6, 4);
+/**
+ * The Barcode Laser wrecked: the casing cracks, the lens goes, and the scanner dies the way a
+ * scanner does: a shattered lens and a failing beep, an error buzzer, or sad slowing beeps and steam.
+ */
+export function scannerWreck(v, t, x) {
+  noise(v, { t, type: 'lowpass', f: 1500 * x.j(0.2), q: 0.7, peak: 0.34, a: 0.002, d: 0.12 }); // the casing
+  noise(v, { t, type: 'bandpass', f: 2500 * x.j(0.1), q: 1, peak: 0.16, a: 0.002, d: 0.04 }); // plastic cracking
+  tone(v, { t, f: 90 * x.j(0.12), f1: 32, glide: 0.22, peak: 0.28, a: 0.003, d: 0.28 });
+  clang(v, t, 160 * x.j(0.12), 0.12, 0.5, 4);
+  const beep = (at, hz, len, peak = 0.07) => tone(v, { t: at, f: hz, type: 'square', lp: 4000, peak, a: 0.003, h: len, d: 0.03 });
   if (x.shape === 0) {
-    noise(v, { t: t + 0.04, type: 'highpass', f: 6000, q: 0.7, peak: 0.1, a: 0.002, d: 0.12 }); // the capacitor zaps
-    tone(v, { t: t + 0.1, f: 500 * x.j(0.1), f1: 40, glide: 0.5, type: 'sawtooth', lp: 900, peak: 0.1, a: 0.02, h: 0.1, d: 0.3 }); // coil winding down
+    noise(v, { t: t + 0.03, type: 'highpass', f: 5000, q: 0.7, peak: 0.14, a: 0.002, d: 0.15 }); // the lens shatters
+    for (let i = 0; i < 5; i++) bell(v, { t: t + 0.06 + i * x.between(0.04, 0.08), f: x.between(3000, 5200), ratio: 3.1, index: 1, peak: 0.06, d: 0.15 });
+    tone(v, { t: t + 0.2, f: 2700 * x.j(0.05), f1: 700, glide: 0.45, type: 'square', lp: 3500, peak: 0.07, a: 0.004, h: 0.05, d: 0.2 }); // the beep failing
   } else if (x.shape === 1) {
-    tone(v, { t: t + 0.08, f: 95 * x.j(0.1), f1: 58, glide: 0.5, type: 'sawtooth', lp: 420, peak: 0.13, a: 0.03, h: 0.25, d: 0.2, vib: { rate: 8, depth: 40 } }); // the frame groans
-    for (let i = 0; i < 4; i++) clang(v, t + 0.2 + i * x.between(0.06, 0.1), x.between(500, 1300), 0.07 * (1 - i * 0.18), 0.12, 1.5);
+    [0.14, 0.34].forEach((dt) => tone(v, { t: t + dt, f: 105 * x.j(0.06), type: 'square', lp: 900, peak: 0.11, a: 0.004, h: 0.13, d: 0.03 })); // error buzzer
+    [0.58, 0.72, 0.9].forEach((dt, i) => beep(t + dt, 2700 * x.j(0.03) - i * 350, 0.03, 0.06));
   } else {
-    noise(v, { t: t + 0.06, type: 'highpass', f: 3500 * x.j(0.15), q: 0.7, peak: 0.12, a: 0.02, h: 0.2, d: 0.25 }); // coolant steam
-    for (let i = 0; i < 3; i++) clang(v, t + 0.14 + i * x.between(0.07, 0.12), x.between(300, 800), 0.09, 0.2, 2);
+    [[2700, 0.14], [2200, 0.33], [1700, 0.58]].forEach(([hz, dt]) => beep(t + dt, hz * x.j(0.03), 0.07)); // sad slowing beeps
+    noise(v, { t: t + 0.08, type: 'highpass', f: 3500 * x.j(0.15), q: 0.7, peak: 0.1, a: 0.02, h: 0.15, d: 0.25 }); // steam
+    for (let i = 0; i < 3; i++) noise(v, { t: t + 0.12 + i * 0.09, type: 'bandpass', f: x.between(5000, 7500), q: 4, peak: 0.09, a: 0.002, d: 0.015 }); // sparks
   }
 }
 

@@ -6,7 +6,11 @@
 // How DEB decides whether to speak (all the numbers are in TALK and TOPICS below):
 // - Every kind of remark is a "topic". "Must" topics are always said: a wave starting, the first
 //   appearance of a kind of shopper, the ten-second warning, the refund limit getting close, a
-//   player arriving or leaving, winning and losing.
+//   player arriving or leaving, winning and losing, the boss walking in, storming off or getting
+//   through, and a won game being carried on as an endless one.
+// - The boss is announced when he walks in (bossIn, 12 seconds after the doors open), not when the
+//   doors open, with a bank for each of his titles; the first time, his trick is explained too.
+// - On the Food Court map a share of the wave openings (TALK.foodShare) come from its own bank.
 // - Anything else is optional. The first time DEB comments on a topic she nearly always does;
 //   every comment after that makes the next one on that topic less likely (down to a floor) and
 //   the topic's own quiet time longer. On top of that, DEB keeps a gap after any optional remark,
@@ -16,7 +20,9 @@
 // - The three friends (see FRIENDS in lines.js): when a line would name one of them and he is
 //   connected, a share of the time it is one of his own lines instead, and now and then DEB has a
 //   go at one of them unprompted between waves.
-import { TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer } from '../sim/index.js';
+import {
+  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle,
+} from '../sim/index.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, FRIENDS,
   BUILDING_NAMES, SHOPPER_NOUNS, fill, choose, textOf, friendOf,
@@ -52,8 +58,15 @@ export const TALK = {
   friendIdle: 0.45,
   /** Shares of the refund limit at which DEB warns that the store is about to close. */
   nearLimit: [0.75, 0.9],
-  /** Fewest shoppers hit by one rail gun shot for it to be worth a comment. */
+  /** Fewest shoppers hit by one barcode laser shot for it to be worth a comment. */
   railHits: 5,
+  /** On the Food Court map, the share of wave openings taken from its own bank. */
+  foodShare: 0.35,
+  /** In an endless game, every this-many-th sales event from endlessFrom on gets a remark. */
+  endlessEvery: 10,
+  endlessFrom: 20,
+  /** Least the factory must have earned while the doors were opened early to be worth a word. */
+  earlyCash: 50,
 };
 
 /**
@@ -107,7 +120,26 @@ export const TOPICS = {
   kidtv: { chance: 0.6, gap: 30 },
   rail: { chance: 0.5, gap: 30 },
   shield: { chance: 0.6, gap: 25 },
+  bossIn: { must: true, friend: 'boss' },
+  bossOut: { must: true },
+  bossEscape: { must: true },
+  // His pep talk comes every 7 seconds, so it is thinned hard: a handful of remarks a game.
+  pep: { chance: 0.1, gap: 90 },
+  endless: { must: true },
+  // Said at round-numbered events of an endless game, instead of the usual opening.
+  endlessMark: { important: true, loud: true },
+  early: { chance: 0.5, gap: 120 },
 };
+
+/** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
+const BOSS_BANKS = ['manager', 'director', 'vp', 'ceo'];
+const bossBank = (tier) => BOSS_BANKS[Math.min(BOSS_BANKS.length, Math.max(1, tier)) - 1];
+
+/** A boss tier from an event field: a whole number from 1, or 0 if it is not one. */
+const tierOf = (v) => (Number.isFinite(v) && v >= 1 ? Math.floor(v) : 0);
+
+/** The boss's title for {k}, without "The", so every line can say "the {k}" ("the CEO"). */
+const titleOf = (tier) => String(bossTitle(tier) || '').replace(/^the\s+/i, '') || undefined;
 
 /** obj[k], but only for the object's own keys: event fields are not trusted to be sensible. */
 const own = (obj, k) => (obj && typeof k === 'string' && Object.hasOwn(obj, k) ? obj[k] : undefined);
@@ -132,6 +164,7 @@ export function createDirector(random = Math.random) {
   const lastPlaced = new Map(); // "x,y" -> { tick, by }
   const met = new Set(); // kinds of shopper DEB has already introduced
   const metSuper = new Set(); // and the super versions
+  let bossNow = 0; // the tier of this wave's boss, 0 if none (pep talks do not say)
 
   /** Picks a line from a bank and fills it in; null if no line fits the variables given. */
   function line(bank, vars) {
@@ -186,7 +219,8 @@ export function createDirector(random = Math.random) {
     const name = player?.name || 'Someone';
     let text = null;
     const own = friendBank(player, friend ?? t.friend, leaving);
-    if (own && random() < TALK.friendShare) text = line(own, { p: name });
+    // A friend's line gets the same values (his boss lines name the boss with {k}).
+    if (own && random() < TALK.friendShare) text = line(own, { ...vars, p: name });
     if (text === null && bank) text = line(bank, { p: name, ...vars });
     if (text === null) return false;
     if (!t.must) remarks++;
@@ -263,7 +297,8 @@ export function createDirector(random = Math.random) {
   function introduce(out, state, e) {
     let introduced = false;
     for (const k of Array.isArray(e.kinds) ? e.kinds : []) {
-      if (met.has(k)) continue;
+      // The boss is explained when he walks in (see bossIn), not when the doors open.
+      if (k === 'boss' || met.has(k)) continue;
       met.add(k);
       const text = intro(own(INTRO, k), state);
       if (text) { out.push({ t: 'say', who: DEB, mood: 'flat', text }); lastSay = state.tick; introduced = true; }
@@ -277,6 +312,19 @@ export function createDirector(random = Math.random) {
       if (text) { out.push({ t: 'say', who: DEB, mood: 'angry', text }); lastSay = state.tick; introduced = true; }
     }
     return introduced;
+  }
+
+  /**
+   * The doors opening: a remark at round-numbered events of an endless game (when DEB feels like
+   * it), else the usual opening, from the Food Court's own bank a share of the time on that map.
+   */
+  function opening(out, state, w) {
+    const mark = isEndless(state) && Number.isInteger(w) && w >= TALK.endlessFrom && w % TALK.endlessEvery === 0;
+    if (mark && say(out, state, 'endlessMark', LINES.endlessMark, { w }, { mood: 'smug' })) return;
+    const food = state.map?.design === 'food' && random() < TALK.foodShare;
+    // (The two smallest food courts have no fountain, so there the fountain jokes are left out.)
+    const foodBank = () => (String(state.decor || '').includes('f') ? LINES.foodCourt : LINES.foodCourt.filter((l) => !/fountain/i.test(textOf(l))));
+    say(out, state, 'waveStart', food ? foodBank() : LINES.waveStart, { w }, { friend: standing(state) });
   }
 
   /** Warns once as refunds pass each share of the limit in TALK.nearLimit. */
@@ -296,14 +344,46 @@ export function createDirector(random = Math.random) {
       case 'waveStart': {
         escapes = [];
         if (state.training) break; // the tutorial does its own talking
+        bossNow = tierOf(e.boss);
         const introduced = introduce(out, state, e);
         const boss = officePlayer(state);
         if (boss && e.office) say(out, state, 'officeWave', LINES.officeWave, { n: e.total }, { pid: boss.id, mood: 'smug' });
         else if (boss) say(out, state, 'officeNoPlan', LINES.officeNoPlan, {}, { pid: boss.id });
-        else if (!introduced) say(out, state, 'waveStart', LINES.waveStart, { w: e.wave ?? state.wave }, { friend: standing(state) });
+        else if (!introduced) opening(out, state, e.wave ?? state.wave);
         if (e.dads > 0) say(out, state, 'dadLine', LINES.dadLine, { n: e.dads }, { mood: 'smug' });
         break;
       }
+      case 'bossIn': {
+        const tier = tierOf(e.tier) || bossNow || bossTier(state.wave | 0) || 1;
+        bossNow = tier;
+        say(out, state, 'bossIn', own(LINES.bossIn, bossBank(tier)), { k: titleOf(tier) }, { mood: 'angry' });
+        // The first boss of the game: what he does, after who he is.
+        if (!met.has('boss')) {
+          met.add('boss');
+          const text = intro(INTRO.boss, state);
+          if (text) { out.push({ t: 'say', who: DEB, mood: 'flat', text }); lastSay = state.tick; }
+        }
+        break;
+      }
+      case 'bossOut': {
+        const tier = tierOf(e.tier) || bossNow || 1;
+        const bank = [...LINES.bossOut, ...(own(LINES.bossOutBy, bossBank(tier)) || [])];
+        say(out, state, 'bossOut', bank, { k: titleOf(tier), n: e.bounty > 0 ? Math.round(e.bounty) : undefined }, { mood: 'smug' });
+        break;
+      }
+      case 'pep': {
+        const tier = bossNow || bossTier(state.wave | 0);
+        say(out, state, 'pep', LINES.pep, { k: tier ? titleOf(tier) : undefined, n: e.n >= 2 ? e.n : undefined }, { mood: 'angry' });
+        break;
+      }
+      case 'endless':
+        say(out, state, 'endless', LINES.endless, {}, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
+        break;
+      case 'early':
+        if (e.cash >= TALK.earlyCash) {
+          say(out, state, 'early', LINES.early, { n: Math.round(e.cash), m: e.secs > 0 ? Math.round(e.secs) : undefined }, { mood: 'smug' });
+        }
+        break;
       case 'crawl':
         say(out, state, 'crawl', LINES.crawl, {}, { mood: 'angry' });
         break;
@@ -366,13 +446,21 @@ export function createDirector(random = Math.random) {
       case 'escape':
         escapes.push(state.tick);
         escapes = escapes.filter((t) => state.tick - t < 6 * TICK_HZ);
+        if (e.k === 'boss') {
+          const tier = tierOf(e.tier) || bossNow || 1;
+          say(out, state, 'bossEscape', LINES.bossEscape, {
+            k: titleOf(tier), n: e.n > 0 ? e.n : undefined, m: e.refund > 0 ? Math.round(e.refund) : undefined,
+          }, { mood: 'angry' });
+        }
         nearLimit(out, state);
         if (escapes.length >= 5 && say(out, state, 'manyEscapes', LINES.manyEscapes, { n: escapes.length }, { mood: 'angry' })) escapes = [];
-        // Dads get their smug five-star review in more often than anyone else.
-        review(out, state, own(ESCAPE_REVIEWS, e.k), e.k, e.k === 'dad' ? 1 : 4);
+        // Dads get their smug five-star review in more often than anyone else; the boss always.
+        review(out, state, own(ESCAPE_REVIEWS, e.k), e.k, e.k === 'dad' ? 1 : e.k === 'boss' ? 0 : 4);
         break;
       case 'left':
-        if (random() < 0.35) review(out, state, own(LEFT_REVIEWS, e.k), e.k, 6);
+        // The boss storming off always gets his review; anyone else only now and then.
+        if (e.k === 'boss') review(out, state, LEFT_REVIEWS.boss, e.k, 0);
+        else if (random() < 0.35) review(out, state, own(LEFT_REVIEWS, e.k), e.k, 6);
         break;
       case 'grab':
         say(out, state, 'grab', LINES.grab);

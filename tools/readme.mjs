@@ -13,9 +13,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { MAP_DESIGNS, MAP_SIZES, SHOPPERS } from '../src/sim/index.js';
-import { SHOPPER_HELP, SUPER_HELP } from '../src/content/help.js';
-import { SHOPPER_ORDER, shopperFacts, fmt } from '../src/content/facts.js';
+import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, TUNE } from '../src/sim/index.js';
+import { SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../src/content/help.js';
+import { SHOPPER_ORDER, shopperFacts, bossFacts, fmt } from '../src/content/facts.js';
 import { versionText } from '../src/version.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,7 +35,7 @@ export function generated() {
   ].join('\n');
 
   const shoppers = [
-    'Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund.',
+    `Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund. The boss, last in the list, walks in with the crowd every ${TUNE.bossEvery}th sales event.`,
     '',
     '| | Shopper |',
     '|---|---|',
@@ -44,6 +44,12 @@ export function generated() {
       // (An img tag, not Markdown, so the picture keeps a fixed width inside the table.)
       return `| <img src="docs/img/shopper-${k}.png" alt="${f.name} and ${f.superName}" width="200"> | **${f.name}** · from sales event ${f.first} · patience ${fmt(f.hp)}, speed ${fmt(f.speed)}, refund $${f.refund}<br>${help.trick}<br>**Beat it with:** ${help.beat}<br>**Super: ${f.superName}** (from sales event ${f.superFrom}). ${SUPER_HELP[k]} |`;
     }),
+    // The boss is not one of SHOPPERS: he has a row of his own, last.
+    (() => {
+      const b = bossFacts();
+      const ranks = b.titles.map((t) => `${t.title} (event ${t.from}${t.tier === b.titles.length ? ' on' : ''})`).join(', ');
+      return `| <img src="docs/img/shopper-boss.png" alt="The boss, ${b.name}" width="200"> | **${b.name}** (the boss) · every ${b.every}th sales event · patience ${fmt(b.hp)}, more for each rank, speed ${fmt(b.speed)}, refund $${b.refund} times his rank<br>${BOSS_HELP.trick}<br>Every ${fmt(b.pepEvery)} seconds his pep talk gives every shopper within ${fmt(b.pepRange)} tiles ${Math.round(b.pepHeal * 100)}% of their patience back. If he reaches a till he counts as ${b.refunds} refunds; if he storms out the store gets a bounty of $${TUNE.bossBounty} times his rank.<br>**Beat him with:** ${BOSS_HELP.beat}<br>**Ranks:** ${ranks}. |`;
+    })(),
   ].join('\n');
 
   return { version, maps, shoppers };
@@ -64,7 +70,7 @@ export function fill(text) {
 export function pictures(base = 'http://localhost:5173') {
   return [
     ...Object.keys(MAP_DESIGNS).map((k) => [`docs/img/map-${k}.png`, `${base}/tools/render-harness.html?design=${k}&size=m&players=3&fitview=1&nostart=1&demo=0&route=1`, 1200, 660]),
-    ...Object.keys(SHOPPERS).map((k) => [`docs/img/shopper-${k}.png`, `${base}/tools/portrait.html?k=${k}`, 340, 180]),
+    ...[...Object.keys(SHOPPERS), 'boss'].map((k) => [`docs/img/shopper-${k}.png`, `${base}/tools/portrait.html?k=${k}`, 340, 180]),
   ];
 }
 

@@ -3,7 +3,7 @@
 // drift from what the simulation actually does. No DOM; runs in Node too.
 import {
   SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, priceOf,
-  tracksOf, defaultTrack, maxIn, levelCost,
+  tracksOf, defaultTrack, maxIn, levelCost, BOSS, bossTier, bossTitle, bossPatience,
 } from '../sim/index.js';
 
 /** The order shoppers are listed in: the order they first turn up. */
@@ -35,12 +35,58 @@ export function countIn(k, n, players = 1) {
   return { all, sup };
 }
 
+/** A game's length in words: "20 sales events", or "Endless" (waves 0). */
+export const lengthText = (waves) => (waves > 0 ? `${waves} sales events` : 'Endless');
+
+/** "7 / 20", or just "7" in an endless game, which has no last sales event to count towards. */
+export const eventOf = (n, waves) => (waves > 0 ? `${n} / ${waves}` : `${n}`);
+
+/** The waves shown for an endless game (waves 0), which has no last one to stop at. */
+export const ENDLESS_SAMPLE = [1, 5, 10, 20, 30, 40];
+
 /** The waves worth showing in a table for a game of `waves` waves: 1, 5, 10 ... and the last. */
 export function sampleWaves(waves = SETTINGS.defaults.waves) {
+  if (!(waves > 0)) return [...ENDLESS_SAMPLE];
   const out = [1];
   for (let n = 5; n < waves; n += 5) out.push(n);
   out.push(waves);
   return out;
+}
+
+/** The boss waves worth showing for a game of `waves` waves (0: endless, where they go on). */
+export function bossWaves(waves = SETTINGS.defaults.waves) {
+  const out = [];
+  const last = waves > 0 ? waves : 50;
+  for (let n = TUNE.bossEvery; n <= last; n += TUNE.bossEvery) {
+    // An endless table would get too wide: after 30, every tenth.
+    if (!(waves > 0) && n > 30 && n % 10) continue;
+    out.push(n);
+  }
+  return out;
+}
+
+/** The bounty for driving out a boss of this tier, before it is split between the players. */
+export const bossBounty = (tier, pay = 1) => Math.max(1, Math.round(TUNE.bossBounty * tier * pay));
+
+/**
+ * Everything the interface says about the boss, from the rules. `hpMul` and `pay` are the
+ * difficulty's multipliers; `waves` is the game's length (0: endless) and picks the sample waves.
+ *   titles: [{ tier, title, from }] the title he has at each tier and the first wave he has it
+ *   waves: [{ n, tier, title, hp, bounty, refund }] his numbers in each sample boss wave
+ */
+export function bossFacts({ hpMul = 1, pay = 1, waves = SETTINGS.defaults.waves } = {}) {
+  const titles = BOSS.titles.map((title, i) => ({ tier: i + 1, title, from: (i + 1) * TUNE.bossEvery }));
+  return {
+    name: BOSS.name, titles,
+    every: TUNE.bossEvery, at: TUNE.bossAt, crowd: TUNE.bossCrowd,
+    hp: BOSS.hp * hpMul, speed: BOSS.speed, refund: BOSS.refund, refunds: TUNE.bossRefunds,
+    tierHp: TUNE.bossTierHp,
+    pepEvery: BOSS.pepEvery, pepRange: BOSS.pepRange, pepHeal: BOSS.pepHeal,
+    waves: bossWaves(waves).map((n) => {
+      const tier = bossTier(n);
+      return { n, tier, title: bossTitle(tier), hp: bossPatience(n, hpMul), bounty: bossBounty(tier, pay), refund: BOSS.refund * tier };
+    }),
+  };
 }
 
 /** A number for a table: whole if it is big or whole, otherwise one decimal. */
@@ -70,7 +116,7 @@ export function shopperTraits(k, sup = 0) {
     out.push(['Chasing speed', `${fmt(d.speed * v('chaseSpeed'))} tiles a second; no refund until she has him back`]);
     out.push(['Out of patience with the kid loose', `crawls to him at ${pct(TUNE.crawlSpeed)} speed, untouchable; gets up with ${pct(TUNE.crawlBack)} patience, ${times === 1 ? 'once' : `up to ${times} times`}; the last time she leaves the cart and carries him`]);
   }
-  if (d.bolts) out.push(['Dog bolts when sprayed', `${fmt(v('boltSecs'))} s at ${fmt(d.speed * v('boltSpeed'))} tiles a second${d.boltsOnAny ? ' (forklift and rail gun hits too)' : ''}`]);
+  if (d.bolts) out.push(['Dog bolts when sprayed', `${fmt(v('boltSecs'))} s at ${fmt(d.speed * v('boltSpeed'))} tiles a second${d.boltsOnAny ? ' (forklift and barcode laser hits too)' : ''}`]);
   if (d.smashes) out.push(['Wrecking', `stops to hit any crate stack in his way, and every crate stack beside him; every ${fmt(v('smashEvery'))} s a ${pct(v('smashOther'))} chance of hitting something else`]);
   if (d.sways) {
     out.push(['Walking speed', `changes every ${fmt(TUNE.swayEvery)} s, between ${fmt(d.speed * v('swayMin'))} and ${fmt(d.speed * v('swayMax'))} tiles a second`]);
@@ -104,7 +150,7 @@ export function shopperFacts(k) {
  * ...the numbers that track changes }, with the other tracks at 0:
  *   dmg  towers: dmg, dps, most · wet floor sign: slow, slip, slipDmg · samples: secs ·
  *        salesman: secs, stopLeft, rushMul (see statsOf) · dps is damage a second to one shopper
- *        (a Rail Gun does it to everyone in line); most is that times how many it can hit at once
+ *        (a Barcode Laser does it to everyone in line); most is that times how many it can hit at once
  *   spd  towers: cd, perSec (shots a second), dps, most · unpacker: period, perMin · press and
  *        packer: time, perMin
  *   rng  range

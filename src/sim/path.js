@@ -14,7 +14,9 @@ const cache = new WeakMap();
 
 /** Which map a kind of shopper walks by. */
 export function modeOf(kind) {
+  // (The boss is not in SHOPPERS; he walks like anyone else.)
   const def = SHOPPERS[kind];
+  if (!def) return NORMAL;
   return def.hopsBelts ? HOP : def.smashes ? SMASH : NORMAL;
 }
 

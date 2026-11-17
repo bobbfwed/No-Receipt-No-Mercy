@@ -1,9 +1,10 @@
 // Short-lived effects driven by simulation events: floating cash, speech blips, "WHOA" pops,
-// forklift shots, rail gun beams, sprinkler bursts, wreckage when a gym bro smashes something,
-// shield flashes round cosplayers, and sparkles when something is upgraded. A fixed pool of effect
+// forklift shots, barcode laser beams, sprinkler bursts, wreckage when a gym bro smashes something,
+// shield flashes round cosplayers, sparkles when something is upgraded, and the boss's entrance,
+// pep talks, exit and (worst of all) arrival at a till. A fixed pool of effect
 // objects is reused so a big wave does not allocate, and every kind has a cap so the screen stays
 // readable.
-import { BUILD, DIRS, statsOf, sizeOf } from '../sim/index.js';
+import { BUILD, DIRS, BOSS, statsOf, sizeOf, bossTitle } from '../sim/index.js';
 import { TILE, INK, C, rr, paint, label, starPath, burstPath, font, hash2 } from './paint.js';
 import { drawItem } from './items.js';
 import { KIND_COLOURS } from './buildings.js';
@@ -11,10 +12,22 @@ import { KIND_COLOURS } from './buildings.js';
 const T = TILE;
 const TEXT = 1, BLIP = 2, POP = 3, SHOT = 4, SPRAY = 5, DEBRIS = 6, UPGRADE = 7, DENT = 8;
 const BEAM = 9, MARK = 10, SHIELD = 11;
+// The boss: his title over the entrance he came in by, his pep talks, him storming off (the
+// bounty), and him reaching a till (a disaster).
+const BOSS_IN = 12, PEP = 13, BOSS_OUT = 14, BOSS_ESC = 15;
 /** At most this many of each kind on screen at once; extra events are skipped. */
-const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8];
+const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8, 3, 6, 3, 3];
 /** Lifetime of each kind in ms. */
-const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550, 480, 700, 420];
+const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550, 480, 700, 420, 3600, 1300, 2200, 2600];
+/** What the boss shouts in a pep talk, in turn. */
+const PEP_WORDS = [
+  'SYNERGY!', 'CIRCLE BACK!', "LET'S ALIGN!", 'TOUCH BASE!', 'MOVE THE NEEDLE!', 'PIVOT!',
+  'GRIP IT AND RIP IT!', 'OWN IT, LADIES!', 'BALLS TO THE WALL!', 'RAW-DOG THE QUARTER!',
+  'TAKE IT OFFLINE!', 'BLUE-SKY IT!',
+];
+/** What he says as he storms off, and when he reaches a till. */
+const BOSS_QUITS = ["I'M CALLING CORPORATE", 'THIS IS GOING IN YOUR REVIEW', "YOU'RE ALL FIRED", 'NOT A CULTURE FIT'];
+const BOSS_WINS = ['FULL REFUND. AND YOUR JOBS.', 'I OWN THIS STORE NOW', 'ENJOY UNEMPLOYMENT', 'BONUS SEASON, BITCHES'];
 /** Upgrade tracks: the colour of the flash and the word on it. */
 const TRACK_LOOK = {
   dmg: ['#ff6b5e', 'DMG'], spd: ['#5cc8ff', 'SPD'], rng: ['#4ade80', 'RNG'], dur: ['#ffd23f', 'DUR'],
@@ -49,11 +62,14 @@ const SPRAY_DROPS = 12;
 export function createEffects() {
   const pool = [];
   for (let k = 0; k < POOL; k++) {
-    pool.push({ type: 0, t0: 0, x: 0, y: 0, x2: 0, y2: 0, text: '', color: '', w: 0, r: 0, st: PLAIN, sz: 0 });
+    pool.push({ type: 0, t0: 0, x: 0, y: 0, x2: 0, y2: 0, text: '', t2: '', color: '', w: 0, r: 0, st: PLAIN, sz: 0 });
   }
   const count = new Int32Array(CAP.length);
-  /** Times (ms) of the latest event per tile or row, read by buildings and the tills. */
-  const timers = { sprayAt: null, shotAt: null, railAt: null, saleAt: null, upAt: null, tillAt: null };
+  /**
+   * Times (ms) of the latest event per tile or row, read by buildings and the tills; bossEscAt: when
+   * a boss last reached a till (the renderer flashes the edges of the screen red).
+   */
+  const timers = { sprayAt: null, shotAt: null, railAt: null, saleAt: null, upAt: null, tillAt: null, bossEscAt: -1e9 };
   let W = 0, H = 0;
   let pitchAt = -1e9; // when the salesman last shouted
   /** Sizes the per-tile timers for a map (they are kept if the size has not changed). */
@@ -69,6 +85,7 @@ export function createEffects() {
   }
   setMap(30, 16);
   let pick = 0; // rotates through the line banks
+  let pepN = 0; // and through the boss's pep words
 
   function add(type, now, x, y) {
     if (count[type] >= CAP[type]) return null;
@@ -106,10 +123,34 @@ export function createEffects() {
           break;
         case 'escape':
           timers.tillAt[Math.max(0, Math.min(H - 1, e.y | 0))] = now;
+          if (e.k === 'boss') {
+            timers.bossEscAt = now;
+            f = add(BOSS_ESC, now, e.x * T, e.y * T);
+            if (f) { pick++; f.text = '-$' + e.refund; f.t2 = BOSS_WINS[pick % BOSS_WINS.length]; f.sz = e.n || 5; }
+            break;
+          }
           f = add(TEXT, now, e.x * T - 22, e.y * T - 6);
           if (f) { f.text = '-$' + e.refund; f.color = '#ff5a4e'; }
           break;
+        case 'bossIn':
+          f = add(BOSS_IN, now, e.x * T, e.y * T);
+          if (f) { f.text = titleOf(e.tier); f.sz = e.tier | 0; }
+          break;
+        case 'pep':
+          f = add(PEP, now, e.x * T, e.y * T);
+          if (f) {
+            f.text = PEP_WORDS[pepN++ % PEP_WORDS.length];
+            f.sz = e.n | 0;
+            f.w = ((BOSS && BOSS.pepRange) || 3.5) * T;
+            f.r = (pepN % 2 ? 1 : -1) * 0.12;
+          }
+          break;
+        case 'bossOut':
+          f = add(BOSS_OUT, now, e.x * T, e.y * T);
+          if (f) { pick++; f.text = '+$' + e.bounty; f.t2 = BOSS_QUITS[pick % BOSS_QUITS.length]; f.sz = e.tier | 0; }
+          break;
         case 'left':
+          if (e.k === 'boss') break; // his exit is the bossOut effect
           f = add(BLIP, now, e.x * T, e.y * T - 30);
           if (f) {
             pick++;
@@ -297,14 +338,18 @@ export function createEffects() {
   }
 
   /**
-   * Draws live effects. layer 0 is under the shoppers (sprinkler bursts), layer 1 above them.
+   * Draws live effects. layer 0 is under the shoppers (sprinkler bursts, the ring of a pep talk),
+   * layer 1 above them. zoom: screen pixels a tile; the boss's effects grow when zoomed out so they
+   * can still be read.
    */
-  function draw(ctx, now, layer, sprites) {
+  function draw(ctx, now, layer, sprites, zoom = 40) {
+    ZK = Math.max(1, 36 / zoom);
     for (let k = 0; k < POOL; k++) {
       const e = pool[k];
       if (!e.type) continue;
       const k01 = (now - e.t0) / DUR[e.type];
       if (k01 >= 1 || k01 < 0) { count[e.type]--; e.type = 0; continue; }
+      if (e.type === PEP) { if (layer === 0) pepRing(ctx, e, k01); else pepWord(ctx, e, k01); continue; }
       if ((e.type === SPRAY) !== (layer === 0)) continue;
       switch (e.type) {
         case TEXT: floatText(ctx, e, k01); break;
@@ -318,6 +363,9 @@ export function createEffects() {
         case BEAM: beam(ctx, e, k01); break;
         case MARK: mark(ctx, e, k01); break;
         case SHIELD: shield(ctx, e, k01); break;
+        case BOSS_IN: bossIn(ctx, e, k01, W * T, H * T); break;
+        case BOSS_OUT: bossOut(ctx, e, k01, W * T); break;
+        case BOSS_ESC: bossEscape(ctx, e, k01, W * T); break;
         default:
       }
     }
@@ -325,6 +373,187 @@ export function createEffects() {
   }
 
   return { handle, draw, timers, setMap };
+}
+
+/** How much bigger the boss's effects are drawn this frame (zoomed out: bigger). */
+let ZK = 1;
+
+/** The boss's title at a tier, from the rules (with a fallback if they have none). */
+function titleOf(tier) {
+  try { return bossTitle(tier || 1) || 'Regional Manager'; } catch { return 'Regional Manager'; }
+}
+
+/**
+ * The boss walks in: a red ribbon banner over the entrance, "NOW ENTERING" and his title, with
+ * gold stars spinning round it and an arrow down to the door. Lasts a few seconds.
+ */
+function bossIn(ctx, e, k, worldW, worldH) {
+  const z = ZK;
+  const pop = k < 0.06 ? 0.4 + (k / 0.06) * 0.75 : k < 0.1 ? 1.15 - (k - 0.06) * 3.75 : 1;
+  ctx.globalAlpha = fadeOut(k, 0.82);
+  const title = e.text.toUpperCase();
+  const size = 17 * z;
+  ctx.font = font(size, 900);
+  if (!e.w || e.r !== size) { e.w = ctx.measureText(title).width; e.r = size; }
+  const bw = Math.max(e.w + 34 * z, 150 * z), bh = 44 * z;
+  // Over the entrance, kept inside the store.
+  const x = Math.max(bw / 2 + 10 * z, Math.min(worldW - bw / 2 - 10 * z, e.x + (e.x < T * 2 ? bw / 2 - 10 * z : 0)));
+  const y = Math.max(bh / 2 + 6, Math.min(worldH - bh, e.y - 70 * z)) - k * 10 * z;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(pop, pop);
+  // Arrow from the banner down toward the door.
+  const ax = Math.max(-bw / 2 + 10 * z, Math.min(bw / 2 - 10 * z, (e.x - x) / pop));
+  ctx.beginPath();
+  ctx.moveTo(ax - 9 * z, bh / 2 - 2); ctx.lineTo(ax, bh / 2 + 14 * z); ctx.lineTo(ax + 9 * z, bh / 2 - 2);
+  ctx.closePath();
+  paint(ctx, '#ffd23f', 2 * z);
+  // The ribbon: notched tails behind, then the band.
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(s * (bw / 2 - 8 * z), -bh / 2 + 8 * z);
+    ctx.lineTo(s * (bw / 2 + 16 * z), -bh / 2 + 8 * z);
+    ctx.lineTo(s * (bw / 2 + 8 * z), 4 * z);
+    ctx.lineTo(s * (bw / 2 + 16 * z), bh / 2 + 6 * z);
+    ctx.lineTo(s * (bw / 2 - 8 * z), bh / 2 + 6 * z);
+    ctx.closePath();
+    paint(ctx, '#8f1414', 2 * z);
+  }
+  rr(ctx, -bw / 2, -bh / 2, bw, bh, 5 * z);
+  paint(ctx, '#d42020', 2.4 * z);
+  ctx.strokeStyle = '#ffd23f';
+  ctx.lineWidth = 1.6 * z;
+  rr(ctx, -bw / 2 + 4 * z, -bh / 2 + 4 * z, bw - 8 * z, bh - 8 * z, 3 * z);
+  ctx.stroke();
+  label(ctx, 'NOW ENTERING', 0, -bh / 2 + 12 * z, 9 * z, '#ffd23f', null);
+  label(ctx, title, 0, 6 * z, size, '#ffffff', INK, 4 * z);
+  // Gold stars circling it.
+  for (let j = 0; j < 6; j++) {
+    const a = k * 9 + (j * Math.PI * 2) / 6;
+    starPath(ctx, Math.cos(a) * (bw / 2 + 4 * z), Math.sin(a) * (bh / 2 + 10 * z), 5 * z, a);
+    paint(ctx, '#ffe14a', 1.2 * z);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/** Layer 0 of a pep talk: rings of corporate enthusiasm spreading out to the reach of his voice. */
+function pepRing(ctx, e, k) {
+  const R = e.w || 140;
+  for (let j = 0; j < 2; j++) {
+    const kk = Math.min(1, Math.max(0, (k - j * 0.15) / 0.6));
+    if (kk <= 0 || kk >= 1) continue;
+    ctx.globalAlpha = 0.85 * (1 - kk);
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y + 8, R * kk, R * kk * 0.62, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 6 * (1 - kk) + 2;
+    ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Layer 1 of a pep talk: the buzzword in a burst beside his head, and who it worked on. */
+function pepWord(ctx, e, k) {
+  const z = ZK;
+  ctx.globalAlpha = fadeOut(k, 0.65);
+  const s = k < 0.1 ? 0.5 + (k / 0.1) * 0.6 : k < 0.18 ? 1.1 - (k - 0.1) * 1.25 : 1;
+  ctx.save();
+  ctx.translate(e.x + 34 * z, e.y - 70 * z - k * 10 * z);
+  ctx.rotate(e.r);
+  ctx.scale(s, s);
+  const size = 13 * z;
+  ctx.font = font(size);
+  const w = ctx.measureText(e.text).width;
+  burstPath(ctx, 0, 0, Math.max(22 * z, w * 0.5), 13, 0.2);
+  paint(ctx, '#e0f2fe', 2 * z);
+  label(ctx, e.text, 0, 0, size, '#0b4f8a', null);
+  if (e.sz > 0) label(ctx, `+${e.sz} MOTIVATED`, 0, 20 * z, 9 * z, '#4ade80', INK, 3 * z);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/** Driven out: the bounty in big gold figures, a burst of banknotes, and his parting shot. */
+function bossOut(ctx, e, k, worldW) {
+  const z = ZK;
+  // Banknotes flung out and fluttering down.
+  ctx.globalAlpha = fadeOut(k, 0.55);
+  for (let j = 0; j < 14; j++) {
+    const a = (j / 14) * Math.PI * 2 + hash2(j, 9) * 0.5;
+    const v = (40 + hash2(j, 3) * 50) * z;
+    const x = e.x + Math.cos(a) * v * Math.min(1, k * 2.2);
+    const y = e.y - 30 * z + Math.sin(a) * v * 0.6 * Math.min(1, k * 2.2) + 50 * z * k * k;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a + k * 6 * (j % 2 ? 1 : -1));
+    rr(ctx, -5 * z, -2.8 * z, 10 * z, 5.6 * z, 1);
+    paint(ctx, '#86efac', 1.1 * z);
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(-1.2 * z, -1.6 * z, 2.4 * z, 3.2 * z);
+    ctx.restore();
+  }
+  if (k < 0.3) {
+    ctx.globalAlpha = 1 - k / 0.3;
+    starPath(ctx, e.x, e.y - 30 * z, (24 + k * 60) * z, k * 2);
+    paint(ctx, '#fff3a8', 2 * z);
+  }
+  ctx.globalAlpha = fadeOut(k, 0.7);
+  const grow = k < 0.1 ? 0.5 + k * 5 : 1;
+  label(ctx, e.text, e.x, e.y - 40 * z - k * 30 * z, 26 * z * grow, '#ffd23f', INK, 6 * z);
+  label(ctx, 'BOSS DOWN!', e.x, e.y - 14 * z - k * 30 * z, 12 * z, '#4ade80', INK, 4 * z);
+  // His parting shot, in a bubble.
+  if (k > 0.08) quip(ctx, e.t2, e.x, e.y - 72 * z - k * 12 * z, 11 * z, '#1e3a8a', worldW, fadeOut(k, 0.75));
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * The boss reached a till: a red shockwave, a huge "-$" figure, how many refunds he counts as, and
+ * his gloating line. (The renderer also flashes the edges of the screen red: timers.bossEscAt.)
+ */
+function bossEscape(ctx, e, k, worldW) {
+  const z = ZK;
+  const x = Math.min(e.x, worldW - 110 * z);
+  for (let j = 0; j < 3; j++) {
+    const kk = Math.min(1, Math.max(0, (k - j * 0.12) / 0.5));
+    if (kk <= 0 || kk >= 1) continue;
+    ctx.globalAlpha = 0.8 * (1 - kk);
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, (20 + kk * 160) * z, 0, Math.PI * 2);
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = (10 * (1 - kk) + 2) * z;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = fadeOut(k, 0.7);
+  const s = k < 0.08 ? 0.4 + (k / 0.08) * 0.8 : k < 0.14 ? 1.2 - (k - 0.08) * 3.3 : 1;
+  ctx.save();
+  ctx.translate(x - 30 * z, e.y - 30 * z);
+  ctx.rotate(-0.08);
+  ctx.scale(s, s);
+  burstPath(ctx, 0, 0, 52 * z, 13, 0.2);
+  paint(ctx, '#7f1d1d', 2.5 * z);
+  label(ctx, e.text, 0, -6 * z, 26 * z, '#ff5a4e', INK, 6 * z);
+  label(ctx, `COUNTS AS ${e.sz} REFUNDS`, 0, 18 * z, 9.5 * z, '#ffffff', INK, 3 * z);
+  ctx.restore();
+  if (k > 0.1) quip(ctx, e.t2, x - 30 * z, e.y - 92 * z - k * 10 * z, 11 * z, '#b91c1c', worldW, fadeOut(k, 0.75));
+  ctx.globalAlpha = 1;
+}
+
+/** A white speech bubble with a line in it, kept inside the world. */
+function quip(ctx, str, x, y, size, color, worldW, alpha) {
+  ctx.globalAlpha = alpha;
+  ctx.font = font(size);
+  const w = ctx.measureText(str).width + size * 1.2, h = size * 1.8;
+  const cx = Math.max(w / 2 + 4, Math.min(worldW - w / 2 - 4, x));
+  rr(ctx, cx - w / 2, y - h, w, h, size * 0.5);
+  ctx.moveTo(x - 4, y); ctx.lineTo(x - 2, y + size * 0.6); ctx.lineTo(x + 5, y);
+  paint(ctx, '#ffffff', Math.max(2, size * 0.16));
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x - 3.5, y - 2, 8, 3);
+  label(ctx, str, cx, y - h / 2, size, color, null);
+  ctx.globalAlpha = 1;
 }
 
 function fadeOut(k, from = 0.7) {
@@ -598,51 +827,74 @@ function upgrade(ctx, e, k) {
 }
 
 /**
- * The rail gun's beam: a white-hot core in a cyan glow, the full length at once, thinning and
- * fading fast; a flash at the muzzle and a ring of sparks where it starts. (x, y) is the gun's
- * front end, (x2, y2) the far end, w the width it hits.
+ * The barcode laser's beam: a red scanning laser the full length at once, a white-hot core in a red
+ * glow, barcode stripes flickering across it, and a bright scan line sweeping out along it; a red
+ * flash and a "BEEP!" at the window. (x, y) is the scanner's front end, (x2, y2) the far end, w
+ * the width it hits.
  */
 function beam(ctx, e, k) {
   const fade = 1 - k;
   const w = Math.max(6, e.w || 48);
+  const dx = e.x2 - e.x, dy = e.y2 - e.y, len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
   ctx.lineCap = 'butt';
   ctx.beginPath();
   ctx.moveTo(e.x, e.y);
   ctx.lineTo(e.x2, e.y2);
-  ctx.globalAlpha = 0.35 * fade;
-  ctx.strokeStyle = '#38e1ff';
-  ctx.lineWidth = w * (1 + k * 0.4);
+  ctx.globalAlpha = 0.28 * fade;
+  ctx.strokeStyle = '#ff2d2d';
+  ctx.lineWidth = w * (1 + k * 0.3);
   ctx.stroke();
   ctx.globalAlpha = 0.9 * fade;
-  ctx.strokeStyle = '#7df9ff';
-  ctx.lineWidth = w * 0.45 * (1 - k * 0.6);
+  ctx.strokeStyle = '#ff3b30';
+  ctx.lineWidth = w * 0.42 * (1 - k * 0.6);
   ctx.stroke();
   ctx.globalAlpha = fade;
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = Math.max(1.5, w * 0.18 * (1 - k));
+  ctx.strokeStyle = '#fff0f0';
+  ctx.lineWidth = Math.max(1.5, w * 0.14 * (1 - k));
   ctx.stroke();
-  // Crackles along the beam.
-  const dx = e.x2 - e.x, dy = e.y2 - e.y, len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len, ny = dx / len;
-  ctx.beginPath();
-  for (let j = 0; j < 7; j++) {
-    const p = (j + 0.5) / 7, off = (hash2(j, e.t0 | 0) - 0.5) * w * 0.9;
-    const px = e.x + dx * p, py = e.y + dy * p;
-    ctx.moveTo(px - dx / len * 8, py - dy / len * 8);
-    ctx.lineTo(px + nx * off, py + ny * off);
-    ctx.lineTo(px + dx / len * 8, py + dy / len * 8);
+  // Barcode stripes across the beam, re-shuffled several times over its short life.
+  const flick = (k * 9) | 0;
+  const half = w * 0.5;
+  ctx.globalAlpha = 0.55 * fade;
+  ctx.strokeStyle = '#5a0a0a';
+  for (let pass = 0; pass < 2; pass++) {
+    // Thin bars, then fat ones.
+    ctx.beginPath();
+    for (let j = 0; j < 26; j++) {
+      const h = hash2(j + flick * 31, e.t0 | 0);
+      if (h < 0.35 || (h > 0.72) !== (pass === 1)) continue;
+      const px = e.x + dx * ((j + 0.5) / 26), py = e.y + dy * ((j + 0.5) / 26);
+      ctx.moveTo(px + nx * half, py + ny * half);
+      ctx.lineTo(px - nx * half, py - ny * half);
+    }
+    ctx.lineWidth = pass ? 4.5 : 1.6;
+    ctx.stroke();
   }
-  ctx.globalAlpha = 0.8 * fade;
-  ctx.strokeStyle = '#e0ffff';
-  ctx.lineWidth = 1.6;
+  // The scan line: a bright bar across the beam, sweeping out to the far end and back once.
+  const sweep = k < 0.5 ? k / 0.5 : 1 - (k - 0.5) / 0.5;
+  const sx = e.x + dx * sweep, sy = e.y + dy * sweep;
+  ctx.globalAlpha = Math.min(1, fade * 1.4);
+  ctx.beginPath();
+  ctx.moveTo(sx + nx * w * 0.75, sy + ny * w * 0.75);
+  ctx.lineTo(sx - nx * w * 0.75, sy - ny * w * 0.75);
+  ctx.strokeStyle = '#ff2d2d';
+  ctx.lineWidth = 7;
   ctx.stroke();
-  // Muzzle flash.
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  // Red flash at the window, and the beep.
   ctx.globalAlpha = Math.max(0, 1 - k * 1.8);
   starPath(ctx, e.x, e.y, 14 + k * 10, k * 3);
-  paint(ctx, '#e0ffff', 1.6);
-  if (e.sz > 1 && k < 0.8) {
-    ctx.globalAlpha = fadeOut(k, 0.5);
-    label(ctx, 'x' + e.sz, e.x + dx / len * 34 + nx * 22, e.y + dy / len * 34 + ny * 22 - 6, 13, '#7df9ff', INK, 3.5);
+  paint(ctx, '#ff6b5e', 1.6);
+  if (k < 0.85) {
+    ctx.globalAlpha = fadeOut(k, 0.55);
+    const s = k < 0.12 ? 0.6 + (k / 0.12) * 0.4 : 1;
+    // Beside the beam near the window, a little above it.
+    const lx = e.x + ux * 30 + nx * 24 * (ny > 0.5 ? -1 : 1), ly = e.y + uy * 30 + ny * 24 * (ny > 0.5 ? -1 : 1) - 8;
+    label(ctx, 'BEEP!', lx, ly - k * 8, 15 * s, '#ff3b30', INK, 4);
+    if (e.sz > 1) label(ctx, 'x' + e.sz, lx + 36, ly - k * 8 + 1, 12, '#ffd23f', INK, 3.5);
   }
   ctx.globalAlpha = 1;
 }

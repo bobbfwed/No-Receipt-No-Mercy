@@ -171,12 +171,12 @@ The owner reached sales event 13 on Normal on his first game and won 20 events o
 - Click a building (or tap it) to open a sheet with a button per track. The U key buys the next level of the first track, as before.
 - **Worth knowing:** the owner asked for the split upgrades to be cheaper than the old single upgrade, and they are. Bought sensibly (damage first), a dollar of upgrade now buys about twice the damage it did. With the easier difficulty on top, the scripted players reach sales event 14 or 15 on Normal where they used to lose at 9. See "Balance after 0.2".
 
-**Durability and rebuilding.** A gym bro's hit no longer wrecks a building outright or knocks a level off. Each building survives a number of hits per sales event (1 as built; 2 for a Rail Gun or TV Salesman; +1 per durability level) and the count starts again when the event ends. A wrecked building can be bought back at half of everything spent on it, upgrades included. If the B key (rebuild all) finds too little money, the building comes back at half price with as many of its upgrades as the money covers at half price; the rest are lost.
+**Durability and rebuilding.** A gym bro's hit no longer wrecks a building outright or knocks a level off. Each building survives a number of hits per sales event (1 as built; 2 for a Barcode Laser or TV Salesman; +1 per durability level) and the count starts again when the event ends. A wrecked building can be bought back at half of everything spent on it, upgrades included. If the B key (rebuild all) finds too little money, the building comes back at half price with as many of its upgrades as the money covers at half price; the rest are lost.
 - Side effect: a gym bro now stops and hits a durable crate stack until it goes, so a durable crate wall holds him up. This was not asked for; it follows from the rule.
 
 **Security.**
 - Forklift range 6 tiles (was 5.5).
-- **Rail Gun** ($700, 3 x 1, press R to turn it before placing): every 4.5 seconds it fires a beam 10 tiles long straight out of its front end, through walls, buildings and shoppers, and hits everyone within 0.6 tiles of the line for 60. The owner chose a fixed line over aiming. Range upgrades lengthen the beam by a tile.
+- **Barcode Laser** ($700, 3 x 1, press R to turn it before placing): every 4.5 seconds it fires a beam 10 tiles long straight out of its front end, through walls, buildings and shoppers, and hits everyone within 0.6 tiles of the line for 60. The owner chose a fixed line over aiming. Range upgrades lengthen the beam by a tile.
 - **TV Salesman** ($450, 2 x 2, reach 4.5 tiles): each shopper who comes in reach is pitched to once (then not again for 9 seconds). He either stops and watches for 2.5 seconds, hurries past at 1.4 times his speed for 4 seconds, or ignores it. Chances to stop / hurry: Dad 20% / 30%, Mobility Scooter 80% / 0%, Karen 40% / 0%, Bargain Hunter 35% / 10%, Teenager 5% / 25%, Stray Dog 10% / 50%, Man with Guide Dog none. 70% of runaway children stop to watch the television. Pitch upgrades lengthen the stop and move the chances the player's way.
 
 **Shoppers.**
@@ -184,7 +184,7 @@ The owner reached sales event 13 on Normal on his first game and won 20 events o
 - **Day Drinker** (from sales event 5): speed keeps changing; at corners of the route he may fall over for 4 seconds, and everyone crossing that tile moves at about a third of their speed.
 - **Stray Dog** (from 7): fast and weak; pees on security it passes (not wet floor signs), switching it off for 6 seconds.
 - **Exhibitionist** (from 8): opens her bathrobe every 6 seconds or so; dads and teenagers within 2.5 tiles stop and stare for 2 seconds. She helps the players.
-- **Cosplayer** (from 9): patience 150 (Karen has 170), speed 1.25 (nobody else has it). Shots from sprinklers, forklifts and rail guns aimed at anyone within 0.9 tiles of him hit him instead. Several costumes, chosen per shopper.
+- **Cosplayer** (from 9): patience 150 (Karen has 170), speed 1.25 (nobody else has it). Shots from sprinklers, forklifts and barcode lasers aimed at anyone within 0.9 tiles of him hit him instead. Several costumes, chosen per shopper.
 - Each has a super version (Bottomless Bruncher from 12, Great Dane 13, Nudist Nan 14, Full Mech Suit 15).
 
 **Other.** Marked floor no longer touches a wall: one tile clear, two in front of a shopper entrance. Entrances no longer carry a player's name.
@@ -209,10 +209,26 @@ The owner got to 13 on Normal before these changes, so a person should now get f
 - Gym bros and durable crates: keep it. A crate stack with durability upgrades holds a gym bro up.
 - The Exhibitionist: no censor bars. She and Nudist Nan are drawn cartoon-naked ("go further" was his choice over black bars or pixelation).
 
+## Version 0.2.06: boss, endless mode, Food Court, flow arrows (owner's requests of 2026-11-16, built the same day, not yet played by a person)
+Decided by Claude while the owner was away; every one is easy to change.
+
+- **Barcode Laser.** The owner asked for the Rail Gun to get a name that fits the game. It is now the Barcode Laser: a supermarket scanner turned up far too high, firing a red beam through everyone in the queue. Nothing about how it works changed. Inside the code and in saved games it is still `railgun`.
+- **A boss every fifth sales event.** One boss walks in 12 seconds after the doors open. His title climbs each visit: Regional Manager (event 5), Area Director (10), Vice President of Returns (15), The CEO (20 and every fifth event after, in an endless game).
+  - Nothing slows or stops him: not wet floors, samples, the TV Salesman, the exhibitionist or a fallen drunk. He walks at 0.8 tiles a second.
+  - Every 7 seconds he gives a pep talk: every other shopper within 3.5 tiles gets 20% of his patience back.
+  - If he reaches a till he counts as 5 refunds and takes $150 times his tier. If the players wear him out, the store is paid a bounty of $150 times his tier (times the difficulty's income multiplier).
+  - The rest of that event's crowd is 75% of its usual size (the owner asked for "slightly fewer").
+  - His patience is 4 Bargain Hunters' worth, grown by event like everyone's, and half as much again for each later visit: 267 in event 5, 788 in 10, 1,796 in 15 and 3,465 in 20 on Normal. The first guess of 15 Bargain Hunters was far too much: security shoots whoever is nearest the tills, a slow man at the back is shot last, and he walked through every time. At 4 the scripted players just drive him out in event 5.
+  - Balance with scripted players on Normal (the event each loses in) moved by at most one: seed 11: 10 / 15 / 15 (was 10 / 14 / 15); seed 5: 10 / 15 / 14 (unchanged); seed 23: 11 / 15 / 15 (was 10 / 15 / 14).
+  - Head Office cannot buy him, and he comes whatever Head Office planned.
+- **Endless mode.** A fifth choice of game length, "Endless": no last event, the game ends only at the refund limit. A game that has just been won can also be carried on as endless from the win screen. The best event reached is remembered in the browser. From about event 30 the crowd stops growing (about 1,100 shoppers a player in one event) and only patience grows, so an endless game is always lost in the end; without that cap event 60 would have sent 3,900 shoppers at a solo player and event 100 over 10,000.
+- **Food Court.** A fourth store design: single tables in staggered clusters, booths, benches with planters, bins, food stalls and (from the two-player size up) a fountain. Furniture is 6 to 11% of the floor, never touches other furniture or the walls, and keeps clear of the entrances, the tills and the marked floor, so nothing can be sealed off. The line checker fits every production line it tries on every size (the Showroom fits 12 of 18 on the biggest), and the walk to the tills is at most about 10% longer than on the Open Warehouse.
+- **Arrows on factory buildings.** Unpackers, Presses and Packers show a large arrow where goods come out; the Shipping Chute shows that things go in.
+- **Drawing fixes.** The Great Dane redrawn as a dog, the Stray Dog made readable when zoomed out, the laser drawn properly facing up or down, and a mom's abandoned cart kept in the game state so a player who joins mid-event sees it.
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
-- More shopper types and a boss every fifth wave (the Regional Manager).
-- More map designs (a food court, a car park), and maps with tills on more than one wall.
-- An endless mode after wave 20.
+- More shopper types. More kinds of boss (today it is one man with four titles).
+- More map designs (a car park), and maps with tills on more than one wall.
 - Role restrictions as an optional hard mode.

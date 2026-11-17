@@ -2,9 +2,12 @@
 // view, facing the way they walk. Each kind is built from a few shared parts (limbs, head, face)
 // plus its own props: trolley, coupons, dad cap and receipt, Karen hair and pointing finger,
 // mobility scooter, hoodie and slushie, mom's trolley with a child in the seat, guide dog and white
-// cane, the gym bro's boxed TV, the stray dog's mangy coat, the cosplayers' four costumes (and the
-// mech suit), the exhibitionist's bathrobe (and what is under it), the day drinker's bottle in a bag.
-// A mom's runaway child is a separate little figure (drawKid); so is a cart a mom left behind.
+// cane, the gym bro's boxed TV, the stray dog's mangy coat (and the Great Dane), the cosplayers'
+// four costumes (and the mech suit), the exhibitionist's bathrobe (and what is under it), the day
+// drinker's bottle in a bag, and the boss in a suit at each of his four ranks (1.6 times life, with
+// his name plate and patience bar drawn over the crowd by drawBossTag).
+// A mom's runaway child is a separate little figure (drawKid); so is a cart a mom left behind
+// (drawCart, for each entry in state.carts).
 //
 // A big wave has well over a hundred shoppers, so each figure is drawn once per pose into a small
 // offscreen canvas (a sprite) and then stamped with one drawImage. A pose is: kind, colour
@@ -13,8 +16,8 @@
 // chasing, carrying or crawling, a dog peeing or sitting, the bathrobe open). Overlays such as the
 // patience bar, the marks over someone watching something, a dog's stream and a drunk's rolling
 // bottle are drawn directly every frame.
-import { ST, TUNE, TICK_HZ, defOf } from '../sim/index.js';
-import { TILE, INK, C, rr, paint, box, circle, label, ramp, starPath, text, hazard } from './paint.js';
+import { ST, TUNE, TICK_HZ, defOf, BOSS } from '../sim/index.js';
+import { TILE, INK, C, rr, paint, box, circle, label, ramp, starPath, text, hazard, font } from './paint.js';
 
 /** Feet sit this far below the shopper's position, so the figure looks centred on its tile. */
 const FEET = 9;
@@ -37,7 +40,8 @@ const MOM_HAIR = ['#8a5a2b', '#2b2118', '#c9a15a', '#5a3a1e'];
 const TANKS = ['#ffffff', '#ff3d7f', '#39d353', '#ffd23f'];
 const DOG = '#e2b15f', DOG_DARK = '#b8873a', VEST = '#f4e04d';
 const KID_HAIR = '#e07b24';
-const MUTT = '#9a8262', MUTT_DARK = '#6e5a40', MUTT_PATCH = '#54432f';
+// The mutt is ginger, not grey-brown: the old colours all but vanished on concrete when zoomed out.
+const MUTT = '#c27a32', MUTT_DARK = '#8a4f1e', MUTT_PATCH = '#4f2f16', MUTT_CREAM = '#f6e2b8';
 const DANE = '#d4d8dc', DANE_SPOT = '#2b2f34', DANE_DARK = '#9aa0a6';
 const ROBE = '#f7a8c8', ROBE_DARK = '#d9759f', SLIPPER = '#ff9ccf';
 const DRINK_SHIRTS = ['#ece6d2', '#9ec5e8', '#e8b49e', '#b8d8a8'];
@@ -68,10 +72,16 @@ const KIND = {
   },
   blind: { n: 7, sc: 1, top: 35, step: 9, vars: 1, still: true, down: true, box: [-30, -52, 88, 64], crown: [1.5, -33] },
   gymbro: { n: 8, sc: 1.08, top: 38, step: 13, vars: TANKS.length, box: [-31, -52, 63, 64], crown: [1.8, -34.5] },
-  dog: { n: 11, sc: 1, top: 22, supTop: 38, step: 19, vars: 1, crown: [16, -36], stillAlt: (1 << DOG_PEE) | (1 << DOG_SIT) },
+  // A little bigger than life (sc), so the mutt still reads at 16 pixels a tile.
+  dog: {
+    n: 11, sc: 1.12, top: 24, supTop: 43, step: 19, vars: 1, box: [-34, -58, 72, 70], crown: [18, -41],
+    stillAlt: (1 << DOG_PEE) | (1 << DOG_SIT),
+  },
   cosplay: { n: 12, sc: 1, top: 52, supTop: 64, step: 8, vars: 4, box: [-36, -78, 72, 90], crown: [1, -64] },
   flasher: { n: 13, sc: 1, top: 38, step: 8, vars: 1, crown: [0.5, -39], stillAlt: 2 },
   drinker: { n: 14, sc: 1, top: 36, supTop: 41, step: 9, vars: DRINK_SHIRTS.length, down: true, crown: [1, -41] },
+  // The boss: 1.6 times life, slow and stately; a colour variant per tier (v = tier - 1).
+  boss: { n: 16, sc: 1.6, top: 38, step: 6, vars: 4, box: [-44, -68, 92, 80], crown: [0, 0] },
 };
 /**
  * Super shoppers are drawn this much bigger, with a gold outline and glow and a crown, so they
@@ -84,7 +94,7 @@ const GOLD = '#ffd23f';
 const KID = { n: 9, sc: 1, top: 22, step: 24, vars: 1, box: [-20, -32, 40, 40] };
 const DOGSIT = { n: 10, sc: 1, top: 24, step: 1, vars: 1, box: [-16, -30, 32, 36] };
 /** A trolley on its side, left behind by a mom who went down for the last time. */
-const CART = { n: 15, sc: 1, top: 16, step: 1, vars: 1, box: [-22, -26, 44, 34] };
+const CART = { n: 15, sc: 1, top: 16, step: 1, vars: 2, box: [-22, -26, 44, 34] };
 for (const K of [...Object.values(KIND), KID, DOGSIT, CART]) {
   const b = K.box || [BX, BY, BW, BH];
   K.bx = b[0]; K.by = b[1]; K.bw = b[2]; K.bh = b[3];
@@ -1075,7 +1085,7 @@ function momCrawl(ctx, P, cart) {
 // --- the stray dog ---------------------------------------------------------------------------
 
 /** A ragged ellipse: a mangy coat, tufts sticking up along the top. */
-function shaggy(ctx, x, y, rx, ry, col, n = 12) {
+function shaggy(ctx, x, y, rx, ry, col, n = 12, lw = OUT) {
   ctx.beginPath();
   for (let k = 0; k <= n * 2; k++) {
     const a = (k / (n * 2)) * TAU;
@@ -1084,124 +1094,206 @@ function shaggy(ctx, x, y, rx, ry, col, n = 12) {
     if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
   }
   ctx.closePath();
-  paint(ctx, col, OUT);
+  ctx.lineJoin = 'round';
+  paint(ctx, col, lw);
 }
+
+/** Outline width on the mutt: heavier than on people, so the little dog survives zooming out. */
+const DOG_OUT = 2.3;
 
 /** The mutt's head, facing +x, centred on (x, y). */
 function muttHead(ctx, x, y) {
+  // Muzzle (pale), then the shaggy head over its back half.
   ctx.beginPath();
-  ctx.ellipse(x + 4.2, y + 1.6, 3.3, 2.3, 0, 0, TAU);
-  paint(ctx, MUTT, 1.4);
-  shaggy(ctx, x, y, 4.6, 4.2, MUTT, 7);
+  ctx.ellipse(x + 4.6, y + 1.6, 3.8, 2.7, 0, 0, TAU);
+  paint(ctx, MUTT_CREAM, 1.6);
+  shaggy(ctx, x, y, 5, 4.6, MUTT, 7, DOG_OUT);
   // One ear up, one flopped over.
-  ctx.beginPath(); ctx.moveTo(x - 3, y - 2.5); ctx.lineTo(x - 1.6, y - 9.5); ctx.lineTo(x + 1.2, y - 3.4); ctx.closePath();
-  paint(ctx, MUTT_DARK, 1.2);
-  ctx.beginPath(); ctx.ellipse(x - 3.2, y + 0.8, 1.8, 3.4, 0.4, 0, TAU);
-  paint(ctx, MUTT_DARK, 1.1);
+  ctx.beginPath(); ctx.moveTo(x - 3.4, y - 2.5); ctx.lineTo(x - 1.8, y - 10.5); ctx.lineTo(x + 1.4, y - 3.6); ctx.closePath();
+  paint(ctx, MUTT_DARK, 1.6);
+  ctx.beginPath(); ctx.ellipse(x - 3.4, y + 1, 2.1, 3.8, 0.4, 0, TAU);
+  paint(ctx, MUTT_DARK, 1.4);
   // Eye patch, eye, nose, tongue.
-  ctx.beginPath(); ctx.arc(x + 1.8, y - 1, 2.1, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
-  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x + 2, y - 1.1, 1.1, 0, TAU); ctx.fill();
-  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x + 2.3, y - 1.1, 0.7, 0, TAU); ctx.fill();
-  circle(ctx, x + 7.3, y + 1, 1.4, INK, 0);
-  ctx.beginPath(); ctx.ellipse(x + 4.8, y + 4.4, 1.2, 2.1, 0.2, 0, TAU);
-  paint(ctx, '#ff6b8a', 0.8);
+  ctx.beginPath(); ctx.arc(x + 1.9, y - 1, 2.3, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x + 2.1, y - 1.1, 1.2, 0, TAU); ctx.fill();
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x + 2.4, y - 1.1, 0.75, 0, TAU); ctx.fill();
+  circle(ctx, x + 8.2, y + 1, 1.6, INK, 0);
+  ctx.beginPath(); ctx.ellipse(x + 5, y + 4.8, 1.3, 2.3, 0.2, 0, TAU);
+  paint(ctx, '#ff6b8a', 0.9);
+}
+
+/** A dog's leg with a pale paw. */
+function dogLeg(ctx, x1, y1, x2, y2, col, w) {
+  limb(ctx, x1, y1, x2, y2, col, w);
+  ctx.beginPath();
+  ctx.ellipse(x2 + 0.8, y2 + 0.2, w * 0.62, w * 0.42, 0, 0, TAU);
+  paint(ctx, MUTT_CREAM, 1.2);
 }
 
 /**
- * A scruffy stray mutt, fast and low. alt DOG_PEE: back leg cocked (the stream is drawn live,
- * toward whatever he is peeing on, behind him); DOG_SIT: sitting with his head on one side,
- * watching something. The super is a Great Dane.
+ * A scruffy stray mutt, fast and low: a ginger coat with a dark saddle, pale chest, muzzle and paws,
+ * and a thick outline, so he still shows on grey concrete when zoomed out. alt DOG_PEE: back leg
+ * cocked (the stream is drawn live, toward whatever he is peeing on, behind him); DOG_SIT: sitting
+ * with his head on one side, watching something. The super is a Great Dane.
  */
 function strayDog(ctx, P) {
   if (P.sup) { greatDane(ctx, P); return; }
   const sw = P.sw;
   if (P.alt === DOG_SIT) {
-    limb(ctx, -6, -2, -12, -1, MUTT, 2.4); // tail on the floor
-    shaggy(ctx, -2, -7.5, 6, 6.5, MUTT, 8);
-    ctx.beginPath(); ctx.ellipse(-3.5, -9, 3, 2, 0, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
-    limb(ctx, 2.5, -7, 3, -1, MUTT, 2.6);
-    limb(ctx, 0.5, -7, 0.8, -1, MUTT_DARK, 2.4);
-    ctx.save(); ctx.translate(3.5, -16); ctx.rotate(0.3); muttHead(ctx, 0, 0); ctx.restore();
+    limb(ctx, -6, -2, -13, -1.5, MUTT, 3); // tail on the floor
+    shaggy(ctx, -2, -8, 6.6, 7, MUTT, 8, DOG_OUT);
+    ctx.beginPath(); ctx.ellipse(-3.8, -10, 3.2, 2.2, 0, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(2.4, -9, 2.6, 3.4, 0.2, 0, TAU); ctx.fillStyle = MUTT_CREAM; ctx.fill();
+    dogLeg(ctx, 0.5, -7, 0.8, -1, MUTT_DARK, 3);
+    dogLeg(ctx, 3, -7, 3.4, -1, MUTT, 3.3);
+    ctx.save(); ctx.translate(3.8, -17); ctx.rotate(0.3); muttHead(ctx, 0, 0); ctx.restore();
     return;
   }
   const pee = P.alt === DOG_PEE;
-  const by = -10;
+  const by = -11;
   const wag = Math.sin(P.ph * TAU * 2) * 2;
-  limb(ctx, -9, by - 2, -14 + wag * 0.3, by - 9 + wag, MUTT, 2.4); // tail up
-  limb(ctx, -6, by + 2, -6 - sw * 3.2, -1, MUTT_DARK, 2.4);
-  limb(ctx, 6, by + 2, 6 + sw * 3.2, -1, MUTT_DARK, 2.4);
-  shaggy(ctx, 0, by, 10, 5.4, MUTT);
-  ctx.beginPath(); ctx.ellipse(-2.5, by - 2.2, 4.2, 2.2, 0, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
+  // Tail up, with a pale tip.
+  limb(ctx, -10, by - 2, -15 + wag * 0.3, by - 10 + wag, MUTT, 3);
+  circle(ctx, -15 + wag * 0.3, by - 10 + wag, 1.9, MUTT_CREAM, 1.2);
+  dogLeg(ctx, -6.5, by + 2, -6.5 - sw * 3.4, -1, MUTT_DARK, 3);
+  dogLeg(ctx, 6.5, by + 2, 6.5 + sw * 3.4, -1, MUTT_DARK, 3);
+  shaggy(ctx, 0, by, 11, 6, MUTT, 12, DOG_OUT);
+  // Dark saddle and a pale chest.
+  ctx.beginPath(); ctx.ellipse(-2.5, by - 2.6, 5, 2.6, 0, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(8, by + 1.6, 3, 3.2, 0, 0, TAU); ctx.fillStyle = MUTT_CREAM; ctx.fill();
   if (pee) {
     // Back leg cocked up and out behind him.
-    limb(ctx, -6, by + 1, -13, by - 5, MUTT, 2.7);
-    limb(ctx, -13, by - 5, -16.5, by - 3.5, MUTT, 2.3);
+    limb(ctx, -6, by + 1, -13.5, by - 5, MUTT, 3.3);
+    dogLeg(ctx, -13.5, by - 5, -17, by - 3.5, MUTT, 2.8);
   } else {
-    limb(ctx, -5, by + 2, -5 + sw * 3.2, -1, MUTT, 2.7);
+    dogLeg(ctx, -5, by + 2, -5 + sw * 3.4, -1, MUTT, 3.3);
   }
-  limb(ctx, 7, by + 2, 7 - sw * 3.2, -1, MUTT, 2.7);
-  muttHead(ctx, 11, by - 5);
+  dogLeg(ctx, 7.5, by + 2, 7.5 - sw * 3.4, -1, MUTT, 3.3);
+  muttHead(ctx, 12, by - 5.5);
 }
 
-/** The super stray: a Great Dane, grey with black patches, long legs, a spiked collar, drool. */
+/**
+ * The super stray: a Great Dane. A horse of a dog: a long level back, a deep chest and tucked-up
+ * belly, long legs with a proper bend at the back ones, a short thick neck in a spiked collar, and a
+ * big square head with hanging jowls, a floppy black ear and a string of drool. Grey with black
+ * patches.
+ */
 function greatDane(ctx, P) {
   const sw = P.sw;
-  const by = -19;
+  /** The head, with the skull centred on (x, y), looking +x. */
   const headAt = (x, y) => {
-    // A long square muzzle, a domed head, one floppy black ear at the back.
-    box(ctx, x + 1, y - 1.5, 10.5, 5.6, 2.4, DANE, 1.4);
-    circle(ctx, x, y, 4.6, DANE, 1.6);
-    ctx.beginPath(); ctx.ellipse(x - 3, y - 0.5, 1.6, 3.6, 0.5, 0, TAU); paint(ctx, DANE_SPOT, 1.1);
-    ctx.fillStyle = DANE_SPOT; ctx.beginPath(); ctx.ellipse(x + 1.6, y - 1.6, 2.4, 1.8, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x + 2, y - 1.4, 1.1, 0, TAU); ctx.fill();
-    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x + 2.3, y - 1.4, 0.7, 0, TAU); ctx.fill();
-    circle(ctx, x + 11, y - 0.4, 1.6, INK, 0);
-    ctx.beginPath(); ctx.moveTo(x + 7, y + 4.8); ctx.lineTo(x + 7.5, y + 10); // drool
-    ctx.strokeStyle = 'rgba(200,235,255,0.95)'; ctx.lineWidth = 1.3; ctx.stroke();
+    // The floppy ear behind, then the skull, the long square muzzle and the jowls hanging off it.
+    ctx.beginPath();
+    ctx.moveTo(x - 3.5, y - 5); ctx.quadraticCurveTo(x - 9, y - 1, x - 6, y + 6); ctx.lineTo(x - 1.5, y);
+    ctx.closePath();
+    paint(ctx, DANE_SPOT, 1.6);
+    rr(ctx, x - 6.5, y - 5.5, 13, 11, 5);
+    paint(ctx, DANE, OUT);
+    ctx.beginPath();
+    ctx.moveTo(x + 2.5, y + 4.5); ctx.quadraticCurveTo(x + 7.5, y + 11, x + 12.8, y + 4.6);
+    ctx.closePath();
+    paint(ctx, DANE_DARK, 1.6);
+    rr(ctx, x + 2, y - 2.6, 11.5, 8, 2.8);
+    paint(ctx, DANE, OUT);
+    // Nose, the black patch round his eye, a heavy brow.
+    rr(ctx, x + 10.6, y - 3, 3.6, 3.4, 1.3);
+    ctx.fillStyle = INK; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + 1.4, y - 1.4, 3, 2.5, 0, 0, TAU); ctx.fillStyle = DANE_SPOT; ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x + 1.8, y - 1.5, 1.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(x + 2.2, y - 1.4, 0.8, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - 1.6, y - 4.6); ctx.lineTo(x + 4, y - 3.6);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.lineCap = 'round'; ctx.stroke();
+    // Drool off the jowl.
+    ctx.beginPath(); ctx.moveTo(x + 8.5, y + 7.6); ctx.quadraticCurveTo(x + 9.6, y + 11, x + 8.8, y + 14);
+    ctx.strokeStyle = 'rgba(200,235,255,0.95)'; ctx.lineWidth = 1.5; ctx.stroke();
+    circle(ctx, x + 8.8, y + 14.4, 1.2, 'rgba(200,235,255,0.95)', 0);
   };
-  const spots = (x, y, rx, ry) => {
+  /** A spiked red collar across a neck at (x, y), turned by a. */
+  const collar = (x, y, a) => {
     ctx.save();
-    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.clip();
+    ctx.translate(x, y);
+    ctx.rotate(a);
+    ctx.beginPath();
+    for (let k = 0; k < 4; k++) { const sx = -4.5 + k * 3; ctx.moveTo(sx - 1.1, -1.4); ctx.lineTo(sx, -4.2); ctx.lineTo(sx + 1.1, -1.4); }
+    paint(ctx, '#e6ebef', 1);
+    box(ctx, -6.2, -1.8, 12.4, 3.6, 1.2, '#d9372b', 1.3);
+    ctx.restore();
+  };
+  /** Black patches over whatever path is current (clipped to it). */
+  const patches = (pts) => {
+    ctx.save();
+    ctx.clip();
     ctx.fillStyle = DANE_SPOT;
     ctx.beginPath();
-    ctx.ellipse(x - 5, y - 2, 3.4, 2.2, 0.3, 0, TAU);
-    ctx.ellipse(x + 4, y - 3, 2.6, 1.8, -0.2, 0, TAU);
-    ctx.ellipse(x + 1, y + 3, 2.4, 1.6, 0, 0, TAU);
+    for (let k = 0; k < pts.length; k += 5) ctx.ellipse(pts[k], pts[k + 1], pts[k + 2], pts[k + 3], pts[k + 4], 0, TAU);
     ctx.fill();
     ctx.restore();
   };
+  const paw = (x, y, col) => { ctx.beginPath(); ctx.ellipse(x + 1, y, 3, 1.9, 0, 0, TAU); paint(ctx, col, 1.4); };
   if (P.alt === DOG_SIT) {
-    // Sitting up tall: a big haunch on the floor, front legs straight, head up.
-    limb(ctx, -10, -2, -17, -1, DANE, 2.2);
-    ctx.beginPath(); ctx.ellipse(-5, -7, 8, 6.5, 0, 0, TAU); paint(ctx, DANE, OUT);
-    spots(-5, -7, 8, 6.5);
-    ctx.beginPath(); ctx.ellipse(0, -16, 6, 10, 0.35, 0, TAU); paint(ctx, DANE, OUT);
-    spots(0, -16, 6, 10);
-    limb(ctx, 5, -14, 5.5, -1, DANE, 4);
-    limb(ctx, 2, -14, 2.4, -1, DANE_DARK, 3.6);
-    limb(ctx, 2, -23, 5, -29, DANE, 5.4);
-    box(ctx, 1.5, -27.5, 6.5, 2.6, 1, '#d9372b', 1);
-    headAt(6, -32);
+    // Sitting up tall: the haunch on the floor, chest up, front legs straight, head held high.
+    limb(ctx, -12, -2.5, -22, -1.5, DANE, 2.4); // tail along the floor
+    ctx.beginPath(); ctx.ellipse(-6, -9, 9.5, 8.5, 0, 0, TAU); paint(ctx, DANE, OUT);
+    ctx.beginPath(); ctx.ellipse(-6, -9, 9.5, 8.5, 0, 0, TAU); patches([-9, -12, 3.6, 2.4, 0.3, -2, -5, 2.6, 1.8, 0]);
+    paw(-1, -1.5, DANE);
+    limb(ctx, 6, -15, 6.5, -1.5, DANE_DARK, 4.4);
+    paw(6.5, -1, DANE_DARK);
+    ctx.beginPath(); ctx.ellipse(3, -20, 7.6, 12, 0.28, 0, TAU); paint(ctx, DANE, OUT);
+    ctx.beginPath(); ctx.ellipse(3, -20, 7.6, 12, 0.28, 0, TAU); patches([0, -24, 3, 2.2, 0.2, 5, -14, 2.4, 3, 0]);
+    limb(ctx, 9, -15, 9.8, -1.5, DANE, 4.6);
+    paw(9.8, -1, DANE);
+    limb(ctx, 6, -28, 10.5, -36, DANE, 8.5); // short thick neck
+    collar(7.6, -31, 0.5);
+    headAt(13, -41);
     return;
   }
   const pee = P.alt === DOG_PEE;
-  limb(ctx, -13, by - 1, -18 + sw, by + 7, DANE, 2.2); // long thin tail
-  limb(ctx, -8, by + 3, -8 - sw * 4.4, -1, DANE_DARK, 4);
-  limb(ctx, 9, by + 3, 9 + sw * 4.4, -1, DANE_DARK, 4);
-  ctx.beginPath(); ctx.ellipse(0, by, 13, 7, 0, 0, TAU); paint(ctx, DANE, OUT);
-  spots(0, by, 13, 7);
+  // Long thin tail hanging down from the rump, swinging as he walks.
+  ctx.beginPath();
+  ctx.moveTo(-18, -23); ctx.quadraticCurveTo(-23, -18 + sw, -22 - sw * 1.5, -9);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = INK; ctx.lineWidth = 4.4; ctx.stroke();
+  ctx.strokeStyle = DANE; ctx.lineWidth = 2.2; ctx.stroke();
+  // Far legs (darker): front straight, back with the hock bent backward.
+  limb(ctx, 11, -13, 11 + sw * 4.5, -1, DANE_DARK, 4.4);
+  paw(11 + sw * 4.5, -0.6, DANE_DARK);
+  limb(ctx, -10, -16, -14 - sw * 2, -7, DANE_DARK, 4.6);
+  limb(ctx, -14 - sw * 2, -7, -12 - sw * 4.5, -1, DANE_DARK, 4);
+  paw(-12 - sw * 4.5, -0.6, DANE_DARK);
+  // The body: level back, deep chest, belly tucked up toward the hind legs.
+  const body = () => {
+    ctx.beginPath();
+    ctx.moveTo(-14, -27);
+    ctx.lineTo(9, -27);
+    ctx.quadraticCurveTo(15.5, -27, 16.5, -19.5);
+    ctx.quadraticCurveTo(17, -10.5, 9, -10);
+    ctx.quadraticCurveTo(1, -10, -4, -15.5);
+    ctx.quadraticCurveTo(-9, -16.5, -13, -13.5);
+    ctx.quadraticCurveTo(-19.5, -14, -19.5, -20.5);
+    ctx.quadraticCurveTo(-19.5, -27, -14, -27);
+    ctx.closePath();
+  };
+  body();
+  ctx.lineJoin = 'round';
+  paint(ctx, DANE, OUT);
+  body();
+  patches([-11, -23, 4.2, 2.6, 0.3, 1, -25, 3.2, 2, -0.2, 7, -16, 2.8, 2.2, 0, -6, -17, 2.4, 1.6, 0.2]);
+  // Near legs.
   if (pee) {
-    limb(ctx, -8, by + 2, -18, by - 6, DANE, 4.2);
-    limb(ctx, -18, by - 6, -22, by - 3.5, DANE, 3.4);
+    // Back leg cocked up and out behind him.
+    limb(ctx, -13, -16, -21, -21, DANE, 5);
+    limb(ctx, -21, -21, -25.5, -18, DANE, 4.2);
   } else {
-    limb(ctx, -7, by + 3, -7 + sw * 4.4, -1, DANE, 4.2);
+    limb(ctx, -13, -16, -17 + sw * 2, -7, DANE, 5);
+    limb(ctx, -17 + sw * 2, -7, -15 + sw * 4.5, -1, DANE, 4.4);
+    paw(-15 + sw * 4.5, -0.6, DANE);
   }
-  limb(ctx, 10, by + 3, 10 - sw * 4.4, -1, DANE, 4.2);
-  limb(ctx, 9, by - 2, 13, by - 9, DANE, 6); // neck
-  box(ctx, 10, by - 9, 6, 2.6, 1, '#d9372b', 1); // spiked collar
-  ctx.fillStyle = '#e6ebef';
-  for (let k = 0; k < 3; k++) ctx.fillRect(10.5 + k * 2, by - 10.4, 1, 1.5);
-  headAt(16, by - 13);
+  limb(ctx, 8, -13, 8 - sw * 4.5, -1, DANE, 4.8);
+  paw(8 - sw * 4.5, -0.6, DANE);
+  // Short thick neck up from the withers, the collar, then the head.
+  limb(ctx, 10.5, -24, 15.5, -31.5, DANE, 9);
+  collar(13.2, -28.2, 0.58);
+  headAt(19, -36);
 }
 
 // --- cosplayers ------------------------------------------------------------------------------
@@ -1694,8 +1786,11 @@ function bruncher(ctx, P) {
   }
 }
 
-/** A trolley tipped over on its nose, back wheels in the air, the cereal spilled out of it. */
-function cartDown(ctx) {
+/**
+ * A trolley tipped over on its nose, back wheels in the air, the cereal spilled out of it. A
+ * Soccer Mom's (P.v 1) spills a football and orange slices instead.
+ */
+function cartDown(ctx, P) {
   ctx.fillStyle = 'rgba(0,0,0,0.2)';
   ctx.beginPath(); ctx.ellipse(1, 0, 15, 3.5, 0, 0, TAU); ctx.fill();
   ctx.save();
@@ -1705,6 +1800,20 @@ function cartDown(ctx) {
   ctx.translate(-20, 2);
   trolley(ctx);
   ctx.restore();
+  if (P.v === 1) {
+    // A football rolled out, and the half-time orange slices.
+    circle(ctx, 15, -3.2, 3.6, '#ffffff', 1.3);
+    ctx.fillStyle = INK;
+    ctx.beginPath(); ctx.arc(15, -3.2, 1.3, 0, TAU); ctx.fill();
+    ctx.fillRect(12.2, -4.6, 1, 1); ctx.fillRect(17, -1.6, 1, 1);
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      ctx.arc(7 + k * 4, 0.6 + (k % 2), 1.9, Math.PI, 0);
+      ctx.closePath();
+      paint(ctx, '#ff9a1f', 0.8);
+    }
+    return;
+  }
   ctx.save();
   ctx.translate(14, -2.5);
   ctx.rotate(0.9);
@@ -1715,11 +1824,256 @@ function cartDown(ctx) {
   for (let k = 0; k < 6; k++) ctx.fillRect(9 + k * 2.4, -0.8 + (k % 2) * 1.2, 1.6, 1.4);
 }
 
-const DRAW = [hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit, strayDog, cosplay, flasher, drinker, cartDown];
+// --- the boss ----------------------------------------------------------------------------------
+// One suit, four ranks (P.v is his tier minus one): each a little more senior and a lot more
+// ridiculous. Drawn at KIND.boss.sc (1.6 times life), bigger than any super.
+
+/** Per tier: suit, its shadow side, tie, lanyard. */
+const BOSS_SUIT = ['#8a919b', '#2b3d6b', '#3b404b', '#1b1c22'];
+const BOSS_SUIT_DARK = ['#6a7079', '#1d2a4d', '#2a2e37', '#0f1014'];
+const BOSS_TIE = ['#d9372b', '#f2c21b', '#8e44ad', '#ffd23f'];
+const BOSS_LANYARD = ['#2f8fe0', '#d9372b', '#14b8a6', '#ffd23f'];
+/** Boss poses (the `alt` of his sprite). */
+const BOSS_PEP = 1, BOSS_STORM = 2;
+
+/** His face, looking +x from (x, y): mood 0 smug, 1 shouting a pep talk, 2 apoplectic. */
+function bossFace(ctx, x, y, mood) {
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.arc(x + 1.4, y - 0.6, 1.2, 0, TAU);
+  ctx.arc(x + 5.2, y - 0.6, 1.2, 0, TAU);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  if (mood === 2) {
+    ctx.moveTo(x - 0.6, y - 4.2); ctx.lineTo(x + 2.6, y - 2.4);
+    ctx.moveTo(x + 7, y - 4.2); ctx.lineTo(x + 4, y - 2.4);
+  } else {
+    // Smug: one brow flat, one arched right up.
+    ctx.moveTo(x - 0.2, y - 3.4); ctx.lineTo(x + 2.8, y - 3.4);
+    ctx.moveTo(x + 3.8, y - 4.2); ctx.quadraticCurveTo(x + 5.3, y - 6, x + 6.8, y - 4.4);
+  }
+  ctx.stroke();
+  if (mood === 0) {
+    // A big smarmy grin.
+    ctx.beginPath();
+    ctx.moveTo(x + 1.2, y + 2.6); ctx.quadraticCurveTo(x + 4.2, y + 5.4, x + 7, y + 2);
+    ctx.lineTo(x + 6.4, y + 3.2); ctx.quadraticCurveTo(x + 4.2, y + 4.6, x + 1.8, y + 3.2);
+    ctx.closePath();
+    paint(ctx, '#ffffff', 1.1);
+  } else {
+    ctx.beginPath();
+    ctx.ellipse(x + 4.2, y + 3.4, 2.6, mood === 2 ? 2.6 : 2.2, 0, 0, TAU);
+    paint(ctx, '#7a1010', 1.1);
+  }
+  // A double chin.
+  ctx.beginPath();
+  ctx.moveTo(x - 1, y + 6.4); ctx.quadraticCurveTo(x + 2.5, y + 8.2, x + 5.5, y + 6.2);
+  ctx.strokeStyle = C.skinDark; ctx.lineWidth = 1.2; ctx.stroke();
+}
+
+/** A clipboard centred on (x, y), turned by a: a board, a page with ticks, a steel clip. */
+function clipboard(ctx, x, y, a) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(a);
+  box(ctx, -4.5, -6.5, 9, 13, 1, '#a0703a', 1.4);
+  box(ctx, -3.4, -4.8, 6.8, 10.4, 0.5, '#ffffff', 0.8);
+  ctx.beginPath();
+  for (let k = 0; k < 3; k++) {
+    const ly = -2.6 + k * 2.8;
+    ctx.moveTo(-2.6, ly); ctx.lineTo(-1.8, ly + 0.9); ctx.lineTo(-0.6, ly - 0.8);
+    ctx.moveTo(0.4, ly); ctx.lineTo(2.6, ly);
+  }
+  ctx.strokeStyle = '#2f8fe0'; ctx.lineWidth = 0.8; ctx.stroke();
+  box(ctx, -2, -7.6, 4, 2.4, 0.8, '#c9ced4', 0.9);
+  ctx.restore();
+}
+
+/** A phone in a hand at (x, y), screen lit. */
+function phone(ctx, x, y, a) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(a);
+  box(ctx, -1.8, -3.4, 3.6, 6.8, 0.9, '#1d2125', 1);
+  ctx.fillStyle = '#7fd3ff';
+  ctx.fillRect(-1.1, -2.6, 2.2, 4.6);
+  ctx.restore();
+}
+
+function boss(ctx, P) {
+  const tier = P.v, sw = P.sw;
+  const up = P.alt === BOSS_PEP || P.alt === BOSS_STORM;
+  const suit = BOSS_SUIT[tier], dark = BOSS_SUIT_DARK[tier];
+  // Behind him: tier 2's wheeled briefcase, tier 4's golf club over his shoulder, and his back arm.
+  if (tier === 1) {
+    box(ctx, -23, -13, 11, 12.5, 2, '#2b2f34', 1.6);
+    ctx.fillStyle = '#4b5058'; ctx.fillRect(-21.5, -9, 8, 1.4);
+    circle(ctx, -21, -0.6, 1.7, '#111', 1);
+    circle(ctx, -14, -0.6, 1.7, '#111', 1);
+    ctx.beginPath(); ctx.moveTo(-14, -13); ctx.lineTo(-7.5, -18.5);
+    ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ctx.stroke();
+    ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 1.2; ctx.stroke();
+    limb(ctx, -1, -19.5, -7, -18.5, dark, 3.4);
+    circle(ctx, -7.5, -18.5, 1.9, C.skin, 1);
+  } else if (tier === 2) {
+    // Arm up to the phone clamped to his ear (the phone is drawn over his head, below).
+    limb(ctx, -1.5, -19.5, -4, -25.5, dark, 3.4);
+  } else if (tier === 3) {
+    // Golf club over the shoulder, held at the grip in front of it.
+    ctx.beginPath(); ctx.moveTo(4, -20); ctx.lineTo(-15, -35);
+    ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.strokeStyle = '#d4d8dc'; ctx.lineWidth = 1.1; ctx.stroke();
+    ctx.save(); ctx.translate(-15, -35); ctx.rotate(0.7);
+    box(ctx, -1.5, -1.5, 6, 3.2, 1.2, '#c9ced4', 1.2);
+    ctx.restore();
+    limb(ctx, -1, -19.5, 3, -20, dark, 3.4);
+  } else {
+    limb(ctx, -1.5, -19.5, -4.5 - sw * 1.5, -12, dark, 3.4);
+    circle(ctx, -4.8 - sw * 1.5, -12.5, 1.9, C.skin, 1);
+  }
+  // Legs: suit trousers and polished black shoes.
+  limb(ctx, -2.5, -10, -2.5 - sw * 2.6, -1.5, dark, 3.6);
+  limb(ctx, 2.5, -10, 2.5 + sw * 2.6, -1.5, suit, 3.6);
+  shoe(ctx, -2.5 - sw * 2.6, -0.8, '#111');
+  shoe(ctx, 2.5 + sw * 2.6, -0.8, '#111');
+  // The Vice President's long camel coat, open over the suit.
+  if (tier === 2) {
+    ctx.beginPath();
+    ctx.moveTo(-6, -23); ctx.lineTo(-9.5, -4); ctx.lineTo(10, -4); ctx.lineTo(7, -23);
+    ctx.closePath();
+    paint(ctx, '#b58b56', OUT);
+  }
+  // Jacket over a belly.
+  ctx.beginPath();
+  ctx.ellipse(1.2, -16, 8.6, 8.2, 0, 0, TAU);
+  paint(ctx, suit, OUT);
+  if (tier === 3) {
+    // Pinstripes.
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(1.2, -16, 8.6, 8.2, 0, 0, TAU); ctx.clip();
+    ctx.beginPath();
+    for (let x = -6; x <= 9; x += 2.4) { ctx.moveTo(x, -25); ctx.lineTo(x, -7); }
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.restore();
+  }
+  // Shirt, tie (flung over his shoulder when he storms off), lanyard and its badge.
+  ctx.beginPath(); ctx.moveTo(-0.4, -23.8); ctx.lineTo(2.2, -17.5); ctx.lineTo(4.8, -23.8); ctx.closePath();
+  paint(ctx, '#ffffff', 1.1);
+  if (P.alt === BOSS_STORM) {
+    ctx.beginPath(); ctx.moveTo(1.4, -23); ctx.quadraticCurveTo(-3, -27, -7, -24); ctx.lineTo(-6, -22); ctx.quadraticCurveTo(-3, -24.5, 2.6, -22);
+    ctx.closePath();
+    paint(ctx, BOSS_TIE[tier], 1);
+  } else {
+    ctx.beginPath(); ctx.moveTo(1.4, -22.8); ctx.lineTo(3, -22.8); ctx.lineTo(4.2, -13.2); ctx.lineTo(2.2, -11); ctx.lineTo(0.6, -13.2); ctx.closePath();
+    paint(ctx, BOSS_TIE[tier], 1);
+  }
+  ctx.beginPath(); ctx.moveTo(-0.6, -23.4); ctx.lineTo(5.8, -15.6); ctx.moveTo(4.6, -23.4); ctx.lineTo(6.6, -15.6);
+  ctx.strokeStyle = BOSS_LANYARD[tier]; ctx.lineWidth = 1.3; ctx.stroke();
+  box(ctx, 4, -16, 5.2, 6.4, 0.8, '#ffffff', 0.9);
+  ctx.fillStyle = BOSS_LANYARD[tier]; ctx.fillRect(4.5, -15.4, 4.2, 1.5);
+  ctx.fillStyle = '#c9a07a'; ctx.fillRect(4.7, -13.4, 2, 2.2);
+  // A raised arm goes up behind his head (drawn first, so it never crosses his face).
+  if (up) {
+    limb(ctx, 2.5, -19.5, 10, -34, suit, 3.6);
+    if (tier === 3) {
+      circle(ctx, 10.4, -35, 2.4, C.skin, 1.1);
+      box(ctx, 8, -32.4, 4.6, 2, 0.6, GOLD, 0.8); // the gold watch
+    } else {
+      clipboard(ctx, 12, -38, P.alt === BOSS_STORM ? 0.9 : 0.25);
+      circle(ctx, 10.4, -34.4, 2, C.skin, 1.1);
+    }
+  }
+  // Head.
+  const hx = 1.6, hy = -29.5;
+  if (tier === 2) {
+    // The coat's collar turned up round his neck.
+    ctx.beginPath(); ctx.moveTo(-5, -25.5); ctx.lineTo(-2, -21); ctx.lineTo(-6, -22); ctx.closePath();
+    paint(ctx, '#9a7444', 1.1);
+  }
+  head(ctx, hx, hy, 7.4);
+  if (tier === 0) {
+    // Bald, with a brave comb-over.
+    ctx.beginPath();
+    ctx.moveTo(hx - 5.5, hy - 3); ctx.quadraticCurveTo(hx, hy - 9.4, hx + 5, hy - 5.2);
+    ctx.moveTo(hx - 5.8, hy - 1.4); ctx.quadraticCurveTo(hx, hy - 7.8, hx + 5.6, hy - 3.4);
+    ctx.strokeStyle = '#5a3a1e'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(hx - 5.8, hy + 0.5, 2, Math.PI * 0.5, Math.PI * 1.5); ctx.fillStyle = '#5a3a1e'; ctx.fill();
+  } else if (tier === 1) {
+    hairCap(ctx, hx, hy, 7.4, '#3b2a1e');
+    // Headset: band over the head, earpiece, boom to his mouth.
+    ctx.beginPath(); ctx.arc(hx - 0.6, hy, 8.2, Math.PI * 1.1, Math.PI * 1.75);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.6; ctx.stroke();
+    circle(ctx, hx - 5.2, hy + 0.2, 2.4, '#2b2f34', 1.1);
+    ctx.beginPath(); ctx.moveTo(hx - 4, hy + 2); ctx.quadraticCurveTo(hx, hy + 6.5, hx + 4.5, hy + 4.6);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke();
+    circle(ctx, hx + 4.8, hy + 4.4, 1.1, '#2b2f34', 0.8);
+  } else if (tier === 2) {
+    hairCap(ctx, hx, hy, 7.4, '#c3c8ce');
+    // Sunglasses pushed up on his head.
+    ctx.beginPath(); ctx.ellipse(hx + 1.2, hy - 7.2, 2.3, 1.3, -0.25, 0, TAU); ctx.ellipse(hx + 5.2, hy - 6, 2.1, 1.2, 0.3, 0, TAU);
+    ctx.fillStyle = '#14181c'; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(hx + 0.4, hy - 7.8, 1.2, 0.6);
+  } else {
+    // Slicked silver hair.
+    ctx.beginPath();
+    ctx.arc(hx, hy, 8, Math.PI * 0.95, Math.PI * 1.85);
+    ctx.quadraticCurveTo(hx + 1, hy - 5.4, hx - 7.6, hy + 1);
+    ctx.closePath();
+    paint(ctx, '#e3e6ea', 1.4);
+    ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(hx - 3, hy - 7.6, 5, 1);
+  }
+  bossFace(ctx, hx, hy + 0.4, P.alt === BOSS_STORM ? 2 : P.alt === BOSS_PEP ? 1 : 0);
+  if (tier === 3 && P.alt !== BOSS_PEP) {
+    // A fat cigar, lit.
+    ctx.save(); ctx.translate(hx + 6.4, hy + 3.4); ctx.rotate(-0.15);
+    box(ctx, 0, -1.1, 7, 2.4, 1, '#7a4a22', 0.9);
+    ctx.fillStyle = '#ff6a1a'; ctx.fillRect(6.2, -0.8, 1.2, 1.8);
+    ctx.restore();
+  }
+  if (tier === 2) {
+    // The phone at his ear, over the back of his head.
+    phone(ctx, hx - 4.6, hy + 0.6, -0.25);
+    circle(ctx, hx - 5, hy + 3.6, 1.9, C.skin, 1);
+  }
+  // Front arm (unless it is in the air): holding his prop out in front.
+  if (up) {
+    // (Drawn before the head.)
+  } else if (tier === 2) {
+    // Clipboard tucked under the arm, a second phone in his hand, eyes on it.
+    clipboard(ctx, 6, -14, 1.35);
+    limb(ctx, 2.5, -19.5, 9.5, -16.5, suit, 3.6);
+    phone(ctx, 11, -18.5, 0.3);
+    circle(ctx, 10, -16.8, 1.9, C.skin, 1);
+  } else if (tier === 3) {
+    // The leash, down to a tiny dog trotting ahead of him, and the gold watch.
+    limb(ctx, 2.5, -19.5, 9, -15, suit, 3.6);
+    box(ctx, 6.4, -17, 4.4, 2, 0.6, GOLD, 0.8);
+    circle(ctx, 9.4, -14.6, 2, C.skin, 1);
+    const tx = 21, ty = -3.5, hop = Math.abs(sw) * 0.8;
+    ctx.beginPath(); ctx.moveTo(10, -15); ctx.quadraticCurveTo(15, -6, tx + 2, ty - 3 - hop);
+    ctx.strokeStyle = '#ff5fa8'; ctx.lineWidth = 0.9; ctx.stroke();
+    limb(ctx, tx - 2, ty, tx - 2 - sw, -0.6, '#d9a066', 1);
+    limb(ctx, tx + 2, ty, tx + 2 + sw, -0.6, '#d9a066', 1);
+    ctx.beginPath(); ctx.ellipse(tx, ty - hop, 3.4, 2.1, 0, 0, TAU); paint(ctx, '#e3b07a', 1);
+    circle(ctx, tx + 3.6, ty - 2.8 - hop, 2.2, '#e3b07a', 1);
+    ctx.beginPath(); ctx.moveTo(tx + 2.4, ty - 4.2 - hop); ctx.lineTo(tx + 2, ty - 7.8 - hop); ctx.lineTo(tx + 4, ty - 4.8 - hop); ctx.closePath();
+    paint(ctx, '#e3b07a', 0.9);
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(tx + 4.4, ty - 3.2 - hop, 0.6, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ff5fa8'; ctx.fillRect(tx + 1.8, ty - 1.4 - hop, 1.6, 1); // a pink collar
+  } else {
+    limb(ctx, 2.5, -19.5, 9, -16, suit, 3.6);
+    clipboard(ctx, 12.6, -19.5, 0.2);
+    circle(ctx, 9.6, -15.8, 2, C.skin, 1.1);
+  }
+}
+
+const DRAW = [hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit, strayDog, cosplay, flasher, drinker, cartDown, boss];
 
 /** A super shopper's little gold crown, worn at a jaunty angle on top of the head. */
 function crown(ctx, K, P) {
   let [x, y] = K.crown;
+  if (K.n === KIND.dog.n && P.alt === DOG_SIT) [x, y] = [12, -46]; // the Great Dane sitting up
   if (K.n === KIND.blind.n) {
     // He leans back when his dog bolts and a little forward when walking; the crown goes with him.
     const lean = P.alt ? -0.3 : P.moving ? 0.07 : 0;
@@ -1876,7 +2230,7 @@ function puff(ctx, x, y, k) {
 }
 
 /** Half-width of each kind's ground shadow (9 if not listed). */
-const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9 };
+const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9, boss: 11 };
 
 /** Adds this shopper's ground shadow to the current path (all shadows are filled at once). */
 export function shadowPath(ctx, s, sx, sy, face = 1) {
@@ -1885,7 +2239,7 @@ export function shadowPath(ctx, s, sx, sy, face = 1) {
   let rx = (SHADOW_RX[s.k] || 9) * K.sc;
   let cx = sx;
   if (s.k === 'mom' && s.cr === 1) { rx = 17; cx += face * 2; } // stretched out on the floor
-  else if (s.k === 'dog' && s.sup) rx = 15;
+  else if (s.k === 'dog' && s.sup) rx = 18;
   else if (s.k === 'cosplay' && s.sup) rx = 16;
   if (s.k === 'blind' && s.st !== ST.STUN) {
     // One long shadow under the man and his dog.
@@ -1922,9 +2276,12 @@ export function drawKid(ctx, mom, sx, sy, face, F, sprites) {
   ctx.drawImage(img, sx + boxX(KID, face), sy + FEET + KID.by - hop, KID.bw, KID.bh);
 }
 
-/** A cart a mom left behind, on its side where she went down ((sx, sy) in logical pixels). */
-export function drawCart(ctx, sx, sy, face, sprites) {
-  const img = sprites.get(CART, 0, face, STAND, 0);
+/**
+ * A cart a mom left behind, on its side where she went down ((sx, sy) in logical pixels).
+ * soccer: it was a Soccer Mom's (a football spills out of it).
+ */
+export function drawCart(ctx, sx, sy, face, sprites, soccer = 0) {
+  const img = sprites.get(CART, soccer ? 1 : 0, face, STAND, 0);
   ctx.drawImage(img, sx + boxX(CART, face), sy + FEET + CART.by - 3, CART.bw, CART.bh);
 }
 
@@ -2020,12 +2377,18 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     if (watching) alt = how.pee ? DOG_PEE : DOG_SIT;
   } else if (s.k === 'flasher') {
     if (s.fl > 0 && !leaving) alt = 1; // bathrobe open
+  } else if (s.k === 'boss') {
+    // Storming off; or, for a second after each pep talk (s.pp has just been wound back up to a
+    // full pepEvery), arm in the air, shouting.
+    const every = (defOf(s).pepEvery || 7) * TICK_HZ;
+    alt = leaving ? BOSS_STORM : s.pp > every - 30 ? BOSS_PEP : 0;
   }
   const ph = F.time * K.step * pace + s.id * 1.7; // walking cycle, radians
   const cycle = (((ph / TAU) % 1) + 1) % 1;
   const frame = stunned && K.down ? DOWN : moving ? ((cycle * WALK_FRAMES) | 0) : STAND;
-  const v = K.vars > 1 ? s.id % K.vars : 0;
-  const sup = !!s.sup;
+  const isBoss = s.k === 'boss';
+  const v = isBoss ? bossV(s) : K.vars > 1 ? s.id % K.vars : 0;
+  const sup = !!s.sup && !isBoss; // he has no super version
   const img = sprites.get(K, v, face, frame, alt, sup);
   const fy = sy + FEET;
   // The sprite's box around the feet; a super's is padded for the glow and drawn bigger.
@@ -2122,13 +2485,93 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   // On his way over to a salesman's stand (s.sa): eyes on the television all the way there, so it
   // is plain why he has left the route.
   else if (s.sa !== undefined && !stunned) eyes(ctx, sx + 9, top - 12, false, true);
-  if (!how.noBar && (s.k === 'dad' || sup || s.hp < s.mhp - 0.01)) patienceBar(ctx, sx, top - 4, s.hp / s.mhp, sup);
+  // (The boss's bar goes with his name plate, drawn over everyone by drawBossTag.)
+  if (!how.noBar && !isBoss && (s.k === 'dad' || sup || s.hp < s.mhp - 0.01)) patienceBar(ctx, sx, top - 4, s.hp / s.mhp, sup);
+}
+
+/** The boss's sprite variant: his tier (1 to 4 and up) less one. */
+const bossV = (s) => Math.max(0, Math.min(3, (s.tr | 0 || 1) - 1));
+
+/** His title on the name plate, in capitals ("Vice President" shortened so it fits). */
+const plateText = new Map();
+function bossPlate(tier) {
+  let t = plateText.get(tier);
+  if (!t) {
+    const titles = (BOSS && BOSS.titles && BOSS.titles.length) ? BOSS.titles : BOSS_TITLES;
+    t = titles[Math.max(0, Math.min(titles.length, tier | 0 || 1) - 1)].toUpperCase().replace('VICE PRESIDENT', 'VP');
+    plateText.set(tier, t);
+  }
+  return t;
+}
+/** Titles to fall back on if the rules have none. */
+const BOSS_TITLES = ['Regional Manager', 'Area Director', 'Vice President of Returns', 'The CEO'];
+const plateWidths = new Map();
+
+/**
+ * Over the boss, drawn after every shopper so nobody stands on it: his patience bar (always), and
+ * a brass name plate with his title, both growing when zoomed out (F.zoom, screen pixels a tile) so
+ * they stay readable; zoomed out, a pulsing gold ring at his feet too, so he can be found in a crowd.
+ * (sx, sy) as for drawShopper.
+ */
+export function drawBossTag(ctx, s, sx, sy, F) {
+  if (s.st === ST.LEAVE) return;
+  const K = KIND.boss;
+  const zoom = F.zoom || 40;
+  const k = Math.max(1, 40 / zoom);
+  const fy = sy + FEET;
+  if (zoom < 30) {
+    const p = 0.5 + 0.5 * Math.sin(F.time * 5);
+    ctx.globalAlpha = 0.55 + 0.35 * p;
+    ctx.beginPath();
+    ctx.ellipse(sx, fy, (16 + 4 * p) * k, (6 + 1.5 * p) * k, 0, 0, TAU);
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 2.2 * k;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  const top = fy - K.top * K.sc - 4;
+  // Patience bar: wide, red-framed, always shown.
+  const f = Math.max(0, Math.min(1, s.hp / Math.max(1e-6, s.mhp)));
+  const hw = 20 * k, hh = 3.2 * k;
+  const by = top - hh - 1;
+  ctx.fillStyle = '#b91c1c';
+  ctx.fillRect(sx - hw - 1.6 * k, by - hh - 1.6 * k, hw * 2 + 3.2 * k, hh * 2 + 3.2 * k);
+  ctx.fillStyle = INK;
+  ctx.fillRect(sx - hw, by - hh, hw * 2, hh * 2);
+  ctx.fillStyle = '#4b5563';
+  ctx.fillRect(sx - hw + k, by - hh + k, hw * 2 - 2 * k, hh * 2 - 2 * k);
+  ctx.fillStyle = ramp(f);
+  ctx.fillRect(sx - hw + k, by - hh + k, (hw * 2 - 2 * k) * f, hh * 2 - 2 * k);
+  // Name plate: brass, screwed on, his title engraved.
+  const str = bossPlate(s.tr);
+  const size = Math.round(9.5 * k * 10) / 10;
+  const key = str + size;
+  let tw = plateWidths.get(key);
+  if (!tw) { ctx.font = font(size, 900); tw = ctx.measureText(str).width; plateWidths.set(key, tw); }
+  const pw = tw + 12 * k, ph = size + 6 * k;
+  const px = sx - pw / 2, py = by - hh - 3 * k - ph;
+  rr(ctx, px, py, pw, ph, 2.5 * k);
+  ctx.fillStyle = '#e9c45a';
+  ctx.fill();
+  ctx.lineWidth = 1.8 * k;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.fillRect(px + 2 * k, py + 1.6 * k, pw - 4 * k, 1.2 * k);
+  ctx.fillStyle = '#7a5a14';
+  ctx.beginPath();
+  ctx.arc(px + 3.2 * k, py + ph / 2, 1 * k, 0, TAU);
+  ctx.moveTo(px + pw - 2.2 * k, py + ph / 2);
+  ctx.arc(px + pw - 3.2 * k, py + ph / 2, 1 * k, 0, TAU);
+  ctx.fill();
+  text(ctx, str, sx, py + ph / 2 + 0.6 * k, size, '#2a1d05', 900);
 }
 
 /** A dog's stream: an arc from his cocked leg to the security he is peeing on (at in tiles). */
 function peeStream(ctx, s, sx, fy, face, z, t, at) {
   const big = !!s.sup;
-  const x0 = sx - face * (big ? 21 : 15.5) * z, y0 = fy - (big ? 23 : 12.5) * z;
+  const sc = KIND.dog.sc * z; // from the tip of his cocked leg (see strayDog and greatDane)
+  const x0 = sx - face * (big ? 25 : 17) * sc, y0 = fy - (big ? 19 : 14) * sc;
   const x1 = at[0] * TILE, y1 = at[1] * TILE;
   const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - 10;
   ctx.beginPath();

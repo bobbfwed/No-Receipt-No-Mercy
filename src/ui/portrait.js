@@ -11,9 +11,13 @@ const spriteSets = new Map();
  * @param {Object} [o]
  * @param {boolean} [o.sup] the super version
  * @param {number} [o.size] width and height in CSS pixels
+ * @param {number} [o.tier] for the boss: which of his four ranks (1 to 4; default 1)
  * @returns {HTMLCanvasElement}
  */
-export function shopperPortrait(k, { sup = false, size = 72 } = {}) {
+export function shopperPortrait(k, { sup = false, size = 72, tier = 1 } = {}) {
+  // The boss has no super version: asked for one, he is drawn as himself.
+  const boss = k === 'boss';
+  if (boss) sup = false;
   const dpr = Math.min(3, globalThis.devicePixelRatio || 1);
   const canvas = document.createElement('canvas');
   canvas.className = `portrait${sup ? ' is-super' : ''}`;
@@ -26,7 +30,10 @@ export function shopperPortrait(k, { sup = false, size = 72 } = {}) {
   // The cosplayer's costume is half as tall again as anyone else, and his mech suit bigger still.
   const wide = k === 'mom' || k === 'blind' || k === 'scooter';
   const tall = k === 'cosplay';
-  const box = tall ? (sup ? 122 : 84) : (sup ? 82 : 58) + (wide ? 6 : 0);
+  // The boss is drawn 1.6 times life, with props either side of him.
+  // The Great Dane (the stray dog's super) is a long animal, tall at the head.
+  const dane = k === 'dog' && sup;
+  const box = boss ? 84 : dane ? 96 : tall ? (sup ? 122 : 84) : (sup ? 82 : 58) + (wide ? 6 : 0);
   const z = (size * dpr) / box;
   const key = Math.round(z * 1000);
   if (!spriteSets.has(key)) { const made = createShopperSprites(); made.setScale(z); spriteSets.set(key, made); }
@@ -35,11 +42,11 @@ export function shopperPortrait(k, { sup = false, size = 72 } = {}) {
   g.setTransform(z, 0, 0, z, 0, 0);
   const s = {
     id: 3, k, sup: sup ? 1 : 0, x: 0, y: 0, vx: 0.05, vy: 0, hp: 30, mhp: 30, st: ST.WALK, t: 0, cd: 0,
-    kd: k === 'mom' ? 2 : 0, kx: 0, ky: 0, kvx: 0, kvy: 0, bt: 0,
+    kd: k === 'mom' ? 2 : 0, kx: 0, ky: 0, kvx: 0, kvy: 0, bt: 0, tr: tier, pp: 0,
   };
   const F = { time: 0.35, now: 350, alpha: 0 };
-  const x = box / 2 - (k === 'mom' ? 12 : k === 'blind' ? 5 : 0);
-  const y = box / 2 + (tall ? (sup ? 37 : 18) : sup ? 17 : 10);
+  const x = box / 2 - (k === 'mom' ? 12 : k === 'blind' ? 5 : boss ? 2 : dane ? 8 : 0);
+  const y = box / 2 + (boss ? 30 : dane ? 28 : tall ? (sup ? 37 : 18) : sup ? 17 : 10);
   drawShopper(g, s, x, y, 1, F, sprites, { noBar: true });
   // A mom is not herself without the kid she is chasing.
   if (k === 'mom') drawKid(g, s, x + 26, y + 4, -1, F, sprites);

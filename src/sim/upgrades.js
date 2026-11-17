@@ -72,8 +72,8 @@ export function spentOn(b) {
  * A building's working numbers with its upgrades applied. `b` may be a building from the grid or
  * any `{ k, u }`, so tables can be worked out for any mix of levels. Only the numbers its kind
  * uses are meaningful:
- *   dmg, range, cd       towers (cd in seconds between shots; the Rail Gun's range is its beam)
- *   width                Rail Gun: how far either side of the beam's centre line it hits
+ *   dmg, range, cd       towers (cd in seconds between shots; the Barcode Laser's range is its beam)
+ *   width                Barcode Laser: how far either side of the beam's centre line it hits
  *   range, secs          free samples (how long a sample stops a shopper)
  *   range, secs, stopLeft, rushMul   salesman: reach, how long a shopper watches, what is left
  *                        of each shopper's chance not to stop (it stops with 1 - (1 - stop) *

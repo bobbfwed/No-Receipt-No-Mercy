@@ -21,13 +21,15 @@
 //
 // Everything is drawn in logical world pixels, TILE (40) per tile; the camera turns that into a
 // canvas transform. The parts are split by layer:
-//   floor.js      walls, shelving, entrances, tills, the machines' marked floor (static parts
-//                 cached in chunks)
-//   buildings.js  belts, machines, security, level badges, wreckage left by gym bros
+//   floor.js      walls, shelving, the food court's furniture, entrances, tills, the machines'
+//                 marked floor (static parts cached in chunks)
+//   buildings.js  belts, machines, security, the flow arrows on factory buildings, level badges
+//                 (moved to the corner away from a flow arrow), wreckage left by gym bros
 //   items.js      goods on belts (pre-rendered sprites)
 //   messes.js     slushie spills teenagers leave on the floor
-//   shoppers.js   every kind of shopper, their super versions, a mom's runaway child, and the
-//                 carts moms leave behind
+//   shoppers.js   every kind of shopper, their super versions, the boss (and his name plate, drawn
+//                 after everyone), a mom's runaway child, and the carts moms leave behind
+//                 (state.carts)
 //   effects.js    floating cash, speech blips, shots, beams, sprays, wreckage, upgrade sparkles
 //   guides.js     route guides and tutorial marks
 //   minimap.js    the whole map small, for the interface's corner (a separate canvas)
@@ -42,11 +44,12 @@ import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
 import {
   beltShape, drawBelt, drawBeltItems, drawBuilding, createBeltSprites, createBuildingSprites, SP,
-  drawBadge, drawRubble, drawWear, rectOf, BIG,
+  drawBadge, drawRubble, drawWear, rectOf, BIG, FLOW, drawFlow, badgeCorner,
 } from './buildings.js';
 import { buildItemSprites } from './items.js';
 import {
   drawShopper, shadowPath, drawKid, kidShadowPath, createShopperSprites, drawCart, drawDownTile,
+  drawBossTag,
 } from './shoppers.js';
 import { createMessSprites, drawMesses } from './messes.js';
 import { createEffects } from './effects.js';
@@ -114,10 +117,6 @@ export function createRenderer(canvas, session) {
   const nameWidths = new Map();
   /** Visible tiles this frame, with a margin (exclusive end). */
   const vis = { x0: 0, y0: 0, x1: 0, y1: 0 };
-  /** Carts moms have left behind this wave, where they went down: { x, y, f } in tiles. */
-  const carts = [];
-  /** Moms' `nc` as last seen, by id, to notice the moment one leaves her cart. */
-  const hadCart = new Map();
   /** Context for one shopper's drawing (see drawShopper): reused. */
   const how = { pee: null, gawk: false, tv: false };
   const peeAt = [0, 0];
@@ -323,9 +322,9 @@ export function createRenderer(canvas, session) {
     drawBuildings(s, now);
 
     if (view.route) drawRoutes(ctx, s, now / 1000);
-    fx.draw(ctx, now, 0, sprites);
+    fx.draw(ctx, now, 0, sprites, cam.zoom);
     drawShoppers(s, alpha);
-    fx.draw(ctx, now, 1, sprites);
+    fx.draw(ctx, now, 1, sprites, cam.zoom);
     drawPreview(s, view);
     if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now, s.w, s.h);
     ctx.restore();
@@ -335,6 +334,25 @@ export function createRenderer(canvas, session) {
     const k = canvas.width / cssW;
     ctx.setTransform(k, 0, 0, k, 0, 0);
     if (view.cursors) drawCursors(s, view.cursors);
+    // A boss got his refund: the edges of the screen throb red for a moment, wherever you are looking.
+    const esc = now - fx.timers.bossEscAt;
+    if (esc >= 0 && esc < 1800) bossAlarm(esc / 1800);
+  }
+
+  /** The red alarm round the edges of the screen after a boss reaches a till (k 0..1). */
+  function bossAlarm(k) {
+    const a = (1 - k) * (0.55 + 0.45 * Math.abs(Math.sin(k * Math.PI * 4)));
+    const edge = Math.min(cssW, cssH) * 0.18;
+    for (const [x0, y0, x1, y1, w, h] of [
+      [0, 0, 0, edge, cssW, edge], [0, cssH, 0, cssH - edge, cssW, edge],
+      [0, 0, edge, 0, edge, cssH], [cssW, 0, cssW - edge, 0, edge, cssH],
+    ]) {
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, `rgba(220,20,20,${0.75 * a})`);
+      g.addColorStop(1, 'rgba(220,20,20,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x0 === cssW ? cssW - edge : 0, y0 === cssH ? cssH - edge : 0, w, h);
+    }
   }
 
   /**
@@ -442,6 +460,8 @@ export function createRenderer(canvas, session) {
         } else if (ai !== i) continue;
         if (b.k !== 'belt') drawBuilding(ctx, b, ai, F, buildingSprites);
         drawWear(ctx, b, ai, F);
+        // Which way the goods go, over any damage (belts show it with their chevrons).
+        if (b.k !== 'belt' && FLOW[b.k] !== undefined) drawFlow(ctx, b, ai, F, buildingSprites);
         const r = rectOf(b, ai, w);
         const since = now - upAt[ai];
         if (since < 450) {
@@ -453,7 +473,7 @@ export function createRenderer(canvas, session) {
           ctx.globalAlpha = 1;
         }
         const lv = b.u ? levelOf(b) : 1;
-        if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b));
+        if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b), badgeCorner(b));
       }
     }
   }
@@ -478,15 +498,9 @@ export function createRenderer(canvas, session) {
     order.length = 0;
     flashing.length = 0;
     let nk = 0;
-    // Carts left behind stay until the wave is over.
-    if (s.phase !== 'wave') {
-      if (carts.length) carts.length = 0;
-      if (hadCart.size) hadCart.clear();
-    }
     // Only the ones on screen (a margin of two tiles for trolleys, dogs and bubbles).
     const ax = vis.x0 - 2, bx = vis.x1 + 2, ay = vis.y0 - 2, by = vis.y1 + 2;
     for (const sh of s.shoppers) {
-      if (sh.k === 'mom') noticeCart(sh);
       if (sh.fl > 0 && sh.st !== ST.LEAVE) flashing.push(sh);
       if (sh.x >= ax && sh.x <= bx && sh.y >= ay && sh.y <= by) order.push(sh);
       // A mom's loose child is a figure of its own on the floor, sorted in with everyone else.
@@ -500,9 +514,13 @@ export function createRenderer(canvas, session) {
       }
     }
     order.sort(byY);
-    // On the floor first: carts moms abandoned, and the tiles drunks are lying across.
-    for (const c of carts) {
-      if (c.x >= ax && c.x <= bx && c.y >= ay && c.y <= by) drawCart(ctx, c.x * T, c.y * T, c.f, shopperSprites);
+    // On the floor first: carts moms abandoned this wave (state.carts: [x, y, sup, face], kept by
+    // the rules so a player who joins mid-wave sees them too), and the tiles drunks are lying across.
+    const carts = s.carts;
+    if (carts) {
+      for (const c of carts) {
+        if (c[0] >= ax && c[0] <= bx && c[1] >= ay && c[1] <= by) drawCart(ctx, c[0] * T, c[1] * T, c[3] < 0 ? -1 : 1, shopperSprites, c[2]);
+      }
     }
     for (let n = 0; n < order.length; n++) {
       const sh = order[n];
@@ -521,6 +539,7 @@ export function createRenderer(canvas, session) {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.fill();
+    let bosses = 0;
     for (let n = 0; n < order.length; n++) {
       const sh = order[n];
       if (sh.kid) {
@@ -535,6 +554,14 @@ export function createRenderer(canvas, session) {
       how.pee = null; how.gawk = false; how.tv = false;
       if (sh.st === ST.WATCH) face = watching(s, sh, face);
       drawShopper(ctx, sh, px, py, face, F, shopperSprites, how);
+      if (sh.k === 'boss') bosses++;
+    }
+    // The boss's name plate and patience bar go over everyone, so the crowd never hides them.
+    if (bosses) {
+      for (let n = 0; n < order.length; n++) {
+        const sh = order[n];
+        if (!sh.kid && sh.k === 'boss') drawBossTag(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T, F);
+      }
     }
     for (let k = 0; k < nk; k++) kids[k].m = null;
     // Forget shoppers who have gone, now and then.
@@ -543,19 +570,6 @@ export function createRenderer(canvas, session) {
       for (const sh of s.shoppers) { live.add(sh.id); live.add(-sh.id); }
       for (const id of facing.keys()) if (!live.has(id)) facing.delete(id);
     }
-  }
-
-  /**
-   * Notices the moment a mom leaves her cart behind (her `nc` turns 1, as she goes down for the
-   * last time) and leaves it on the floor there for the rest of the wave. A mom first seen without
-   * it (after joining mid-wave) leaves nothing, as nobody knows where it is.
-   */
-  function noticeCart(sh) {
-    const was = hadCart.get(sh.id);
-    const now = sh.nc === 1 ? 1 : 0;
-    if (was === now) return;
-    hadCart.set(sh.id, now);
-    if (was === 0 && now === 1 && carts.length < 60) carts.push({ x: sh.x, y: sh.y, f: faceOf(sh.id, sh.vx) });
   }
 
   /**
@@ -650,7 +664,7 @@ export function createRenderer(canvas, session) {
   }
 
   /**
-   * The Rail Gun's beam: a straight strip `range` tiles long and `2 * width` wide from its front
+   * The Barcode Laser's beam: a straight strip `range` tiles long and `2 * width` wide from its front
    * end, through everything. Same styles as rangeCircle.
    */
   function beamStrip(fx, fy, d, range, width, style) {
@@ -669,11 +683,12 @@ export function createRenderer(canvas, session) {
       return;
     }
     const faint = style === 'faint', ok = style !== 'bad';
-    ctx.fillStyle = faint ? 'rgba(125,249,255,0.08)' : ok ? 'rgba(125,249,255,0.16)' : 'rgba(239,68,68,0.14)';
+    // The scanner's red laser when it may go here; grey-white with a red fill when it may not.
+    ctx.fillStyle = faint ? 'rgba(255,60,60,0.08)' : ok ? 'rgba(255,70,70,0.16)' : 'rgba(239,68,68,0.14)';
     ctx.fill();
     if (!faint) ctx.setLineDash(RANGE_DASH);
     ctx.lineWidth = faint ? 1.5 : 2.5;
-    ctx.strokeStyle = faint ? 'rgba(200,250,255,0.5)' : ok ? 'rgba(200,250,255,0.95)' : 'rgba(255,120,110,0.9)';
+    ctx.strokeStyle = faint ? 'rgba(255,190,190,0.5)' : ok ? 'rgba(255,210,210,0.95)' : 'rgba(170,170,170,0.9)';
     ctx.stroke();
     ctx.setLineDash(NO_DASH);
     // The centre line, with an arrowhead at the far end.
@@ -686,14 +701,14 @@ export function createRenderer(canvas, session) {
       ctx.lineTo(ex, ey);
       ctx.lineTo(ex - dx * 10 + dy * 7, ey - dy * 10 + dx * 7);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = ok ? 'rgba(200,250,255,0.8)' : 'rgba(255,120,110,0.8)';
+      ctx.strokeStyle = ok ? 'rgba(255,80,80,0.9)' : 'rgba(170,170,170,0.8)';
       ctx.stroke();
     }
   }
 
   /**
    * What a building reaches, drawn for building b (any { k, d, u }) with its anchor at tile ai:
-   * the Rail Gun's beam, or a circle round the middle of its footprint for anything with a range.
+   * the Barcode Laser's beam, or a circle round the middle of its footprint for anything with a range.
    */
   function showRange(s, b, ai, style) {
     const st = statsOf(b);
@@ -818,6 +833,8 @@ export function createRenderer(canvas, session) {
       ctx.lineWidth = 3;
       ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
       ctx.stroke();
+      // The flow arrow at full strength, so the facing is plain before it is built.
+      if (tool === 'belt' || FLOW[tool] !== undefined) drawFlow(ctx, ghost, gi, F, buildingSprites, tool);
       const cx = gx + gw / 2;
       // Off its marked floor: say where it does go, in that floor's colour. Grows when zoomed out
       // so it stays readable (about 11 screen pixels at least).
