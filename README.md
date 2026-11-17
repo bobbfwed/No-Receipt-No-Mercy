@@ -3,7 +3,7 @@
 *The customer is always a prick.*
 
 <!-- gen:version -->
-**Version 0.2.03** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
+**Version 0.2.04** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
 <!-- /gen:version -->
 
 **Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).

@@ -503,7 +503,7 @@ test('the TV salesman stops some shoppers and hurries others past, each kind in 
   assert.ok(Math.abs(st.secs - TUNE.stopSecs * 1.15 ** 4) < 1e-9 && Math.abs(st.stopLeft - 0.88 ** 4) < 1e-9 && Math.abs(st.rushMul - 0.85 ** 4) < 1e-9);
 });
 
-test('a pitched shopper watches for the stop time, or hurries at 1.4 times his speed, and is left alone for 9 seconds', () => {
+test('a pitched shopper sets off for the stand to watch for the stop time, or hurries at 1.4 times his speed, and is left alone for 9 seconds', () => {
   const s = stage(1);
   place(s, 'salesman', 14, 4);
   send(s, [{ k: 'hunter', n: 40, gap: 0.6, at: 0 }]);
@@ -515,7 +515,7 @@ test('a pitched shopper watches for the stop time, or hurries at 1.4 times his s
       const m = s.shoppers.find((q) => q.pc === Math.round(TUNE.pitchCool * TICK_HZ) && Math.abs(q.x - q.vx - e.x) < 1e-9);
       assert.ok(!firstPitch.has(m.id) || s.tick - firstPitch.get(m.id) >= TUNE.pitchCool * TICK_HZ, 'not again within the cooldown');
       firstPitch.set(m.id, s.tick);
-      if (e.r === 'stop') { assert.equal(m.st, ST.WATCH); assert.equal(m.t, Math.round(TUNE.stopSecs * TICK_HZ)); }
+      if (e.r === 'stop') { assert.equal(m.sa, at(14, 4), 'on his way to the stand'); assert.equal(m.sw, Math.round(TUNE.stopSecs * TICK_HZ)); assert.equal(e.i, at(14, 4)); }
       else { assert.equal(m.ru, Math.round(TUNE.rushSecs * TICK_HZ)); assert.ok(Math.abs(Math.hypot(m.vx, m.vy) - SHOPPERS.hunter.speed * TUNE.rushSpeed * DT) < 1e-9); }
     }
   });
@@ -526,6 +526,86 @@ test('a pitched shopper watches for the stop time, or hurries at 1.4 times his s
   g.grid[at(14, 4)].off = 1e6;
   send(g, [{ k: 'scooter', n: 10, gap: 1, at: 0 }]);
   assert.equal(play(g, 200).filter((e) => e.e === 'pitch').length, 0);
+});
+
+/** Plays a wave past a stand on (14,4)-(15,5) and returns where each stopped shopper was pitched and where he watched from. */
+function walkUps(s, groups) {
+  send(s, groups);
+  const from = new Map(), stops = [];
+  play(s, 300, (tick) => {
+    for (const e of tick) {
+      if (e.e === 'pitch' && e.r === 'stop') {
+        // (The one pitched this tick still has all his walking time.)
+        const m = s.shoppers.find((q) => q.sa !== undefined && q.sl === Math.round(TUNE.pitchWalkSecs * TICK_HZ) && q.x === e.x && q.y === e.y);
+        from.set(m.id, [e.x, e.y]);
+      } else if (e.e === 'watching') {
+        // (Several may be watching from the same spot: this is the one who has only just stopped.)
+        const m = s.shoppers.filter((q) => q.st === ST.WATCH && q.x === e.x && q.y === e.y).sort((p, q) => q.t - p.t)[0];
+        assert.equal(m.t, Math.round(TUNE.stopSecs * TICK_HZ), 'he watches for the whole stop time once he is there');
+        assert.equal(m.sa, undefined);
+        stops.push({ x: e.x, y: e.y, tx: Math.floor(e.x), ty: Math.floor(e.y), from: from.get(m.id) });
+      }
+    }
+  });
+  return stops;
+}
+const toStand = (x, y) => Math.hypot(x - 15, y - 5); // the middle of the stand on (14,4)-(15,5)
+
+test('a shopper the salesman stops walks up to the stand before he stops', () => {
+  const s = stage(3);
+  place(s, 'salesman', 14, 4);
+  const stops = walkUps(s, [{ k: 'scooter', n: 12, gap: 1.5, at: 0 }]);
+  assert.ok(stops.length >= 6, `${stops.length} scooters stopped`);
+  for (const p of stops) {
+    // Beside the stand: on a tile that shares an edge with one of its four.
+    const beside = [[14, 4], [15, 4], [14, 5], [15, 5]].some(([bx, by]) => Math.abs(p.tx - bx) + Math.abs(p.ty - by) === 1);
+    assert.ok(beside, `watching from ${p.tx},${p.ty}`);
+    assert.ok(toStand(p.x, p.y) < toStand(...p.from) - 0.5, 'nearer than where the pitch caught him');
+  }
+});
+
+test('if something is in the way he gets as near as he can and watches from there', () => {
+  const s = stage(3);
+  place(s, 'salesman', 14, 4);
+  // A wall of crates between the stand and the route along rows 7 and 8.
+  for (let x = 9; x <= 20; x++) assert.ok(place(s, 'crate', x, 6).ok);
+  const stops = walkUps(s, [{ k: 'scooter', n: 12, gap: 1.5, at: 0 }]);
+  assert.ok(stops.length >= 6, `${stops.length} scooters stopped`);
+  for (const p of stops) {
+    assert.equal(p.ty, 7, `against the crates, on row 7 (was at ${p.tx},${p.ty})`);
+    assert.ok(p.tx === 14 || p.tx === 15, `level with the stand (was at ${p.tx},${p.ty})`);
+  }
+  // What is in the way depends on who is walking: a belt stops a scooter, and a dad steps onto it.
+  for (const [k, n, row] of [['scooter', 12, 7], ['dad', 80, 6]]) {
+    const g = stage(4);
+    place(g, 'salesman', 14, 4);
+    for (let x = 9; x <= 20; x++) assert.ok(place(g, 'belt', x, 6).ok);
+    const seen = walkUps(g, [{ k, n, gap: 1.2, at: 0 }]);
+    assert.ok(seen.length >= 5, `${seen.length} ${k}s stopped`);
+    for (const p of seen) assert.equal(p.ty, row, `a ${k} watches from row ${row} (was at ${p.tx},${p.ty})`);
+  }
+});
+
+test('a stand that is sold or switched off while he walks over is forgotten, and he walks on', () => {
+  for (const how of ['sold', 'off']) {
+    const s = stage(3);
+    place(s, 'salesman', 14, 4);
+    send(s, [{ k: 'scooter', n: 6, gap: 2, at: 0 }]);
+    let gone = false, watched = 0;
+    play(s, 200, (tick) => {
+      if (tick.some((e) => e.e === 'watching')) watched++;
+      if (!gone && tick.some((e) => e.e === 'pitch' && e.r === 'stop')) {
+        gone = true;
+        if (how === 'sold') assert.ok(applyCommand(s, 0, { c: 'remove', x: 14, y: 4 }).ok);
+        else s.grid[at(14, 4)].off = 1e6;
+      } else if (gone) {
+        for (const m of s.shoppers) assert.equal(m.sa, undefined, 'nobody is still heading for it');
+      }
+    });
+    assert.ok(gone, 'somebody was pitched');
+    assert.equal(watched, 0, `${how}: nobody stopped to watch`);
+    assert.equal(s.refunds, 6, 'and they all carried on to the tills');
+  }
 });
 
 test('a running child may stop to watch the television, and waits there for his mother', (t) => {

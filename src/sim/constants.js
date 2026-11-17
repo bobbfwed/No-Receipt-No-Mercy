@@ -354,7 +354,8 @@ export const TUNE = {
 
   // TV Salesman.
   pitchCool: 9, // seconds before any salesman can pitch to the same shopper again
-  stopSecs: 2.5, // how long a shopper who stops watches the demonstration
+  stopSecs: 2.5, // how long a shopper who stops watches the demonstration, once he has walked over to the stand
+  pitchWalkSecs: 4, // the longest he will spend walking over; then he watches from where he is
   rushSecs: 4, // how long a shopper who hurries past stays hurried...
   rushSpeed: 1.4, // ...at this many times his speed
   // Stray dog.

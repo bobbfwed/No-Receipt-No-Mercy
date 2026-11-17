@@ -126,7 +126,7 @@ function securityCard(k) {
   if (k === 'salesman') {
     extra.push(['Reach', `${fmt(st.range)} tiles from the middle of the stand`]);
     extra.push(['Stops / hurries', Object.keys(SHOPPERS).filter((c) => SHOPPERS[c].pitch).map((c) => `${SHOPPERS[c].name} ${pct(SHOPPERS[c].pitch[0])} / ${pct(SHOPPERS[c].pitch[1])}`).join(' · ')]);
-    extra.push(['A stopped shopper', `watches for ${fmt(st.secs)} s; a hurried one moves 40% faster for ${fmt(TUNE.rushSecs)} s`]);
+    extra.push(['A stopped shopper', `walks over to the stand (for up to ${fmt(TUNE.pitchWalkSecs)} s, and only as near as he can get), then watches for ${fmt(st.secs)} s; a hurried one moves 40% faster for ${fmt(TUNE.rushSecs)} s`]);
   }
   extra.push(['Gym bro hits it survives', `${st.hits} a sales event`]);
   return h('article', { class: 'hb-card hb-wide' }, buildingHead(k),

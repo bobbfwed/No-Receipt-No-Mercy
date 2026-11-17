@@ -60,8 +60,8 @@ export const HOW = {
     maze: 'Blocks all shoppers.',
   },
   salesman: {
-    does: 'A man demonstrating knives and barbecues on a television. Each shopper who comes within 4.5 tiles may stop to watch for 2.5 seconds, or hurry past to get away from him. Runaway kids usually stop to watch the television.',
-    use: 'It takes up two tiles by two. It is the one thing that makes some dads stop (1 in 5), but more of them speed up (3 in 10), so put damage where they stop, not after. Mobility scooters nearly always stop. Upgrading his pitch makes more shoppers stop, for longer, and fewer hurry.',
+    does: 'A man demonstrating knives and barbecues on a television. Each shopper who comes within 4.5 tiles may walk over to the stand and watch for 2.5 seconds, or hurry past to get away from him. If something is in his way he watches from as near as he can get. Runaway kids usually stop to watch the television.',
+    use: 'It takes up two tiles by two. It is the one thing that makes some dads stop (1 in 5), but more of them speed up (3 in 10), so put damage round the stand, where they stop, not after it. Mobility scooters nearly always stop. Upgrading his pitch makes more shoppers stop, for longer, and fewer hurry.',
     maze: 'Blocks all shoppers.',
   },
 };
