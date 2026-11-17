@@ -2,6 +2,8 @@
 
 Date: 2026-11-16. Committed and pushed to `main`; the menu will read **0.2.06**.
 
+> **Added after your answers (same day), release 0.2.07, committed but not pushed:** you kept the name Barcode Laser and chose a tougher boss with a smaller crowd. His patience is doubled (535 in event 5, 1,575 in 10, 3,592 in 15, 6,931 in 20 on Normal) and the rest of his event's crowd is 60% of normal instead of 75%. The scripted players still drive him out in events 5 and 10, because the thinner crowd lets security reach him sooner; their results are 11 / 16 / 14, 11 / 14 / 14 and 11 / 15 / 14 for seeds 11, 5 and 23. Where the report below says 75% or "about as tough as a Karen", read these numbers instead.
+
 ## Needs your attention
 
 1. **I made the design decisions myself, because you were away.** The three that are most a matter of taste are the new name (Barcode Laser), how tough the boss is, and what he does. They are listed under "Decisions made for you" and two of them are the questions at the end. All are quick to change.
