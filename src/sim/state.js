@@ -97,6 +97,9 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [crn] mom: how many times she has crawled to him and got up again
  * @property {number} [nc]  mom: 1 once she has left her cart behind (she then carries the child)
  * @property {number} [pc]  ticks before a salesman can pitch to this shopper again
+ * @property {number} [sa]  the tile of the salesman's stand he is walking over to (then he watches)
+ * @property {number} [sw]  ...how many ticks he will watch for when he gets there
+ * @property {number} [sl]  ...and how many ticks he has left to get there
  * @property {number} [ru]  ticks left hurrying away from a salesman (moves faster)
  * @property {number} [gz]  dads and teenagers: ticks before an exhibitionist can catch his eye again
  * @property {number} [fl]  exhibitionist: ticks left with her bathrobe open (for drawing)

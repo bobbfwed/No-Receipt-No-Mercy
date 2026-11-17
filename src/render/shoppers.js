@@ -2119,6 +2119,9 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   }
   if (s.st === ST.BROWSE) thought(ctx, sx + 10, top - 10, s.k === 'clipper' ? '%' : '$');
   else if (watching && !how.pee && !(s.k === 'flasher')) eyes(ctx, sx + 9, top - 12, how.gawk, how.tv);
+  // On his way over to a salesman's stand (s.sa): eyes on the television all the way there, so it
+  // is plain why he has left the route.
+  else if (s.sa !== undefined && !stunned) eyes(ctx, sx + 9, top - 12, false, true);
   if (!how.noBar && (s.k === 'dad' || sup || s.hp < s.mhp - 0.01)) patienceBar(ctx, sx, top - 4, s.hp / s.mhp, sup);
 }
 

@@ -491,6 +491,47 @@ function moveAlong(state, field, x, y, ox, oy, speed, id) {
   return moveTo(x, y, (best % W) + 0.5 + ox, ((best / W) | 0) + 0.5 + oy, speed);
 }
 
+const clearStand = (s) => { delete s.sa; delete s.sw; delete s.sl; };
+
+/**
+ * A shopper the salesman has talked into stopping walks up to the stand before he stops, so it is
+ * plain what stopped him (the owner's request). He heads straight for it: each step is to the
+ * neighbouring tile he can walk on that is nearer the stand, so he ends up beside it, or, if
+ * belts, crates or walls are in the way, as near as he can get. There he stands and watches for
+ * the time the pitch earned. He gives up if the stand is wrecked, sold or switched off on the way,
+ * or if getting there takes too long.
+ * @returns {boolean} true if this tick was spent on it (walking, or starting to watch)
+ */
+function walkToStand(state, s, def, i, ev) {
+  const b = state.grid[s.sa];
+  if (!b || b.k !== 'salesman' || b.part !== undefined || b.off > 0) { clearStand(s); return false; }
+  const W = state.w;
+  const [cx, cy] = centreOf(state, s.sa, b);
+  const far = (ti) => ((ti % W) + 0.5 - cx) ** 2 + (((ti / W) | 0) + 0.5 - cy) ** 2;
+  // (A gym bro does not smash his way to the television: crates stop him like anyone else.)
+  const mode = modeOf(s.k) === SMASH ? NORMAL : modeOf(s.k);
+  let to = i, best = far(i) - 1e-9;
+  if (--s.sl > 0) {
+    for (let d = 0; d < 4; d++) {
+      const ni = neighbour(state, i, d);
+      if (ni < 0 || !walkable(state, ni, mode) || state.tiles[ni] === 'T') continue;
+      const f = far(ni);
+      if (f < best) { best = f; to = ni; }
+    }
+  }
+  // Nowhere nearer to go: he finishes the step to the middle of this tile, then watches.
+  if (moveTo(s.x, s.y, (to % W) + 0.5 + (s.ox || 0), ((to / W) | 0) + 0.5 + (s.oy || 0), def.speed)) {
+    s.vx = MV.vx; s.vy = MV.vy;
+    s.x += MV.vx; s.y += MV.vy;
+    if (to !== i || s.sl > 0) return true;
+  }
+  s.st = ST.WATCH;
+  s.t = s.sw;
+  ev.push({ e: 'watching', x: s.x, y: s.y, k: s.k, i: s.sa });
+  clearStand(s);
+  return true;
+}
+
 /** True if a salesman (from stepBuildings) reaches the point (x, y) and is still switched on. */
 function salesmanAt(state, salesmen, x, y) {
   for (const m of salesmen) {
@@ -707,6 +748,12 @@ function stepShoppers(state, fields, sec, ev) {
       continue;
     }
 
+    // Taken in by a salesman: on his way over to the stand, and nothing else gets his attention.
+    if (s.sa !== undefined) {
+      if (chasing || s.cr === 1) clearStand(s); // her child has run off: the television can wait
+      else if (walkToStand(state, s, def, i, ev)) continue;
+    }
+
     let speed = def.speed;
     let here = grid[i];
 
@@ -824,9 +871,13 @@ function stepShoppers(state, fields, sec, ev) {
         const roll = rand(state);
         s.pc = secs(TUNE.pitchCool);
         if (roll < stop) {
-          s.st = ST.WATCH;
-          s.t = secs(st.secs);
-          ev.push({ e: 'pitch', x: s.x, y: s.y, k: s.k, r: 'stop' });
+          // He does not freeze where he is: he walks over to the stand, and watches from there
+          // (see walkToStand). `sa` is the stand, `sw` how long he will watch, `sl` how long he
+          // may take getting there.
+          s.sa = m[4];
+          s.sw = secs(st.secs);
+          s.sl = secs(TUNE.pitchWalkSecs);
+          ev.push({ e: 'pitch', x: s.x, y: s.y, k: s.k, r: 'stop', i: m[4] });
           continue;
         }
         if (roll < stop + rush) {
@@ -900,7 +951,9 @@ function stepShoppers(state, fields, sec, ev) {
  *     and is crawling to him, untouchable
  *   smash {i,x,y,k,owner,left} a gym bro hit the building of kind k on anchor tile i; left is how
  *     many more hits it takes this wave (0: destroyed, and now rubble)
- *   pitch {x,y,k,r} a salesman got to a shopper of kind k: r 'stop' (watches) or 'rush' (hurries)
+ *   pitch {x,y,k,r,i?} a salesman got to a shopper of kind k: r 'stop' (he sets off for the stand
+ *     on tile i to watch) or 'rush' (hurries past)
+ *   watching {x,y,k,i} that shopper has reached the stand, or got as near as he can, and stopped
  *   pee {i,x,y,k} a dog peed on the building of kind k on anchor tile i: it is off for a while
  *   shield {x,y} a cosplayer soaked up a shot meant for someone near him (at most once a second each)
  *   flash {x,y,n} an exhibitionist opened her bathrobe; n dads and teenagers stopped to stare
