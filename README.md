@@ -3,7 +3,7 @@
 *The customer is always a prick.*
 
 <!-- gen:version -->
-**Version 0.2.02** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
+**Version 0.2.03** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
 <!-- /gen:version -->
 
 **Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
@@ -107,6 +107,7 @@ With two or more players, one can stop defending and run the other side. Between
 | U | Buy the next level of the first upgrade of the building under the mouse (or pick the Upgrade tool and click a building to open its upgrades) |
 | B | Rebuild everything of yours that gym bros have wrecked, at half price, upgrades included |
 | Right-click, or X then click | Remove (75% of what was spent on it back) |
+| OPEN THE DOORS | Start the next sales event without waiting for the timer. It costs nothing: the factory is paid at once for what it would have sold in the time skipped |
 | Esc | Put the tool down |
 | W A S D, or arrow keys | Move the view around the map |
 | Mouse wheel | Zoom. Middle-button drag also moves the view |

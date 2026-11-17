@@ -1994,24 +1994,45 @@ html, body { overscroll-behavior: none; }
   .bb-touch .tc-btn { min-width: 3.3rem; }
 }
 
-/* Fifteen buttons leave the held tool's card no room in the bar on anything narrower than a very
-   wide screen (it was squeezed to a sliver and made the bar taller than the floor). There it
-   floats just above the bar, in the middle of the space to the left of DEB's bubble, and gives
-   way to the building sheet. The block after this one restyles it again for small screens. */
-@media (max-width: 1720px) {
-  .bb-info {
-    position: absolute;
-    left: 0.6rem;
-    right: 31.5rem;
-    bottom: calc(100% + 0.45rem);
-    max-width: 28rem;
-    margin: 0 auto;
-    padding: 0.35rem 0.6rem 0.45rem;
-    font-size: 0.74rem;
-    box-shadow: 0 0.3rem 0 rgba(0, 0, 0, 0.45);
-  }
-  .game:has(.touch-sheet:not(.hidden)) .bb-info { display: none; }
+/* The held tool's card is never part of the build bar's layout, on any screen. When it was, the
+   bar's height depended on how long that building's description was, so picking a building
+   resized the floor and the view jumped (the owner's complaint, 0.2.01: with fifteen buttons the
+   card no longer fitted in the bar even on a wide screen). It floats just above the bar, in the
+   middle of the space to the left of DEB's bubble, gives way to the building sheet, and folds
+   down to its heading with the button at its right. The block after this one restyles it again
+   for small screens. */
+.bb-info {
+  position: absolute;
+  left: 0.6rem;
+  right: 31.5rem;
+  bottom: calc(100% + 0.45rem);
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 0.35rem 0.6rem 0.45rem;
+  font-size: 0.74rem;
+  box-shadow: 0 0.3rem 0 rgba(0, 0, 0, 0.45);
 }
+.game:has(.touch-sheet:not(.hidden)) .bb-info { display: none; }
+.bbi-fold {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.7rem;
+  height: 1.4rem;
+  margin: -0.05rem -0.2rem -0.05rem 0.15rem;
+  border: 0.12rem solid var(--line);
+  border-radius: 0.4rem;
+  background: #fff;
+  color: var(--ink);
+  font: 900 0.9rem/1 var(--font);
+  cursor: pointer;
+}
+.bbi-fold::after { content: "▾"; }
+.bb-info.folded .bbi-fold::after { content: "▴"; }
+.bb-info.folded p { display: none; }
+/* The key hints at the end of the bar are capped at a button's height, so they cannot change
+   the bar's height either. */
+.bb-hints { align-self: center; max-height: 4.85rem; }
 
 /* Any narrow screen, and any touch screen: the build bar is one strip that scrolls sideways, with
    the touch buttons fixed at its end, and the held tool's card is a sheet just above the bar that

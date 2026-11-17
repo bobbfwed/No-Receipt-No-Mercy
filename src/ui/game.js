@@ -165,6 +165,14 @@ export function startGame(session, {
   });
   session.on('review', (m) => toasts.review(m));
   session.on('players', (m) => toasts.notice(m.text));
+  // Doors opened early: say that the factory's takings for the skipped time were paid, so nobody
+  // wonders where the money came from (or thinks opening early costs him).
+  session.on('fx', (events) => {
+    const e = events.find((x) => x.e === 'early');
+    if (!e || !(e.cash > 0)) return;
+    const several = session.state.players.filter((p) => p.on && p.side !== 'office').length > 1;
+    toasts.notice(`Doors opened ${e.secs} seconds early. The factory was paid for that time: +$${Math.round(e.cash).toLocaleString('en-US')}${several ? ', split between you' : ''}.`);
+  });
   session.on('report', (m) => {
     if (replaying) pendingReport = m;
     else review.show(m);

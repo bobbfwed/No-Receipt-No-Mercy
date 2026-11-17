@@ -198,6 +198,10 @@ The owner reached sales event 13 on Normal on his first game and won 20 events o
 
 The owner got to 13 on Normal before these changes, so a person should now get further than that, which is the direction he asked for. Whether Normal is now too easy needs a game or two.
 
+**Found by the owner playing 0.2.01, fixed in 0.2.03:**
+- The view jumped whenever a building was picked. The description card for the held building sat inside the build bar, and with fifteen buttons it no longer fitted on a wide screen, so the bar's height changed with every building and the floor was resized. The card now floats above the bar on every screen and can be folded to its heading.
+- Opening the doors early lost the money the factory would have made in the rest of the build time, so it was always a mistake. Now the remaining time is played through at once (the owner's suggestion), which leaves the store exactly as if the players had waited; a notice says how much was paid.
+
 **The owner's answers after the build (2026-11-16):**
 - Balance: leave it as it is until he has played. If Normal proves too easy, the two levers offered were dearer Damage and Speed upgrades, or undoing the 10% easing.
 - Gym bros and durable crates: keep it. A crate stack with durability upgrades holds a gym bro up.

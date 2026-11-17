@@ -3,7 +3,7 @@
 import { BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf } from './state.js';
 import { computeDist, modeOf, UNREACHABLE } from './path.js';
-import { beginWave } from './step.js';
+import { beginWave, skipBuild } from './step.js';
 import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 
@@ -345,6 +345,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
           return { ok: true, waiting: true };
         }
       }
+      // Opening early must not cost the players what the factory would have sold meanwhile.
+      skipBuild(state, ev);
       beginWave(state, ev);
       return { ok: true };
     }
