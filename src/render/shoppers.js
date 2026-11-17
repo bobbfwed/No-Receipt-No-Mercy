@@ -3,7 +3,7 @@
 // plus its own props: trolley, coupons, dad cap and receipt, Karen hair and pointing finger,
 // mobility scooter, hoodie and slushie, mom's trolley with a child in the seat, guide dog and white
 // cane, the gym bro's boxed TV, the stray dog's mangy coat, the cosplayers' four costumes (and the
-// mech suit), the exhibitionist's bathrobe (and censor bar), the day drinker's bottle in a bag.
+// mech suit), the exhibitionist's bathrobe (and what is under it), the day drinker's bottle in a bag.
 // A mom's runaway child is a separate little figure (drawKid); so is a cart a mom left behind.
 //
 // A big wave has well over a hundred shoppers, so each figure is drawn once per pose into a small
@@ -1461,24 +1461,34 @@ function plainText(ctx, str, x, y, size, color) {
   ctx.restore();
 }
 
-/** A black censor bar (with a white rim), across (x, y) w by h, tilted a little. */
-function censor(ctx, x, y, w, h, tilt = -0.08) {
-  ctx.save();
-  ctx.translate(x + w / 2, y + h / 2);
-  ctx.rotate(tilt);
-  rr(ctx, -w / 2 - 1, -h / 2 - 1, w + 2, h + 2, 1.5);
-  ctx.fillStyle = '#ffffff';
-  ctx.fill();
-  ctx.fillStyle = '#111';
-  ctx.fillRect(-w / 2, -h / 2, w, h);
-  if (h >= 6) plainText(ctx, 'CENSORED', 0, 0.3, Math.min(4.2, w / 8), '#ffffff');
-  ctx.restore();
+/**
+ * What the bathrobe was hiding, drawn the way a rude cartoon would: no censor bar (the owner's
+ * choice; the game is for adults). `old` is Nudist Nan, on whom gravity has been at work.
+ */
+function bare(ctx, old) {
+  const nip = '#b8605a';
+  if (old) {
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.ellipse(s * 3.5, -15.6, 2.5, 5.4, s * -0.08, 0, TAU); paint(ctx, C.skin, 1.2);
+      ctx.beginPath(); ctx.arc(s * 3.6, -11.4, 0.8, 0, TAU); ctx.fillStyle = nip; ctx.fill();
+    }
+  } else {
+    for (const s of [-1, 1]) {
+      circle(ctx, s * 3.1, -19.6, 3, C.skin, 1.2);
+      ctx.beginPath(); ctx.arc(s * 3.3, -19.2, 0.8, 0, TAU); ctx.fillStyle = nip; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(0, -13.2, 0.9, 0.2, Math.PI - 0.2); // belly button
+    ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(-2.6, -9.4); ctx.lineTo(2.6, -9.4); ctx.lineTo(0, -6.4); ctx.closePath();
+  ctx.fillStyle = old ? '#c9c9c9' : '#5a3a22'; ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 0.7; ctx.stroke();
 }
 
 /**
  * The exhibitionist: pink fluffy bathrobe, slippers, rollers, a glass of wine. alt 1: robe held
- * wide open, turned to her audience, a censor bar where it counts. The super, Nudist Nan, has
- * given up on the robe: censor bars at all times.
+ * wide open, turned to her audience, nothing under it. The super, Nudist Nan, has given up on
+ * the robe altogether.
  */
 function flasher(ctx, P) {
   if (P.sup) { nan(ctx, P); return; }
@@ -1500,7 +1510,7 @@ function flasher(ctx, P) {
       ctx.fillStyle = ROBE_DARK; ctx.fill();
     }
     ctx.beginPath(); ctx.ellipse(0, -16, 6.6, 10, 0, 0, TAU); paint(ctx, C.skin, OUT);
-    censor(ctx, -9.5, -24, 19, 15);
+    bare(ctx, false);
     for (const s of [-1, 1]) circle(ctx, s * 19.5, -31, 2.2, C.skin, 1.1);
     // Head on, delighted with herself.
     head(ctx, 0, -32, 6.6);
@@ -1545,7 +1555,7 @@ function flasher(ctx, P) {
   circle(ctx, 9.5, -19, 2, C.skin, 1);
 }
 
-/** Nudist Nan: a pensioner in nothing but slippers and support stockings, and two censor bars. */
+/** Nudist Nan: a pensioner in nothing but slippers and support stockings. */
 function nan(ctx, P) {
   const sw = P.sw, open = P.alt === 1;
   for (const [x, s] of [[-3, -1], [3, 1]]) {
@@ -1564,8 +1574,7 @@ function nan(ctx, P) {
     box(ctx, -12, -12, 8, 6.5, 1.5, '#5b3a9c', 1.4);
   }
   ctx.beginPath(); ctx.ellipse(0, -16, 7.4, 9.5, 0, 0, TAU); paint(ctx, C.skin, OUT);
-  censor(ctx, -9, -24, 18, 6, -0.06);
-  censor(ctx, -8.5, -13, 17, 6.5, 0.05);
+  bare(ctx, true);
   if (!open) { limb(ctx, 5, -22, 8, -12, C.skin, 2.6); }
   // Head on: white bun, big glasses, a toothless grin.
   circle(ctx, 0, -40.5, 3.6, '#f1f1f1', 1.3);

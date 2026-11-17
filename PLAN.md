@@ -198,6 +198,11 @@ The owner reached sales event 13 on Normal on his first game and won 20 events o
 
 The owner got to 13 on Normal before these changes, so a person should now get further than that, which is the direction he asked for. Whether Normal is now too easy needs a game or two.
 
+**The owner's answers after the build (2026-11-16):**
+- Balance: leave it as it is until he has played. If Normal proves too easy, the two levers offered were dearer Damage and Speed upgrades, or undoing the 10% easing.
+- Gym bros and durable crates: keep it. A crate stack with durability upgrades holds a gym bro up.
+- The Exhibitionist: no censor bars. She and Nudist Nan are drawn cartoon-naked ("go further" was his choice over black bars or pixelation).
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
