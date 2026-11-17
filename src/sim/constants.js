@@ -270,10 +270,12 @@ export const BOSS = {
   name: 'Regional Manager',
   titles: ['Regional Manager', 'Area Director', 'Vice President of Returns', 'The CEO'],
   boss: true,
-  // hp 160 (four Bargain Hunters) was tuned with tools/balance.mjs: the scripted players' wave-5
-  // defence only just drives him out, and the results moved by at most one sales event. Towers
-  // shoot whoever is nearest the tills, so a slow man at the back of the crowd is hit late.
-  hp: 160, speed: 0.8, refund: 150, steady: true, pitch: [0, 0],
+  // hp 320 (eight Bargain Hunters) with only 60% of the usual crowd round him (TUNE.bossCrowd):
+  // the owner's choice, to make the event about him. With the first tuning (160 and 75%) the
+  // scripted players in tools/balance.mjs only just drove him out; with this one they still do,
+  // because the smaller crowd lets security reach him sooner. Towers shoot whoever is nearest
+  // the tills, so a slow man at the back of a big crowd is hit late.
+  hp: 320, speed: 0.8, refund: 150, steady: true, pitch: [0, 0],
   pepEvery: 7, pepRange: 3.5, pepHeal: 0.2,
 };
 
@@ -340,7 +342,7 @@ export const TUNE = {
   // The boss (see BOSS): every bossEvery-th wave, bossAt seconds after the doors open.
   bossEvery: 5,
   bossAt: 12,
-  bossCrowd: 0.75, // in his wave every other group is this share of its usual size
+  bossCrowd: 0.6, // in his wave every other group is this share of its usual size (the owner asked for a smaller crowd, so the event is about him)
   bossTierHp: 0.5, // each tier above the first adds this share of his patience
   bossRefunds: 5, // reaching a till, he counts as this many refunds toward the limit
   bossBounty: 150, // driving him out pays the store this much per tier (times the difficulty's pay)

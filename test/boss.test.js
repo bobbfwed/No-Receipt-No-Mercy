@@ -112,8 +112,9 @@ test('the boss comes on waves 5, 10, 15 ... only, at the right tier, about 12 se
   assert.ok(!t.spawnQ.some((q) => q[1] === 'boss'));
 });
 
-test('in a boss wave every other group is three quarters of its usual size, over the same time', (t) => {
-  assert.equal(TUNE.bossCrowd, 0.75);
+test('in a boss wave every other group is a smaller share of its usual size, over the same time', (t) => {
+  assert.equal(TUNE.bossCrowd, 0.6);
+  const share = TUNE.bossCrowd;
   const real = waveSpec(10).filter((g) => g.k !== 'boss');
   const nine = waveSpec(9);
   tune(t, { bossCrowd: 1 });
@@ -123,11 +124,11 @@ test('in a boss wave every other group is three quarters of its usual size, over
   for (let i = 0; i < real.length; i++) {
     assert.equal(real[i].k, full[i].k);
     assert.ok(real[i].n <= full[i].n, real[i].k);
-    assert.ok(Math.abs(real[i].n - full[i].n * 0.75) <= 1, `${real[i].k}: ${real[i].n} of ${full[i].n}`);
+    assert.ok(Math.abs(real[i].n - full[i].n * share) <= 1, `${real[i].k}: ${real[i].n} of ${full[i].n}`);
     assert.ok(Math.abs(real[i].gap * real[i].n - full[i].gap * full[i].n) < 1e-9, 'the group takes as long to arrive');
     a += real[i].n; b += full[i].n;
   }
-  assert.ok(a / b > 0.7 && a / b < 0.8, `the crowd is ${a} instead of ${b}`);
+  assert.ok(Math.abs(a / b - share) < 0.05, `the crowd is ${a} instead of ${b}`);
   // A wave without him is untouched.
   assert.deepEqual(waveSpec(9), nine);
 });

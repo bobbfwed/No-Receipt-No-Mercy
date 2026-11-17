@@ -60,11 +60,11 @@ const demo = (s) => { applyDemoLayout(s, 0); };
 const OLD_BYTES = { Steve: 3897882, Gaz: 3897564 };
 
 test('a busy game sends each client at least ten times less than the old scheme, and everyone ends in step', () => {
-  // Wave 10 on a medium map; three players; a maze of crates and two rows of towers built
+  // Wave 11 on a medium map (not 10: a boss wave has a smaller crowd); three players; a maze of crates and two rows of towers built
   // through commands during the first seconds; then 30 seconds of play.
   const { host, clients, conns } = game({
     names: ['Steve', 'Gaz'], seed: 11, map: { design: 'warehouse', size: 'm' },
-    prepare: (s) => { s.wave = 9; s.players[0].cash = 6000; },
+    prepare: (s) => { s.wave = 10; s.players[0].cash = 6000; },
   });
   const [steve, gaz] = clients;
   const st = host.state;
@@ -89,7 +89,7 @@ test('a busy game sends each client at least ten times less than the old scheme,
     if (i > 90 && i % 60 === 0) steve.send({ c: 'upgrade', x: 10 + ((i / 60) % 8) * 4, y: 6 });
   });
   const sent = conns.map((c, k) => c.sent - start[k]);
-  assert.equal(st.wave, 10);
+  assert.equal(st.wave, 11);
   assert.ok(st.shoppers.length > 150, `a big crowd (${st.shoppers.length})`);
   assert.ok(st.grid.filter(Boolean).length > 60, 'plenty was built');
   for (const [k, name] of ['Steve', 'Gaz'].entries()) {
