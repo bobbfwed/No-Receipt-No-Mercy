@@ -13,8 +13,6 @@ import { howToPlay } from './overlays.js';
  * @param {(name, map) => Promise} actions.solo  map is { design, size }
  * @param {(name, fixedCode, map) => Promise} actions.host
  * @param {(name, code) => Promise} actions.join
- * @param {(name, code, map) => Promise} actions.hostLocal
- * @param {(name, code) => Promise} actions.joinLocal
  * @param {Object} [o]
  * @param {string} [o.error]  an error to show straight away (from a URL option that failed)
  * @param {string} [o.name]
@@ -72,13 +70,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
     id: 'code', type: 'text', maxlength: '5', autocomplete: 'off', spellcheck: 'false',
     placeholder: 'ABCDE', 'aria-label': 'Room code', class: 'code-in', value: code,
   });
-  const localIn = h('input', {
-    id: 'local-code', type: 'text', maxlength: '12', autocomplete: 'off', spellcheck: 'false',
-    value: 'TEST', 'aria-label': 'Test room code', class: 'code-in',
-  });
-  for (const el of [codeIn, localIn]) {
-    el.addEventListener('input', () => { el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
-  }
+  codeIn.addEventListener('input', () => { codeIn.value = codeIn.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
   const status = h('p', { class: 'menu-status', role: 'status', 'aria-live': 'polite' });
 
   const btnTrain = h('button', { type: 'button', class: 'btn-big btn-train' },
@@ -86,8 +78,6 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   const btnSolo = h('button', { type: 'button', class: 'btn-big btn-yellow' }, 'Play solo');
   const btnHost = h('button', { type: 'button', class: 'btn-big btn-orange' }, 'Host a game');
   const btnJoin = h('button', { type: 'submit', class: 'btn-big btn-red' }, 'Join a game');
-  const btnLHost = h('button', { type: 'button', class: 'btn-small' }, 'Host in this tab');
-  const btnLJoin = h('button', { type: 'button', class: 'btn-small' }, 'Join from this tab');
   // A game saved in this browser can be carried on.
   const save = opts.save || null;
   const btnResume = save ? h('button', { type: 'button', class: 'btn-big btn-resume' },
@@ -96,7 +86,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
   const btnForget = save ? h('button', { type: 'button', class: 'btn-forget', title: 'Throw the saved game away' }, 'Delete this save') : null;
   const resumeBox = save ? h('div', { class: 'resume-box' }, btnResume, btnForget,
     save.players.length > 1 ? h('p', { class: 'resume-note' }, 'You will be the host. A new room code appears at the top: send it to the others, and each gets his place and money back by joining under the same name.') : null) : null;
-  const all = [btnResume, btnForget, btnTrain, btnSolo, btnHost, btnJoin, btnLHost, btnLJoin, nameIn, codeIn, localIn, designIn, sizeIn, ...settings.inputs].filter(Boolean);
+  const all = [btnResume, btnForget, btnTrain, btnSolo, btnHost, btnJoin, nameIn, codeIn, designIn, sizeIn, ...settings.inputs].filter(Boolean);
 
   function playerName() {
     const n = nameIn.value.trim().slice(0, 14);
@@ -139,9 +129,10 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
     }
     run(() => actions.join(playerName(), code), `Knocking on room ${code}. Connecting...`);
   });
-  const localCode = () => localIn.value.trim() || 'TEST';
-  btnLHost.addEventListener('click', () => run(() => actions.hostLocal(playerName(), localCode(), chosenMap(), true, settings.get()), 'Opening a test room...'));
-  btnLJoin.addEventListener('click', () => run(() => actions.joinLocal(playerName(), localCode()), 'Looking for the other tab...'));
+  // The handbook is reading, not a way into a game, so it sits last and looks quieter than the
+  // buttons above it. (It used to head the HOW TO PLAY column, where it read as a title.)
+  const btnBook = h('button', { type: 'button', class: 'btn-handbook', onclick: () => openHandbook(null) },
+    '📖 Employee Handbook', h('small', null, 'Every shopper, machine and piece of security, with its numbers'));
 
   const card = h('div', { class: 'menu-card' },
     h('div', { class: 'menu-main' },
@@ -166,16 +157,10 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
         btnTrain,
         btnSolo,
         btnHost,
-        h('div', { class: 'join' }, h('label', { for: 'code', class: 'join-label' }, 'Got a room code?'), joinForm)),
-      status,
-      h('details', { class: 'local-test' },
-        h('summary', null, 'Test on this computer'),
-        h('p', null, 'Open this page in two tabs of the same browser. Host in one, join from the other. No internet needed. Playing with yourself, basically, which you are used to.'),
-        h('div', { class: 'local-row' }, localIn, btnLHost, btnLJoin))),
-    h('aside', { class: 'menu-help' }, h('h2', null, 'HOW TO PLAY'),
-      h('button', { type: 'button', class: 'btn-handbook', onclick: () => openHandbook(null) },
-        '📖 Employee Handbook', h('small', null, 'Every shopper, machine and piece of security, with its numbers')),
-      howToPlay()));
+        h('div', { class: 'join' }, h('label', { for: 'code', class: 'join-label' }, 'Got a room code?'), joinForm),
+        btnBook),
+      status),
+    h('aside', { class: 'menu-help' }, h('h2', null, 'HOW TO PLAY'), howToPlay()));
 
   mount.replaceChildren(h('div', { class: 'menu' }, h('div', { class: 'hazard top', 'aria-hidden': 'true' }), card,
     h('div', { class: 'hazard bottom', 'aria-hidden': 'true' })));

@@ -218,12 +218,6 @@ kbd {
 .menu-status.error { color: #fff; background: var(--red-2); border: 0.13rem solid var(--line); border-radius: 0.4rem; padding: 0.4rem 0.6rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.local-test { margin-top: 0.4rem; border-top: 0.1rem dashed #4b5563; padding-top: 0.5rem; font-size: 0.9rem; }
-.local-test summary { cursor: pointer; color: var(--muted); font-weight: 700; }
-.local-test summary:hover { color: var(--white); }
-.local-test p { color: #c9d1db; margin: 0.4rem 0; }
-.local-row { display: grid; grid-template-columns: 6.5rem auto auto; gap: 0.5rem; justify-content: start; }
-.local-row .code-in { font-size: 0.95rem; padding: 0.3rem 0.5rem; text-transform: uppercase; }
 
 .menu-help {
   padding: 1.2rem 1.4rem;
@@ -1810,7 +1804,7 @@ html, body { overscroll-behavior: none; }
   .howto ul.touch-only { display: block; }
   .howto ul.key-only, .hotkey, .bb-hints { display: none; }
   /* At least 16px: a phone zooms the whole page into a smaller text box when it gets focus. */
-  .field input, .code-in, .local-row .code-in, .chat-input, .map-pick select, .lobby-pick select { font-size: max(16px, 1rem); }
+  .field input, .code-in, .chat-input, .map-pick select, .lobby-pick select { font-size: max(16px, 1rem); }
   /* Small buttons get a finger-sized target. */
   .btn-small, .btn-copy, .tut-btn, .chat-open { min-height: 38px; }
   .player .role-btn, .player .give-btn, .player .side-btn { min-height: 30px; padding-inline: 0.5rem; }
@@ -2300,9 +2294,11 @@ html, body { overscroll-behavior: none; }
 .hb-table tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.035); }
 .hb-super { margin-top: 0.6rem; padding: 0.5rem 0.6rem; border: 0.12rem solid #ca8a04; border-radius: 0.5rem; background: #fef9c3; }
 .hb-small { font-size: 0.74rem; color: #6b7280; }
-.btn-handbook { display: block; width: 100%; margin: 0 0 0.8rem; padding: 0.5rem 0.8rem; border: 0.15rem solid var(--line); border-radius: 0.5rem; background: var(--yellow); color: var(--ink); font: 900 1rem var(--font-heavy); text-align: left; box-shadow: 0 0.18rem 0 var(--line); }
-.btn-handbook small { display: block; font: 600 0.78rem var(--font); }
-.btn-handbook:hover { filter: brightness(1.06); }
+/* On the menu, under JOIN A GAME: plainly a button, but quieter than the ones that start a game. */
+.btn-handbook { grid-column: 1 / -1; display: block; width: 100%; margin: 0.1rem 0 0; padding: 0.5rem 0.8rem; border: 0.15rem solid var(--yellow); border-radius: 0.5rem; background: #2f363e; color: var(--white); font: 900 1rem var(--font-heavy); text-align: center; box-shadow: 0 0.18rem 0 var(--line); cursor: pointer; }
+.btn-handbook small { display: block; font: 600 0.78rem var(--font); color: #c9d1db; }
+.btn-handbook:hover { background: #3a424c; }
+.btn-handbook:active { transform: translateY(0.12rem); box-shadow: 0 0.06rem 0 var(--line); }
 .help .help-head .hb-open { margin-left: auto; }
 .btn-book { font-size: 1rem; }
 @media (max-width: 1099px), (max-height: 559px) { .hud-more > .btn-help.btn-book::after { content: "  Handbook"; } }
