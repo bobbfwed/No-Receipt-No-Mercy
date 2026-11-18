@@ -11,10 +11,10 @@ const SIZES = Object.keys(MAP_SIZES);
 const count = (str, ch) => [...str].filter((c) => c === ch).length;
 
 test('the Food Court is the fourth design', () => {
-  assert.deepEqual(Object.keys(MAP_DESIGNS), ['warehouse', 'showroom', 'aisles', 'food']);
+  assert.deepEqual(Object.keys(MAP_DESIGNS).slice(0, 4), ['warehouse', 'showroom', 'aisles', 'food']);
   assert.equal(MAP_DESIGNS.food.name, 'Food Court');
   assert.ok(MAP_DESIGNS.food.desc.length > 20);
-  assert.deepEqual(Object.keys(DECOR).sort(), [' ', 'b', 'f', 'k', 'n', 'p', 't']);
+  for (const ch of [' ', 'b', 'f', 'k', 'n', 'p', 't']) assert.ok(DECOR[ch], `DECOR has no '${ch}'`);
 });
 
 test('every size has furniture of every kind, all of it solid, in a sensible amount', () => {
@@ -22,7 +22,7 @@ test('every size has furniture of every kind, all of it solid, in a sensible amo
     const { w, h, tiles, decor } = makeMap('food', size);
     assert.equal(decor.length, w * h, size);
     for (let i = 0; i < decor.length; i++) {
-      assert.ok(decor[i] in DECOR, `${size}: unknown furniture '${decor[i]}'`);
+      assert.ok(' bfknpt'.includes(decor[i]), `${size}: '${decor[i]}' is not food court furniture`);
       if (decor[i] !== ' ') assert.equal(tiles[i], '#', `${size}: furniture at ${i % w},${(i / w) | 0} is not solid`);
     }
     const floor = count(tiles, '.');

@@ -191,7 +191,7 @@ test('every line bank is non-empty and covers every shopper and refusal reason',
     assert.ok(ESCAPE_REVIEWS[kind]?.length, `escape reviews for ${kind}`);
     assert.ok(LEFT_REVIEWS[kind]?.length, `left reviews for ${kind}`);
   }
-  for (const why of ['cash', 'blocked', 'occupied', 'shopper', 'bounds', 'over']) assert.ok(NOPE[why]?.length, why);
+  for (const why of ['cash', 'blocked', 'bank', 'occupied', 'shopper', 'bounds', 'over']) assert.ok(NOPE[why]?.length, why);
   assert.equal(nopeLine('cash', 'Kev', () => 0), "You can't afford that. Add it to the list, Kev.");
   assert.ok(nopeLine('something-new', 'Kev').length > 0);
 });

@@ -18,7 +18,9 @@ import { HOW, SHOPPER_HELP, SUPER_HELP } from '../src/content/help.js';
 test('README.md shows the current version, every store design and every shopper', () => {
   const readme = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   assert.equal(fill(readme), readme, 'README.md is out of date: run "node tools/readme.mjs"');
-  assert.ok(readme.includes(`Version ${versionText()}`));
+  assert.ok(readme.includes(`Play version ${versionText()} now: https://`));
+  // The play link opens the README once, not twice in a row.
+  assert.equal(readme.split('\n').slice(0, 12).join('\n').match(/https:\/\/bobbfwed\.github\.io/g).length, 1);
   for (const d of Object.values(MAP_DESIGNS)) assert.ok(readme.includes(`### ${d.name}`), d.name);
   for (const k of Object.keys(SHOPPERS)) {
     assert.ok(readme.includes(`**${SHOPPERS[k].name}**`), SHOPPERS[k].name);

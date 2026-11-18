@@ -1,5 +1,5 @@
 // The store itself: concrete floor, walls, pillars, partition walls, shelving, the entrances and
-// the tills. Maps run from 30 x 16 to 121 x 67 tiles, and four designs:
+// the tills. Maps run from 30 x 16 to 121 x 67 tiles, and five designs:
 //   warehouse  open floor with a few hazard-striped pillars
 //   showroom   rooms divided by plasterboard partitions with framed two-tile doorways; each room
 //              has its own floor tint, like the display rooms of a flat-pack shop
@@ -7,11 +7,17 @@
 //   food       a food court: cream tiled floor, shop-front awnings on the walls, and furniture
 //              where state.decor says (tables, booths, benches, planters, bins, food stalls and a
 //              fountain), each kind drawn in its own function below
+//   carpark    a car park: asphalt with painted bays (zebra stripes on the walkway to the front
+//              doors, yellow keep-clear boxes on the other ways through), a hedge and a fence on
+//              the outer walls, and where state.decor says: parked cars, a prick parked across
+//              two bays, trolley shelters, kerbed islands with lamp posts and pay machines,
+//              abandoned trolleys, coned-off potholes and a burger van. It has a second bank of
+//              tills in the bottom wall, with signs of its own.
 // Most games also have marked floor for the factory machines (state.zones): tinted patches with a
 // painted border and their name stencilled on, one colour per kind (ZONES in the rules).
 // Almost all of it never changes, so it is painted into cached chunks (createFloorCache); only the
-// entrance doors (open during a wave) and the till displays (flash on a refund) are drawn every
-// frame (drawDynamic).
+// entrance doors (open during a wave) and the till displays (each flashes on a refund there) are
+// drawn every frame (drawDynamic).
 import { ZONES } from '../sim/index.js';
 import {
   TILE, INK, C, rr, paint, box, text, hazard, hash2, FONT_FAMILY,
@@ -19,7 +25,7 @@ import {
 
 const T = TILE;
 
-/** What a wall tile is, for drawing. FURN: the food court's furniture (see state.decor). */
+/** What a wall tile is, for drawing. FURN: the food court's furniture or the car park's cars (see state.decor). */
 export const OUTER = 1, PILLAR = 2, PARTITION = 3, SHELF = 4, FURN = 5;
 
 /** Floor tints for the showroom's rooms (one is picked per room). */
@@ -40,7 +46,9 @@ const PRODUCT_COLOURS = ['#e8303a', '#2f8fe0', '#f2c21b', '#3fae49', '#ff8c1a', 
  * Everything the renderer needs to know about a floor plan, worked out once from the tiles.
  * @returns {Object} info: { w, h, tiles, design, wall (wall kind per tile), doorway (per tile:
  *   1 gap in a wall running across, 2 gap in a wall running up and down), tint (room tint per
- *   tile, -1 none), shelves [{x, y0, y1}], tills [i], tillTop, tillBot, doors [door] }
+ *   tile, -1 none), shelves [{x, y0, y1}], tills [i], tillTop, tillBot (rows of the bank in the
+ *   right-hand wall), tillLeft, tillRight (columns of a bank in the bottom wall; tillLeft >=
+ *   tillRight when there is none), doors [door], bays (the car park's rows of bays, see findBays) }
  *   door: { n, tiles: [a, b], side 'L'|'T'|'B'|'R', x0, y0 (top-left tile), open, frame:
  *   [vx, vy, ux, uy, ox, oy] (local x points into the store, local y along the doorway) }
  */
@@ -132,14 +140,21 @@ export function analyzeMap(s) {
     }
   }
 
+  // Tills. Every design has a bank in the right-hand wall; the car park has a second one in the
+  // bottom wall, which gets signs of its own, so the two are measured apart.
   const tills = [];
-  let tillTop = h, tillBot = 0;
+  let tillTop = h, tillBot = 0, tillLeft = w, tillRight = 0;
   for (let i = 0; i < n; i++) {
     if (tiles[i] !== 'T') continue;
     tills.push(i);
-    const y = (i / w) | 0;
-    tillTop = Math.min(tillTop, y);
-    tillBot = Math.max(tillBot, y + 1);
+    const x = i % w, y = (i / w) | 0;
+    if (y === h - 1 && x < w - 1) {
+      tillLeft = Math.min(tillLeft, x);
+      tillRight = Math.max(tillRight, x + 1);
+    } else {
+      tillTop = Math.min(tillTop, y);
+      tillBot = Math.max(tillBot, y + 1);
+    }
   }
 
   const doors = (s.doors || []).map((list, k) => {
@@ -157,8 +172,12 @@ export function analyzeMap(s) {
   const zones = typeof s.zones === 'string' && s.zones.length === n ? s.zones : '';
   const patches = zones ? findPatches(w, h, zones, doorway) : [];
   const blocks = decor ? findBlocks(w, h, decor) : [];
+  const bays = decor && design === 'carpark' ? findBays(w, h, tiles, decor) : [];
 
-  return { w, h, tiles, design, wall, doorway, tint, shelves, tills, tillTop, tillBot, doors, zones, patches, decor, blocks };
+  return {
+    w, h, tiles, design, wall, doorway, tint, shelves, tills, tillTop, tillBot, tillLeft, tillRight,
+    doors, zones, patches, decor, blocks, bays,
+  };
 }
 
 /** The state's decor string if it fits the map, else '' (other designs, and saves from before it). */
@@ -172,16 +191,42 @@ export function mapChanged(info, s) {
     info.decor !== decorOf(s);
 }
 
+/** Decor characters drawn as part of a bigger piece (findBlocks), never tile by tile. */
+const BLOCK_CH = new Set(['k', 'f', 'x', 'v', 'i', 'l', 'm']);
+const isIsland = (ch) => ch === 'i' || ch === 'l' || ch === 'm';
+
 /**
- * The food court's pieces bigger than a tile: each connected block of food stall ('k') or
- * fountain ('f') tiles, drawn as one. @returns {Array} { ch, x0, y0, x1, y1 } (exclusive end)
+ * The pieces bigger than a tile, each drawn as one: every connected block of food stall ('k'),
+ * fountain ('f') or burger van ('v') tiles; each car parked across two bays ('x', always two tiles
+ * each way, so it is cut out by its top-left tile in case two ever touch); and each kerbed island
+ * (a run along a row of 'i', 'l' and 'm' tiles, given ch 'i').
+ * @returns {Array} { ch, x0, y0, x1, y1 } (exclusive end)
  */
 function findBlocks(w, h, decor) {
   const seen = new Uint8Array(w * h);
   const blocks = [];
   for (let i = 0; i < w * h; i++) {
     const ch = decor[i];
-    if (seen[i] || (ch !== 'k' && ch !== 'f')) continue;
+    if (seen[i]) continue;
+    if (ch === 'x') {
+      const x = i % w, y = (i / w) | 0;
+      for (let dy = 0; dy < 2; dy++) {
+        for (let dx = 0; dx < 2; dx++) {
+          const k = (y + dy) * w + x + dx;
+          if (x + dx < w && y + dy < h && decor[k] === 'x') seen[k] = 1;
+        }
+      }
+      blocks.push({ ch, x0: x, y0: y, x1: x + 2, y1: y + 2 });
+      continue;
+    }
+    if (isIsland(ch)) {
+      const x = i % w, y = (i / w) | 0;
+      let e = x;
+      while (e < w && isIsland(decor[y * w + e])) seen[y * w + e++] = 1;
+      blocks.push({ ch: 'i', x0: x, y0: y, x1: e, y1: y + 1 });
+      continue;
+    }
+    if (ch !== 'k' && ch !== 'f' && ch !== 'v') continue;
     let x0 = w, y0 = h, x1 = 0, y1 = 0;
     const stack = [i];
     seen[i] = 1;
@@ -200,6 +245,45 @@ function findBlocks(w, h, decor) {
     blocks.push({ ch, x0, y0, x1, y1 });
   }
   return blocks;
+}
+
+/**
+ * The car park's rows of bays, for painting the lines. A row is bounded by a kerbed island at
+ * its top and another below it in the same columns; every tile row between them is a row of
+ * bays, whatever is parked there. A tile row of the bays with nothing in it at all is a way
+ * through; the one at the height of the store's front doors ((h >> 1) - 1 and h >> 1, as the
+ * rules lay it out) is the walkway to them.
+ * @returns {Array} rows, left to right: { x0, x1, y0, y1 (the bays, exclusive end), across (bays
+ *   side by side, 1 or 2), way: [per tile row from y0: 0 bays, 1 a way through, 2 the walkway] }
+ */
+function findBays(w, h, tiles, decor) {
+  const runs = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!isIsland(decor[y * w + x])) continue;
+      let e = x;
+      while (e < w && isIsland(decor[y * w + e])) e++;
+      runs.push({ x0: x, x1: e, y, used: false });
+      x = e;
+    }
+  }
+  const walk = (h >> 1) - 1;
+  const rows = [];
+  for (const a of runs) {
+    if (a.used) continue;
+    // Runs are listed top to bottom, so the first match below is this island's partner.
+    const b = runs.find((o) => !o.used && o !== a && o.y > a.y + 1 && o.x0 === a.x0 && o.x1 === a.x1);
+    if (!b) continue;
+    a.used = b.used = true;
+    const row = { x0: a.x0, x1: a.x1, y0: a.y + 1, y1: b.y, across: (a.x1 - a.x0) >= 4 ? 2 : 1, way: [] };
+    for (let y = row.y0; y < row.y1; y++) {
+      let empty = true;
+      for (let x = row.x0; x < row.x1; x++) if (tiles[y * w + x] !== '.') empty = false;
+      row.way.push(!empty ? 0 : y === walk || y === walk + 1 ? 2 : 1);
+    }
+    rows.push(row);
+  }
+  return rows.sort((p, q) => p.x0 - q.x0);
 }
 
 /**
@@ -441,11 +525,14 @@ export function drawChunk(g, info, x0, y0, x1, y1, zoom = 40) {
 
 function drawConcrete(g, info, r, x0, y0, x1, y1, zoom) {
   const { w, h, tiles, tint } = info;
-  const food = info.design === 'food';
-  g.fillStyle = food ? FOOD.floor : info.design === 'aisles' ? '#979a9c' : C.floor;
+  const food = info.design === 'food', park = info.design === 'carpark';
+  // The food court and the car park have floor colours of their own.
+  const pal = food ? FOOD : park ? PARK : null;
+  g.fillStyle = pal ? pal.floor : info.design === 'aisles' ? '#979a9c' : C.floor;
   g.fillRect(x0 * T, y0 * T, (x1 - x0) * T, (y1 - y0) * T);
 
   if (food) foodFloor(g, info, r);
+  else if (park) parkFloor(g, info, r);
   // Slightly lighter and darker concrete slabs, and the odd oil spot, so the floor is not flat.
   else for (let y = Math.max(1, r.y0); y < Math.min(h - 1, r.y1); y++) {
     for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
@@ -477,23 +564,26 @@ function drawConcrete(g, info, r, x0, y0, x1, y1, zoom) {
   g.beginPath();
   for (let x = r.x0; x <= r.x1; x++) { g.moveTo(x * T + 0.5, Y0); g.lineTo(x * T + 0.5, Y1); }
   for (let y = r.y0; y <= r.y1; y++) { g.moveTo(X0, y * T + 0.5); g.lineTo(X1, y * T + 0.5); }
-  g.strokeStyle = food ? FOOD.grout : C.floorLine;
+  g.strokeStyle = pal ? pal.grout : C.floorLine;
   g.lineWidth = 1.5;
   g.stroke();
-  // Expansion joints every five tiles across and four down, a little darker.
-  g.beginPath();
-  for (let x = Math.ceil(r.x0 / 5) * 5; x <= r.x1; x += 5) { if (x > 0 && x < w) { g.moveTo(x * T + 0.5, Y0); g.lineTo(x * T + 0.5, Y1); } }
-  for (let y = Math.ceil(r.y0 / 4) * 4; y <= r.y1; y += 4) { if (y > 0 && y < h) { g.moveTo(X0, y * T + 0.5); g.lineTo(X1, y * T + 0.5); } }
-  g.strokeStyle = food ? FOOD.joint : C.joint;
-  g.lineWidth = 2.5;
-  g.stroke();
+  // Expansion joints every five tiles across and four down, a little darker. (Tarmac has none.)
+  if (!park) {
+    g.beginPath();
+    for (let x = Math.ceil(r.x0 / 5) * 5; x <= r.x1; x += 5) { if (x > 0 && x < w) { g.moveTo(x * T + 0.5, Y0); g.lineTo(x * T + 0.5, Y1); } }
+    for (let y = Math.ceil(r.y0 / 4) * 4; y <= r.y1; y += 4) { if (y > 0 && y < h) { g.moveTo(X0, y * T + 0.5); g.lineTo(X1, y * T + 0.5); } }
+    g.strokeStyle = food ? FOOD.joint : C.joint;
+    g.lineWidth = 2.5;
+    g.stroke();
+  }
   // A small dot in the middle of every floor tile helps judge positions.
-  g.fillStyle = food ? FOOD.dot : C.floorDot;
+  g.fillStyle = pal ? pal.dot : C.floorDot;
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
       if (tiles[y * w + x] === '.') g.fillRect(x * T + 19, y * T + 19, 3, 3);
     }
   }
+  if (park) parkMarkings(g, info, r);
   // Painted floor markings: a yellow safety line along the outer walls, and hatched "keep clear"
   // zones inside the open entrances and in front of the tills.
   g.strokeStyle = 'rgba(242,194,27,0.75)';
@@ -506,9 +596,13 @@ function drawConcrete(g, info, r, x0, y0, x1, y1, zoom) {
     if (p.x1 <= x0 || p.x0 >= x1 || p.y1 <= y0 || p.y0 >= y1) continue;
     drawPatch(g, p, zoom);
   }
+  // In front of each till: the floor tile next to it, on the store side of whichever wall it is in.
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
-      if (tiles[y * w + x] === 'T') hatch(g, (x - 1) * T, y * T, T, T);
+      if (tiles[y * w + x] !== 'T') continue;
+      const fx = x === w - 1 ? x - 1 : x === 0 ? x + 1 : x;
+      const fy = fx !== x ? y : y === h - 1 ? y - 1 : y === 0 ? y + 1 : y;
+      hatch(g, fx * T, fy * T, T, T);
     }
   }
   for (const d of info.doors) {
@@ -677,6 +771,11 @@ function drawWalls(g, info, r) {
         g.strokeStyle = INK; g.lineWidth = 1.5; g.stroke();
       }
     }
+    return;
+  }
+  // The car park is outdoors: a hedge along the top and left, a fence along the bottom.
+  if (info.design === 'carpark') {
+    parkBoundary(g, info, r);
     return;
   }
   // Pallet racking along the top and bottom walls: orange beams and boxes, purely decoration.
@@ -906,7 +1005,8 @@ function drawFurniture(g, info, r, zoom) {
       const i = y * w + x;
       if (wall[i] !== FURN) continue;
       const ch = decor[i];
-      if (ch === 'k' || ch === 'f') continue;
+      // Blocks are added below; a car or a trolley shelter is drawn whole from its left half.
+      if (BLOCK_CH.has(ch) || ch === 'C' || ch === 'R') continue;
       items.push(y * 1e4 + x, ch, x, y);
     }
   }
@@ -922,7 +1022,10 @@ function drawFurniture(g, info, r, zoom) {
     const it = items[k + 1];
     if (typeof it === 'object') {
       if (it.ch === 'k') drawStall(g, it, zoom);
-      else drawFountain(g, it);
+      else if (it.ch === 'f') drawFountain(g, it);
+      else if (it.ch === 'x') drawPrick(g, it);
+      else if (it.ch === 'v') drawVan(g, it);
+      else drawIsland(g, info, it);
       continue;
     }
     const x = items[k + 2], y = items[k + 3];
@@ -930,6 +1033,10 @@ function drawFurniture(g, info, r, zoom) {
     else if (it === 'b') drawBench(g, info, x, y);
     else if (it === 'p') drawPlanter(g, x, y);
     else if (it === 'n') drawBin(g, x, y);
+    else if (it === 'c') drawCar(g, info, x, y);
+    else if (it === 'r') drawShelter(g, x, y);
+    else if (it === 'a') drawLaneTrolley(g, x, y);
+    else if (it === 'o') drawPothole(g, x, y);
     else drawPillar(g, x * T, y * T); // a character we do not know: draw a plain pillar
   }
 }
@@ -1264,6 +1371,865 @@ function drawFountain(g, b) {
   g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1.2; g.stroke();
 }
 
+// ---------------------------------------------------------------------------------------------
+// The car park: tarmac with painted bays, and the pieces in state.decor (see DECOR in the rules):
+// parked cars, some prick's car across two bays, trolley shelters, the kerbed islands at the ends
+// of the rows with their lamp posts and pay machines, abandoned trolleys and coned-off potholes in
+// the lanes, and the burger van. Every piece is solid ('#').
+
+const PARK = {
+  // The tarmac is a little darker and bluer than the warehouse's concrete, but kept light enough
+  // that shoppers, buildings and the marked floor read on it as well as on any other floor.
+  floor: '#7f868f', grout: '#757c85', dot: '#6c737c',
+  line: 'rgba(238,240,234,0.85)', zebra: 'rgba(238,240,234,0.8)', box: 'rgba(242,194,27,0.8)',
+  glass: '#3c5266', mist: '#e2e9ec',
+  // Car paint, body then roof (a shade lighter). Muted, so a crowd of shoppers still stands out
+  // against a row of cars.
+  cars: [
+    ['#8e504b', '#a0625c'], ['#4e6987', '#607b98'], ['#5d7859', '#6f8a6b'], ['#b5b3ab', '#c8c6be'],
+    ['#3f434a', '#53585f'], ['#d6d2c6', '#e5e1d6'], ['#8a7a5b', '#9c8c6c'], ['#6a5c7a', '#7c6e8c'],
+    ['#a3894d', '#b49a5e'], ['#7a8288', '#8c949a'], ['#4d6f72', '#5f8184'],
+  ],
+};
+
+/**
+ * Car shapes, from the nose back: [length, width, bonnet, windscreen, roof, rear window, corner
+ * radius]. What is left behind the rear window is the boot (long on a saloon, a stub on the rest).
+ */
+const CAR_SHAPES = {
+  hatch: [58, 29, 14, 8, 20, 8, 9],
+  saloon: [72, 29, 18, 10, 17, 9, 7],
+  estate: [74, 30, 16, 9, 37, 5, 6],
+  suv: [72, 34, 15, 8, 35, 5, 5],
+  van: [76, 32, 9, 8, 55, 0, 6],
+  pickup: [76, 31, 16, 8, 15, 4, 6],
+};
+/** How common each shape is (the shares add up to one). */
+const CAR_KINDS = [['hatch', 0.24], ['saloon', 0.22], ['estate', 0.14], ['suv', 0.18], ['van', 0.11], ['pickup', 0.11]];
+/** The prick's car: body, racing stripes, roof. */
+const PRICK_PAINT = [['#24272d', '#d4a72c', '#363a42'], ['#e8e5dc', '#24272d', '#f4f2ec'], ['#6e1f2a', '#e8e5dc', '#842f3b']];
+/** What somebody has keyed into the prick's bonnet. */
+const KEYED = ['PRICK', 'TOSSER', 'NOB', 'WANKER'];
+/** Burger vans: the name on the sign, what the giant thing on the roof is, the paint. */
+const VANS = [
+  ['HOT MEAT IN A VAN', 'kebab', '#c4473b'], ['TRUST ME BURGERS', 'burger', '#3f7fc0'],
+  ['MR. SALMONELLA', 'burger', '#4f9a52'], ['DODGY DOGS', 'hotdog', '#e07e2a'],
+  ['THE GREASY HANDSHAKE', 'fries', '#8a5aa6'],
+];
+
+/**
+ * The car park's tarmac: a grain of light and dark stones, and here and there a patch of newer
+ * tarmac, an oil stain, a crack, trodden-in chewing gum, a fag end, a drink can run over flat or a
+ * crisp packet; and a soft pool of light round every lamp post.
+ */
+function parkFloor(g, info, r) {
+  const { w, h, tiles, decor } = info;
+  const TAU = Math.PI * 2;
+  for (let y = Math.max(1, r.y0); y < Math.min(h - 1, r.y1); y++) {
+    for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
+      if (tiles[y * w + x] !== '.') continue;
+      const X = x * T, Y = y * T;
+      for (let k = 0; k < 3; k++) {
+        const a = hash2(x * 3 + k, y + 900), b = hash2(y * 3 + k, x + 400);
+        g.fillStyle = k === 1 ? 'rgba(255,255,255,0.13)' : 'rgba(30,36,46,0.16)';
+        g.fillRect(X + 2 + a * 35, Y + 2 + b * 35, 2, 2);
+      }
+      const v = hash2(x + 31, y + 517), u = hash2(x + 7, y + 211);
+      if (v < 0.03) {
+        // A patch of newer, darker tarmac where somebody dug a hole, its ragged edge sealed.
+        const pw = 26 + u * 40, ph = 20 + hash2(y, x + 3) * 26;
+        const j = (k) => (hash2(x * 4 + k, y + 60) - 0.5) * 8;
+        g.beginPath();
+        g.moveTo(X + 5 + j(0), Y + 6 + j(1));
+        g.lineTo(X + 5 + pw * 0.5, Y + 6 + j(2));
+        g.lineTo(X + 5 + pw + j(3), Y + 6 + j(4));
+        g.lineTo(X + 5 + pw + j(5), Y + 6 + ph * 0.6);
+        g.lineTo(X + 5 + pw + j(6), Y + 6 + ph + j(7));
+        g.lineTo(X + 5 + j(8), Y + 6 + ph + j(9));
+        g.closePath();
+        g.fillStyle = 'rgba(40,46,56,0.08)';
+        g.fill();
+        g.strokeStyle = 'rgba(28,32,40,0.15)'; g.lineWidth = 1.4;
+        g.stroke();
+      } else if (v < 0.075) {
+        g.fillStyle = 'rgba(22,26,32,0.2)';
+        g.beginPath();
+        g.ellipse(X + 14 + u * 12, Y + 20, 9 + u * 4, 6, u * 2, 0, TAU);
+        g.moveTo(X + 28 + u * 6, Y + 14);
+        g.ellipse(X + 24 + u * 6, Y + 14, 4, 3, 0, 0, TAU);
+        g.fill();
+      } else if (v < 0.1) {
+        g.beginPath();
+        g.moveTo(X + 3, Y + 8 + u * 20);
+        g.lineTo(X + 14, Y + 12 + u * 14);
+        g.lineTo(X + 22, Y + 6 + u * 24);
+        g.lineTo(X + 37, Y + 14 + u * 16);
+        g.strokeStyle = 'rgba(28,32,40,0.4)'; g.lineWidth = 1.3; g.stroke();
+      } else if (v < 0.11) {
+        g.save(); g.translate(X + 12 + u * 16, Y + 14 + u * 12); g.rotate(u * 6);
+        box(g, -5, -3, 10, 6, 1.5, u < 0.5 ? '#c8302a' : '#c9ced4', 1);
+        g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(-3, -1.5, 5, 1.2);
+        g.restore();
+      } else if (v < 0.12) {
+        g.save(); g.translate(X + 26 - u * 14, Y + 26 - u * 10); g.rotate(u * 5 + 1);
+        box(g, -4, -5, 8, 10, 1, ['#f2c21b', '#2f8fe0', '#d9372b', '#3fae49'][(u * 4) | 0], 1);
+        g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(-2.5, -1, 5, 2);
+        g.restore();
+      } else if (v < 0.2) {
+        g.fillStyle = 'rgba(48,50,56,0.32)';
+        g.beginPath();
+        g.arc(X + 6 + u * 28, Y + 9 + v * 120, 1.6, 0, TAU);
+        g.moveTo(X + 31.3 - u * 20, Y + 30 - v * 80);
+        g.arc(X + 30 - u * 20, Y + 30 - v * 80, 1.3, 0, TAU);
+        g.fill();
+      } else if (v < 0.215) {
+        g.save(); g.translate(X + 10 + u * 20, Y + 28 - u * 12); g.rotate(u * 9);
+        g.fillStyle = '#f1efe6'; g.fillRect(-3, -0.9, 4.5, 1.8);
+        g.fillStyle = '#d98a3a'; g.fillRect(1.5, -0.9, 2, 1.8);
+        g.restore();
+      }
+    }
+  }
+  // Light round the lamp posts (the posts are drawn with their islands). Under two tiles across,
+  // so a lamp just outside a chunk lights it the same as the chunk it is in.
+  for (let y = r.y0; y < r.y1; y++) {
+    for (let x = r.x0; x < r.x1; x++) {
+      if (decor[y * w + x] !== 'l') continue;
+      const cx = x * T + T / 2, cy = y * T + T / 2;
+      const glow = g.createRadialGradient(cx, cy, 6, cx, cy, 70);
+      glow.addColorStop(0, 'rgba(255,238,170,0.26)');
+      glow.addColorStop(1, 'rgba(255,238,170,0)');
+      g.fillStyle = glow;
+      g.fillRect(cx - 70, cy - 70, 140, 140);
+    }
+  }
+}
+
+/**
+ * Paint on the tarmac: white lines round every bay, full or empty; zebra stripes where the
+ * walkway to the front doors crosses a row of bays; a yellow keep-clear box on every other way
+ * through; and faint arrows down the lanes between the rows. All of it flat paint: players may
+ * build on empty bays and ways through.
+ */
+function parkMarkings(g, info, r) {
+  const { w, h, tiles, zones } = info;
+  const rows = info.bays;
+  for (const row of rows) {
+    if (row.x1 <= r.x0 || row.x0 >= r.x1 || row.y1 < r.y0 || row.y0 > r.y1) continue;
+    const X0 = row.x0 * T, X1 = row.x1 * T;
+    const way = (y) => (y >= row.y0 && y < row.y1 ? row.way[y - row.y0] : 0);
+    for (let y = row.y0; y < row.y1; y++) {
+      const k = way(y);
+      if (!k || way(y - 1) === k) continue;
+      let e = y;
+      while (way(e) === k) e++;
+      if (k === 2) zebra(g, X0, y * T, X1 - X0, (e - y) * T);
+      else keepClear(g, X0, y * T, X1 - X0, (e - y) * T);
+    }
+    // A line between each bay and the next (none across the middle of a way through), and down
+    // the middle where two bays meet nose to nose.
+    g.beginPath();
+    for (let y = row.y0; y <= row.y1; y++) {
+      if (way(y - 1) && way(y)) continue;
+      g.moveTo(X0 + 3, y * T); g.lineTo(X1 - 3, y * T);
+    }
+    if (row.across === 2) {
+      const mx = X0 + 2 * T;
+      for (let y = row.y0; y < row.y1; y++) if (!way(y)) { g.moveTo(mx, y * T); g.lineTo(mx, (y + 1) * T); }
+    }
+    g.strokeStyle = PARK.line; g.lineWidth = 2.5; g.stroke();
+  }
+  // Arrows down each lane between two rows: one way beside the left row, the other way beside
+  // the right one. That column is just outside the marked floor's band, so they never meet it.
+  const walk = (h >> 1) - 1;
+  for (let j = 1; j < rows.length; j++) {
+    const a = rows[j - 1].x1, b = rows[j].x0 - 1;
+    if (b - a < 2) continue;
+    for (const [x, down] of [[a, true], [b, false]]) {
+      if (x < r.x0 || x >= r.x1) continue;
+      for (let y = Math.max(3, r.y0); y < Math.min(h - 3, r.y1); y++) {
+        if (y % 5 !== 2 || (y >= walk - 1 && y <= walk + 2)) continue;
+        const i = y * w + x;
+        if (tiles[i] !== '.' || (zones && zones[i] !== ' ')) continue;
+        laneArrow(g, x * T, y * T, down);
+      }
+    }
+  }
+}
+
+/** Zebra stripes across a walkway: white bars running the way people walk over it. */
+function zebra(g, x, y, w, h) {
+  g.fillStyle = PARK.zebra;
+  for (let yy = y + 5; yy + 6 <= y + h - 3; yy += 12) g.fillRect(x + 7, yy, w - 14, 6);
+}
+
+/** A yellow box with a criss-cross in it: keep this way through clear. */
+function keepClear(g, x, y, w, h) {
+  g.save();
+  g.beginPath(); g.rect(x + 5, y + 5, w - 10, h - 10); g.clip();
+  g.beginPath();
+  for (let s = -h; s < w; s += 16) {
+    g.moveTo(x + s, y + h); g.lineTo(x + s + h, y);
+    g.moveTo(x + s, y); g.lineTo(x + s + h, y + h);
+  }
+  g.strokeStyle = 'rgba(242,194,27,0.45)'; g.lineWidth = 2; g.stroke();
+  g.restore();
+  g.strokeStyle = PARK.box; g.lineWidth = 2.5;
+  g.strokeRect(x + 5, y + 5, w - 10, h - 10);
+}
+
+/** A faint painted arrow along a lane, pointing down or up the map. */
+function laneArrow(g, X, Y, down) {
+  g.save();
+  g.translate(X + T / 2, Y + T / 2);
+  if (!down) g.rotate(Math.PI);
+  g.beginPath();
+  g.moveTo(-2.5, -15); g.lineTo(2.5, -15); g.lineTo(2.5, 3); g.lineTo(7, 3);
+  g.lineTo(0, 15); g.lineTo(-7, 3); g.lineTo(-2.5, 3);
+  g.closePath();
+  g.fillStyle = 'rgba(238,240,234,0.38)';
+  g.fill();
+  g.restore();
+}
+
+/** Which bay of its row a tile is in: -1 the left of two, 1 the right of two, 0 a row one bay across. */
+function baySide(info, x, y) {
+  for (const row of info.bays) {
+    if (x < row.x0 || x >= row.x1 || y < row.y0 || y >= row.y1) continue;
+    return row.across === 2 ? (x < row.x0 + 2 ? -1 : 1) : 0;
+  }
+  return 0;
+}
+
+/**
+ * A parked car filling its bay (the 'c' tile and the 'C' to its right), lying east-west. Its
+ * shape (hatchback, saloon, estate, SUV, white van or pickup), its paint and which way it faces
+ * come from a hash of where it is; in a row two bays across most have parked nose in, facing the
+ * other bay. Now and then there is something extra: a parking ticket under a wiper, a wheel clamp,
+ * a roof box, a car up on bricks with its wheels nicked, one with the windows steamed up and hand
+ * prints on the glass, or a police car.
+ */
+function drawCar(g, info, x, y) {
+  const hv = (k) => hash2(x * 11 + k * 7, y * 17 + k * 3);
+  const side = baySide(info, x, y);
+  const nose = side ? (hv(1) < 0.75 ? -side : side) : hv(1) < 0.5 ? 1 : -1;
+  const e = hv(4);
+  const police = e > 0.985;
+  let kind = 'estate';
+  if (!police) {
+    let p = hv(2);
+    for (const [k, share] of CAR_KINDS) { kind = k; if ((p -= share) < 0) break; }
+  }
+  const [L, W, bonnet, ws, roof, rw, rad] = CAR_SHAPES[kind];
+  let [body, top] = PARK.cars[(hv(3) * PARK.cars.length) | 0];
+  if (police) { body = '#f1f1ec'; top = '#f8f8f4'; } else if (kind === 'van' && hv(5) < 0.8) { body = '#e2e0d9'; top = '#eceae4'; }
+  const ticket = e < 0.035, clamp = e >= 0.035 && e < 0.05;
+  const roofBox = e >= 0.05 && e < 0.085 && kind !== 'van' && kind !== 'pickup';
+  const bricks = e >= 0.085 && e < 0.097, steamy = e >= 0.097 && e < 0.115;
+  const cx = x * T + T, cy = y * T + T / 2, hl = L / 2, hw = W / 2;
+  // Shadow, cast down and to the right whichever way the car faces.
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  rr(g, cx - hl + 3, cy - hw + 4, L, W, rad);
+  g.fill();
+  g.save();
+  g.translate(cx, cy);
+  if (nose < 0) g.scale(-1, 1);
+  // From here on the nose points right (+x).
+  const wheelX = [hl - 14, -hl + 13];
+  if (bricks) {
+    // Wheels nicked overnight: it sits on piles of bricks instead.
+    for (const wx of wheelX) {
+      for (const by of [-hw - 4.5, hw - 2.5]) {
+        box(g, wx - 6, by, 12, 7, 0.5, '#b8613f', 1.3);
+        g.fillStyle = '#e0c9a8'; g.fillRect(wx - 0.6, by + 0.6, 1.2, 5.8);
+      }
+    }
+  } else {
+    g.fillStyle = INK;
+    for (const wx of wheelX) { g.fillRect(wx - 6, -hw - 2, 12, 5); g.fillRect(wx - 6, hw - 3, 12, 5); }
+  }
+  box(g, -hl, -hw, L, W, rad, body, 2.2);
+  const fx = hl - bonnet; // the bottom of the windscreen
+  const rx = fx - ws; // the front of the roof
+  const bx = rx - roof; // the back of the roof
+  const gx = bx - rw; // the bottom of the rear window
+  g.fillStyle = 'rgba(255,255,255,0.2)';
+  g.fillRect(fx + 3, -1, bonnet - 7, 2);
+  // A saloon's long boot gets a crease too, so it reads as one from above.
+  if (kind === 'saloon') g.fillRect(-hl + 4, -1, gx + hl - 8, 2);
+  if (police) {
+    // Blue and yellow checks down both sides.
+    for (let k = 0; k * 6 < L - 14; k++) {
+      g.fillStyle = k & 1 ? '#e8d21b' : '#2a55c4';
+      g.fillRect(-hl + 7 + k * 6, -hw + 0.8, 6, 2.6);
+      g.fillRect(-hl + 7 + k * 6, hw - 3.4, 6, 2.6);
+    }
+  }
+  if (kind === 'pickup') pickupBed(g, -hl + 4, gx - 2, hw, hv(5));
+  // Glass all round the cabin, then the roof over it, which leaves the side windows showing.
+  rr(g, gx, -hw + 3, fx - gx, W - 6, 4);
+  paint(g, steamy ? PARK.mist : PARK.glass, 1.5);
+  rr(g, bx, -hw + 4.5, roof, W - 9, 3);
+  paint(g, top, 1.5);
+  if (!steamy) { g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(rx + 2.5, -hw + 6, 1.8, W - 12); }
+  // Wing mirrors and lights.
+  g.beginPath();
+  g.ellipse(fx - 2, -hw - 1, 2.6, 1.8, 0, 0, Math.PI * 2);
+  g.moveTo(fx + 0.6, hw + 1);
+  g.ellipse(fx - 2, hw + 1, 2.6, 1.8, 0, 0, Math.PI * 2);
+  paint(g, body, 1);
+  g.fillStyle = '#f6efc4';
+  g.fillRect(hl - 4, -hw + 3, 2.5, 6); g.fillRect(hl - 4, hw - 9, 2.5, 6);
+  g.fillStyle = '#c4302a';
+  g.fillRect(-hl + 1.5, -hw + 3, 2, 6); g.fillRect(-hl + 1.5, hw - 9, 2, 6);
+  if (kind === 'suv') {
+    // Roof rails, and a spare wheel on the tailgate.
+    g.fillStyle = '#2a2d33';
+    g.fillRect(bx + 2, -hw + 6, roof - 4, 1.6); g.fillRect(bx + 2, hw - 7.6, roof - 4, 1.6);
+    g.beginPath(); g.arc(-hl + 1, 0, 5.5, 0, Math.PI * 2); paint(g, '#2a2d33', 1.4);
+    g.fillStyle = '#8a9097'; g.fillRect(-hl - 0.5, -1.5, 3, 3);
+  } else if (kind === 'van') {
+    // The split between the back doors, and a ladder on the roof or WASH ME in the dirt.
+    g.fillStyle = INK; g.fillRect(-hl + 1, -0.6, 4, 1.2);
+    const v = hv(6);
+    if (v < 0.35) {
+      g.fillStyle = '#9aa0a6';
+      g.fillRect(bx + 4, -6, roof - 8, 2); g.fillRect(bx + 4, 4, roof - 8, 2);
+      for (let k = bx + 8; k < rx - 4; k += 6) g.fillRect(k, -5, 1.5, 10);
+    } else if (v > 0.7) {
+      g.save(); g.scale(nose, 1);
+      text(g, 'WASH ME', nose * (bx + roof / 2), 0.5, 6, 'rgba(90,80,62,0.6)', 700);
+      g.restore();
+    }
+  }
+  if (police) {
+    // The light bar across the roof.
+    box(g, bx + roof / 2 - 3, -hw + 4, 6, W - 8, 1.5, '#ffffff', 1.2);
+    g.fillStyle = '#2f5fe0'; g.fillRect(bx + roof / 2 - 2, -hw + 5, 4, 6); g.fillRect(bx + roof / 2 - 2, hw - 11, 4, 6);
+  }
+  if (roofBox) {
+    box(g, bx + 3, -6, roof - 6, 12, 5, '#2b2e33', 1.4);
+    g.fillStyle = 'rgba(255,255,255,0.22)'; g.fillRect(bx + 6, -4, roof - 12, 2);
+  }
+  if (ticket) {
+    // A yellow penalty notice under the wiper.
+    g.strokeStyle = INK; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(fx - 0.5, -hw + 5); g.lineTo(rx + 1.5, 2); g.stroke();
+    box(g, rx + 1, -7, 5.5, 8, 0.6, '#f4e04a', 0.9);
+  }
+  if (clamp) {
+    box(g, wheelX[0] - 6, -hw - 5, 12, 7, 1.5, '#f2c21b', 1.4);
+    g.fillStyle = INK; g.fillRect(wheelX[0] - 1.5, -hw - 3.5, 3, 3);
+  }
+  if (steamy) {
+    // Steamed up from the inside, with hands pressed against it. Nobody is checking the oil.
+    g.fillStyle = 'rgba(160,175,185,0.6)';
+    g.fillRect(gx + 2, -hw + 5, 1, 4); g.fillRect(fx - 3, hw - 8, 1, 4);
+    handPrint(g, rx + ws / 2, -hw + 8, -1.2);
+    handPrint(g, gx + rw / 2 + 0.5, hw - 8, 1.9);
+  }
+  g.restore();
+}
+
+/** A hand print wiped into a steamed-up window: a palm and four fingers, turned by `a`. */
+function handPrint(g, x, y, a) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(a);
+  g.fillStyle = PARK.glass;
+  g.beginPath(); g.ellipse(0, 0.8, 2.5, 2.1, 0, 0, Math.PI * 2); g.fill();
+  for (let k = 0; k < 4; k++) g.fillRect(-2.5 + k * 1.4, -4.6 + (k === 0 || k === 3 ? 0.8 : 0), 0.95, 3.8);
+  g.fillRect(2, -0.4, 2.4, 0.95);
+  g.restore();
+}
+
+/** The open bed of a pickup, from x0 back to x1, and what he is hauling. */
+function pickupBed(g, x0, x1, hw, v) {
+  box(g, x0, -hw + 3, x1 - x0, 2 * hw - 6, 2, '#34383e', 1.4);
+  const bw = x1 - x0;
+  if (v < 0.35) {
+    // A mattress with a stain nobody wants to explain.
+    box(g, x0 + 2, -hw + 5, bw - 4, 2 * hw - 10, 2, '#e9e1c9', 1);
+    g.fillStyle = 'rgba(190,150,40,0.45)';
+    g.beginPath(); g.ellipse(x0 + bw * 0.55, 1, 5, 3.4, 0.4, 0, Math.PI * 2); g.fill();
+  } else if (v < 0.7) {
+    // Bin bags he is going to dump somewhere.
+    g.beginPath();
+    for (const [dx, dy, rad] of [[0.25, -4, 5], [0.62, 3, 5.5], [0.4, 5, 4]]) {
+      g.moveTo(x0 + bw * dx + rad, dy);
+      g.arc(x0 + bw * dx, dy, rad, 0, Math.PI * 2);
+    }
+    paint(g, '#26292e', 1.2);
+    g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(x0 + bw * 0.25 - 2, -7, 3, 1.4);
+  } else {
+    // A toolbox and some planks.
+    box(g, x0 + 3, -hw + 5, bw - 6, 4, 0.5, '#c8a070', 1);
+    box(g, x0 + 3, -hw + 10, bw - 8, 4, 0.5, '#b8905e', 1);
+    box(g, x0 + bw / 2 - 5, 2, 10, 6, 1, '#d9372b', 1.1);
+  }
+}
+
+/**
+ * Some prick's car, parked at an angle across two bays: long, low and expensive, with racing
+ * stripes, fat wheels with gold rims, a spoiler, and something keyed into the bonnet.
+ */
+function drawPrick(g, b) {
+  const cx = ((b.x0 + b.x1) * T) / 2, cy = ((b.y0 + b.y1) * T) / 2;
+  const hv = (k) => hash2(b.x0 * 13 + k * 5, b.y0 * 7 + k);
+  const ang = (hv(1) < 0.5 ? 1 : -1) * 0.6, nose = hv(2) < 0.5 ? 1 : -1;
+  // Scrambled further than a plain hash, as the pricks in a row are evenly spaced and would
+  // otherwise often come out alike.
+  const [body, stripe, top] = PRICK_PAINT[((hv(3) * 7919) | 0) % PRICK_PAINT.length];
+  const word = KEYED[((hv(4) * 6151) | 0) % KEYED.length];
+  const L = 82, W = 34, hl = L / 2, hw = W / 2;
+  g.save();
+  g.translate(cx + 4, cy + 5);
+  g.rotate(ang);
+  g.fillStyle = 'rgba(0,0,0,0.25)';
+  rr(g, -hl, -hw, L, W, 10);
+  g.fill();
+  g.restore();
+  g.save();
+  g.translate(cx, cy);
+  g.rotate(ang);
+  if (nose < 0) g.scale(-1, 1);
+  // Fat wheels, the gold of the rims showing at their outer edges.
+  for (const wx of [hl - 16, -hl + 15]) {
+    g.fillStyle = INK;
+    g.fillRect(wx - 7, -hw - 3, 14, 6); g.fillRect(wx - 7, hw - 3, 14, 6);
+    g.fillStyle = '#e0b43a';
+    g.fillRect(wx - 4, -hw - 2.4, 8, 1.8); g.fillRect(wx - 4, hw + 0.6, 8, 1.8);
+  }
+  // A wedge: square at the back, a long rounded nose.
+  g.beginPath();
+  g.moveTo(-hl + 4, -hw);
+  g.lineTo(hl - 14, -hw);
+  g.quadraticCurveTo(hl, -hw + 1, hl, -hw + 9);
+  g.lineTo(hl, hw - 9);
+  g.quadraticCurveTo(hl, hw - 1, hl - 14, hw);
+  g.lineTo(-hl + 4, hw);
+  g.quadraticCurveTo(-hl, hw, -hl, hw - 4);
+  g.lineTo(-hl, -hw + 4);
+  g.quadraticCurveTo(-hl, -hw, -hl + 4, -hw);
+  g.closePath();
+  paint(g, body, 2.4);
+  g.fillStyle = stripe;
+  g.fillRect(-hl + 1, -4.6, L - 2, 3.2); g.fillRect(-hl + 1, 1.4, L - 2, 3.2);
+  // Bonnet vents and slim headlights.
+  g.fillStyle = INK;
+  g.fillRect(hl - 22, -hw + 6, 9, 2); g.fillRect(hl - 22, hw - 8, 9, 2);
+  g.fillStyle = '#f6efc4';
+  g.fillRect(hl - 5, -hw + 5, 3, 7); g.fillRect(hl - 5, hw - 12, 3, 7);
+  // A low cabin set well back, the stripes carrying on over the roof.
+  rr(g, -16, -hw + 5, 30, W - 10, 7);
+  paint(g, PARK.glass, 1.5);
+  rr(g, -11, -hw + 7, 17, W - 14, 5);
+  paint(g, top, 1.4);
+  g.fillStyle = stripe;
+  g.fillRect(-10, -4.6, 15, 3.2); g.fillRect(-10, 1.4, 15, 3.2);
+  g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(9, -hw + 8, 2, W - 16);
+  g.beginPath();
+  g.ellipse(13, -hw - 1.5, 3, 2, 0, 0, Math.PI * 2);
+  g.moveTo(16, hw + 1.5);
+  g.ellipse(13, hw + 1.5, 3, 2, 0, 0, Math.PI * 2);
+  paint(g, body, 1);
+  // The spoiler.
+  box(g, -hl - 3, -hw + 1, 6, W - 2, 1.5, top, 1.8);
+  // What somebody thought of his parking, scratched into the paint.
+  g.save();
+  g.scale(nose, 1);
+  g.translate(nose * (hl - 14), 0);
+  g.font = `700 7px ${FONT_FAMILY}`;
+  const size = Math.min(7, (7 * 20) / g.measureText(word).width);
+  text(g, word, 0, 0.5, size, body === '#e8e5dc' ? 'rgba(60,60,60,0.75)' : 'rgba(255,255,255,0.78)', 700);
+  g.restore();
+  g.restore();
+}
+
+/**
+ * A trolley shelter filling its bay (the 'r' tile and the 'R' to its right): a frame with a clear
+ * roof, and under it a line of trolleys nested into each other (or the one nobody wanted).
+ */
+function drawShelter(g, x, y) {
+  const X = x * T, Y = y * T, v = hash2(x * 5 + 3, y * 9 + 1);
+  g.fillStyle = 'rgba(0,0,0,0.2)';
+  g.fillRect(X + 5, Y + 7, 2 * T - 4, T - 8);
+  // The trolleys, nested: one long run of wire basket, tapering at the front one's nose, and a
+  // handle (a steel bar with a red grip) wherever one of them ends.
+  const n = v < 0.2 ? 1 : 5 + (((v * 40) | 0) % 3);
+  const step = 7.5, tx = X + 9, len = 22 + (n - 1) * step;
+  g.beginPath();
+  g.moveTo(tx, Y + 9); g.lineTo(tx + len, Y + 11); g.lineTo(tx + len, Y + 29); g.lineTo(tx, Y + 31);
+  g.closePath();
+  paint(g, '#c9d0d6', 1.6);
+  g.strokeStyle = 'rgba(80,88,96,0.5)'; g.lineWidth = 1;
+  g.beginPath();
+  for (let k = 1; k < 4; k++) { g.moveTo(tx + 1, Y + 9 + k * 5.5); g.lineTo(tx + len - 1, Y + 10 + k * 4.5); }
+  g.stroke();
+  for (let k = 0; k < n; k++) {
+    const hx = tx - 2 + k * step;
+    g.fillStyle = '#5b6168'; g.fillRect(hx, Y + 7, 2, 26);
+    box(g, hx - 1, Y + 12, 4, 16, 1, '#d9372b', 1);
+  }
+  // The roof: clear plastic in a steel frame, with ribs, a post at each corner and a sign.
+  box(g, X + 2, Y + 3, 2 * T - 4, T - 6, 3, 'rgba(165,212,236,0.42)', 2.2);
+  g.strokeStyle = '#7d858d'; g.lineWidth = 1.6;
+  g.strokeRect(X + 4.5, Y + 5.5, 2 * T - 9, T - 11);
+  g.fillStyle = 'rgba(70,80,92,0.6)';
+  g.fillRect(X + 27, Y + 5, 2, T - 10); g.fillRect(X + 52, Y + 5, 2, T - 10);
+  g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(X + 10, Y + 31); g.lineTo(X + 21, Y + 9);
+  g.moveTo(X + 59, Y + 31); g.lineTo(X + 70, Y + 9);
+  g.stroke();
+  g.fillStyle = '#3e4852';
+  for (const [px, py] of [[X + 1, Y + 2], [X + 2 * T - 7, Y + 2], [X + 1, Y + T - 8], [X + 2 * T - 7, Y + T - 8]]) g.fillRect(px, py, 6, 6);
+  box(g, X + 2 * T - 31, Y + T - 13, 24, 8, 1.5, '#2f6fbf', 1.2);
+  text(g, 'TROLLEYS', X + 2 * T - 19, Y + T - 8.8, 3.6, '#ffffff', 900);
+}
+
+/**
+ * A kerbed island at the end of a row of bays, over its whole run: a concrete kerb round a bed of
+ * scruffy grass with shrubs and whatever has been thrown in them, a lamp post on its 'l' tile and
+ * a pay machine on its 'm' tile.
+ */
+function drawIsland(g, info, b) {
+  const { w, decor } = info;
+  const X0 = b.x0 * T, Y = b.y0 * T, W = (b.x1 - b.x0) * T;
+  g.fillStyle = 'rgba(0,0,0,0.2)';
+  g.fillRect(X0 + 6, Y + 8, W - 6, T - 8);
+  box(g, X0 + 2, Y + 3, W - 4, T - 6, 12, '#c4c0b5', 2.4);
+  g.fillStyle = 'rgba(255,255,255,0.4)';
+  g.fillRect(X0 + 12, Y + 4.5, W - 24, 1.5);
+  box(g, X0 + 6, Y + 7, W - 12, T - 14, 8, '#6f7c40', 1.4);
+  for (let x = b.x0; x < b.x1; x++) {
+    if (decor[b.y0 * w + x] !== 'i') continue;
+    const px = x * T, v = hash2(x * 3 + 1, b.y0 * 5 + 2), u = hash2(x + 17, b.y0 + 29);
+    // A scruffy shrub.
+    const sx = px + 14 + v * 12, sy = Y + 20;
+    g.beginPath();
+    for (const [dx, dy, rad] of [[-5, 1, 6.5], [4, 2, 6], [0, -4, 6.5]]) {
+      g.moveTo(sx + dx + rad, sy + dy);
+      g.arc(sx + dx, sy + dy, rad, 0, Math.PI * 2);
+    }
+    paint(g, v < 0.5 ? '#4c7f3a' : '#5a8a3c', 1.6);
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    g.fillRect(sx - 4, sy - 6, 3, 2); g.fillRect(sx + 3, sy - 1, 3, 2);
+    // Whatever has been chucked in it.
+    if (u < 0.3) {
+      box(g, sx + 6, sy + 3, 6, 4, 1, '#f6f6f0', 1); // a coffee cup on its side
+      g.fillStyle = '#7a4a2a'; g.fillRect(sx + 10, sy + 3.5, 2, 3);
+    } else if (u < 0.45) {
+      box(g, sx - 12, sy + 4, 7, 4, 1.5, '#c9ced4', 1); // a can
+    } else if (u < 0.55) {
+      // A pair of knickers, caught on a branch. Somebody had a good night.
+      g.beginPath();
+      g.moveTo(sx - 3, sy - 6); g.lineTo(sx + 5, sy - 6); g.lineTo(sx + 3, sy - 1); g.lineTo(sx + 1, sy - 2.5); g.lineTo(sx - 1, sy - 1);
+      g.closePath();
+      paint(g, '#e84393', 1);
+    } else if (u < 0.65) {
+      box(g, sx + 5, sy - 8, 6, 7, 1, '#f2c21b', 1); // a crisp packet
+    }
+  }
+  for (let x = b.x0; x < b.x1; x++) {
+    const ch = decor[b.y0 * w + x];
+    if (ch === 'l') drawLamp(g, x, b.y0);
+    else if (ch === 'm') drawPayMachine(g, x, b.y0);
+  }
+}
+
+/**
+ * A lamp post seen from above: its base, the top of the post and two arms with a lamp on each;
+ * now and then a pigeon on one of them, and what pigeons leave underneath.
+ */
+function drawLamp(g, x, y) {
+  const cx = x * T + T / 2, cy = y * T + T / 2, v = hash2(x * 7 + 2, y * 3 + 5);
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.fillRect(cx - 16, cy + 1, 34, 5);
+  box(g, cx - 5, cy - 5, 10, 10, 2, '#8a9097', 1.6);
+  box(g, cx - 15, cy - 2, 30, 4, 1.5, '#5b6168', 1.4);
+  box(g, cx - 20, cy - 4, 8, 8, 2, '#d4d8dc', 1.5);
+  box(g, cx + 12, cy - 4, 8, 8, 2, '#d4d8dc', 1.5);
+  g.fillStyle = '#fff3b0';
+  g.fillRect(cx - 18, cy - 2, 4, 4); g.fillRect(cx + 14, cy - 2, 4, 4);
+  g.beginPath(); g.arc(cx, cy, 3.5, 0, Math.PI * 2); paint(g, '#6e767e', 1.5);
+  if (v < 0.4) {
+    const s = v < 0.2 ? -1 : 1, px = cx + s * 16;
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    for (let k = 0; k < 4; k++) g.fillRect(px - 4 + k * 2.5, cy + 7 + (k % 2) * 3, 1.8, 1.8);
+    g.beginPath(); g.ellipse(px, cy - 5, 4.6, 3, 0.2 * s, 0, Math.PI * 2); paint(g, '#8f949c', 1);
+    g.beginPath(); g.arc(px + s * 4, cy - 6, 2, 0, Math.PI * 2); paint(g, '#5f6670', 1);
+    g.fillStyle = '#e8a03a'; g.fillRect(px + s * 6 - (s < 0 ? 1.5 : 0), cy - 6.5, 1.5, 1);
+  }
+}
+
+/** A pay-and-display machine: a screen, a coin slot and PAY on the front; sometimes taped up OUT OF ORDER. */
+function drawPayMachine(g, x, y) {
+  const cx = x * T + T / 2, cy = y * T + T / 2, v = hash2(x * 5 + 7, y * 11 + 3);
+  g.fillStyle = 'rgba(0,0,0,0.25)';
+  g.fillRect(cx - 8, cy - 6, 22, 20);
+  box(g, cx - 11, cy - 11, 22, 18, 3, '#2f62a8', 2);
+  box(g, cx - 11, cy + 4, 22, 8, 2, '#22497e', 2);
+  text(g, 'PAY', cx, cy + 8.3, 5, '#f2c21b', 900);
+  box(g, cx - 8, cy - 8, 11, 7, 1, '#9fe0b0', 1.2);
+  g.fillStyle = INK;
+  g.fillRect(cx + 5, cy - 8, 2, 7);
+  if (v < 0.45) {
+    // A sheet of paper taped over the front. It has been like that since 2019.
+    g.save();
+    g.translate(cx, cy - 3);
+    g.rotate((v - 0.22) * 0.7);
+    box(g, -10, -6, 20, 12, 0.5, '#fbfbf4', 1);
+    g.fillStyle = 'rgba(200,170,110,0.8)';
+    g.fillRect(-12, -7.5, 7, 3); g.fillRect(5, 4.5, 7, 3);
+    text(g, 'OUT OF', 0, -2, 3.8, C.red, 900);
+    text(g, 'ORDER', 0, 2.6, 3.8, C.red, 900);
+    g.restore();
+  }
+}
+
+/**
+ * A trolley abandoned in the lane: standing at an angle, knocked over on its side, or with a
+ * traffic cone dumped in it.
+ */
+function drawLaneTrolley(g, x, y) {
+  const cx = x * T + T / 2, cy = y * T + T / 2;
+  const v = hash2(x * 3 + 11, y * 7 + 5), a = (hash2(x + 40, y + 9) - 0.5) * 2.4;
+  g.save();
+  g.translate(cx, cy);
+  g.rotate(a);
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  if (v < 0.3) {
+    // On its side: the side of the basket, the wheels sticking out, the handle at the end.
+    g.fillRect(-11, -3, 28, 12);
+    box(g, -13, -6, 26, 11, 1.5, '#c4cbd2', 1.6);
+    g.strokeStyle = 'rgba(80,88,96,0.55)'; g.lineWidth = 1;
+    g.beginPath();
+    for (let k = -8; k < 12; k += 5) { g.moveTo(k, -5); g.lineTo(k, 4); }
+    g.stroke();
+    g.beginPath();
+    for (const wx of [-9, 9]) { g.moveTo(wx + 2.4, -8.5); g.arc(wx, -8.5, 2.4, 0, Math.PI * 2); }
+    paint(g, '#3a3f45', 1);
+    box(g, -17, -8, 4, 14, 1, '#d9372b', 1.2);
+  } else {
+    g.fillRect(-11, -9, 26, 23);
+    g.beginPath();
+    g.moveTo(-10, -11); g.lineTo(12, -9); g.lineTo(12, 9); g.lineTo(-10, 11);
+    g.closePath();
+    paint(g, 'rgba(196,203,210,0.7)', 1.8);
+    g.strokeStyle = 'rgba(80,88,96,0.55)'; g.lineWidth = 1;
+    g.beginPath();
+    for (let k = -5; k < 12; k += 5) { g.moveTo(k, -10 + (k + 10) * 0.09); g.lineTo(k, 10 - (k + 10) * 0.09); }
+    for (const yy of [-4, 2]) { g.moveTo(-9, yy); g.lineTo(11, yy); }
+    g.stroke();
+    box(g, -15, -12, 4, 24, 1.5, '#d9372b', 1.4);
+    if (v > 0.8) cone(g, 2, 0);
+  }
+  g.restore();
+}
+
+/** A traffic cone seen from above, centred on (x, y): a square base, the cone, a reflective band. */
+function cone(g, x, y) {
+  box(g, x - 5, y - 5, 10, 10, 1.5, '#c9541a', 1.3);
+  g.beginPath(); g.arc(x, y, 3.8, 0, Math.PI * 2); paint(g, '#ff8c1a', 1.2);
+  g.beginPath(); g.arc(x, y, 2.2, 0, Math.PI * 2);
+  g.strokeStyle = '#ffffff'; g.lineWidth = 1.2; g.stroke();
+}
+
+/** Traffic cones round a pothole full of muddy water, one of them usually knocked flat. */
+function drawPothole(g, x, y) {
+  const X = x * T, Y = y * T, cx = X + 20, cy = Y + 21, v = hash2(x * 9 + 4, y * 5 + 8);
+  g.beginPath();
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * Math.PI * 2, rad = 11 + hash2(x + k, y * 3 + 1) * 4;
+    const px = cx + Math.cos(a) * rad * 1.15, py = cy + Math.sin(a) * rad * 0.85;
+    if (k) g.lineTo(px, py); else g.moveTo(px, py);
+  }
+  g.closePath();
+  paint(g, '#3c4149', 1.4);
+  g.beginPath(); g.ellipse(cx + 1, cy + 1, 9, 5.5, v - 0.5, 0, Math.PI * 2);
+  g.fillStyle = '#6d8293'; g.fill();
+  g.fillStyle = 'rgba(255,255,255,0.45)';
+  g.fillRect(cx - 4, cy - 1, 5, 1.2);
+  cone(g, X + 7, Y + 7);
+  cone(g, X + 33, Y + 8);
+  cone(g, X + 8, Y + 33);
+  if (v < 0.6) {
+    // Knocked flat, lying on its side.
+    g.save();
+    g.translate(X + 31, Y + 32);
+    g.rotate(v * 5);
+    g.beginPath(); g.moveTo(-8, -4); g.lineTo(6, -1.2); g.lineTo(6, 1.2); g.lineTo(-8, 4); g.closePath();
+    paint(g, '#ff8c1a', 1.2);
+    g.fillStyle = '#ffffff'; g.fillRect(-3, -2.6, 2.5, 5.2);
+    box(g, -10, -5, 3, 10, 0.5, '#c9541a', 1.1);
+    g.restore();
+  } else cone(g, X + 33, Y + 33);
+}
+
+/**
+ * The burger van over its whole block: a cab at one end, the kitchen behind it with its serving
+ * hatch open on the side facing us under a propped-up striped flap, a cook with a fag on, a menu
+ * board, a giant version of what it sells on the roof, and a sign on top with its name, fitted
+ * and sized as on the food court's stalls.
+ */
+function drawVan(g, b) {
+  const X0 = b.x0 * T, Y0 = b.y0 * T, W = (b.x1 - b.x0) * T, H = (b.y1 - b.y0) * T;
+  const n = ((hash2(b.x0 * 7 + 31, b.y0 * 13 + 17) * 9973) | 0) % VANS.length;
+  const [name, food, col] = VANS[n];
+  const cabLeft = hash2(b.x0 + 3, b.y0 + 5) < 0.5;
+  const cream = '#efe8d6', creamDark = '#d3c9ae';
+  g.fillStyle = 'rgba(0,0,0,0.25)';
+  g.fillRect(X0 + 8, Y0 + 12, W - 6, H - 10);
+  g.fillStyle = INK;
+  g.fillRect(X0 + 22, Y0 + H - 8, 18, 6); g.fillRect(X0 + W - 40, Y0 + H - 8, 18, 6);
+  // The cab: bonnet and windscreen.
+  const cabX = cabLeft ? X0 + 2 : X0 + W - 40;
+  box(g, cabX, Y0 + 12, 38, H - 24, 8, col, 2.2);
+  rr(g, cabLeft ? cabX + 11 : cabX + 18, Y0 + 15, 9, H - 30, 3);
+  paint(g, PARK.glass, 1.5);
+  // The kitchen: its roof seen from above, then the side with the hatch.
+  const kx = cabLeft ? X0 + 30 : X0 + 4, kw = W - 34;
+  box(g, kx, Y0 + 4, kw, H - 20, 7, cream, 2.4);
+  // On the roof: an extractor with grease smoke, and a gas bottle at the back end.
+  const ex = cabLeft ? kx + kw - 16 : kx + 16;
+  g.beginPath(); g.arc(ex, Y0 + 26, 6, 0, Math.PI * 2); paint(g, '#9aa0a6', 1.6);
+  g.fillStyle = 'rgba(70,70,70,0.22)';
+  g.beginPath();
+  g.arc(ex + 4, Y0 + 18, 6, 0, Math.PI * 2);
+  g.moveTo(ex + 15, Y0 + 12); g.arc(ex + 9, Y0 + 12, 6, 0, Math.PI * 2);
+  g.fill();
+  foodIcon(g, food, cabLeft ? kx + kw * 0.42 : kx + kw * 0.58, Y0 + 28, 1.25);
+  // The side facing us, with a stripe of the van's colour along the bottom.
+  const fy = Y0 + H - 30;
+  box(g, kx, fy, kw, 26, 5, creamDark, 2.4);
+  g.fillStyle = col;
+  g.fillRect(kx + 2, fy + 19, kw - 4, 4);
+  // The hatch: dark inside, a cook with a fag on, the counter with the sauces.
+  const hx = cabLeft ? kx + 10 : kx + kw - 10 - kw * 0.5, hw = kw * 0.5;
+  box(g, hx, fy + 4, hw, 13, 2, '#2b2f34', 1.8);
+  g.beginPath(); g.arc(hx + hw * 0.4, fy + 11, 5, 0, Math.PI * 2); paint(g, C.skin, 1.3);
+  g.fillStyle = INK;
+  g.fillRect(hx + hw * 0.4 - 2.5, fy + 9.5, 1.3, 1.3); g.fillRect(hx + hw * 0.4 + 1.2, fy + 9.5, 1.3, 1.3);
+  g.fillStyle = '#f1efe6'; g.fillRect(hx + hw * 0.4 + 2, fy + 13, 5, 1.2);
+  g.fillStyle = '#ff6b2a'; g.fillRect(hx + hw * 0.4 + 6.5, fy + 13, 1.4, 1.2);
+  box(g, hx - 3, fy + 15, hw + 6, 4, 1.5, '#d4d8dc', 1.6);
+  box(g, hx + hw - 14, fy + 9, 3.5, 6, 1, '#d9372b', 1);
+  box(g, hx + hw - 9, fy + 9, 3.5, 6, 1, '#f2c21b', 1);
+  // The flap, propped up over the hatch as an awning, striped and scalloped.
+  const ax0 = hx - 5, aw = hw + 10, stripes = Math.max(4, Math.round(aw / 10)), sw = aw / stripes, ay = fy + 2;
+  for (let k = 0; k < stripes; k++) {
+    g.fillStyle = k & 1 ? '#fbf4e4' : col;
+    g.beginPath();
+    g.moveTo(ax0 + k * sw, ay - 8);
+    g.lineTo(ax0 + (k + 1) * sw, ay - 8);
+    g.lineTo(ax0 + (k + 1) * sw, ay);
+    g.arc(ax0 + (k + 0.5) * sw, ay, sw / 2, 0, Math.PI);
+    g.closePath();
+    g.fill();
+  }
+  g.beginPath();
+  g.moveTo(ax0, ay - 8); g.lineTo(ax0 + aw, ay - 8);
+  for (let k = stripes - 1; k >= 0; k--) g.arc(ax0 + (k + 0.5) * sw, ay, sw / 2, 0, Math.PI, false);
+  g.strokeStyle = INK; g.lineWidth = 2; g.stroke();
+  // The menu board beside the hatch, chalked up.
+  const mx = cabLeft ? hx + hw + 9 : kx + 7, mw = cabLeft ? kx + kw - 7 - mx : hx - 9 - mx;
+  if (mw > 10) {
+    box(g, mx, fy + 3, mw, 15, 1.5, '#262a2f', 1.4);
+    for (let k = 0; k < 3; k++) {
+      g.fillStyle = k === 1 ? '#ffd23f' : '#f1efe6';
+      g.fillRect(mx + 3, fy + 6 + k * 3.8, (mw - 10) * (0.55 + 0.45 * hash2(n, k + 4)), 1.4);
+      g.fillRect(mx + mw - 6, fy + 6 + k * 3.8, 3, 1.4);
+    }
+  }
+  // The sign on top, sticking up above the block.
+  const sh = 17;
+  box(g, X0 + 8, Y0 - 10, W - 16, sh, 4, '#fbf4e4', 2.4);
+  g.fillStyle = col;
+  g.fillRect(X0 + 11, Y0 - 7, W - 22, 2);
+  let size = 9;
+  g.font = `900 ${size}px ${FONT_FAMILY}`;
+  const room = W - 26;
+  const tw = g.measureText(name).width;
+  if (tw > room) size = Math.max(5, (size * room) / tw);
+  text(g, name, X0 + W / 2, Y0 - 10 + sh / 2 + 1.5, size, INK, 900);
+}
+
+/**
+ * The car park's outer walls: a hedge along the top and the left, a steel palisade fence along
+ * the bottom, with litter caught in both. (The right-hand wall is the store's front, and keeps
+ * its plain wall and RETURNS signs.)
+ */
+function parkBoundary(g, info, r) {
+  const { w, h, tiles } = info;
+  const TAU = Math.PI * 2;
+  /** One tile of hedge centred on (cx, cy), running across (or, `down`, up and down). */
+  const hedge = (cx, cy, down, x, y) => {
+    const v = hash2(x * 5 + 1, y * 3 + 77);
+    g.fillStyle = '#2b5228';
+    if (down) g.fillRect(cx - 12, cy - T / 2, 24, T); else g.fillRect(cx - T / 2, cy - 12, T, 24);
+    g.beginPath();
+    for (let k = 0; k < 3; k++) {
+      const along = -13 + k * 13, off = (hash2(x * 3 + k, y + 5) - 0.5) * 6, rad = 9 + hash2(k + x, y * 7) * 2;
+      const px = down ? cx + off : cx + along, py = down ? cy + along : cy + off;
+      g.moveTo(px + rad, py);
+      g.arc(px, py, rad, 0, TAU);
+    }
+    paint(g, '#3f7a37', 1.5);
+    g.fillStyle = 'rgba(255,255,255,0.16)';
+    g.fillRect(cx - 8, cy - 6, 4, 2); g.fillRect(cx + 5, cy + 1, 4, 2);
+    if (v < 0.08) {
+      // A carrier bag, snagged and flapping.
+      g.beginPath(); g.ellipse(cx + 2, cy - 1, 6, 4.5, 0.4, 0, TAU); paint(g, '#f4f4ee', 1.2);
+      g.strokeStyle = INK; g.lineWidth = 1;
+      g.beginPath(); g.arc(cx - 3, cy - 4, 2.2, Math.PI, 0); g.stroke();
+    } else if (v < 0.13) {
+      box(g, cx - 3, cy - 4, 7, 9, 1, ['#f2c21b', '#d9372b', '#2f8fe0'][(v * 60) % 3 | 0], 1); // a crisp packet
+    } else if (v < 0.16) {
+      box(g, cx - 5, cy + 2, 9, 5, 1.5, '#c9ced4', 1); // a can
+    } else if (v < 0.175) {
+      // Somebody's boxer shorts.
+      box(g, cx - 5, cy - 4, 10, 7, 1.5, '#2f8fe0', 1.1);
+      g.fillStyle = '#ffffff'; g.fillRect(cx - 4, cy - 3, 8, 1.4);
+      g.fillStyle = '#e8303a'; g.fillRect(cx - 2, cy, 1.5, 1.5); g.fillRect(cx + 2, cy + 1, 1.5, 1.5);
+    }
+  };
+  if (r.y0 <= 0) {
+    for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
+      if (tiles[x] === '#') hedge(x * T + T / 2, 17, false, x, 0);
+    }
+  }
+  if (r.x0 <= 0) {
+    for (let y = Math.max(1, r.y0); y < Math.min(h - 1, r.y1); y++) {
+      if (tiles[y * w] === '#') hedge(16, y * T + T / 2, true, 0, y);
+    }
+  }
+  if (r.y1 >= h) {
+    // The fence: two rails and a row of pointed steel pales, with rubbish blown against it.
+    const py = (h - 1) * T;
+    for (let x = Math.max(1, r.x0); x < Math.min(w - 1, r.x1); x++) {
+      if (tiles[(h - 1) * w + x] !== '#') continue;
+      const px = x * T, v = hash2(x * 7 + 3, h + 11);
+      g.fillStyle = '#2c4636';
+      g.fillRect(px, py + 13, T, 3); g.fillRect(px, py + 26, T, 3);
+      g.beginPath();
+      for (let k = 0; k < 5; k++) {
+        const sx = px + 2 + k * 8;
+        g.moveTo(sx, py + 33); g.lineTo(sx, py + 11); g.lineTo(sx + 2, py + 7); g.lineTo(sx + 4, py + 11); g.lineTo(sx + 4, py + 33);
+        g.closePath();
+      }
+      paint(g, '#4a6b56', 1.2);
+      if (v < 0.12) {
+        g.beginPath(); g.ellipse(px + 18, py + 28, 7, 5, -0.3, 0, TAU); paint(g, '#f4f4ee', 1.2);
+      } else if (v < 0.2) {
+        box(g, px + 10, py + 25, 8, 9, 1, '#2f8fe0', 1);
+      } else if (v < 0.25) {
+        cone(g, px + 24, py + 29);
+      }
+    }
+  }
+}
+
 /** A red checkout till facing into the store. */
 function drawTill(g, px, py) {
   g.fillStyle = C.floor;
@@ -1323,15 +2289,51 @@ function drawDoorStatic(g, d) {
   g.restore();
 }
 
-/** Wall signs on the right wall: RETURNS above the tills and NO RECEIPT NO REFUND below them. */
+/**
+ * Wall signs on the right wall: RETURNS above the tills and NO RECEIPT NO REFUND below them. A
+ * bank of tills in the bottom wall (the car park's) gets MORE RETURNS on its left and NO RECEIPT
+ * NO REFUND on its right, lying along that wall, as long as they fit between the entrances.
+ */
 function drawSigns(g, info) {
-  const { w, h, tillTop, tillBot } = info;
-  if (tillTop >= tillBot) return;
-  const x = w * T - 35;
-  const a0 = Math.max(0.8, tillTop - 4.2), a1 = tillTop - 1.0;
-  if (a1 - a0 >= 2) verticalSign(g, x, a0, a1, C.red, '#ffffff', ['RETURNS']);
-  const b0 = tillBot + 0.2, b1 = Math.min(h - 0.8, tillBot + 3.4);
-  if (b1 - b0 >= 2.6) verticalSign(g, x, b0, b1, C.yellow, INK, ['NO RECEIPT', 'NO REFUND']);
+  const { w, h, tillTop, tillBot, tillLeft, tillRight, tiles } = info;
+  if (tillTop < tillBot) {
+    const x = w * T - 35;
+    const a0 = Math.max(0.8, tillTop - 4.2), a1 = tillTop - 1.0;
+    if (a1 - a0 >= 2) verticalSign(g, x, a0, a1, C.red, '#ffffff', ['RETURNS']);
+    const b0 = tillBot + 0.2, b1 = Math.min(h - 0.8, tillBot + 3.4);
+    if (b1 - b0 >= 2.6) verticalSign(g, x, b0, b1, C.yellow, INK, ['NO RECEIPT', 'NO REFUND']);
+  }
+  if (tillLeft < tillRight) {
+    // How far the plain wall runs either side of the bank: to an entrance (keeping clear of the
+    // hazard stripes on its jambs) or to the corner (keeping clear of the right wall's sign).
+    const row = (h - 1) * w;
+    let l = tillLeft - 1;
+    while (l > 0 && tiles[row + l] === '#') l--;
+    let rt = tillRight;
+    while (rt < w - 1 && tiles[row + rt] === '#') rt++;
+    const left = l <= 0 ? 0.8 : l + 1.5, right = rt >= w - 1 ? w - 1.1 : rt - 0.5;
+    const y = h * T - 35;
+    const a0 = Math.max(left, tillLeft - 4.4), a1 = tillLeft - 0.2;
+    if (a1 - a0 >= 3.2) acrossSign(g, a0, a1, y, C.red, '#ffffff', ['MORE RETURNS']);
+    else if (a1 - a0 >= 2) acrossSign(g, a0, a1, y, C.red, '#ffffff', ['RETURNS']);
+    const b0 = tillRight + 0.2, b1 = Math.min(right, tillRight + 4.4);
+    if (b1 - b0 >= 2.6) acrossSign(g, b0, b1, y, C.yellow, INK, ['NO RECEIPT', 'NO REFUND']);
+  }
+}
+
+/** A sign lying along the bottom wall from tile x1 to x2, 30 pixels tall from y. */
+function acrossSign(g, x1, x2, y, bg, fg, lines) {
+  const xa = x1 * T, xb = x2 * T;
+  box(g, xa, y, xb - xa, 30, 5, bg, 2.5);
+  // Lettering as big as on the right wall's signs, smaller if the sign is short.
+  const size = lines.length === 1 ? 15 : 10;
+  g.font = `900 ${size}px ${FONT_FAMILY}`;
+  let wide = 0;
+  for (const s of lines) wide = Math.max(wide, g.measureText(s).width);
+  const fit = Math.min(size, (size * (xb - xa - 12)) / wide);
+  const cx = (xa + xb) / 2;
+  if (lines.length === 1) text(g, lines[0], cx, y + 16, fit, fg, 900);
+  else { text(g, lines[0], cx, y + 9, fit, fg, 900); text(g, lines[1], cx, y + 22, fit, fg, 900); }
 }
 
 function verticalSign(g, x, y1, y2, bg, fg, lines) {
@@ -1353,7 +2355,7 @@ function verticalSign(g, x, y1, y2, bg, fg, lines) {
  * arrive) and the till displays (flash red after a refund). Entrances belong to nobody: they are
  * not marked with any player's name or colour.
  * @param {number} open 0 closed .. 1 open
- * @param {Float64Array} tillAt per-row time (ms) of the last refund at that row's till
+ * @param {Float64Array} tillAt per-tile time (ms) of the last refund at the till on that tile
  */
 export function drawDynamic(ctx, info, open, tillAt, now) {
   for (const d of info.doors) {
@@ -1385,7 +2387,7 @@ export function drawDynamic(ctx, info, open, tillAt, now) {
   const w = info.w;
   for (const i of info.tills) {
     const px = (i % w) * T, py = ((i / w) | 0) * T;
-    const since = now - tillAt[(i / w) | 0];
+    const since = now - tillAt[i];
     const hot = since < 900 && ((since / 150) | 0) % 2 === 0;
     box(ctx, px + 21, py + 8, 14, 16, 2, hot ? '#7a1010' : '#3a3a3a', 1.8);
     text(ctx, hot ? '-$' : '$', px + 28, py + 16.5, 11, hot ? '#ff6b5e' : '#7CFC00', 900);

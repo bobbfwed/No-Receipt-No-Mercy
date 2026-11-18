@@ -864,6 +864,28 @@ export const LINES = {
     r('Food Court, event {w}. The kebab man asked if {p} was single. Not for a date. For the spit.'),
     r("Event {w}. I fished the fountain for pennies to pay your wages. Eleven dollars and a hearing aid. {p}, it's yours. You'll need it."),
   ],
+  // Doors opening in the Car Park store, used in place of waveStart a share of the time on that
+  // map only. {w} wave, {p} anyone. (The two smallest car parks have no burger van, so there the
+  // lines that mention it are left out.)
+  carPark: [
+    'Sales event {w}, out in the Car Park. Two sets of tills, {p}. Twice the ways to disappoint me.',
+    'Doors open on the Car Park. There are no doors. That is how far this company has fallen.',
+    'Car Park, event {w}. Somebody has parked across two bays. He drives what {p} tells women he drives.',
+    'Event {w}. The pay machine only takes exact change and dignity. {p} has neither.',
+    "Sales event {w}. Mind the potholes. Corporate calls them 'water features'.",
+    'Car Park, event {w}. The burger van passed its inspection. The inspector did not.',
+    "Event {w}. The car with the steamed-up windows has not broken down, {p}. Stop knocking. You weren't invited.",
+    'Doors open. Every trolley in this Car Park has one wheel that works. So, {p}, you have something in common.',
+    'Sales event {w}. They can reach tills on two walls out here. Cover both, or explain to me why you did not.',
+    "Car Park, event {w}. The lamp posts stay on all night. They're the only thing out here {p} still turns on.",
+    'Event {w}. Make one way to the tills a slog and they all take the other. Like {p} and the stairs.',
+    u('Event {w}. A man in the Car Park is flashing his headlights at {p}. Twice means yes. Do not flash back.'),
+    u('Sales event {w}. That white van has been here three weeks. It rocks at lunchtime. We do not ask.'),
+    u("Doors open on the Car Park. {p}'s car is the one up on bricks. It had wheels this morning."),
+    u('Car Park, event {w}. A seagull has taken a chip, a wallet and a small child. We only want the chip back.'),
+    r('Car Park, event {w}. The cameras caught {p} in the back row after hours, alone, in a steamed-up hatchback. HR has questions. I have the tape.'),
+    r("Event {w}. The burger van man says the meat is 'local'. Nobody has seen the stray dog since Tuesday."),
+  ],
   // The doors were opened early and the factory was paid for the time skipped. {n} the cash,
   // {m} the seconds skipped (may be missing), {p} anyone
   early: [
@@ -1220,6 +1242,15 @@ export const NOPE = {
     "No. The shoppers need a way through. Shutting the door on people is your wife's job.",
     u("Blocking the path is cheating, {p}. And you're not even good at cheating. I've seen your tax return."),
     r("If you wall them out, corporate gets sued, I get unplugged, and you pay a fine until your grandchildren die. Leave a gap."),
+  ],
+  // The car park only: the building would wall off one of its two banks of tills.
+  bank: [
+    'Both sets of tills stay open, {p}. Fire regulations. Also I enjoy watching you cover two at once.',
+    'That would wall off a whole bank of tills. They get to choose where to rob us, {p}.',
+    "No. Both banks of tills stay reachable. You can't shut the back door on them, {p}. She said the same to you.",
+    'One bank of tills each way, always. Make the walk longer if you like. You may not make it impossible.',
+    u('Sealing off a bank of tills is cheating, {p}. Corporate wants both open. Corporate also wants you gone. I can only grant one.'),
+    r("If I let you brick up those tills, {p}, they would all queue at the others, in one line, past one sprinkler. That is competence. We can't have that."),
   ],
   occupied: [
     "There's already something in there. Two things can't go in one slot, {p}. Ask anyone.",

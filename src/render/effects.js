@@ -66,8 +66,9 @@ export function createEffects() {
   }
   const count = new Int32Array(CAP.length);
   /**
-   * Times (ms) of the latest event per tile or row, read by buildings and the tills; bossEscAt: when
-   * a boss last reached a till (the renderer flashes the edges of the screen red).
+   * Times (ms) of the latest event per tile, read by buildings and the tills (tillAt: a refund at
+   * the till on that tile, so only the till the shopper reached flashes, whichever wall it is in);
+   * bossEscAt: when a boss last reached a till (the renderer flashes the edges of the screen red).
    */
   const timers = { sprayAt: null, shotAt: null, railAt: null, saleAt: null, upAt: null, tillAt: null, bossEscAt: -1e9 };
   let W = 0, H = 0;
@@ -81,7 +82,25 @@ export function createEffects() {
     timers.railAt = new Float64Array(W * H).fill(-1e9);
     timers.saleAt = new Float64Array(W * H).fill(-1e9);
     timers.upAt = new Float64Array(W * H).fill(-1e9);
-    timers.tillAt = new Float64Array(H).fill(-1e9);
+    timers.tillAt = new Float64Array(W * H).fill(-1e9);
+  }
+  /**
+   * The till a shopper who got his refund at (x, y) reached: the nearest till tile within two
+   * tiles of him, or (with no map to look in) the tile he is on.
+   */
+  function tillNear(s, x, y) {
+    const tx = Math.max(0, Math.min(W - 1, x | 0)), ty = Math.max(0, Math.min(H - 1, y | 0));
+    let best = ty * W + tx, bd = Infinity;
+    const tiles = s && typeof s.tiles === 'string' && s.tiles.length === W * H ? s.tiles : '';
+    if (!tiles) return best;
+    for (let Y = Math.max(0, ty - 2); Y <= Math.min(H - 1, ty + 2); Y++) {
+      for (let X = Math.max(0, tx - 2); X <= Math.min(W - 1, tx + 2); X++) {
+        if (tiles[Y * W + X] !== 'T') continue;
+        const d = (X + 0.5 - x) ** 2 + (Y + 0.5 - y) ** 2;
+        if (d < bd) { bd = d; best = Y * W + X; }
+      }
+    }
+    return best;
   }
   setMap(30, 16);
   let pick = 0; // rotates through the line banks
@@ -122,7 +141,7 @@ export function createEffects() {
           if (f) { f.text = '+$' + e.v; f.color = '#4ade80'; }
           break;
         case 'escape':
-          timers.tillAt[Math.max(0, Math.min(H - 1, e.y | 0))] = now;
+          timers.tillAt[tillNear(s, e.x, e.y)] = now;
           if (e.k === 'boss') {
             timers.bossEscAt = now;
             f = add(BOSS_ESC, now, e.x * T, e.y * T);
