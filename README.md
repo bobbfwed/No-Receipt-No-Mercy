@@ -3,10 +3,8 @@
 *The customer is always a prick.*
 
 <!-- gen:version -->
-**Version 0.2.07** · [play it](https://bobbfwed.github.io/No-Receipt-No-Mercy/)
+**Play version 0.2.08 now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
 <!-- /gen:version -->
-
-**Play it now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
 
 A co-op browser game for 1 to 7 players, set in the returns department of a discount warehouse. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
 
@@ -33,6 +31,11 @@ Rows of shelving with a wide main aisle down the middle. The shelves are free wa
 Little tables, sticky booths, kebab stalls and a fountain full of pennies. The crowd weaves through it all; so do your belts.
 
 ![Food Court](docs/img/map-food.png)
+
+### Car Park
+The sale has spilled outside. Rows of parked cars with the odd empty bay to squeeze through, and tills on two walls: make one way in a slog and the whole crowd takes the other.
+
+![Car Park](docs/img/map-carpark.png)
 
 | Size | Tiles | Suits |
 |---|---|---|
@@ -79,9 +82,10 @@ Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chro
 
 - **Training shift** teaches every building hands on in about ten minutes, then every awkward kind of shopper in about ten more ("Jump to part 2" skips straight to those). Start here.
 - **Painted floor:** Unpackers, Presses, Packers and Shipping Chutes each only go on their own named patch of floor (Loading Bay, Press Shop, Gift Wrap, Shipping). The patches are apart, so belts carry the goods between them, and those belts are your maze.
-- **The store** on the menu picks the map for Play solo and Host a game: a design (open warehouse, showroom of walled rooms, supermarket aisles, food court) and a size. Each size says how many players it suits; every player gets his own shopper entrance.
+- **The store** on the menu picks the map for Play solo and Host a game: a design (open warehouse, showroom of walled rooms, supermarket aisles, food court, car park) and a size. Each size says how many players it suits; every player gets his own shopper entrance.
 - **The game** on the menu sets its length (10, 15, 20 or 30 sales events, or **Endless**), the difficulty and each player's starting cash. An endless game has no last sales event: it goes on until the refunds close the store, and the browser remembers the furthest sales event reached on each difficulty. A game that has been won can also be carried on as an endless one with **Keep going (endless)** on the win screen.
 - **The boss** walks in every fifth sales event, a little after the doors open: slow, very patient, and nothing slows or stops him. His pep talks give the shoppers around him patience back. If he reaches a till he counts as five refunds; drive him out and the store gets a bounty. He comes back with a grander title each time (Regional Manager, Area Director, Vice President of Returns, The CEO). A bar across the top of the floor shows his patience while he is in the store.
+- **The Car Park** is the one store with tills on two walls: the usual bank on the right and a second in the bottom wall. Shoppers walk to whichever is nearer, so lengthening one route sends the crowd to the other. Both banks must stay reachable: a building that would wall one off is refused. Its entrances in the bottom wall open last (for a sixth and seventh player), because they are close to the bottom tills.
 - **Play solo** starts a real game straight away.
 - The speaker button at the top right turns sound effects, music and DEB's voice on or off.
 - To try multiplayer alone, open http://localhost:5173/tools/two-player.html : a host and a second player side by side.

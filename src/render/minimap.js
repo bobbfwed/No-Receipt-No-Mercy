@@ -3,7 +3,9 @@
 // when open, dark when shut), buildings coloured by group over their whole footprint
 // (factory orange, security blue), shoppers as dots (dads light blue, supers bigger and gold, the
 // boss a big pink star), the food court's furniture in its own colours (tables white, stalls red,
-// the fountain blue...), wreckage, and a white frame showing what the main view shows.
+// the fountain blue...), the car park's tarmac and what is parked on it (cars in two tones, so a
+// row reads as a row of cars; the prick's car gold, the burger van orange, trolley shelters glassy
+// blue, islands green), wreckage, and a white frame showing what the main view shows.
 //
 //   const mini = createMinimap(canvas, session, renderer);
 //   mini.draw();                  a few times a second
@@ -15,11 +17,20 @@ import { INK } from './paint.js';
 const COL = {
   wall: [45, 52, 60], floor: [141, 144, 147], till: [217, 55, 43], shut: [70, 76, 84], open: [236, 240, 244],
   factory: [245, 140, 30], security: [60, 150, 255], rubble: [110, 96, 80], food: [190, 178, 154],
+  park: [127, 134, 143],
 };
-/** Food court furniture by decor character (state.decor): tables, benches, planters, bins, stalls, fountain. */
+/**
+ * Furniture by decor character (state.decor). The food court: tables, benches, planters, bins,
+ * stalls, fountain. The car park: a car's two halves (body and windscreen end), a trolley
+ * shelter's, the prick across two bays, the islands with their lamp posts and pay machines, a
+ * trolley and a coned-off pothole in the lanes, and the burger van.
+ */
 const FURN = {
   t: [242, 238, 228], b: [140, 50, 45], p: [35, 95, 45], n: [60, 70, 75], k: [215, 45, 60], f: [60, 170, 235],
+  c: [200, 202, 206], C: [92, 112, 136], r: [150, 196, 218], R: [150, 196, 218], x: [222, 178, 50],
+  i: [92, 128, 66], l: [232, 214, 120], m: [60, 98, 168], a: [196, 202, 210], o: [255, 140, 26], v: [235, 120, 40],
 };
+const CAR_DARK = { c: FURN.c.map((v) => Math.round(v * 0.82)), C: FURN.C.map((v) => Math.round(v * 0.8)) };
 const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f', BOSS_COL = '#ff2a6d';
 
 const rgb = (hex) => {
@@ -74,12 +85,15 @@ export function createMinimap(canvas, session, renderer) {
       for (const i of door) doorCol.set(i, c);
     });
     const zones = s.zones && s.zones.length === n ? s.zones : '';
-    // The food court: its own floor colour, and its furniture in colours of its own.
+    // The food court and the car park: their own floor colours, and their furniture in colours of its own.
     const decor = typeof s.decor === 'string' && s.decor.length === n ? s.decor : '';
-    const floor = s.map && s.map.design === 'food' ? COL.food : COL.floor;
+    const design = s.map && s.map.design;
+    const floor = design === 'food' ? COL.food : design === 'carpark' ? COL.park : COL.floor;
     for (let i = 0; i < n; i++) {
       const ch = tiles[i];
       let c = ch === '#' ? (decor && FURN[decor[i]]) || COL.wall : ch === 'T' ? COL.till : ch === 'D' || ch === 'd' ? (doorCol.get(i) || COL.shut) : floor;
+      // Parked cars touch nose to tail; every other row a shade darker keeps them apart.
+      if (decor && (decor[i] === 'c' || decor[i] === 'C') && ((i / s.w) | 0) & 1) c = c === FURN.c ? CAR_DARK.c : CAR_DARK.C;
       if (zones && c === floor && ZONE_COL[zones[i]]) c = ZONE_COL[zones[i]];
       const b = grid[i];
       if (b && BUILD[b.k]) c = BUILD[b.k].group === 'security' ? COL.security : COL.factory;

@@ -46,7 +46,7 @@ const VARS = {
   won: 'p', lost: 'p', nearLimit: 'pn', report: 'p', reportNoStops: 'p', reportNoShips: 'p',
   reportPerfect: 'p', pee: 'pk', flash: 'pn', fall: 'p', pitchStop: 'pk', pitchRush: 'pk',
   kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
-  pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', early: 'pnm',
+  pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw', early: 'pnm',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -61,6 +61,8 @@ const AT_LEAST = {
   // Version 0.2.06: the boss, endless games, the Food Court and opening early.
   'bossIn.manager': 8, 'bossIn.director': 8, 'bossIn.vp': 8, 'bossIn.ceo': 10, bossOut: 8,
   bossEscape: 12, pep: 12, endless: 8, endlessMark: 10, foodCourt: 12, early: 6,
+  // Version 0.2.08: the Car Park.
+  carPark: 12,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
@@ -123,7 +125,7 @@ test('every bank has about three times the lines it had, and every new event and
   assert.ok(EMPLOYEES_OF_THE_WAVE.length >= 18);
   const oldNope = { cash: 3, blocked: 2, zone: 3 };
   for (const [k, list] of Object.entries(NOPE)) assert.ok(list.length >= 3 * (oldNope[k] || 1), `refusals for ${k}`);
-  for (const k of ['fit', 'zone', 'max', 'noup']) assert.ok(NOPE[k]?.length >= 3, `refusal ${k}`);
+  for (const k of ['fit', 'zone', 'max', 'noup', 'bank']) assert.ok(NOPE[k]?.length >= 3, `refusal ${k}`);
 });
 
 test('no line is repeated, every placeholder gets filled, and nothing is too long to read at a glance', () => {
@@ -166,7 +168,7 @@ test('banks whose number or name can be missing still have lines that need neith
 
 test('every bank has common, uncommon and rare lines, and the friends have lines for every situation', () => {
   for (const key of ['waveStart', 'dadLine', 'manyEscapes', 'report', 'removed', 'smashOther', 'bossOut', 'bossEscape',
-    'pep', 'endless', 'endlessMark', 'foodCourt', 'early', 'rail']) {
+    'pep', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'early', 'rail']) {
     const ws = LINES[key].map(weightOf);
     assert.ok(ws.some((w) => w === 1) && ws.some((w) => w < 0.5 && w > 0.2) && ws.some((w) => w <= 0.15), key);
   }
@@ -576,7 +578,7 @@ test('the pep talk, every 7 seconds, gets only a handful of remarks in a game', 
 test('an endless game never mentions a last event, and marks the round numbers', () => {
   const lastEvent = /last (one|sales event|event)|final (sales )?event|every sales event|\bof 0\b/i;
   // Nothing anywhere that DEB can say in an endless game names a last event...
-  const endlessBanks = ['waveStart', 'endless', 'endlessMark', 'foodCourt', 'bossOut', 'bossEscape', 'pep', 'early', 'report', 'nearLimit', 'lost'];
+  const endlessBanks = ['waveStart', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'bossOut', 'bossEscape', 'pep', 'early', 'report', 'nearLimit', 'lost'];
   for (const key of endlessBanks) for (const l of LINES[key]) assert.ok(!lastEvent.test(textOf(l)), `${key}: "${textOf(l)}"`);
   for (const l of Object.values(LINES.bossIn).flat()) assert.ok(!lastEvent.test(textOf(l)), textOf(l));
 
@@ -638,6 +640,34 @@ test('the Food Court lines come up on the Food Court and nowhere else', () => {
   const n = there.filter((t) => food.has(t)).length;
   assert.equal(there.length, 30);
   assert.ok(n >= 5 && n <= 18, `${n} of 30 openings on the Food Court were its own`);
+});
+
+test('the Car Park lines come up on the Car Park and nowhere else, and the van only where there is one', () => {
+  const lot = new Set();
+  for (const name of ['Dave', 'Steve']) for (const l of LINES.carPark) for (let w = 1; w <= 30; w++) lot.add(fill(textOf(l), { p: name, w }));
+  const openings = (design, size = 'm', seed = 23) => {
+    const director = createDirector(seeded(seed));
+    const state = createGame({ map: { design, size } });
+    addPlayer(state, 'Dave');
+    addPlayer(state, 'Steve');
+    const said = [];
+    for (let wave = 1; wave <= 30; wave++) {
+      state.wave = wave;
+      state.tick += 200 * TICK_HZ;
+      said.push(...says(director.handle([{ e: 'waveStart', wave, kinds: [], supers: [], dads: 0 }], state)));
+    }
+    return said;
+  };
+  for (const design of ['warehouse', 'showroom', 'aisles', 'food']) {
+    assert.deepEqual(openings(design).filter((t) => lot.has(t)), [], design);
+  }
+  const there = openings('carpark');
+  const n = there.filter((t) => lot.has(t)).length;
+  assert.equal(there.length, 30);
+  assert.ok(n >= 5 && n <= 18, `${n} of 30 openings on the Car Park were its own`);
+  // The Outlet's car park has no burger van, so nothing said there mentions one.
+  assert.ok(LINES.carPark.some((l) => /burger van/i.test(textOf(l))));
+  for (let seed = 1; seed <= 12; seed++) for (const t of openings('carpark', 's', seed)) assert.ok(!/burger van/i.test(t), t);
 });
 
 test('refusals: the same rules, and a refusal does not repeat straight away', () => {

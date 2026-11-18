@@ -10,7 +10,8 @@
 //   through, and a won game being carried on as an endless one.
 // - The boss is announced when he walks in (bossIn, 12 seconds after the doors open), not when the
 //   doors open, with a bank for each of his titles; the first time, his trick is explained too.
-// - On the Food Court map a share of the wave openings (TALK.foodShare) come from its own bank.
+// - On the Food Court map a share of the wave openings (TALK.foodShare) come from its own bank,
+//   and the same on the Car Park map (TALK.carParkShare).
 // - Anything else is optional. The first time DEB comments on a topic she nearly always does;
 //   every comment after that makes the next one on that topic less likely (down to a floor) and
 //   the topic's own quiet time longer. On top of that, DEB keeps a gap after any optional remark,
@@ -62,6 +63,8 @@ export const TALK = {
   railHits: 5,
   /** On the Food Court map, the share of wave openings taken from its own bank. */
   foodShare: 0.35,
+  /** The same on the Car Park map. */
+  carParkShare: 0.35,
   /** In an endless game, every this-many-th sales event from endlessFrom on gets a remark. */
   endlessEvery: 10,
   endlessFrom: 20,
@@ -316,7 +319,8 @@ export function createDirector(random = Math.random) {
 
   /**
    * The doors opening: a remark at round-numbered events of an endless game (when DEB feels like
-   * it), else the usual opening, from the Food Court's own bank a share of the time on that map.
+   * it), else the usual opening, from the Food Court's or the Car Park's own bank a share of the
+   * time on those maps.
    */
   function opening(out, state, w) {
     const mark = isEndless(state) && Number.isInteger(w) && w >= TALK.endlessFrom && w % TALK.endlessEvery === 0;
@@ -324,7 +328,10 @@ export function createDirector(random = Math.random) {
     const food = state.map?.design === 'food' && random() < TALK.foodShare;
     // (The two smallest food courts have no fountain, so there the fountain jokes are left out.)
     const foodBank = () => (String(state.decor || '').includes('f') ? LINES.foodCourt : LINES.foodCourt.filter((l) => !/fountain/i.test(textOf(l))));
-    say(out, state, 'waveStart', food ? foodBank() : LINES.waveStart, { w }, { friend: standing(state) });
+    // The Car Park has a bank of its own as well. (Its two smallest sizes have no burger van.)
+    const lot = !food && state.map?.design === 'carpark' && random() < TALK.carParkShare;
+    const lotBank = () => (String(state.decor || '').includes('v') ? LINES.carPark : LINES.carPark.filter((l) => !/burger van/i.test(textOf(l))));
+    say(out, state, 'waveStart', food ? foodBank() : lot ? lotBank() : LINES.waveStart, { w }, { friend: standing(state) });
   }
 
   /** Warns once as refunds pass each share of the limit in TALK.nearLimit. */

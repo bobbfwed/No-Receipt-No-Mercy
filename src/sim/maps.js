@@ -5,7 +5,8 @@
 //   '#' wall, pillar, shelf or furniture (nothing walks or builds here; what furniture looks
 //       like is in the separate `decor` string, see DECOR)
 //   '.' floor (the only tiles that can be built on)
-//   'T' till (shoppers want to reach one)
+//   'T' till (shoppers want to reach one). Most designs have one bank of them, in the right-hand
+//       wall; the car park has a second bank in the bottom wall
 //   'D' open entrance (shoppers appear here)   'd' entrance that is still shut
 // There is one entrance per player. All seven possible entrances exist from the start, shut, so the
 // maze can never be built across one; they open as players join.
@@ -42,6 +43,10 @@ export const MAP_DESIGNS = {
     name: 'Food Court',
     desc: 'Little tables, sticky booths, kebab stalls and a fountain full of pennies. The crowd weaves through it all; so do your belts.',
   },
+  carpark: {
+    name: 'Car Park',
+    desc: 'The sale has spilled outside. Rows of parked cars with the odd empty bay to squeeze through, and tills on two walls: make one way in a slog and the whole crowd takes the other.',
+  },
 };
 
 /** The size that suits a number of players. */
@@ -72,22 +77,32 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
 
   if (design === 'showroom') rooms(w, h, wall, set);
   else if (design === 'aisles') shelves(w, h, mid, wall);
-  else if (design !== 'food') pillars(w, h, wall);
+  else if (design !== 'food' && design !== 'carpark') pillars(w, h, wall);
 
-  // Tills: a band in the middle of the right-hand wall.
-  const tillRows = Math.max(6, Math.round(h * 0.375) & ~1);
+  // Tills: a bank in the middle of the right-hand wall. The car park has two shorter banks: that
+  // one, and another in the bottom wall towards the right, about as far from the first entrance.
+  const two = design === 'carpark';
+  const tillRows = two ? Math.max(4, Math.round(h * 0.25) & ~1) : Math.max(6, Math.round(h * 0.375) & ~1);
   const t0 = (h - tillRows) >> 1;
   for (let y = t0; y < t0 + tillRows; y++) {
     set(w - 1, y, 'T');
     set(w - 2, y, '.');
     set(w - 3, y, '.');
   }
+  if (two) {
+    const b0 = Math.min(Math.round(w * 0.78 - tillRows / 2), w - 3 - tillRows);
+    for (let x = b0; x < b0 + tillRows; x++) {
+      set(x, h - 1, 'T');
+      set(x, h - 2, '.');
+      set(x, h - 3, '.');
+    }
+  }
 
   // Entrances, in the order they open: the first on the left wall, then top and bottom (a fifth
   // of the way along), then two more on the left wall, then a second one on top and on the
   // bottom (two fifths of the way along).
   const cx = Math.round(w * 0.2), cx2 = Math.round(w * 0.4), ry = Math.round(h * 0.22);
-  const spots = [
+  let spots = [
     { side: 'L', at: mid - 1 },
     { side: 'T', at: cx },
     { side: 'B', at: cx },
@@ -96,6 +111,10 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
     { side: 'T', at: cx2 },
     { side: 'B', at: cx2 },
   ];
+  // In the car park the entrances in the bottom wall are about half as far from the bottom bank
+  // of tills as any other entrance is from a till, so they open last: only a sixth and a seventh
+  // player get one.
+  if (two) spots = [0, 1, 3, 4, 5, 2, 6].map((k) => spots[k]);
   const doors = [];
   for (const sp of spots.slice(0, Math.max(1, slots))) {
     const door = [];
@@ -110,24 +129,39 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
     }
     doors.push(door);
   }
-  // The food court's furniture goes in last, around the tills, the entrances (all seven, so the
-  // layout is the same however many are in use) and the marked floor.
-  const decor = design === 'food' ? furnish(w, h, g, spots) : '';
+  // The food court's furniture and the car park's cars go in last, around the tills, the entrances
+  // (all seven, so the layout is the same however many are in use) and the marked floor.
+  const decor = design === 'food' ? furnish(w, h, g, spots) : design === 'carpark' ? park(w, h, g, spots) : '';
   return { w, h, tiles: g.join(''), doors, decor };
 }
 
 /**
- * What a solid tile of the food court looks like (the `decor` string from makeMap). Every one of
- * them is an ordinary '#' in the tiles, so the rules treat furniture exactly like a wall.
+ * What a solid tile of the food court or the car park looks like (the `decor` string from
+ * makeMap). Every one of them is an ordinary '#' in the tiles, so the rules treat furniture and
+ * parked cars exactly like a wall.
  */
 export const DECOR = {
   ' ': 'nothing special: floor, or a plain wall',
+  // The food court.
   t: 'a small table with chairs',
   b: 'a bench or booth seat (a run of them is one bench)',
   p: 'a planter or potted palm',
   n: 'a bin and tray return',
   k: 'a food stall (a block of several tiles)',
   f: 'the fountain (a block of several tiles)',
+  // The car park. A parked car and a trolley shelter each fill one bay: two tiles side by side,
+  // the left one the small letter and the right one the capital.
+  c: 'the left half of a parked car',
+  C: 'the right half of a parked car',
+  r: 'the left half of a trolley shelter',
+  R: 'the right half of a trolley shelter',
+  x: 'a car parked across two bays (a block two tiles each way)',
+  i: 'the kerbed island at the end of a row of bays (a run of them is one island)',
+  l: 'a lamp post on an island',
+  m: 'a pay machine on an island',
+  a: 'an abandoned trolley in the lane',
+  o: 'traffic cones round a pothole in the lane',
+  v: 'the burger van (a block four tiles wide and two deep)',
 };
 
 /** A small, fixed scramble of a few numbers, used in place of dice so a map is the same every time. */
@@ -156,46 +190,8 @@ function hash(a, b, c) {
  */
 function furnish(w, h, g, spots) {
   const d = new Array(w * h).fill(' ');
-  const keep = new Uint8Array(w * h); // 1 = no furniture on this tile
-  const clear = (x0, y0, x1, y1) => {
-    for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) {
-      for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x++) keep[y * w + x] = 1;
-    }
-  };
-  // A walkway all round the outer wall, and the three columns in front of the tills.
-  clear(0, 0, w - 1, 1);
-  clear(0, h - 2, w - 1, h - 1);
-  clear(0, 0, 1, h - 1);
-  clear(w - 4, 0, w - 1, h - 1);
-  // The floor in front of every entrance, three deep and a tile wider each side.
-  const allDoors = [];
-  for (const sp of spots) {
-    if (sp.side === 'L') clear(1, sp.at - 1, 3, sp.at + 2);
-    else if (sp.side === 'T') clear(sp.at - 1, 1, sp.at + 2, 3);
-    else clear(sp.at - 1, h - 4, sp.at + 2, h - 2);
-    const door = [];
-    for (let j = 0; j < 2; j++) {
-      const x = sp.side === 'L' ? 0 : sp.at + j;
-      const y = sp.side === 'L' ? sp.at + j : sp.side === 'T' ? 0 : h - 1;
-      door.push(y * w + x);
-    }
-    allDoors.push(door);
-  }
-  // The marked floor and a tile all round it. The columns it is in, and one either side, are the
-  // bands where production lines run: only the odd table goes there, never a big piece.
-  // (A patch can sit a row further in when an entrance faces it, so this is worked out for every
-  // number of entrances in use, and the furniture stays clear of all of them.)
-  const banded = new Uint8Array(w);
-  const tiles = g.join('');
-  for (let n = 1; n <= allDoors.length; n++) {
-    const zones = makeZones(w, h, tiles, allDoors.slice(0, n));
-    for (let i = 0; i < zones.length; i++) {
-      if (zones[i] === ' ') continue;
-      const x = i % w, y = (i / w) | 0;
-      clear(x - 1, y - 1, x + 1, y + 1);
-      for (let k = -1; k <= 1; k++) if (x + k >= 0 && x + k < w) banded[x + k] = 1;
-    }
-  }
+  const { keep, banded } = reserve(w, h, g, spots);
+
 
   /** True if a block of furniture fits here: free floor, and nothing else touching it. */
   const fits = (x0, y0, rows) => {
@@ -317,6 +313,180 @@ function furnish(w, h, g, spots) {
   return d.join('');
 }
 
+/**
+ * Where furniture may not go, for the designs that have any: the walkway round the outer wall,
+ * the floor in front of the tills and the entrances, and the marked floor with a tile all round it.
+ * @param {string[]} g the tiles, before any furniture
+ * @returns {{keep: Uint8Array, banded: Uint8Array}} `keep` is 1 for each tile to leave alone;
+ *   `banded` is 1 for each column that holds marked floor or is beside one that does
+ */
+function reserve(w, h, g, spots) {
+  const keep = new Uint8Array(w * h);
+  const clear = (x0, y0, x1, y1) => {
+    for (let y = Math.max(0, y0); y <= Math.min(h - 1, y1); y++) {
+      for (let x = Math.max(0, x0); x <= Math.min(w - 1, x1); x++) keep[y * w + x] = 1;
+    }
+  };
+  // A walkway all round the outer wall, and the three columns in front of the tills.
+  clear(0, 0, w - 1, 1);
+  clear(0, h - 2, w - 1, h - 1);
+  clear(0, 0, 1, h - 1);
+  clear(w - 4, 0, w - 1, h - 1);
+  // Tills in the bottom wall (the car park's second bank): three deep in front of them as well.
+  for (let x = 1; x < w - 1; x++) {
+    if (g[(h - 1) * w + x] === 'T') clear(x - 1, h - 4, x + 1, h - 1);
+  }
+  // The floor in front of every entrance, three deep and a tile wider each side.
+  const allDoors = [];
+  for (const sp of spots) {
+    if (sp.side === 'L') clear(1, sp.at - 1, 3, sp.at + 2);
+    else if (sp.side === 'T') clear(sp.at - 1, 1, sp.at + 2, 3);
+    else clear(sp.at - 1, h - 4, sp.at + 2, h - 2);
+    const door = [];
+    for (let j = 0; j < 2; j++) {
+      const x = sp.side === 'L' ? 0 : sp.at + j;
+      const y = sp.side === 'L' ? sp.at + j : sp.side === 'T' ? 0 : h - 1;
+      door.push(y * w + x);
+    }
+    allDoors.push(door);
+  }
+  // The marked floor and a tile all round it. The columns it is in, and one either side, are the
+  // bands where production lines run: only the odd small thing goes there, never a big piece.
+  // (A patch can sit a row further in when an entrance faces it, so this is worked out for every
+  // number of entrances in use, and the furniture stays clear of all of them.)
+  const banded = new Uint8Array(w);
+  const tiles = g.join('');
+  for (let n = 1; n <= allDoors.length; n++) {
+    const zones = makeZones(w, h, tiles, allDoors.slice(0, n));
+    for (let i = 0; i < zones.length; i++) {
+      if (zones[i] === ' ') continue;
+      const x = i % w, y = (i / w) | 0;
+      clear(x - 1, y - 1, x + 1, y + 1);
+      for (let k = -1; k <= 1; k++) if (x + k >= 0 && x + k < w) banded[x + k] = 1;
+    }
+  }
+  return { keep, banded };
+}
+
+/**
+ * Car park: rows of parking bays running up and down the strips of floor between the marked
+ * floor, so the marked floor is in the driving lanes between the rows, which is where production
+ * lines go. A row is two bays across, nose to nose (one bay where the strip is narrow). A bay is
+ * two tiles across and one down, and holds a car, a trolley shelter or nothing. Each row ends in
+ * a kerbed island with a lamp post, and every eight bays or so has a way through: two bays down
+ * left empty right across the row. The ways through are staggered from one row to the next, so a
+ * walk across the car park is a zigzag. A bay empty on one side only is a dent, which something
+ * can be built in.
+ *
+ * The cars in a row touch each other, so unlike the food court's furniture a row is a wall. What
+ * keeps every tile reachable is that a row touches nothing else: the walkway round the outer wall
+ * passes both its ends, and the odd trolley or pothole in a lane never touches anything.
+ * @param {string[]} g the tiles, changed in place
+ * @returns {string} the decor string
+ */
+function park(w, h, g, spots) {
+  const d = new Array(w * h).fill(' ');
+  const { keep, banded } = reserve(w, h, g, spots);
+  const free = (x, y) => x > 0 && y > 0 && x < w - 1 && y < h - 1 && !keep[y * w + x] && g[y * w + x] === '.' && d[y * w + x] === ' ';
+  const span = (x, y, n) => { for (let k = 0; k < n; k++) if (!free(x + k, y)) return false; return true; };
+  /** Puts a piece one tile deep at (x, y), a letter per tile, if all of it fits. */
+  const put = (x, y, piece) => {
+    if (!span(x, y, piece.length)) return false;
+    for (let k = 0; k < piece.length; k++) { g[y * w + x + k] = '#'; d[y * w + x + k] = piece[k]; }
+    return true;
+  };
+
+  // Where the rows of bays go, as [first column, bays across]: one in every strip of columns
+  // clear of the marked floor. The strip along the left wall is wider than a row, and its row
+  // keeps to the right of it, leaving a lane in front of the entrances in that wall.
+  const rows = [];
+  for (let x = 2, run = 0; x <= w - 4; x++) {
+    if (x <= w - 5 && !banded[x]) { run++; continue; }
+    if (run >= 4) rows.push([x - run === 2 ? x - 4 : x - run, 2]);
+    else if (run >= 2) rows.push([x - run, 1]);
+    run = 0;
+  }
+  // The burger van parks in the row nearest the middle, on the middle-sized maps and up.
+  let vanRow = -1;
+  if (h >= 24) {
+    rows.forEach(([x0, across], j) => {
+      if (across === 2 && (vanRow < 0 || Math.abs(x0 + 2 - w / 2) < Math.abs(rows[vanRow][0] + 2 - w / 2))) vanRow = j;
+    });
+  }
+
+  rows.forEach(([x0, across], j) => {
+    const wide = across * 2;
+    // The row runs from the first place it fits to the last (an entrance or the second bank of
+    // tills may be in the way at either end), with an island at each end.
+    let ya = 2, yb = h - 3;
+    while (ya < yb && !span(x0, ya, wide)) ya++;
+    while (yb > ya && !span(x0, yb, wide)) yb--;
+    const n = yb - ya - 1; // how many bays down, between the islands
+    if (n < 4) return;
+    put(x0, ya, across === 2 ? 'iili' : 'il');
+    put(x0, yb, across === 2 ? 'mlii' : 'li');
+    // The ways through. One is the walkway to the store's front doors: straight across every row
+    // at the height of the first entrance and the tills in the right-hand wall.
+    const gap = new Uint8Array(h);
+    const walk = (h >> 1) - 1;
+    if (walk >= ya + 2 && walk <= yb - 3) gap[walk] = gap[walk + 1] = 1;
+    // The rest are spread evenly down the row, half a step out from the row before, so that way
+    // across is a zigzag. (The smallest car park is too short to have any.)
+    const ways = Math.round(n / 8) - 1;
+    for (let k = 0; k < ways; k++) {
+      const y = ya + 1 + Math.floor(((k + (j % 2 ? 0.75 : 0.25)) * n) / ways) + (hash(x0, k, h) % 3) - 1;
+      // Never right beside an island or the walkway: at least one bay of cars between.
+      let at = Math.max(ya + 2, Math.min(yb - 3, y));
+      if (at + 2 >= walk && at <= walk + 3) at = at < walk ? walk - 3 : walk + 4;
+      if (at < ya + 2 || at > yb - 3) continue;
+      gap[at] = gap[at + 1] = 1;
+    }
+    if (j === vanRow) {
+      // The van takes the two bays down nearest the middle that are not a way through.
+      const mid = (ya + yb) >> 1;
+      for (let k = 0; k < n; k++) {
+        const y = mid + (k % 2 ? (k + 1) >> 1 : -(k >> 1));
+        if (y <= ya || y + 1 >= yb || gap[y] || gap[y + 1]) continue;
+        put(x0, y, 'vvvv');
+        put(x0, y + 1, 'vvvv');
+        break;
+      }
+    }
+    let across2 = -9; // the last row a car was parked across two bays
+    for (let y = ya + 1; y < yb; y++) {
+      if (gap[y]) continue;
+      let dent = false;
+      for (let b = 0; b < across; b++) {
+        const x = x0 + 2 * b;
+        if (!span(x, y, 2)) continue; // the van, or the back half of a car across two bays
+        const r = hash(x, y, w * 131 + h) % 100;
+        // Now and then some prick has parked across two bays.
+        if (r < 5 && y - across2 >= 3 && y + 1 < yb && !gap[y + 1] && span(x, y + 1, 2)) {
+          put(x, y, 'xx');
+          put(x, y + 1, 'xx');
+          across2 = y;
+        } else if (r < 16 && across === 2 && !dent) {
+          dent = true; // an empty bay; never both sides at once, which would be another way through
+        } else put(x, y, r < 22 ? 'rR' : 'cC');
+      }
+    }
+  });
+
+  // The odd abandoned trolley or coned-off pothole in the lanes, each on its own, touching
+  // nothing, and never beside marked floor.
+  for (let x = 2; x <= w - 5; x++) {
+    for (let y = 2; y <= h - 3; y++) {
+      if ((x + 2 * y) % 4 !== 0 || !free(x, y)) continue;
+      const r = hash(y, x, w * 31 + h) % 100;
+      if (r >= 10) continue;
+      let alone = true;
+      for (let ny = y - 1; ny <= y + 1; ny++) for (let nx = x - 1; nx <= x + 1; nx++) if (d[ny * w + nx] !== ' ') alone = false;
+      if (alone) { g[y * w + x] = '#'; d[y * w + x] = r < 6 ? 'a' : 'o'; }
+    }
+  }
+  return d.join('');
+}
+
 /** Open warehouse: a pillar every dozen tiles or so. */
 function pillars(w, h, wall) {
   for (let x = 8; x <= w - 9; x += 12) {
@@ -387,7 +557,8 @@ function shelves(w, h, mid, wall) {
  * and up the next, which is what makes them a zigzag for shoppers. Patches never touch, so
  * goods always need a belt to get from one to the next.
  * No patch touches the outer wall: the Loading Bay is a tile in from it, or two in front of an
- * entrance in that wall, so there is always a walkway round the edge and in through the doors.
+ * entrance or a till in that wall, so there is always a walkway round the edge, in through the
+ * doors and up to the tills.
  * @returns {string} one character per tile: a key of ZONES, or a space
  */
 export function makeZones(w, h, tiles, doors) {
@@ -397,7 +568,10 @@ export function makeZones(w, h, tiles, doors) {
     // The Loading Bay is against the top wall in even sections and the bottom wall in odd ones
     // (they are upside down). Is an entrance in that wall in front of it?
     const wallY = n % 2 ? h - 1 : 0;
-    const facing = doors.some((door) => door.some((t) => ((t / w) | 0) === wallY && (t % w) >= x0 - 1 && (t % w) <= x0 + wide));
+    let facing = doors.some((door) => door.some((t) => ((t / w) | 0) === wallY && (t % w) >= x0 - 1 && (t % w) <= x0 + wide));
+    // Tills in that wall (the car park's second bank) count the same: the two tiles in front of
+    // a till stay clear, as they are in front of the tills in the right-hand wall.
+    for (let x = x0 - 1; x <= x0 + wide; x++) if (tiles[wallY * w + x] === 'T') facing = true;
     const u = facing ? 3 : 2;
     // The patches below follow on, never closer than one tile apart, and never touching the far wall.
     const p = Math.max(Math.round(h * 0.25), u + tall + 1);

@@ -226,9 +226,22 @@ Decided by Claude while the owner was away; every one is easy to change.
 - **Arrows on factory buildings.** Unpackers, Presses and Packers show a large arrow where goods come out; the Shipping Chute shows that things go in.
 - **Drawing fixes.** The Great Dane redrawn as a dog, the Stray Dog made readable when zoomed out, the laser drawn properly facing up or down, and a mom's abandoned cart kept in the game state so a player who joins mid-event sees it.
 
+## Version 0.2.08: the Car Park, with tills on two walls (owner's requests of 2026-11-17, built the same day, not yet played by a person)
+The owner chose the Car Park from four ideas, and chose tills on two walls for it. The rest was decided by Claude; every one is easy to change.
+
+- **Car Park.** A fifth store design. Rows of parking bays run up and down the map in the strips between the marked floor, so the driving lanes between them are where production lines go. A row is two bays across, nose to nose, with a kerbed island at each end; a bay holds a car, a trolley shelter or nothing. Cars are solid, so a row is a free wall. Empty bays on one side are dents that can be built in. On the Superstore and up a burger van is parked in the middle row.
+  - *Why the rows run up and down and not across, as the first sketch showed:* the marked floor sits in columns ten tiles apart, at different heights in alternate columns, so no row across the map could avoid it. Rows between the columns can.
+  - **Ways through.** One runs straight across every row at the height of the first entrance: the walkway to the tills in the right-hand wall. The others (one for about every eight bays) are staggered from row to row, so going any other way is a zigzag. The smallest size has only the walkway. A one-tile walkway also runs round the outside, past both ends of every row.
+- **Tills on two walls.** The Car Park has two banks of tills, each two thirds the length of another store's one: the usual one in the right-hand wall and one in the bottom wall, about four fifths of the way along. A solo player's entrance is the same distance from each (35 and 35 tiles on the one-player size), and no further from the right-hand one than on the Open Warehouse. Shoppers walk to the nearest till, so making one route longer sends the crowd to the other; a maze is only as long as the shortest way to either bank.
+  - **Both banks stay open.** A building that would wall off either bank is refused (reason `bank`, with lines of DEB's own). Without this, six crates would turn the Car Park back into an ordinary store.
+  - **Entrance order.** The entrances in the bottom wall are about half as far from the bottom tills as any other entrance is from a till (28 tiles against 52 on the three-player size). On the Car Park they open last, for a sixth and a seventh player; the third to fifth players get the left wall and the second top entrance. Other designs keep their order.
+- **Balance.** The scripted players are written for the open warehouse and lose early on every other design, so they only show that the Car Park is not out of line: on the one-player size at Normal they lose in event 5, 8 and 6 (seeds 11, 5, 23), against 5 on the Food Court, 8 on the Supermarket Aisles and 3 on the Showroom (seed 11), and 11 to 16 on the Open Warehouse. Whether two banks of tills make it harder for people than the other stores is for a real game to show. The production-line checker fits every line it tries on every size.
+- **DEB** has 17 lines of her own for the doors opening on the Car Park (a third of the time there), and six for a refused building.
+- **README.** It now opens with one line, "Play version 0.2.08 now: (link)", written by `tools/readme.mjs`, instead of giving the link twice.
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
-- More shopper types. More kinds of boss (today it is one man with four titles).
-- More map designs (a car park), and maps with tills on more than one wall.
+- More shopper types. More kinds of boss (today it is one man with four titles). Ideas were put to the owner on 2026-11-17 (in `.claude/reports/2026-11-17-car-park.md`); nothing is to be built until he approves or changes them.
+- More map designs (the other three offered with the Car Park were a mall atrium with two ways round, a garden centre of hedges, and a stockroom of racking blocks), and tills on more than one wall on other designs.
 - Role restrictions as an optional hard mode.

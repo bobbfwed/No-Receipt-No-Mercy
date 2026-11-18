@@ -2,7 +2,7 @@
 // The host validates every command here, so a confused or cheating client cannot break the game.
 import { BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf } from './state.js';
-import { computeDist, modeOf, UNREACHABLE } from './path.js';
+import { computeDist, banksOpen, modeOf, UNREACHABLE } from './path.js';
 import { beginWave, skipBuild } from './step.js';
 import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
@@ -55,7 +55,8 @@ function clearRubble(state, tiles) {
  *   'fit' part of a bigger building's footprint is off the floor or occupied,
  *   'zone' that machine only goes on its own marked floor,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
- *   'blocked' it would wall off the tills from an entrance or from a shopper.
+ *   'blocked' it would wall off the tills from an entrance or from a shopper,
+ *   'bank' it would wall off one of the two banks of tills (the car park).
  */
 export function canPlace(state, k, x, y, pid = 0, d = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
@@ -84,6 +85,9 @@ export function canPlace(state, k, x, y, pid = 0, d = 0) {
     const dist = computeDist(state, block);
     // Every entrance must keep a way to the tills, including the ones that are still shut.
     for (const door of state.doors) for (const t of door) if (dist[t] === UNREACHABLE) return 'blocked';
+    // In a store with two banks of tills, both stay open: walling one off would turn it back into
+    // an ordinary store, and the crowd choosing between them is the point of it.
+    if (!banksOpen(state, block)) return 'bank';
     // Dads and gym bros get through things others cannot, so each is checked on his own map.
     const fields = [dist, null, null];
     for (const s of state.shoppers) {

@@ -75,6 +75,44 @@ export function computeDist(state, extraBlocked = -1, mode = NORMAL) {
   return flood(state, (i) => tiles[i] === 'T', extraBlocked, mode);
 }
 
+const bankCache = new WeakMap();
+
+/**
+ * The banks of tills: each run of till tiles side by side along a wall, as a list of tile
+ * indexes. Most stores have one bank; the car park has two, on different walls.
+ * @returns {number[][]}
+ */
+export function tillBanks(state) {
+  const hit = bankCache.get(state);
+  if (hit && hit.tiles === state.tiles) return hit.banks;
+  const W = state.w, tiles = state.tiles;
+  const banks = [], bankOf = new Map();
+  for (let i = 0; i < tiles.length; i++) {
+    if (tiles[i] !== 'T') continue;
+    // A till joins the bank of the till to its left or above it, if there is one.
+    const near = i % W && tiles[i - 1] === 'T' ? i - 1 : tiles[i - W] === 'T' ? i - W : -1;
+    const bank = near < 0 ? banks[banks.push([]) - 1] : bankOf.get(near);
+    bank.push(i);
+    bankOf.set(i, bank);
+  }
+  bankCache.set(state, { tiles, banks });
+  return banks;
+}
+
+/**
+ * True if every bank of tills can still be walked to from the first one, so that (as every
+ * entrance has a way to some till) every entrance has a way to every bank. Only matters on a
+ * store with more than one bank.
+ * @param {number|number[]} [extraBlocked] tiles to treat as blocked, as for computeDist
+ */
+export function banksOpen(state, extraBlocked = -1) {
+  const banks = tillBanks(state);
+  if (banks.length < 2) return true;
+  const first = new Set(banks[0]);
+  const dist = flood(state, (i) => first.has(i), extraBlocked, NORMAL);
+  return banks.every((bank) => bank.some((t) => dist[t] !== UNREACHABLE));
+}
+
 function cacheOf(state) {
   let hit = cache.get(state);
   if (!hit || hit.ver !== state.gridVer) {

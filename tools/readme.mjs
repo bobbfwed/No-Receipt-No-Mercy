@@ -23,7 +23,8 @@ const SITE = 'https://bobbfwed.github.io/No-Receipt-No-Mercy/';
 
 /** The generated parts of the README, by name. Each goes between `<!-- gen:name -->` markers. */
 export function generated() {
-  const version = `**Version ${versionText()}** · [play it](${SITE})`;
+  // The opening line of the README: the one place the play link is given at the top.
+  const version = `**Play version ${versionText()} now: ${SITE}** (nothing to install; works in a browser on a computer, a tablet or a phone).`;
 
   const maps = [
     'The host picks a design and a size before the game starts. Each player gets his own shopper entrance, and the painted floor shows where each kind of machine may go.',
