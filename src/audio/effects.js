@@ -19,12 +19,14 @@ import { voice, tone, noise, bell, brass, formant, gain, mtof, rng, vary, say, b
 import { SHAPES, LEFT_ABOUT, bark, thud, knock, leftVoice, escapeVoice, walkout } from './shoppers.js';
 import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, trackIntro, deflate, carryUp } from './newfx.js';
 import { bossWave, bossIn, pep, bossOut, bossEscape, endless } from './boss.js';
+import { popSound, noPop, waah, babyTill, nursery } from './preggo.js';
 
 /**
- * The thirteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
- * in SHOPPERS), for the test page's rows. Only the boss has no super version.
+ * The fourteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
+ * in SHOPPERS), for the test page's rows. Only the boss has no super version. (The Pregnant Lady's
+ * babies are not here: their sounds are their own, waah and babyTill.)
  */
-export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker', 'boss'];
+export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker', 'preggo', 'boss'];
 
 /** What a gym bro can wreck, grouped by what it sounds like. */
 const WRECK = {
@@ -226,6 +228,8 @@ export const SOUNDS = {
       { label: 'cosplay super', opts: { k: 'cosplay', sup: 1 }, max: 1.1, about: 'Full Mech Suit: more coins, a muffled "yay", servo whirr and the drawer.' },
       { label: 'flasher super', opts: { k: 'flasher', sup: 1 }, max: 1.1, about: 'Nudist Nan: more coins, a cackle and the drawer.' },
       { label: 'drinker super', opts: { k: 'drinker', sup: 1 }, max: 1.1, about: 'Bottomless Bruncher: more coins, a hiccup, a cork and the drawer.' },
+      { label: 'preggo', opts: { k: 'preggo' }, about: 'Pregnant Lady: coins, then a contented "mmm" and two pats on the bump.' },
+      { label: 'preggo super', opts: { k: 'preggo', sup: 1 }, max: 1.1, about: 'Octomom: more coins, the "mmm", the pats, a muffled giggle from inside and the drawer.' },
     ],
     play(ctx, dest, t, o = {}) {
       const v = voice(ctx, dest, o.level);
@@ -823,7 +827,7 @@ export const SOUNDS = {
   },
 
   bossEscape: {
-    about: 'The boss reached the tills and counts as five refunds: a rubber stamp thump, five till drawers slamming open one after another, each with a cash-register bell, then a smug chuckle ("heh heh heh", a deep "hoo-hoo-hoo", or an evil "ha-HAAA"). From tier 3 a low rumble underneath.',
+    about: 'The boss reached the tills (he counts as two refunds toward the limit): a rubber stamp thump, a run of five till drawers slamming open one after another, each with a cash-register bell, then a smug chuckle ("heh heh heh", a deep "hoo-hoo-hoo", or an evil "ha-HAAA"). From tier 3 a low rumble underneath.',
     max: 2.1,
     shapes: 3,
     variants: [
@@ -831,6 +835,50 @@ export const SOUNDS = {
       { label: 'tier 4', opts: { tier: 4 }, about: 'The CEO gets away with it: the same, with a rumble.' },
     ],
     play: bossEscape,
+  },
+
+  // The Pregnant Lady and her babies (preggo.js). Her own voice is in `left` and `escape` above.
+  pop: {
+    about: 'A Pregnant Lady runs out of patience and pops: a balloon bang and a party blower (or a slide whistle), then three babies at once, crying, giggling, or both.',
+    max: 1.35,
+    shapes: 3,
+    variants: [
+      { label: '12 babies', opts: { n: 12 } },
+      { label: 'Octomom, 24', opts: { n: 24, sup: 1 }, max: 1.5, about: 'Octomom: a double bang, lower, and four babies.' },
+    ],
+    play: popSound,
+  },
+
+  nopop: {
+    about: 'A Barcode Laser finished her, so nothing pops: the checkout scanner refusing ("bip-bop" lower, or an error buzz), then a balloon let go of, squealing as it deflates. Smaller than the pop.',
+    max: 0.85,
+    shapes: 3,
+    variants: [
+      { label: 'Pregnant Lady', opts: {} },
+      { label: 'Octomom', opts: { sup: 1 }, max: 0.95, about: 'The same, with a longer deflating squeal.' },
+    ],
+    play: noPop,
+  },
+
+  waah: {
+    about: 'One of her babies gives up: a tiny "waah", an "eh-eh" or a hiccuping sob. Short and quiet, because two dozen can come at once.',
+    max: 0.4,
+    shapes: 3,
+    play: waah,
+  },
+
+  babyTill: {
+    about: 'One of her babies reaches a till ($5, not a refund toward the limit): one coin and a giggle ("hee", "hee-hee") or a raspberry. As small as a sale.',
+    max: 0.35,
+    shapes: 3,
+    play: babyTill,
+  },
+
+  nursery: {
+    about: 'Many babies at once (played over the single ones when they pile up): three crying over each other, a giggle and a rattle.',
+    max: 1.0,
+    shapes: 1,
+    play: nursery,
   },
 
   endless: {

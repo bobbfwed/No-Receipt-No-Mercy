@@ -33,7 +33,9 @@ export function shopperPortrait(k, { sup = false, size = 72, tier = 1 } = {}) {
   // The boss is drawn 1.6 times life, with props either side of him.
   // The Great Dane (the stray dog's super) is a long animal, tall at the head.
   const dane = k === 'dog' && sup;
-  const box = boss ? 84 : dane ? 96 : tall ? (sup ? 122 : 84) : (sup ? 82 : 58) + (wide ? 6 : 0);
+  // The Pregnant Lady brings a baby or two that got out early (Octomom, being bigger, needs room).
+  const preggo = k === 'preggo';
+  const box = boss ? 84 : dane ? 96 : tall ? (sup ? 122 : 84) : preggo ? (sup ? 106 : 74) : (sup ? 82 : 58) + (wide ? 6 : 0);
   const z = (size * dpr) / box;
   const key = Math.round(z * 1000);
   if (!spriteSets.has(key)) { const made = createShopperSprites(); made.setScale(z); spriteSets.set(key, made); }
@@ -45,9 +47,14 @@ export function shopperPortrait(k, { sup = false, size = 72, tier = 1 } = {}) {
     kd: k === 'mom' ? 2 : 0, kx: 0, ky: 0, kvx: 0, kvy: 0, bt: 0, tr: tier, pp: 0,
   };
   const F = { time: 0.35, now: 350, alpha: 0 };
-  const x = box / 2 - (k === 'mom' ? 12 : k === 'blind' ? 5 : boss ? 2 : dane ? 8 : 0);
-  const y = box / 2 + (boss ? 30 : dane ? 28 : tall ? (sup ? 37 : 18) : sup ? 17 : 10);
+  const x = box / 2 - (k === 'mom' ? 12 : k === 'blind' ? 5 : boss ? 2 : dane ? 8 : preggo ? (sup ? -8 : -6) : 0);
+  const y = box / 2 + (boss ? 30 : dane ? 28 : tall ? (sup ? 37 : 18) : preggo ? (sup ? 28 : 14) : sup ? 17 : 10);
+  // Her babies scrabble along behind her (Octomom's also at her feet, in front of her).
+  const babies = !preggo ? [] : sup ? [[-41, 1, 1], [-14, 12, 2]] : [[-28, 4, 0]];
+  const baby = ([dx, dy, id]) => drawShopper(g, { ...s, id, k: 'baby', sup: 0, vx: 0.1 }, x + dx, y + dy, 1, F, sprites, { noBar: true });
+  babies.filter((b) => b[1] <= 4).forEach(baby);
   drawShopper(g, s, x, y, 1, F, sprites, { noBar: true });
+  babies.filter((b) => b[1] > 4).forEach(baby);
   // A mom is not herself without the kid she is chasing.
   if (k === 'mom') drawKid(g, s, x + 26, y + 4, -1, F, sprites);
   return canvas;

@@ -48,7 +48,7 @@
 //   client -> host  hello {name} · cmd {c} · chat {text} · cursor {x, y} · sync {} (send me a copy)
 //   host -> client  welcome {me, n, s} · adv {n, h, c: [[n, pid, cmd], ...]} · snap {n, s}
 //                   at {n, m} (a message to show at step n) · nope · cursor · chat · players · closed
-import { createGame, addPlayer, setPlayerOnline, applyCommand, step, TICK_HZ } from '../sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, applyCommand, step, migrateSave, TICK_HZ } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
 /** Steps between advance messages at normal speed: one every step, thirty a second. They are
@@ -192,6 +192,8 @@ export class HostSession extends Session {
     this.state = state || createGame({ seed, map, lobby, settings });
     const s = this.state;
     if (resume) {
+      // A save from an older version of the rules is brought up to date first (once).
+      migrateSave(s);
       // Nobody is here yet, and nobody has walked out on anyone either.
       for (const p of s.players) { p.on = false; delete p.gone; }
     } else if (takeOver) {

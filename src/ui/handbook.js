@@ -7,7 +7,7 @@ import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, track
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  trackRows, factoryFacts, fmt, bossFacts, lengthText, patienceGrowth,
+  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt,
 } from '../content/facts.js';
 import { trackName } from './upgradetext.js';
 import { worded } from '../content/touch.js';
@@ -192,7 +192,8 @@ export function handbook({ state = null, onClose }) {
     const game = state ? 'this game' : 'a standard game';
     if (id === 'shoppers') {
       note.textContent = `Numbers are for ${game}: ${ctx.name} difficulty, ${lengthText(ctx.waves).toLowerCase()}, ${ctx.players} player${ctx.players > 1 ? 's' : ''}. `
-        + `Every shopper's patience grows each sales event: ×${fmt(patienceGrowth(2))} in the second, ×${fmt(patienceGrowth(10))} by the tenth, ×${fmt(patienceGrowth(20))} by the twentieth${ctx.waves > 0 ? '' : `, ×${fmt(patienceGrowth(40))} by the fortieth`}. Speed and refunds never change. A super shopper takes a double refund. The boss is at the end.`;
+        + `Half as many shoppers come as used to, and they get tougher faster as the sales events go on: up to double the patience by event ${TUNE.patienceFull}. `
+        + `Every shopper's patience grows each sales event: ×${fmt(toughnessAt(2))} in the second, ×${fmt(toughnessAt(10))} by the tenth, ×${fmt(toughnessAt(20))} by the twentieth${ctx.waves > 0 ? '' : `, ×${fmt(toughnessAt(40))} by the fortieth`}. Speed and refunds never change. A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone.`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
       note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price; everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;

@@ -1,7 +1,8 @@
 // Short-lived effects driven by simulation events: floating cash, speech blips, "WHOA" pops,
 // forklift shots, barcode laser beams, sprinkler bursts, wreckage when a gym bro smashes something,
-// shield flashes round cosplayers, sparkles when something is upgraded, and the boss's entrance,
-// pep talks, exit and (worst of all) arrival at a till. A fixed pool of effect
+// shield flashes round cosplayers, sparkles when something is upgraded, the boss's entrance,
+// pep talks, exit and (worst of all) arrival at a till, and a Pregnant Lady popping (or a Barcode
+// Laser stopping her: "NOT TODAY") and her babies' small refunds. A fixed pool of effect
 // objects is reused so a big wave does not allocate, and every kind has a cap so the screen stays
 // readable.
 import { BUILD, DIRS, BOSS, statsOf, sizeOf, bossTitle } from '../sim/index.js';
@@ -15,10 +16,18 @@ const BEAM = 9, MARK = 10, SHIELD = 11;
 // The boss: his title over the entrance he came in by, his pep talks, him storming off (the
 // bounty), and him reaching a till (a disaster).
 const BOSS_IN = 12, PEP = 13, BOSS_OUT = 14, BOSS_ESC = 15;
+// The Pregnant Lady: popping (BURST), a Barcode Laser stopping it (NO_POP), and her babies'
+// refunds at the tills, added up per till (BABY_CASH).
+const BURST = 16, NO_POP = 17, BABY_CASH = 18;
 /** At most this many of each kind on screen at once; extra events are skipped. */
-const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8, 3, 6, 3, 3];
+const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8, 3, 6, 3, 3, 6, 4, 8];
 /** Lifetime of each kind in ms. */
-const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550, 480, 700, 420, 3600, 1300, 2200, 2600];
+const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550, 480, 700, 420, 3600, 1300, 2200, 2600, 1900, 1500, 1100];
+/** A baby reaching a till within this many ms of the last one there adds to the same figure. */
+const BABY_MERGE = 650;
+/** The line in a bubble over a pop (an Octomom's are her own). */
+const POP_QUIPS = ["WHO'S THE DAD?", 'CLEAN-UP ON AISLE 5', 'SOMEBODY CALL MAURY', "THEY'RE ALL YOURS", 'NO RECEIPT FOR THOSE'];
+const OCTO_QUIPS = ['THAT IS NOT A LITTER, IT IS A FLEET', 'MAURY CAN NOT HELP YOU NOW', 'SHE WAS CARRYING A CLOWN CAR'];
 /** What the boss shouts in a pep talk, in turn. */
 const PEP_WORDS = [
   'SYNERGY!', 'CIRCLE BACK!', "LET'S ALIGN!", 'TOUCH BASE!', 'MOVE THE NEEDLE!', 'PIVOT!',
@@ -52,6 +61,7 @@ const LEFT_LINES = {
   mom: [['we are LEAVING'], '#c2307a'],
   blind: [['come on, boy'], '#1a5fa0'],
   gymbro: [['bro.'], '#d9372b'],
+  preggo: [['my FEET', 'ugh, MEN', 'I NEED A NAP'], '#c2307a'],
 };
 const KID_LINES = ['WHEEE', "CAN'T CATCH ME", 'NO'];
 /** Pop styles: plain word, white star (WHOA), jagged burst (WOOF, CRUNCH), flying droplets. */
@@ -124,6 +134,24 @@ export function createEffects() {
   }
 
   /**
+   * A baby took its $5 at a till: a small figure, not a full refund's. Babies arrive in swarms, so
+   * one that reaches the same till (ti, a tile index) soon after another adds its cash and itself
+   * to the figure already there ("-$15 x3") instead of stacking more.
+   */
+  function babyCash(e, now, ti) {
+    for (let k = 0; k < POOL; k++) {
+      const f = pool[k];
+      if (f.type !== BABY_CASH || f.x2 !== ti || now - f.t0 > BABY_MERGE) continue;
+      f.w += e.refund | 0;
+      f.sz++;
+      f.t0 = Math.max(f.t0, now - 120); // keep it up a little longer, without jumping back
+      return;
+    }
+    const f = add(BABY_CASH, now, e.x * T - 14, e.y * T - 4);
+    if (f) { f.x2 = ti; f.w = e.refund | 0; f.sz = 1; }
+  }
+
+  /**
    * Turns simulation events into effects.
    * @param {Object} [s] the game state: its size places tile-indexed events, and its buildings
    *   give the sprinklers' ranges
@@ -145,9 +173,10 @@ export function createEffects() {
           if (e.k === 'boss') {
             timers.bossEscAt = now;
             f = add(BOSS_ESC, now, e.x * T, e.y * T);
-            if (f) { pick++; f.text = '-$' + e.refund; f.t2 = BOSS_WINS[pick % BOSS_WINS.length]; f.sz = e.n || 5; }
+            if (f) { pick++; f.text = '-$' + e.refund; f.t2 = BOSS_WINS[pick % BOSS_WINS.length]; f.sz = e.n || 2; }
             break;
           }
+          if (e.k === 'baby') { babyCash(e, now, tillNear(s, e.x, e.y)); break; }
           f = add(TEXT, now, e.x * T - 22, e.y * T - 6);
           if (f) { f.text = '-$' + e.refund; f.color = '#ff5a4e'; }
           break;
@@ -170,6 +199,13 @@ export function createEffects() {
           break;
         case 'left':
           if (e.k === 'boss') break; // his exit is the bossOut effect
+          if (e.k === 'preggo' && e.why === 'pop') break; // the pop says it all
+          if (e.k === 'baby') {
+            // A small wail, not a speech bubble each: a dozen at once would bury the screen.
+            f = add(MARK, now, e.x * T, e.y * T - 20);
+            if (f) { f.text = 'waah'; f.color = '#7dd3fc'; f.st = 0; }
+            break;
+          }
           f = add(BLIP, now, e.x * T, e.y * T - 30);
           if (f) {
             pick++;
@@ -275,6 +311,21 @@ export function createEffects() {
         case 'shield':
           f = add(SHIELD, now, e.x * T, e.y * T - 18);
           if (f) f.r = hash2(now | 0, 3) * 6;
+          break;
+        case 'pop':
+          // A Pregnant Lady popped: e.n babies came out where she stood.
+          f = add(BURST, now, e.x * T, e.y * T);
+          if (f) {
+            pick++;
+            const quips = e.sup ? OCTO_QUIPS : POP_QUIPS;
+            f.sz = e.n | 0; f.r = e.sup ? 1 : 0; f.t2 = quips[pick % quips.length];
+            f.x2 = Math.round(e.x * 97 + e.y * 31); // seeds where the bits fly
+          }
+          break;
+        case 'nopop':
+          // A Barcode Laser finished her: no babies. Says so, so the players learn the counter.
+          f = add(NO_POP, now, e.x * T, e.y * T);
+          if (f) f.r = e.sup ? 1 : 0;
           break;
         case 'bolt':
           f = add(POP, now, e.x * T + 14, e.y * T - 30);
@@ -385,6 +436,9 @@ export function createEffects() {
         case BOSS_IN: bossIn(ctx, e, k01, W * T, H * T); break;
         case BOSS_OUT: bossOut(ctx, e, k01, W * T); break;
         case BOSS_ESC: bossEscape(ctx, e, k01, W * T); break;
+        case BURST: popBurst(ctx, e, k01, W * T); break;
+        case NO_POP: noPop(ctx, e, k01); break;
+        case BABY_CASH: babyFigure(ctx, e, k01); break;
         default:
       }
     }
@@ -557,6 +611,148 @@ function bossEscape(ctx, e, k, worldW) {
   label(ctx, `COUNTS AS ${e.sz} REFUNDS`, 0, 18 * z, 9.5 * z, '#ffffff', INK, 3 * z);
   ctx.restore();
   if (k > 0.1) quip(ctx, e.t2, x - 30 * z, e.y - 92 * z - k * 10 * z, 11 * z, '#b91c1c', worldW, fadeOut(k, 0.75));
+  ctx.globalAlpha = 1;
+}
+
+// ------------------------------------------------------------------ the Pregnant Lady
+
+const TAU = Math.PI * 2;
+
+/** A dummy (pacifier), facing up: the shield, the teat and the ring. s: size. */
+function dummy(ctx, x, y, s, col) {
+  ctx.beginPath();
+  ctx.arc(x, y - s * 1.3, s * 0.7, 0, TAU);
+  ctx.lineWidth = s * 0.45; ctx.strokeStyle = col; ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(x, y, s * 1.6, s * 0.8, 0, 0, TAU);
+  paint(ctx, col, Math.max(1, s * 0.3));
+  ctx.beginPath();
+  ctx.ellipse(x, y + s * 0.95, s * 0.5, s * 0.6, 0, 0, TAU);
+  paint(ctx, '#ffe9b8', Math.max(0.8, s * 0.25));
+}
+
+/** A clean nappy, flying: a white pad with coloured tabs. */
+function nappy(ctx, s, tab) {
+  ctx.beginPath();
+  ctx.moveTo(-s * 1.6, -s); ctx.lineTo(s * 1.6, -s); ctx.lineTo(s * 0.8, s); ctx.lineTo(-s * 0.8, s);
+  ctx.closePath();
+  paint(ctx, '#ffffff', Math.max(1, s * 0.3));
+  ctx.fillStyle = tab;
+  ctx.fillRect(-s * 1.6, -s, s * 0.7, s * 0.6);
+  ctx.fillRect(s * 0.9, -s, s * 0.7, s * 0.6);
+}
+
+/** A baby's bottle: milk, a cap and a teat. */
+function bottle(ctx, s) {
+  rr(ctx, -s * 0.7, -s, s * 1.4, s * 2.2, s * 0.4);
+  paint(ctx, '#f8fafc', Math.max(1, s * 0.3));
+  ctx.fillStyle = '#e0f2fe';
+  ctx.fillRect(-s * 0.55, -s * 0.1, s * 1.1, s * 1.15);
+  rr(ctx, -s * 0.8, -s * 1.5, s * 1.6, s * 0.6, s * 0.2);
+  paint(ctx, '#5cc8ff', Math.max(0.8, s * 0.25));
+  ctx.beginPath(); ctx.arc(0, -s * 1.6, s * 0.4, Math.PI, TAU);
+  paint(ctx, '#ffe9b8', Math.max(0.8, s * 0.25));
+}
+
+/**
+ * She popped: a white flash, pink and blue rings bursting out, nappies, dummies, bottles and
+ * confetti flung up and raining down (a party popper, not a delivery room), "POP!" in a pink burst
+ * with how many babies came out, and a line in a bubble. Octomom's (e.r 1) is half as big again.
+ * Grows when zoomed out, like the boss's effects, so a pop is seen at whole-map zoom.
+ */
+function popBurst(ctx, e, k, worldW) {
+  const z = ZK, sc = (e.r ? 1.45 : 1) * z;
+  const seed = e.x2 | 0;
+  const cy = e.y - 14 * sc;
+  if (k < 0.16) {
+    ctx.globalAlpha = 1 - k / 0.16;
+    burstPath(ctx, e.x, cy, (14 + k * 160) * sc, 12, seed % 7);
+    paint(ctx, '#ffffff', 2 * z);
+  }
+  for (let j = 0; j < 2; j++) {
+    const kk = Math.min(1, Math.max(0, (k - j * 0.07) / 0.5));
+    if (kk <= 0 || kk >= 1) continue;
+    ctx.globalAlpha = 0.9 * (1 - kk);
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y - 4 * sc, (10 + kk * 74) * sc, (6 + kk * 44) * sc, 0, 0, TAU);
+    ctx.strokeStyle = j ? '#5cc8ff' : '#ff7eb6';
+    ctx.lineWidth = (7 * (1 - kk) + 1.5) * z;
+    ctx.stroke();
+  }
+  // Everything that came out with them.
+  ctx.globalAlpha = fadeOut(k, 0.62);
+  const bits = e.r ? 30 : 18;
+  const out = Math.min(1, k * 2.4);
+  for (let j = 0; j < bits; j++) {
+    const h1 = hash2(seed, j), h2 = hash2(j, seed + 5);
+    const a = (j / bits) * TAU + h1 * 0.6;
+    const v = (46 + h2 * 58) * sc;
+    const x = e.x + Math.cos(a) * v * out;
+    const y = cy + Math.sin(a) * v * 0.62 * out - 34 * sc * k + 80 * sc * k * k;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a + k * (h1 > 0.5 ? 7 : -7));
+    const kind = j % 6;
+    if (kind === 0 || kind === 3) nappy(ctx, 3.4 * sc, j % 4 ? '#7dd3fc' : '#ff9ccf');
+    else if (kind === 1) dummy(ctx, 0, 0, 2.4 * sc, j % 4 ? '#ff7eb6' : '#5cc8ff');
+    else if (kind === 4 && j % 4 === 0) bottle(ctx, 3 * sc);
+    else {
+      ctx.fillStyle = ['#ff7eb6', '#5cc8ff', '#ffd23f', '#a3e635'][j % 4];
+      ctx.fillRect(-2.6 * sc, -1.5 * sc, 5.2 * sc, 3 * sc);
+    }
+    ctx.restore();
+  }
+  // "POP!" and the head count.
+  ctx.globalAlpha = fadeOut(k, 0.72);
+  const s = k < 0.07 ? 0.4 + (k / 0.07) * 0.8 : k < 0.13 ? 1.2 - (k - 0.07) * 3.3 : 1;
+  ctx.save();
+  ctx.translate(e.x, e.y - 58 * sc - k * 14 * z);
+  ctx.rotate(-0.1);
+  ctx.scale(s, s);
+  burstPath(ctx, 0, 0, 27 * sc, 12, 0.2);
+  paint(ctx, '#fff0f7', 2.2 * z);
+  label(ctx, 'POP!', 0, -1 * sc, 21 * sc, '#ff3d8b', INK, 5 * z);
+  if (e.sz > 0) label(ctx, `+${e.sz} BABIES`, 0, 27 * sc, 10 * sc, '#7dd3fc', INK, 3.2 * z);
+  ctx.restore();
+  if (k > 0.14 && e.t2) quip(ctx, e.t2, e.x + 24 * z, e.y - 100 * sc - k * 8 * z, 10 * z, '#c2307a', worldW, fadeOut(k, 0.75));
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * A Barcode Laser finished her: a "no babies" sign (a dummy with a red bar through it) pops up over
+ * her with "NOT TODAY", short and clear, so the players learn that the laser is the counter.
+ */
+function noPop(ctx, e, k) {
+  const z = ZK * (e.r ? 1.2 : 1);
+  ctx.globalAlpha = fadeOut(k, 0.7);
+  const s = k < 0.1 ? 0.4 + (k / 0.1) * 0.75 : k < 0.17 ? 1.15 - (k - 0.1) * 2.1 : 1;
+  // Above the speech bubble she storms off with (the 'left' that comes with it).
+  const R = 15 * z;
+  ctx.save();
+  ctx.translate(e.x, e.y - 52 * z - R - k * 8 * z);
+  ctx.scale(s, s);
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU);
+  paint(ctx, '#ffffff', 2 * z);
+  dummy(ctx, 0, 3.5 * z, 3.9 * z, '#ff7eb6');
+  ctx.beginPath(); ctx.arc(0, 0, R - 1.8 * z, 0, TAU);
+  ctx.moveTo(-R * 0.64, -R * 0.64); ctx.lineTo(R * 0.64, R * 0.64);
+  ctx.strokeStyle = '#e11d2a'; ctx.lineWidth = 3.8 * z; ctx.lineCap = 'round'; ctx.stroke();
+  label(ctx, 'NOT TODAY', 0, -R - 10 * z, 14 * z, '#ff3b30', INK, 4 * z);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/** Babies' refunds at one till, added up: smaller and paler than a real refund's figure. */
+function babyFigure(ctx, e, k) {
+  ctx.globalAlpha = fadeOut(k, 0.6);
+  const grow = k < 0.12 ? 0.6 + (k / 0.12) * 0.4 : 1;
+  const y = Math.max(10, e.y - k * 22);
+  label(ctx, '-$' + e.w, e.x, y, 12 * grow, '#ff8a80', INK, 3);
+  if (e.sz > 1) {
+    ctx.font = font(12);
+    const w = ctx.measureText('-$' + e.w).width;
+    label(ctx, 'x' + e.sz, e.x + w / 2 + 9, y + 1, 9, '#7dd3fc', INK, 2.5);
+  }
   ctx.globalAlpha = 1;
 }
 

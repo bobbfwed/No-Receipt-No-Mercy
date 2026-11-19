@@ -1,11 +1,13 @@
-// Shoppers: thirteen kinds of small cartoon people (and one dog), drawn side-on in three-quarter
+// Shoppers: fourteen kinds of small cartoon people (and one dog), drawn side-on in three-quarter
 // view, facing the way they walk. Each kind is built from a few shared parts (limbs, head, face)
 // plus its own props: trolley, coupons, dad cap and receipt, Karen hair and pointing finger,
 // mobility scooter, hoodie and slushie, mom's trolley with a child in the seat, guide dog and white
 // cane, the gym bro's boxed TV, the stray dog's mangy coat (and the Great Dane), the cosplayers'
 // four costumes (and the mech suit), the exhibitionist's bathrobe (and what is under it), the day
 // drinker's bottle in a bag, and the boss in a suit at each of his four ranks (1.6 times life, with
-// his name plate and patience bar drawn over the crowd by drawBossTag).
+// his name plate and patience bar drawn over the crowd by drawBossTag), the Pregnant Lady with her
+// bump and pickles (and Octomom, with her bump full of hands and feet), and the babies a Pregnant
+// Lady pops into: tiny, in nappies, sprinting on all fours (no patience bar).
 // A mom's runaway child is a separate little figure (drawKid); so is a cart a mom left behind
 // (drawCart, for each entry in state.carts).
 //
@@ -45,11 +47,20 @@ const MUTT = '#c27a32', MUTT_DARK = '#8a4f1e', MUTT_PATCH = '#4f2f16', MUTT_CREA
 const DANE = '#d4d8dc', DANE_SPOT = '#2b2f34', DANE_DARK = '#9aa0a6';
 const ROBE = '#f7a8c8', ROBE_DARK = '#d9759f', SLIPPER = '#ff9ccf';
 const DRINK_SHIRTS = ['#ece6d2', '#9ec5e8', '#e8b49e', '#b8d8a8'];
+const MAT_TOPS = ['#f78fc0', '#5fd4c4', '#b79cf5', '#ffd166'];
+const PREG_HAIR = ['#2b2118', '#c9a15a', '#8a5a2b', '#b5452e'];
+const BABY_HAIR = ['#c9a15a', '#5a3a1e', '#e07b24'];
+const BABY_DUMMIES = ['#ff7eb6', '#5cc8ff', '#ffd23f'];
+const BABY_TABS = ['#7dd3fc', '#ff9ccf', '#a3e635'];
 
 /** Mom poses (the `alt` of her sprite). */
 const MOM_CART = 0, MOM_CHASE = 1, MOM_CHASE_NOCART = 2, MOM_CARRY = 3, MOM_CRAWL_CART = 4, MOM_CRAWL = 5;
 /** Dog poses. */
 const DOG_PEE = 1, DOG_SIT = 2;
+/** Pregnant Lady pose: her patience nearly gone, about to pop. */
+const PREG_STRAIN = 1;
+/** Below this share of her patience she shows she is about to pop. */
+const PREG_WARN = 0.3;
 
 /**
  * Per kind: index (for sprite keys), drawing scale, figure height (for the patience bar), walking
@@ -82,6 +93,10 @@ const KIND = {
   drinker: { n: 14, sc: 1, top: 36, supTop: 41, step: 9, vars: DRINK_SHIRTS.length, down: true, crown: [1, -41] },
   // The boss: 1.6 times life, slow and stately; a colour variant per tier (v = tier - 1).
   boss: { n: 16, sc: 1.6, top: 38, step: 6, vars: 4, box: [-44, -68, 92, 80], crown: [0, 0] },
+  // The Pregnant Lady waddles (her drawing rocks by itself, so `still`); the crown is Octomom's.
+  preggo: { n: 17, sc: 1.06, top: 38, supTop: 45, step: 7, vars: MAT_TOPS.length, still: true, box: [-30, -58, 64, 70], crown: [0.5, -40.5] },
+  // Her babies: tiny, on all fours, a fast scrabbling cadence.
+  baby: { n: 18, sc: 1.1, top: 17, step: 34, vars: BABY_HAIR.length, still: true, box: [-20, -22, 38, 26], crown: [8, -17] },
 };
 /**
  * Super shoppers are drawn this much bigger, with a gold outline and glow and a crown, so they
@@ -2068,7 +2083,202 @@ function boss(ctx, P) {
   }
 }
 
-const DRAW = [hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit, strayDog, cosplay, flasher, drinker, cartDown, boss];
+// --- the Pregnant Lady, Octomom and the babies ------------------------------------------------
+
+/**
+ * The bump: bare skin with her top riding up over the upper part (`cover`, 0..1 of its height),
+ * a popped-out belly button and a couple of stretch marks. kicks: little bulges where someone
+ * inside is trying to get out (n of them, round the upper front edge).
+ */
+function bump(ctx, cx, cy, rx, ry, top, cover, kicks = 0) {
+  for (let k = 0; k < kicks; k++) {
+    const a = -2.0 + (k * 2.6) / Math.max(1, kicks - 1);
+    circle(ctx, cx + Math.cos(a) * rx * 0.98, cy + Math.sin(a) * ry * 0.98, 2.3 + (k % 2) * 0.5, C.skin, 1.3);
+  }
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU);
+  ctx.fillStyle = C.skin;
+  ctx.fill();
+  // The top, stretched over the upper part of the bump and not quite reaching.
+  const hem = cy - ry + ry * 2 * cover;
+  ctx.save();
+  ctx.clip();
+  ctx.fillStyle = top;
+  ctx.beginPath();
+  ctx.moveTo(cx - rx - 2, cy - ry - 2);
+  ctx.lineTo(cx + rx + 2, cy - ry - 2);
+  ctx.lineTo(cx + rx + 2, hem - ry * 0.18);
+  ctx.quadraticCurveTo(cx, hem + ry * 0.2, cx - rx - 2, hem + ry * 0.1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU);
+  ctx.strokeStyle = INK; ctx.lineWidth = OUT; ctx.stroke();
+  // Stretch marks, low down, and the outie.
+  ctx.beginPath();
+  for (let k = 0; k < (rx > 12 ? 4 : 2); k++) {
+    const x = cx + rx * (0.05 + k * 0.17), y = cy + ry * (0.55 - k * 0.08);
+    ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 1.5, y - 1.2, x + 3, y - 0.4);
+  }
+  ctx.strokeStyle = '#d98a8a'; ctx.lineWidth = 0.9; ctx.stroke();
+  circle(ctx, cx + rx * 0.9, cy + ry * 0.12, rx > 12 ? 1.9 : 1.4, C.skin, 1);
+}
+
+/** Her face: worn out (cheeks flushed), or straining, about to pop (gritted, sweating). */
+function preggoFace(ctx, x, y, strain) {
+  ctx.fillStyle = 'rgba(232,100,110,0.45)';
+  ctx.beginPath(); ctx.arc(x + 5.6, y + 2, 1.8, 0, TAU); ctx.fill();
+  if (!strain) {
+    face(ctx, x, y, 1);
+    ctx.beginPath(); // a long-suffering sigh
+    ctx.moveTo(x + 2.4, y + 3.6); ctx.quadraticCurveTo(x + 3.8, y + 2.6, x + 5.4, y + 3.6);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.2; ctx.stroke();
+    return;
+  }
+  face(ctx, x, y, 0);
+  // Teeth gritted, a vein, sweat flying.
+  rr(ctx, x + 1.4, y + 2.2, 4.6, 2.2, 0.8);
+  paint(ctx, '#ffffff', 1);
+  ctx.beginPath(); ctx.moveTo(x + 3.7, y + 2.2); ctx.lineTo(x + 3.7, y + 4.4);
+  ctx.strokeStyle = INK; ctx.lineWidth = 0.7; ctx.stroke();
+  circle(ctx, x + 8.4, y - 6, 1.4, '#9fe3ff', 0.9);
+  circle(ctx, x - 5.6, y - 6.5, 1.2, '#9fe3ff', 0.9);
+}
+
+/** Long hair hanging down her back, behind the head (drawn first), with a hairband. */
+function longHair(ctx, x, y, r, col) {
+  ctx.beginPath();
+  ctx.moveTo(x - 1, y - r - 0.6);
+  ctx.quadraticCurveTo(x - r - 3.4, y - r * 0.4, x - r - 1.6, y + r + 3.5);
+  ctx.lineTo(x - r + 3.2, y + r + 2.2);
+  ctx.quadraticCurveTo(x - 2.5, y + 2, x + 1, y - r + 1);
+  ctx.closePath();
+  paint(ctx, col, OUT);
+}
+
+/**
+ * The Pregnant Lady, very pregnant: legs set wide, a hand pressed into the small of her back, an
+ * enormous bump out in front with her top riding up over it, and a jar of pickles balanced on top.
+ * She waddles (rocks from foot to foot) rather than leaning into her walk. alt PREG_STRAIN: her
+ * patience is nearly gone and she is about to pop: the jar is gone, she clutches the bump, things
+ * inside are kicking. The super, Octomom, is drawn by octomom().
+ */
+function preggo(ctx, P) {
+  if (P.sup) { octomom(ctx, P); return; }
+  const sw = P.sw, strain = P.alt === PREG_STRAIN;
+  const top = MAT_TOPS[P.v], hair = PREG_HAIR[P.v];
+  ctx.rotate(sw * 0.07);
+  const l1 = -4.5 - sw * 1.8, l2 = 3 + sw * 1.8;
+  limb(ctx, -3.5, -9, l1, -1.6, '#3b3552', 3.2);
+  shoe(ctx, l1, -0.8, '#8a6bb0');
+  limb(ctx, 2.5, -9, l2, -1.6, '#4a4266', 3.2);
+  shoe(ctx, l2, -0.8, '#8a6bb0');
+  // A hand in the small of her back.
+  limb(ctx, -2.5, -23, -8.6, -18, top, 3.4);
+  limb(ctx, -8.6, -18, -6, -13.6, C.skin, 2.6);
+  ctx.beginPath(); ctx.ellipse(-1, -17.5, 6.2, 8.6, 0, 0, TAU); paint(ctx, top, OUT);
+  bump(ctx, 5.5, -13.8, 10, 9, top, 0.5, strain ? 3 : 0);
+  longHair(ctx, 2, -30.5, 6.6, hair);
+  head(ctx, 2, -30.5, 6.6);
+  hairCap(ctx, 2, -30.5, 6.6, hair);
+  ctx.beginPath(); ctx.arc(2, -30.5, 7.1, Math.PI * 1.12, Math.PI * 1.55);
+  ctx.strokeStyle = '#ff5fa8'; ctx.lineWidth = 1.8; ctx.stroke(); // hairband
+  preggoFace(ctx, 2, -29.5, strain);
+  if (strain) {
+    // Both hands on the bump now.
+    limb(ctx, 2, -23, 10.5, -20.5, top, 3.2);
+    circle(ctx, 11, -20.2, 2, C.skin, 1.1);
+    return;
+  }
+  // A jar of pickles balanced on the bump: eating for thirteen.
+  const jx = 9.6, jy = -21.2; // bottom left of the jar
+  rr(ctx, jx, jy - 8.4, 7, 8.4, 1.6);
+  paint(ctx, '#bfe3a6', 1.4);
+  ctx.fillStyle = '#4f8a2e';
+  ctx.beginPath(); ctx.ellipse(jx + 2.2, jy - 3.8, 1.3, 2.7, 0.2, 0, TAU); ctx.ellipse(jx + 4.9, jy - 4.4, 1.3, 2.5, -0.2, 0, TAU); ctx.fill();
+  box(ctx, jx - 0.5, jy - 10.2, 8, 2.6, 0.8, C.red, 1.2);
+  limb(ctx, 1.5, -23, 8.8, -20.5, top, 3);
+  circle(ctx, 9.4, -20.4, 1.9, C.skin, 1.1);
+}
+
+/**
+ * Octomom: everything about the Pregnant Lady, much more so. Leaning back under a bump that
+ * reaches the floor and has little hands and feet pushing out of it all over, a crop top that
+ * gave up, and a whole tub of ice cream with the spoon still in it on top.
+ */
+function octomom(ctx, P) {
+  const sw = P.sw, strain = P.alt === PREG_STRAIN;
+  const top = MAT_TOPS[P.v], hair = PREG_HAIR[P.v];
+  ctx.rotate(sw * 0.06 - 0.05);
+  const l1 = -6 - sw * 1.6, l2 = 2 + sw * 1.6;
+  limb(ctx, -5, -9, l1, -1.6, '#3b3552', 3.6);
+  shoe(ctx, l1, -0.8, '#8a6bb0');
+  limb(ctx, 1, -9, l2, -1.6, '#4a4266', 3.6);
+  shoe(ctx, l2, -0.8, '#8a6bb0');
+  limb(ctx, -4.5, -25, -11, -19.5, top, 3.6);
+  limb(ctx, -11, -19.5, -8, -14.5, C.skin, 2.8);
+  ctx.beginPath(); ctx.ellipse(-3, -19.5, 6.6, 9, 0, 0, TAU); paint(ctx, top, OUT);
+  bump(ctx, 8, -15.5, 15, 13.5, top, 0.28, 7);
+  // Hair piled up in a bun that has seen things.
+  circle(ctx, -3.5, -40.5, 4.2, hair, OUT);
+  head(ctx, 0, -33, 6.8);
+  hairCap(ctx, 0, -33, 6.8, hair);
+  preggoFace(ctx, 0, -32, strain);
+  if (strain) {
+    limb(ctx, 0.5, -23.5, 10, -25, top, 3.2);
+    circle(ctx, 10.6, -25, 2, C.skin, 1.1);
+    return;
+  }
+  // The tub of ice cream on top of the bump, with a scoop out of it and the spoon in.
+  const tx = 12.5, ty = -27.6; // bottom left of the tub
+  ctx.beginPath();
+  ctx.moveTo(tx - 0.8, ty - 8.4); ctx.lineTo(tx + 9.6, ty - 8.4); ctx.lineTo(tx + 8.6, ty); ctx.lineTo(tx + 0.2, ty);
+  ctx.closePath();
+  paint(ctx, '#ffffff', 1.4);
+  ctx.fillStyle = '#ff8fc4'; ctx.fillRect(tx - 0.2, ty - 6, 9, 2.2);
+  ctx.beginPath(); ctx.ellipse(tx + 4.4, ty - 8.8, 4.8, 2, 0, Math.PI, TAU); paint(ctx, '#ffd6e8', 1.1);
+  line2(ctx, tx + 6, ty - 9, tx + 9.5, ty - 14, 1.4);
+  limb(ctx, 0.5, -23.5, 11, -26, top, 3.2);
+  circle(ctx, 11.6, -26.2, 2, C.skin, 1.1);
+}
+
+/**
+ * A baby, sprinting on all fours: a big nappy up behind, a big head out in front with one curl of
+ * hair and a dummy jammed in, and an expression that says it wants your refund. Small and cheap:
+ * up to two dozen come out of one Octomom.
+ */
+function baby(ctx, P) {
+  const sw = P.sw;
+  if (P.moving) speedLines(ctx, -13, -9, P.ph, 5, 4);
+  // Far arm and leg first (in shadow), then the body, then the near ones.
+  limb(ctx, -3.5, -5.5, -8.5 + sw * 2.6, -1, C.skinDark, 2.4);
+  limb(ctx, 3.5, -6, 6.5 - sw * 2.8, -1, C.skinDark, 2.3);
+  ctx.beginPath(); ctx.ellipse(1, -7, 5, 3.9, 0.12, 0, TAU); paint(ctx, C.skin, 1.5);
+  ctx.beginPath(); ctx.ellipse(-4.6, -7.5, 5.2, 4.8, -0.25, 0, TAU); paint(ctx, '#ffffff', 1.6);
+  ctx.fillStyle = BABY_TABS[P.v];
+  ctx.fillRect(-2.6, -10.6, 2.6, 1.8); // the nappy's tab
+  const k = -8.5 - sw * 2.6;
+  limb(ctx, -4, -4.5, k, -1, C.skin, 2.6);
+  limb(ctx, k, -1, k - 3.5, -2.8, C.skin, 2.2);
+  limb(ctx, 3.8, -5.5, 6.5 + sw * 2.8, -0.9, C.skin, 2.5);
+  // The head: big, bald but for a curl, angry eyebrow, dummy.
+  circle(ctx, 8.4, -11, 5.6, C.skin, 1.6);
+  ctx.beginPath();
+  ctx.moveTo(7, -16.4); ctx.quadraticCurveTo(9.5, -19.6, 10.5, -16.8); ctx.quadraticCurveTo(9.4, -17.6, 8.8, -16.4);
+  ctx.strokeStyle = BABY_HAIR[P.v]; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.beginPath(); ctx.arc(10.6, -11.8, 1.1, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(8.8, -14.4); ctx.lineTo(12, -13); ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(13.8, -8.8, 1.3, 2.6, 0, 0, TAU); paint(ctx, BABY_DUMMIES[P.v], 1);
+  ctx.beginPath(); ctx.arc(15.2, -8.8, 1.3, -1.3, 1.3); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
+}
+
+const DRAW = [
+  hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit, strayDog, cosplay, flasher, drinker, cartDown,
+  boss, preggo, baby,
+];
 
 /** A super shopper's little gold crown, worn at a jaunty angle on top of the head. */
 function crown(ctx, K, P) {
@@ -2230,7 +2440,7 @@ function puff(ctx, x, y, k) {
 }
 
 /** Half-width of each kind's ground shadow (9 if not listed). */
-const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9, boss: 11 };
+const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9, boss: 11, preggo: 11, baby: 8 };
 
 /** Adds this shopper's ground shadow to the current path (all shadows are filled at once). */
 export function shadowPath(ctx, s, sx, sy, face = 1) {
@@ -2238,9 +2448,17 @@ export function shadowPath(ctx, s, sx, sy, face = 1) {
   const z = s.sup ? SUP_SCALE : 1;
   let rx = (SHADOW_RX[s.k] || 9) * K.sc;
   let cx = sx;
+  if (s.k === 'baby') {
+    // Long and low, under all four limbs.
+    ctx.moveTo(sx + face + rx, sy + FEET);
+    ctx.ellipse(sx + face, sy + FEET, rx, 2.4, 0, 0, TAU);
+    return;
+  }
   if (s.k === 'mom' && s.cr === 1) { rx = 17; cx += face * 2; } // stretched out on the floor
   else if (s.k === 'dog' && s.sup) rx = 18;
   else if (s.k === 'cosplay' && s.sup) rx = 16;
+  else if (s.k === 'preggo' && s.sup) rx = 14; // and the bump, out in front
+  if (s.k === 'preggo') cx += face * 3;
   if (s.k === 'blind' && s.st !== ST.STUN) {
     // One long shadow under the man and his dog.
     const bolt = s.bt > 0;
@@ -2382,6 +2600,9 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     // full pepEvery), arm in the air, shouting.
     const every = (defOf(s).pepEvery || 7) * TICK_HZ;
     alt = leaving ? BOSS_STORM : s.pp > every - 30 ? BOSS_PEP : 0;
+  } else if (s.k === 'preggo') {
+    // Nearly out of patience: she is about to pop, and shows it (the warning the players need).
+    if (!leaving && s.mhp > 0 && s.hp / s.mhp < PREG_WARN) alt = PREG_STRAIN;
   }
   const ph = F.time * K.step * pace + s.id * 1.7; // walking cycle, radians
   const cycle = (((ph / TAU) % 1) + 1) % 1;
@@ -2391,8 +2612,11 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   const sup = !!s.sup && !isBoss; // he has no super version
   const img = sprites.get(K, v, face, frame, alt, sup);
   const fy = sy + FEET;
-  // The sprite's box around the feet; a super's is padded for the glow and drawn bigger.
-  const z = sup ? SUP_SCALE : 1, pad = sup ? SUP_PAD : 0;
+  // The sprite's box around the feet; a super's is padded for the glow and drawn bigger. Babies
+  // are drawn a little bigger when zoomed far out, so a swarm still reads as babies.
+  const isBaby = s.k === 'baby';
+  const z = sup ? SUP_SCALE : isBaby && F.zoom ? Math.min(1.45, Math.max(1, 30 / F.zoom)) : 1;
+  const pad = sup ? SUP_PAD : 0;
   const bx = (boxX(K, face) - pad) * z, by = (K.by - pad) * z;
   const bw = (K.bw + pad * 2) * z, bh = (K.bh + pad * 2) * z;
   const height = (sup && K.supTop ? K.supTop : K.top) * K.sc * z;
@@ -2402,10 +2626,13 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     ctx.globalAlpha = fade;
     ctx.drawImage(img, sx + bx + Math.sin(F.time * 60) * 1.2, fy + by, bw, bh); // shaking with rage
     ctx.globalAlpha = Math.min(1, fade * 1.6);
-    puff(ctx, sx, fy - height - 4 - (1 - fade) * 10, 1 - fade);
+    // (A baby giving up just fades: a dozen puffs of steam would hide the rest of the swarm.)
+    if (!isBaby) puff(ctx, sx, fy - height - 4 - (1 - fade) * 10, 1 - fade);
     ctx.globalAlpha = 1;
     return;
   }
+  // About to pop: she trembles.
+  if (alt === PREG_STRAIN && s.k === 'preggo') sx += Math.sin(F.time * 47 + s.id) * 0.9;
   let top = fy - height - (sup ? 7 : 0);
   if (stunned && s.k === 'drinker') {
     // Face down across the aisle, his bottle rolling away ahead of him, snoring.
@@ -2485,8 +2712,9 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   // On his way over to a salesman's stand (s.sa): eyes on the television all the way there, so it
   // is plain why he has left the route.
   else if (s.sa !== undefined && !stunned) eyes(ctx, sx + 9, top - 12, false, true);
-  // (The boss's bar goes with his name plate, drawn over everyone by drawBossTag.)
-  if (!how.noBar && !isBoss && (s.k === 'dad' || sup || s.hp < s.mhp - 0.01)) patienceBar(ctx, sx, top - 4, s.hp / s.mhp, sup);
+  // (The boss's bar goes with his name plate, drawn over everyone by drawBossTag. Babies have
+  // none: two dozen bars over a swarm would be clutter, and they have almost no patience anyway.)
+  if (!how.noBar && !isBoss && !isBaby && (s.k === 'dad' || sup || s.hp < s.mhp - 0.01)) patienceBar(ctx, sx, top - 4, s.hp / s.mhp, sup);
 }
 
 /** The boss's sprite variant: his tier (1 to 4 and up) less one. */

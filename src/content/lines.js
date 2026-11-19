@@ -698,7 +698,7 @@ export const LINES = {
       "Regional Manager on the floor. He's here to 'touch base'. He will touch more than base. Backs to the wall, boys.",
       'The Regional Manager is here. He drove four hours to tell you to smile more. He will not stop walking until somebody does.',
       "Heads up: the Regional Manager. He calls everyone 'champ' and he's slept with two of the cashiers. Keep him off the tills.",
-      'The Regional Manager has arrived. If he gets a refund it counts as five. He is management. Even his failures count extra.',
+      'The Regional Manager has arrived. If he gets a refund it counts as two. He is management. Even his failures count extra.',
       'Regional Manager inbound. Polo shirt tucked into khakis, tucked into a man who peaked at a sales conference in 2008.',
       'The Regional Manager. Wet floors, free samples, the TV, the flasher: he ignores all of it. Like he ignores his kids.',
       u("The Regional Manager is in the building. He has a clipboard with all your names on it. Next to {p}'s he's drawn a small penis."),
@@ -712,7 +712,7 @@ export const LINES = {
       'The Area Director just walked in. Same suit as the last guy, more expensive, worse personality. Wear him down.',
       "Area Director inbound. He's here to 'drive efficiencies'. That means firing {p}. Stop him before the tills and he can't.",
       "The Area Director has arrived. He calls this 'one of my stores'. He has never been in it. He's not sure which state it's in.",
-      'The Area Director. Bigger bonus, bigger gut, same clipboard. If he gets through, that is five refunds and your Christmas party.',
+      'The Area Director. Bigger bonus, bigger gut, same clipboard. If he gets through, that is two refunds and your Christmas party.',
       u('Area Director on site. He has a vasectomy, a boat and a mistress called Brenda. Only the boat makes him happy.'),
       u("The Area Director is here with his clipboard. He's read your numbers. He laughed. Out loud. In a meeting."),
       r("The Area Director walked in, said 'let's take this offline' to nobody, and kept walking. He's taken everything offline since 1997. Including his marriage."),
@@ -733,7 +733,7 @@ export const LINES = {
     ceo: [
       'The CEO is here. Personally. The man who signs your paychecks, if he ever learned your names.',
       "The CEO just walked in. He made forty million last year and he's still here for a refund. That's how he made forty million.",
-      "The CEO is on the floor. If he gets his refund it counts as five, and he'll still call it a soft quarter.",
+      "The CEO is on the floor. If he gets his refund it counts as two, and he'll still call it a soft quarter.",
       'The CEO again. He keeps coming back, like herpes with a stock portfolio.',
       'The CEO. Nothing slows him down. Not wet floors, not samples, not the law.',
       'Here comes the CEO. Golden parachute, silver spoon, brass neck. Make him use all three.',
@@ -897,6 +897,44 @@ export const LINES = {
     u("${n} from the factory for the time you skipped. {p}, if only the bedroom worked like that."),
     r('Doors open early, ${n} in the bank. The factory did {m} seconds of overtime in a blink. It wants a union. It is not getting one.'),
   ],
+  // A Pregnant Lady ran out of patience and popped. {n} how many babies came out (12, or 24 from an
+  // Octomom; may be missing), {p} anyone. Cartoon, not gore: the joke is the players and the refund.
+  pop: [
+    'She popped. {n} babies, straight out and running for the tills. Faster than anything {p} has ever finished.',
+    "Pregnant lady down, {n} babies up. They're quicker than she was, and they want cash. Like their father.",
+    'A pregnant lady just went off like a piñata. {n} babies. No candy. Just child support.',
+    'She popped, {p}. {n} babies. That is not a birth. That is a clown car.',
+    "{n} newborns sprinting for the tills. Alive four seconds and they already know where the money is.",
+    'Water broke in the aisle. So did {n} babies. Mop the first. Stop the second.',
+    "Somebody pushed her too far. Then she pushed. {n} times.",
+    "{n} babies loose in the store. Small, fast, furious. Just like {p} on his wedding night.",
+    "That's {n} babies running for the tills. Who's the father? Statistically, {p}.",
+    'Pop. A dozen-odd babies on the floor and every one of them has a better sense of direction than {p}.',
+    "She popped. You had one job, {p}: the barcode laser. Now you have a daycare.",
+    'Congratulations, gentlemen, it is a boy. And a boy. And a girl. And more. They are all heading for your cash.',
+    u("She popped and {n} babies came out shopping. None of them has a receipt. All of them have her eyes and your problem."),
+    u("{n} babies. Laser her next time. I'm not changing {n} nappies. I'm a chatbot. I'm not changing anything."),
+    u('{n} babies just hit the floor running. {p}, that is the most anything has ever come out of anything near you.'),
+    r('She popped. {n} babies, straight for the refund desk. The circle of life, retail edition. Elton John would weep. {p} should.'),
+    r("Pop. {n} babies loose. Somewhere in the car park a man just felt his wallet clench and doesn't know why."),
+    r("{n} babies, and every one of them is running away from {p}. Even newborns can tell."),
+  ],
+  // A Barcode Laser took a Pregnant Lady's last patience, so she storms off and nothing pops. {p} anyone
+  nopop: [
+    'Barcode laser on the pregnant lady. Scanned, no babies. Best contraception this store has ever stocked.',
+    "The laser got her first. Nothing popped. {p}, take notes: that's what pulling out in time looks like.",
+    'Beep. Pregnant lady scanned and sent home. The babies stay where they are. Nobody gets a refund.',
+    "Laser finished her off. No pop, no babies, no child support. Cleanest job {p} has ever done.",
+    "She stormed off still pregnant. The beam said 'not today'. Her husband said that once too.",
+    'The barcode laser closed her out before the babies could open. Unexpected item stays in the bagging area.',
+    'No pop. The laser did its job. Somebody give it a cigar and a paternity test.',
+    "She's leaving, babies and all. {p}, first time you've stopped something happening by aiming properly.",
+    'One beam and she waddled out, still loaded. That is the trick, gentlemen. Write it on your hands.',
+    u("Laser hit, no babies. That beam has prevented more births than {p}'s personality. And that is saying something."),
+    u("She waddled off, still fully loaded. The barcode laser: ninety-nine percent effective. Unlike {p}."),
+    r("The laser kept the babies in. Corporate wants to sell it: 'Barcode Laser. Because nobody wants twelve more customers.'"),
+    r('No pop. She left the way she came in: angry, enormous and completely your fault, {p}. Well. Partly.'),
+  ],
 };
 
 /**
@@ -916,8 +954,12 @@ export const INTRO = {
   cosplay: 'New today: cosplayers. His huge costume soaks up shots meant for the shoppers next to him. Twenty years of being ignored, and now everyone wants to stand near him.',
   flasher: 'New today: the exhibitionist. A woman in a bathrobe. When she opens it, dads and teenagers stop dead to stare. She is on your side. Put your security where she works.',
   drinker: 'New today: the day drinker. He weaves about at all speeds and falls over at corners, and everyone behind him has to squeeze past. Corners are your friend. So is he, nine beers in.',
+  preggo: [
+    'New today: the pregnant lady. Slow, stubborn, enormous. Run her out of patience and she pops: a dozen tiny sprinters go for the tills. Finish her with the barcode laser and nothing comes out.',
+    "New today: pregnant ladies. Wear one down and she pops, and a dozen babies run for your cash. The barcode laser keeps them in. {p}, you of all people should know how to stop a pregnancy. Badly.",
+  ],
   // Said once, straight after the first boss is announced (when he walks in, not at the doors).
-  boss: 'About management: nothing slows him. His pep talks give shoppers near him their patience back. At the tills he counts as five refunds. Wear him out and the store gets a bounty. Every fifth event.',
+  boss: 'About management: nothing slows him. His pep talks give shoppers near him their patience back. At the tills he counts as two refunds. Wear him out and the store gets a bounty. Every fifth event.',
 };
 
 /** What DEB says the first time the super version of a kind turns up. {p} is anyone. */
@@ -935,6 +977,7 @@ export const SUPER_INTRO = {
   dog: "New and worse: a bigger stray. Bigger bladder, tougher hide, and he has already marked half the store. {p}, he's looking at your leg. Keep moving.",
   cosplay: 'New and worse: a cosplayer in an even bigger costume. Tougher, and it took him two years and a divorce to build. Your shots are going to bounce off a lot of foam.',
   flasher: "New: the exhibitionist's bolder sister. Tougher, and a double refund if she gets through. Still on your side while she's in here. Don't make it weird, {p}.",
+  preggo: 'New and worse: Octomom. Two and a half times the patience, and two dozen babies when she pops. The barcode laser still keeps them all in. Nothing else will. Certainly not {p}.',
   drinker: "New and worse: a day drinker who started on Thursday. Tougher, harder to put off, and he still goes down at corners. He's been going down at corners since 1998.",
 };
 
@@ -1080,6 +1123,16 @@ export const ESCAPE_REVIEWS = {
     [1, 'Wobbly floors in this place. Get them fixed. Hic.', U],
     [5, "Came in to return a beer glass to the wrong store entirely. They gave me nine bucks for it. I'll be back tomorrow. And the day after.", R],
   ],
+  preggo: [
+    [1, 'Waddled the whole maze at nine months. Got my refund. Nobody offered me a chair. The baby kicked. I kicked {p}.'],
+    [1, 'Ate every free sample in the building. I am eating for thirteen. The staff looked frightened. Good.'],
+    [5, 'Refund done before my waters broke. Five stars for timing. None for the staff.'],
+    [1, 'A man called {p} asked if I was "sure" I was pregnant. I am sure. He is not sure of anything.'],
+    [1, 'Sprayed, forklifted, rammed by a dad. I got my refund and all twelve are still inside. Try harder.'],
+    [1, 'Returned the crib, the pram and the father. Only two of them had a receipt.', U],
+    [5, 'My doctor said take it easy. I took the refund instead. Five stars, I am going for a lie down.', U],
+    [1, 'They tried to make me pop. I held it in. I have held in worse for longer. My marriage, for one.', R],
+  ],
   // The boss: written by management, about the staff who could not stop him.
   boss: [
     [1, 'Got my refund. Store team showed no initiative, no synergy and no backbone. Circling back to fire everyone.'],
@@ -1188,6 +1241,14 @@ export const LEFT_REVIEWS = {
     [1, 'Too many corners. Wen home. Fel over.'],
     [1, 'Got lost. Found a bench. Slept. Left.'],
     [1, 'Gave up. The bar opens at eleven. Had to be there. For my health.', U],
+  ],
+  // Only for one who left without popping (a Barcode Laser finished her); a pop gets no review.
+  preggo: [
+    [1, 'Shot by a barcode laser at nine months. Walked out. Still pregnant. Still furious.'],
+    [1, 'Got lasered across the bump. Nothing came out. Not even an apology.'],
+    [1, 'The beam went straight across the bump. The baby now only responds to price checks.'],
+    [1, 'Leaving with no refund and twelve passengers. My husband will hear about this. He hears about everything.', U],
+    [1, 'Waddled out. Their security is a laser and a man called {p} pretending he did it.', R],
   ],
   boss: [
     [1, 'Left without my refund. I have never left anywhere without something. Escalating this to myself.'],
@@ -1571,7 +1632,7 @@ export const BUILDING_NAMES = { railgun: 'Barcode Laser', salesman: 'TV Salesman
 export const SHOPPER_NOUNS = {
   hunter: 'bargain hunter', clipper: 'coupon clipper', dad: 'dad', karen: 'Karen', scooter: 'scooter driver',
   teen: 'teenager', mom: 'mom', blind: 'blind man', gymbro: 'gym bro', dog: 'stray dog', cosplay: 'cosplayer',
-  flasher: 'flasher', drinker: 'day drinker', boss: 'boss',
+  flasher: 'flasher', drinker: 'day drinker', preggo: 'pregnant lady', boss: 'boss', baby: 'baby',
 };
 
 /** The text of a line from any bank: a string, { t, w } or a review [stars, text, w]. */

@@ -89,7 +89,7 @@ export const STEPS = [
     title: 'Welcome to the Returns Department',
     manual: true,
     text: [
-      'Shoppers come in through the ENTRANCE on the left and walk to the tills on the right. Every shopper who reaches a till takes a refund out of your cash. In a real game, 40 refunds closes the store.',
+      'Shoppers come in through the ENTRANCE on the left and walk to the tills on the right. Every shopper who reaches a till takes a refund out of your cash. In a real game, 20 refunds closes the store.',
       'You have two jobs. Build a factory that earns cash. Build security that annoys shoppers until they give up and leave.',
       'This training shift walks you through every building. You cannot lose here, and money is free.',
     ],

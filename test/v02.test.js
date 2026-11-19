@@ -72,7 +72,8 @@ test('every difficulty is 10% easier than it was: 0.9 times the patience, 1.1 ti
   }
   assert.deepEqual(Object.values(SETTINGS.difficulty).map((d) => [d.hp, d.pay]), [[0.68, 1.38], [0.9, 1.1], [1.17, 0.94], [1.49, 0.77]]);
   assert.notEqual(SETTINGS.difficulty.normal.note, 'As designed.');
-  // Shoppers walk in with 90% patience on Normal; training stays at full patience.
+  // Shoppers walk in with 90% patience on Normal (the first event's patience multiplier is 1:
+  // patience is phased in from TUNE.patienceFrom, 0.2.09); training stays at full patience.
   const g = createGame({ seed: 2 });
   addPlayer(g, 'Dave');
   applyCommand(g, 0, { c: 'start' });
@@ -743,15 +744,19 @@ test('the four new shoppers: supers twice as strong, Head Office prices, a pitch
   const speeds = Object.entries(SHOPPERS).filter(([k]) => k !== 'cosplay').flatMap(([k]) => [SHOPPERS[k].speed, SUPERS[k].speed]);
   assert.ok(!speeds.includes(SHOPPERS.cosplay.speed) && !speeds.includes(SUPERS.cosplay.speed));
   assert.ok(SHOPPERS.cosplay.hp < SHOPPERS.karen.hp && SHOPPERS.cosplay.hp > SHOPPERS.karen.hp * 0.8);
-  // The first four waves are exactly what they were.
+  // The first four waves are what they were, except that every group is halved, a half rounded
+  // down and never below one (TUNE.crowdScale, 0.2.09), and arrives over the same time, so its
+  // gaps are longer.
   const old = (n) => {
     const g = [{ k: 'hunter', n: 6 + 2 * n, gap: 0.9, at: 0 }];
     if (n >= 2) g.push({ k: 'dad', n: 1 + n, gap: 0.3, at: 10 });
     if (n >= 3) g.push({ k: 'clipper', n: 3 * (n - 1), gap: 0.35, at: 5 });
     if (n >= 3) g.push({ k: 'mom', n: 1 + Math.floor(n / 3), gap: 3, at: 6 });
     if (n >= 4) g.push({ k: 'teen', n: Math.floor(n / 2), gap: 2.5, at: 3 });
-    // (With nothing to grow, the gap is still worked out the same way.)
-    return g.map((x) => ({ ...x, gap: (x.gap * x.n) / x.n, sup: 0 }));
+    return g.map((x) => {
+      const half = Math.max(1, Math.floor(x.n / 2));
+      return { ...x, n: half, gap: (x.gap * x.n) / half, sup: 0 };
+    });
   };
   for (let n = 1; n <= 4; n++) assert.deepEqual(waveSpec(n), old(n), `wave ${n}`);
 });
@@ -981,7 +986,7 @@ test('host and client stay in step with the new buildings and shoppers, sent ove
   assert.ok(st.shoppers.some((m) => NEW_KINDS.includes(m.k)) || st.ws.stopped + st.ws.escaped > 0);
 });
 
-test('the checksum sees upgrades, hits and a building switched off; saves are version 3', () => {
+test('the checksum sees upgrades, hits and a building switched off; saves are version 4, and 3 still loads', () => {
   const s = stage();
   place(s, 'forklift', 5, 5);
   applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5 });
@@ -991,7 +996,7 @@ test('the checksum sees upgrades, hits and a building switched off; saves are ve
     tweak(c);
     assert.notEqual(checksum(c), base);
   }
-  assert.equal(s.v, 3);
+  assert.equal(s.v, 4, 'version 4 since 0.2.09 (the refund limit was halved; see migrateSave)');
   const storage = new Map();
   const store = { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: (k) => storage.delete(k) };
   const g = createGame({ seed: 5, map: { design: 'warehouse', size: 'm' } });
@@ -999,6 +1004,8 @@ test('the checksum sees upgrades, hits and a building switched off; saves are ve
   place(g, 'crate', 5, 5);
   store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: g }));
   assert.ok(readSave({ storage: store }));
+  store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: { ...g, v: 3 } }));
+  assert.ok(readSave({ storage: store }), 'a save from before 0.2.09 loads (and is migrated when resumed)');
   store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: { ...g, v: 2 } }));
   assert.equal(readSave({ storage: store }), null, 'a save from before these rules is ignored');
 });

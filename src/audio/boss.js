@@ -7,7 +7,7 @@
 //   bossIn     his corporate fanfare, grander with his tier (the CEO's is absurd)
 //   pep        his pep talk, every seven seconds: short, varied and not loud, because it repeats
 //   bossOut    the players made him give up: splutter, door slam, cash flourish
-//   bossEscape he reached the tills (counts as five refunds): five till drawers and a smug chuckle
+//   bossEscape he reached the tills (counts as two refunds): a run of till drawers and a smug chuckle
 //   endless    "here we go again"
 // His walk-out voice when he is not driven out is in shoppers.js (LEFT.boss).
 import { voice, tone, noise, bell, brass, mtof, vary, say, babble } from './synth.js';
@@ -216,7 +216,8 @@ export function bossOut(ctx, dest, t, o = {}) {
 // ------------------------------------------------------------------------- he reaches the tills
 
 /**
- * A disaster: five till drawers slam open one after another, each with its own "cha-ching" (a
+ * A disaster (he counts as two refunds toward the limit, TUNE.bossRefunds): five till drawers
+ * slam open one after another, each with its own "cha-ching" (a
  * rubber stamp thumps on the first), then the boss chuckles smugly. Three versions of the laugh:
  * "heh heh heh", a deep "hoo-hoo-hoo", and a long evil "ha-HAAA". Higher tiers rumble underneath.
  */

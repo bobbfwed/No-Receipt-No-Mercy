@@ -50,13 +50,13 @@ export const HOW = {
     maze: 'Does not block anyone.',
   },
   samples: {
-    does: 'Bargain Hunters and Coupon Clippers within about 2 tiles stop for 2 seconds to eat.',
+    does: 'Bargain Hunters, Coupon Clippers and Pregnant Ladies within about 2 tiles stop for 2 seconds to eat.',
     use: 'Put sprinklers beside it so they are sprayed while they stand there. Dads, Karens and scooters do not stop. Upgrades hold shoppers longer and reach further.',
     maze: 'Blocks all shoppers.',
   },
   railgun: {
     does: 'Fires a beam straight out of its front end every 4.5 seconds. The beam goes through shoppers, buildings and walls, and hits every shopper on the line for 10 tiles.',
-    use: 'It is three tiles long and fires the way its arrow points: press R before placing to turn it. Aim it down a long straight stretch of the route, where a whole queue is in line. It only fires when someone is in the beam.',
+    use: 'It is three tiles long and fires the way its arrow points: press R before placing to turn it. Aim it down a long straight stretch of the route, where a whole queue is in line. It only fires when someone is in the beam. It is the one way to finish a Pregnant Lady without her popping.',
     maze: 'Blocks all shoppers.',
   },
   salesman: {
@@ -83,6 +83,7 @@ export const SHOPPER_HELP = {
   drinker: { trick: 'Weaves along at a speed that keeps changing. At corners of the route he may fall over and lie there for 4 seconds, and everyone else has to squeeze past him at a third of their speed.', beat: 'Corners near your security: when he goes down, the queue behind him stands in the spray.' },
   dog: { trick: 'Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.', beat: 'Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.' },
   flasher: { trick: 'A woman in a bathrobe who opens it every few seconds. Dads and teenagers within 2.5 tiles stop and stare for 2 seconds.', beat: 'She helps you: let her walk with the dad line, in range of something that hurts.' },
+  preggo: { trick: 'Very pregnant: slow, with a lot of patience, and she stops for every free sample (she is eating for thirteen). When her patience runs out she does not leave. She pops, and a dozen babies run for the tills from where she stood: very fast, with very little patience, and nothing distracts them. A baby at a till takes $5 but is not a refund toward the limit. If she reaches a till herself she takes one refund and nothing pops.', beat: 'Finish her with a Barcode Laser: if its beam takes her last patience, no babies come out. Otherwise wear her down early, so the babies have the whole maze to run, with sprinklers and wet floor signs along it to catch them.' },
   cosplay: { trick: 'A big costume and a lot of patience. Shots from sprinklers, forklifts and barcode lasers that would hit a shopper standing next to him hit him instead.', beat: 'Wear him down while he is alone, or separate him from the crowd: free samples and salesmen stop the others while he walks on.' },
 };
 
@@ -112,6 +113,7 @@ export const SUPER_HELP = {
   drinker: 'Two and a half times the patience. Falls over at half the corners and stays down 6 seconds.',
   dog: 'Two and a half times the patience and faster. Switches security off for 12 seconds, from further away, and more often.',
   flasher: 'Two and a half times the patience. No robe at all: stops dads and teenagers within 4 tiles for 3 seconds, every few seconds.',
+  preggo: 'Two and a half times the patience, and two dozen babies when she pops. A Barcode Laser still stops all of them.',
   cosplay: 'Two and a half times the patience. Shields shoppers within 1.6 tiles and takes only half of what he soaks up.',
 };
 

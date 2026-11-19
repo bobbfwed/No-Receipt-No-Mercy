@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
-  waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf,
+  waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt,
   MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
@@ -174,8 +174,10 @@ test('the maze may not wall off an entrance, even one that has not opened yet', 
 
 test('more players means more shoppers and more refunds allowed', () => {
   const total = (n, players) => waveSpec(n, players).reduce((sum, g) => sum + g.n, 0);
-  assert.ok(total(5, 2) > total(5, 1) * 1.3);
-  assert.ok(total(5, 6) > total(5, 2) * 1.5);
+  // (Event 6, not 5: since the crowd was halved in 0.2.09, most groups of the boss's event 5 are a
+  // single shopper whatever the number of players.)
+  assert.ok(total(6, 2) > total(6, 1) * 1.3);
+  assert.ok(total(6, 6) > total(6, 2) * 1.5);
   const s = createGame();
   addPlayer(s, 'Dave');
   assert.equal(s.refundLimit, TUNE.refundLimit);
@@ -388,7 +390,7 @@ test('supers arrive from the middle of the game and grow in number', () => {
 
 test('later waves have many more shoppers than the early growth alone would give', () => {
   const total = (n) => waveSpec(n).reduce((sum, g) => sum + g.n, 0);
-  assert.equal(waveSpec(1)[0].n, 8, 'wave 1 is unchanged');
+  assert.equal(waveSpec(1)[0].n, 4, 'wave 1: eight bargain hunters, halved (TUNE.crowdScale)');
   assert.ok(total(20) > total(10) * 3);
 });
 
@@ -977,7 +979,7 @@ test('the host sets the number of waves, the starting cash and the difficulty', 
   let sale = null;
   for (let i = 0; i < 20 * TICK_HZ && !(sale && s.shoppers.length); i++) for (const e of step(s)) if (e.e === 'sale') sale = e;
   assert.equal(sale.v, Math.round(ITEMS.box.value * SETTINGS.difficulty.hard.pay));
-  assert.ok(Math.abs(s.shoppers[0].mhp - SHOPPERS[s.shoppers[0].k].hp * SETTINGS.difficulty.hard.hp) < 1e-9);
+  assert.ok(Math.abs(s.shoppers[0].mhp - SHOPPERS[s.shoppers[0].k].hp * SETTINGS.difficulty.hard.hp * patienceScaleAt(1)) < 1e-9);
 
   // Ten waves means the game is won after the tenth.
   const short = createGame({ seed: 3, settings: { waves: 10 } });

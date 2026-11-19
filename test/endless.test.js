@@ -126,14 +126,14 @@ test('Head Office cannot carry the game on, but gets a budget for the next wave 
   assert.ok(s.office.budget > 0);
 });
 
-test('one wave sends at most TUNE.maxCrowd shoppers per player; waves up to 30 are untouched', (t) => {
+test('one wave sends at most TUNE.maxCrowd (times TUNE.crowdScale) shoppers per player; waves up to 30 are untouched', (t) => {
   const capped = {};
   for (const p of [1, 2, 3, 7]) for (const n of [30, 46, 60, 100]) capped[`${p}:${n}`] = waveSpec(n, p);
   const old = TUNE.maxCrowd;
   TUNE.maxCrowd = Infinity;
   t.after(() => { TUNE.maxCrowd = old; });
   for (const p of [1, 2, 3, 7]) {
-    const most = Math.round(old * (1 + TUNE.crowdPerPlayer * (p - 1)));
+    const most = Math.round(old * (1 + TUNE.crowdPerPlayer * (p - 1)) * TUNE.crowdScale);
     for (let n = 1; n <= 30; n++) assert.ok(total(waveSpec(n, p)) <= most, `wave ${n} for ${p} is under the cap`);
     assert.deepEqual(capped[`${p}:30`], waveSpec(30, p), 'so wave 30 is as it was');
     // (46 and not 40: a boss wave's smaller crowd does not reach the cap until later.)

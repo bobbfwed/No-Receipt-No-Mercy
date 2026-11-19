@@ -101,6 +101,17 @@ export const RULES = {
   bossOut: { gap: 1, delay: 0, always: true },
   bossEscape: { gap: 0.8, delay: 0, always: true },
   endless: { gap: 3, delay: 0, always: true },
+  // The Pregnant Lady. A pop and the laser stopping one are `always` (never thinned or dropped for
+  // being busy: they tell the players what just happened), but several ladies can go in one event,
+  // so they are spaced. Her babies come in packs of 12 or 24: a baby giving up (`waah`) or taking
+  // its $5 at a till (`babyTill`) is tiny, thinned hard, and past a handful a second merges into
+  // `nursery`. A baby giving up is background (`common`); babies at the tills cost money, so they
+  // are not, or a late-wave storm would swallow a whole pack of them without a sound.
+  pop: { gap: 0.35, delay: 0.2, always: true },
+  nopop: { gap: 0.3, delay: 0.15, always: true },
+  waah: { gap: 0.09, soft: 2, per: 2, common: true, merge: { at: 5, sound: 'nursery', every: 1.4 } },
+  babyTill: { gap: 0.08, soft: 2, per: 2, merge: { at: 5, sound: 'nursery', every: 1.4 } },
+  nursery: { gap: 1.2, delay: 0, always: true },
   // The merged crowd sounds stand in for many single ones, so they skip the caps (`always`).
   kerching: { gap: 1.0, delay: 0, always: true },
   walkout: { gap: 1.2, delay: 0, always: true },

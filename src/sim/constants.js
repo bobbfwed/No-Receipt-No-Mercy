@@ -157,7 +157,11 @@ export const BUILD = {
  * gawks: stops to stare when an exhibitionist opens her bathrobe nearby.
  * pitch: [stop, rush] the TV Salesman's chances with this shopper: with chance `stop` he stops to
  *   watch the demonstration; otherwise, with chance `rush`, he hurries past faster for a while.
- * pees, shields, flashes, sways: see the comments on the shoppers that have them.
+ * pees, shields, flashes, sways, pops: see the comments on the shoppers that have them.
+ * hp, refund and drain here are the base numbers: a shopper walks in with hp times the sales
+ *   event's patience multiplier (patienceScaleAt in step.js; and grown by wave and difficulty),
+ *   takes refund times perHead() at a till, and drains drain times that same multiplier a second
+ *   (none of them scaled in a training game).
  *
  * sup: the "super" version of the shopper, which turns up in later waves (from wave `from`).
  *   In `sup`, hp and speed multiply the normal values; anything else replaces the normal value
@@ -241,6 +245,16 @@ export const SHOPPERS = {
     name: 'Cosplayer', hp: 150, speed: 1.25, refund: 30, shields: true, pitch: [0.3, 0.1],
     sup: { name: 'Full Mech Suit', from: 15, hp: 2.5, shield: 1.6, soak: 0.5 },
   },
+  // pops: when her patience runs out she does not storm off, she pops, and this many babies (BABY
+  // below) run for the tills from where she stood. Not if the hit that takes her last patience is a
+  // Barcode Laser's: then she just leaves. That is the intended counter. Reaching a till she takes
+  // her refund like anyone and nothing pops. She stops for free samples (eating for thirteen) and
+  // grabs goods off belts (nesting), and the TV Salesman's barbecues stop her often; she cannot
+  // hurry. Octomom: two dozen.
+  preggo: {
+    name: 'Pregnant Lady', hp: 130, speed: 0.85, refund: 30, browses: true, pops: 12, pitch: [0.45, 0],
+    sup: { name: 'Octomom', from: 14, hp: 2.5, pops: 24 },
+  },
 };
 
 /** The finished definition of each super shopper: the normal one with `sup` applied. */
@@ -279,41 +293,34 @@ export const BOSS = {
   pepEvery: 7, pepRange: 3.5, pepHeal: 0.2,
 };
 
-/** The definition of a kind of shopper: SHOPPERS[k], SUPERS[k] if sup, or BOSS for 'boss'. */
-export const shopperDef = (k, sup = 0) => (k === 'boss' ? BOSS : sup ? SUPERS[k] : SHOPPERS[k]);
+/**
+ * The Pregnant Lady's babies: a dozen of them run out when she pops (two dozen from an Octomom).
+ * Kept out of SHOPPERS and SUPERS for the same reason as the boss: nothing that lists the kinds of
+ * shopper (the handbook, Head Office's shop, the line banks, the tests that every kind has a super)
+ * should pick them up. Nobody can choose them, Head Office cannot buy them, and they have no super
+ * version. Shoppers in the state have `k: 'baby'`; `defOf()` and `shopperDef()` give this.
+ * hp is their base patience (about an eighth of a Bargain Hunter's), grown by wave, difficulty and
+ *   the sales event's patience multiplier like everyone's.
+ * speed: the fastest thing in the store.
+ * refund: the cash one takes at a till. A baby counts as no refund toward the limit (the owner's
+ *   choice: babies are cash only), and its $5 is not scaled by TUNE.crowdScale like a real refund.
+ * No browses, no gawks, pitch [0, 0]: free samples, goods on belts, the TV Salesman and an
+ *   exhibitionist mean nothing to them. Wet floors, messes and a fallen drunk slow them like anyone.
+ */
+export const BABY = {
+  name: 'Baby', baby: true,
+  hp: 5, speed: 3.2, refund: 5, pitch: [0, 0],
+  // Each baby runs at its own share of `speed`, spread evenly between these two, so a litter
+  // strings out as it runs instead of moving as one clump. Worked out from the baby's id (see
+  // babyPace in step.js): no field in the state, no random draw.
+  paceMin: 0.85, paceMax: 1.15,
+};
+
+/** The definition of a kind of shopper: SHOPPERS[k], SUPERS[k] if sup, BOSS for 'boss', BABY for 'baby'. */
+export const shopperDef = (k, sup = 0) => (k === 'boss' ? BOSS : k === 'baby' ? BABY : sup ? SUPERS[k] : SHOPPERS[k]);
 
 /** The definition a shopper plays by: s is a shopper from the game state. */
-export const defOf = (s) => (s.k === 'boss' ? BOSS : s.sup ? SUPERS[s.k] : SHOPPERS[s.k]);
-
-/**
- * Head Office: a player who runs the shoppers instead of the store (see office.js).
- * kinds: for each kind of shopper, the first wave it can be bought for (the same wave the
- *   automatic waves first include it), a price weight for its trick, and the seconds between
- *   arrivals in a group.
- */
-export const OFFICE = {
-  share: 0.85, // his budget is this share of what the automatic wave is worth...
-  carry: 0.5, // ...plus this share of what he left unspent last wave...
-  perRefund: 5, // ...plus this much for every shopper who got a refund last wave
-  maxGroups: 24, // most groups in one plan
-  maxSize: 200, // most shoppers in one group
-  maxAt: 60, // latest a group may start arriving, in seconds after the doors open
-  kinds: {
-    hunter: { from: 1, weight: 1, gap: 0.6 },
-    dad: { from: 2, weight: 1.5, gap: 0.3 },
-    clipper: { from: 3, weight: 1, gap: 0.35 },
-    mom: { from: 3, weight: 1.3, gap: 2 },
-    teen: { from: 4, weight: 1.2, gap: 2 },
-    karen: { from: 5, weight: 1.3, gap: 3 },
-    blind: { from: 6, weight: 1.2, gap: 3 },
-    gymbro: { from: 6, weight: 1.5, gap: 3 },
-    scooter: { from: 7, weight: 1.2, gap: 2 },
-    drinker: { from: 5, weight: 1.2, gap: 4 },
-    dog: { from: 7, weight: 1.3, gap: 1.2 },
-    flasher: { from: 8, weight: 1.1, gap: 6 },
-    cosplay: { from: 9, weight: 1.4, gap: 5 },
-  },
-};
+export const defOf = (s) => shopperDef(s.k, s.sup);
 
 /**
  * Shopper states. WATCH: stopped to look at something (the salesman's television, an
@@ -326,9 +333,32 @@ export const TUNE = {
   startCash: 500, // each player's own money at the start
   joinCash: 60, // a player who joins late also gets this much per wave already played
   graceSecs: 90, // a player whose connection drops keeps his money for this many real seconds (the same at 2x and 3x speed); then it is shared out
-  refundLimit: 40, // game over when this many shoppers have reached the tills...
-  refundPerPlayer: 10, // ...plus this many for each player after the first
+  // (Halved with the crowd in 0.2.09, the owner's numbers: it was 40 plus 10.)
+  refundLimit: 20, // game over when this many shoppers have reached the tills...
+  refundPerPlayer: 5, // ...plus this many for each player after the first
   crowdPerPlayer: 0.5, // each player after the first adds this share of a solo game's shoppers
+  // Fewer, tougher shoppers (0.2.09, the owner's request: late sales events were a flood nobody
+  // could read, and he wants players to counter each kind rather than drown in all of them).
+  // Every automatic sales event sends crowdScale of the shoppers it would (each group rounded to
+  // the nearest whole number, a half rounded down, never below one, and arriving over the same
+  // length of time, so further apart). Shoppers get tougher to make up for it, but only as the
+  // game goes on: their patience is multiplied by 1 up to and including sales event patienceFrom,
+  // then by a number rising in a straight line to patienceScale at event patienceFull, and by
+  // patienceScale from then on (patienceScaleAt in step.js). Why it is phased in: early on
+  // security has time to spare between arrivals, so a shopper's fate depends on his own patience
+  // against what one walk past the towers does to him, and doubling it made the start far
+  // harder (the scripted players lost in event 4 or 5 instead of 11 to 16). Late in the game
+  // security is busy all the time, and there half the crowd with twice the patience is the same
+  // work. See PLAN.md, version 0.2.09, for the numbers tried.
+  // The boss is not scaled: he is one man, not part of the flood. A training game uses neither, so
+  // the lessons play as written. What is counted per shopper follows, so the economy stays in
+  // proportion: the cash a refund takes and Head Office's prices, bonus per refund and gaps grow by
+  // 1 / crowdScale (perHead below), and a dad's drain by the patience multiplier of the event.
+  // The owner expects to push these further after playing.
+  crowdScale: 0.5,
+  patienceScale: 2, // the full multiplier...
+  patienceFrom: 5, // ...which starts rising after this sales event...
+  patienceFull: 20, // ...and is reached at this one (and kept in an endless game)
   // From wave lateFrom on, every group grows by lateGrowth of its size per wave.
   lateFrom: 8,
   lateGrowth: 0.08,
@@ -344,7 +374,10 @@ export const TUNE = {
   bossAt: 12,
   bossCrowd: 0.6, // in his wave every other group is this share of its usual size (the owner asked for a smaller crowd, so the event is about him)
   bossTierHp: 0.5, // each tier above the first adds this share of his patience
-  bossRefunds: 5, // reaching a till, he counts as this many refunds toward the limit
+  // Reaching a till, he counts as this many refunds toward the limit. It was 5 of 40 until 0.2.09.
+  // 3 of 20 (a bigger share than before) cost the scripted players about one sales event; 2 of 20
+  // brought them back to where they were.
+  bossRefunds: 2,
   bossBounty: 150, // driving him out pays the store this much per tier (times the difficulty's pay)
   // Upgrades: each track's next level costs upGrowth times its last (unless the track has its own
   // `grow`), up to maxLevel levels per track (unless it has its own `max`). See BUILD[k].up.
@@ -425,4 +458,50 @@ export const TUNE = {
   fallChance: 0.25, // chance he falls over going round a corner
   fallSecs: 4, // how long he lies there
   fallSlow: 0.35, // speed multiplier for anyone else crossing the tile he lies on
+  // Pregnant Lady.
+  popSpread: 0.35, // her babies appear up to this far (in tiles) from where she stood, so they are not one dot
 };
+
+/**
+ * How many shoppers of the crowd before TUNE.crowdScale each shopper now stands for (2 while the
+ * crowd is halved). Whatever is paid or charged per shopper is multiplied by it, so the totals
+ * stay as they were: the cash a refund takes, Head Office's prices and his bonus per refund.
+ */
+export const perHead = () => 1 / TUNE.crowdScale;
+
+/**
+ * Head Office: a player who runs the shoppers instead of the store (see office.js).
+ * kinds: for each kind of shopper, the first wave it can be bought for (the same wave the
+ *   automatic waves first include it), a price weight for its trick, and the seconds between
+ *   arrivals in a group.
+ * perRefund and every gap are per shopper, so they are multiplied by perHead() below (once, when
+ * the game loads): with half as many shoppers, each refund is worth twice the bonus, and a group
+ * bought with the same money arrives over the same length of time.
+ */
+export const OFFICE = {
+  share: 0.85, // his budget is this share of what the automatic wave is worth...
+  carry: 0.5, // ...plus this share of what he left unspent last wave...
+  perRefund: 5, // ...plus this much (times perHead) for every shopper who got a refund last wave
+  maxGroups: 24, // most groups in one plan
+  maxSize: 200, // most shoppers in one group
+  maxAt: 60, // latest a group may start arriving, in seconds after the doors open
+  kinds: {
+    hunter: { from: 1, weight: 1, gap: 0.6 },
+    dad: { from: 2, weight: 1.5, gap: 0.3 },
+    clipper: { from: 3, weight: 1, gap: 0.35 },
+    mom: { from: 3, weight: 1.3, gap: 2 },
+    teen: { from: 4, weight: 1.2, gap: 2 },
+    karen: { from: 5, weight: 1.3, gap: 3 },
+    blind: { from: 6, weight: 1.2, gap: 3 },
+    gymbro: { from: 6, weight: 1.5, gap: 3 },
+    scooter: { from: 7, weight: 1.2, gap: 2 },
+    drinker: { from: 5, weight: 1.2, gap: 4 },
+    dog: { from: 7, weight: 1.3, gap: 1.2 },
+    flasher: { from: 8, weight: 1.1, gap: 6 },
+    // Her trick costs the store a dozen fast shoppers unless she is lasered, so she is priced high.
+    preggo: { from: 8, weight: 1.5, gap: 5 },
+    cosplay: { from: 9, weight: 1.4, gap: 5 },
+  },
+};
+OFFICE.perRefund *= perHead();
+for (const kind of Object.values(OFFICE.kinds)) kind.gap *= perHead();
