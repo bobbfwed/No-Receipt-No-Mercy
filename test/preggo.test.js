@@ -441,7 +441,7 @@ test('what is paid per shopper doubles: refunds and Head Office prices', () => {
   for (const k of Object.keys(SHOPPERS)) {
     for (const sup of [0, 1]) {
       const d = sup ? SUPERS[k] : SHOPPERS[k];
-      assert.equal(priceOf(k, sup), 2 * Math.max(1, Math.round((d.hp * d.speed * OFFICE.kinds[k].weight) / 10)), `${k} ${sup}`);
+      assert.equal(priceOf(k, sup), 2 * Math.max(1, Math.round((d.hp * d.speed * OFFICE.kinds[k].weight) / OFFICE.patiencePerDollar)), `${k} ${sup}`);
     }
     assert.equal(shopperFacts(k).refund, SHOPPERS[k].refund * 2);
   }
@@ -460,9 +460,12 @@ test('a training game is unchanged: its own waves, patience, drain and refunds',
   assert.ok(applyCommand(s, 0, { c: 'start' }).ok);
   assert.equal(s.spawnQ.length, 5, 'every shopper the lesson asked for');
   const hunter = arrive(s, 'hunter');
-  assert.equal(hunter.mhp, SHOPPERS.hunter.hp);
+  // The patience the lessons were written for: 40 and 34, the base numbers before 0.2.10 folded
+  // Normal's x0.9 into them (see TUNE.trainingPatienceDivisor).
+  assert.equal(hunter.mhp, 40);
+  assert.equal(hunter.mhp, SHOPPERS.hunter.hp / TUNE.trainingPatienceDivisor);
   const dad = arrive(s, 'dad');
-  assert.equal(dad.mhp, SHOPPERS.dad.hp);
+  assert.equal(dad.mhp, 34);
   const before = dad.hp;
   play(s, 1);
   assert.ok(Math.abs(before - dad.hp - SHOPPERS.dad.drain) < 0.01);

@@ -12,6 +12,7 @@ import {
 import { HostSession, ClientSession, checksum } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
 import { readSave } from '../src/ui/save.js';
+import { factoryFacts } from '../src/content/facts.js';
 
 // Most of these use the original small map, 30 tiles by 16: entrance on the left at rows 7-8,
 // tills on the right at rows 5-10, pillars at (8,4), (20,4), (8,11), (20,11).
@@ -64,25 +65,57 @@ function tune(t, changes, obj = TUNE) {
 
 // ---------------------------------------------------------------- difficulty
 
-test('every difficulty is 10% easier than it was: 0.9 times the patience, 1.1 times the pay', () => {
-  const was = { easy: [0.75, 1.25], normal: [1, 1], hard: [1.3, 0.85], brutal: [1.65, 0.7] };
-  for (const [k, [hp, pay]] of Object.entries(was)) {
-    assert.ok(Math.abs(SETTINGS.difficulty[k].hp - Math.round(hp * 0.9 * 100) / 100) < 1e-9, `${k} hp`);
-    assert.ok(Math.abs(SETTINGS.difficulty[k].pay - Math.round(pay * 1.1 * 100) / 100) < 1e-9, `${k} pay`);
-  }
-  assert.deepEqual(Object.values(SETTINGS.difficulty).map((d) => [d.hp, d.pay]), [[0.68, 1.38], [0.9, 1.1], [1.17, 0.94], [1.49, 0.77]]);
-  assert.notEqual(SETTINGS.difficulty.normal.note, 'As designed.');
-  // Shoppers walk in with 90% patience on Normal (the first event's patience multiplier is 1:
-  // patience is phased in from TUNE.patienceFrom, 0.2.09); training stays at full patience.
+test('Normal is the baseline, exactly x1 and x1; the other levels are round numbers relative to it', () => {
+  assert.equal(SETTINGS.difficulty.normal.hp, 1);
+  assert.equal(SETTINGS.difficulty.normal.pay, 1);
+  assert.deepEqual(Object.values(SETTINGS.difficulty).map((d) => [d.hp, d.pay]), [[0.75, 1.25], [1, 1], [1.3, 0.85], [1.65, 0.7]]);
+  // Normal's description gives no percentages.
+  assert.ok(!/%/.test(SETTINGS.difficulty.normal.note));
+  // Shoppers walk in with their base patience on Normal (the first event's patience multiplier is
+  // 1: patience is phased in from TUNE.patienceFrom, 0.2.09).
   const g = createGame({ seed: 2 });
   addPlayer(g, 'Dave');
   applyCommand(g, 0, { c: 'start' });
   let h = null;
   for (let i = 0; i < 60 && !h; i++) { step(g); h = g.shoppers[0]; }
-  assert.ok(Math.abs(h.mhp - SHOPPERS.hunter.hp * 0.9) < 1e-9);
+  assert.equal(h.mhp, SHOPPERS.hunter.hp);
+  assert.equal(h.mhp, 36, 'what a Normal game gave her before 0.2.10 too (40 x 0.9)');
+  // Training keeps the patience its lessons were written for (see TUNE.trainingPatienceDivisor).
   const s = stage();
   send(s, [{ k: 'hunter', n: 1, gap: 1, at: 0 }]);
-  assert.equal(arrival(s, 'hunter').mhp, SHOPPERS.hunter.hp);
+  assert.equal(arrival(s, 'hunter').mhp, 40);
+});
+
+test('spot check per difficulty: the patience a shopper walks in with in sales event 9, and what each kind of goods sells for', () => {
+  // Recorded with a fixed game (seed 4, a Bargain Hunter, a super Karen, a Dad and a super Pregnant
+  // Lady walking in in event 9). Normal and Hard: the figures from BEFORE 0.2.10 made Normal the
+  // baseline, unchanged. Easy and Brutal: their patience moved from x0.68 / 0.9 to x0.75 and from
+  // x1.49 / 0.9 to x1.65, under 1% (before: Easy hunter 111.077547, Brutal hunter 243.390507).
+  // Sale prices on every level are as before: Easy $3 / $10 / $22, Normal $2 / $8 / $18,
+  // Hard $2 / $7 / $15, Brutal $2 / $5 / $12 (a Mystery Box, a Gadget, a Gift Set).
+  const want = {
+    easy: { hunter: 110.2608, karen: 1874.4336, dad: 93.72168, preggo: 895.869, sells: 'Mystery Box $3, Gadget $10, Gift Set $22' },
+    normal: { hunter: 147.0144, karen: 2499.2448, dad: 124.96224, preggo: 1194.492, sells: 'Mystery Box $2, Gadget $8, Gift Set $18' },
+    hard: { hunter: 191.11872, karen: 3249.01824, dad: 162.450912, preggo: 1552.8396, sells: 'Mystery Box $2, Gadget $7, Gift Set $15' },
+    brutal: { hunter: 242.57376, karen: 4123.75392, dad: 206.187696, preggo: 1970.9118, sells: 'Mystery Box $2, Gadget $5, Gift Set $12' },
+  };
+  for (const [diff, w] of Object.entries(want)) {
+    const s = createGame({ seed: 4, settings: { difficulty: diff } });
+    addPlayer(s, 'Dave');
+    s.wave = 8;
+    place(s, 'unpacker', 3, 3, 0); place(s, 'belt', 4, 3, 0); place(s, 'chute', 5, 3);
+    applyCommand(s, 0, { c: 'start' });
+    s.spawnQ = ['hunter', 'karen', 'dad', 'preggo'].map((k, i) => [s.tick + 1 + i, k, i % 2, -1]);
+    s.shoppers = [];
+    let sale = null;
+    for (let i = 0; i < 10 * TICK_HZ && !sale; i++) for (const e of step(s)) if (e.e === 'sale') sale = e;
+    for (const k of ['hunter', 'karen', 'dad', 'preggo']) {
+      const m = s.shoppers.find((x) => x.k === k);
+      assert.ok(Math.abs(m.mhp - w[k]) < 1e-6, `${diff} ${k}: ${m.mhp} against ${w[k]}`);
+    }
+    assert.equal(`Mystery Box $${sale.v}`, w.sells.split(',')[0], `${diff}: a box sells for what it did`);
+    assert.equal(factoryFacts('chute', SETTINGS.difficulty[diff].pay).find(([label]) => label === 'Sells')[1], w.sells, diff);
+  }
 });
 
 // ---------------------------------------------------------------- buildings bigger than one tile

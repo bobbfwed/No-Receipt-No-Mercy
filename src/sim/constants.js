@@ -12,30 +12,41 @@ export const PLAYER_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d8f', '#eab3
 
 /**
  * What the host can set before a game starts (in the menu, and again in the lobby).
- * difficulty: `hp` multiplies every shopper's patience, `pay` multiplies what goods sell for
- *   and the end-of-wave bonus.
+ * difficulty: `hp` multiplies every shopper's patience (the boss's and the babies' too), `pay`
+ *   multiplies what goods sell for, the end-of-wave bonus and the boss's bounty. Normal is the
+ *   baseline, x1 and x1 by definition: every number in this file is Normal's, and the handbook and
+ *   README show them as they are.
  */
 export const SETTINGS = {
   // 0 means endless: there is no last sales event, and the game ends only when the refund limit
   // is reached (see isEndless in state.js). 0 rather than Infinity so the state stays JSON-safe.
   waves: [10, 15, 20, 30, 0],
   startCash: [300, 500, 800, 1200],
-  // Every level was made 10% easier after playtesting (patience x0.9, pay x1.1 on the old numbers).
+  // Until 0.2.10 Normal itself was x0.9 patience and x1.1 pay on the base numbers (every level had
+  // been made 10% easier after playtesting). Then Normal became the baseline: its multipliers were
+  // folded into every base number below (patience x0.9, money x1.1), so a Normal game plays exactly
+  // as before, and the other levels were given round numbers relative to it (each within 1% of its
+  // old real effect; see PLAN.md, version 0.2.10).
   difficulty: {
-    easy: { name: 'Easy', hp: 0.68, pay: 1.38, note: 'Shoppers give up much sooner and goods sell for a lot more.' },
-    normal: { name: 'Normal', hp: 0.9, pay: 1.1, note: 'Shoppers give up a little sooner and goods sell for a little more.' },
-    hard: { name: 'Hard', hp: 1.17, pay: 0.94, note: 'More patient shoppers, a bit less money.' },
-    brutal: { name: 'Brutal', hp: 1.49, pay: 0.77, note: 'For people who enjoy being told off.' },
+    easy: { name: 'Easy', hp: 0.75, pay: 1.25, note: 'Shoppers give up much sooner and goods sell for a lot more.' },
+    normal: { name: 'Normal', hp: 1, pay: 1, note: 'The standard game. Every number in the handbook is for this one.' },
+    hard: { name: 'Hard', hp: 1.3, pay: 0.85, note: 'More patient shoppers, a bit less money.' },
+    brutal: { name: 'Brutal', hp: 1.65, pay: 0.7, note: 'For people who enjoy being told off.' },
   },
   defaults: { waves: 20, startCash: 500, difficulty: 'normal' },
 };
 export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater'];
 
-/** Things that ride on belts. `value` is the cash paid when one reaches a shipping chute. */
+/**
+ * Things that ride on belts. `value` is the cash for one reaching a shipping chute, before it is
+ * rounded to whole dollars (times the difficulty's pay): on Normal a box pays $2, a gadget $8 and a
+ * gift set $18. (2, 7 and 16 times Normal's old x1.1 until 0.2.10; anything shown to a player is
+ * the rounded amount.)
+ */
 export const ITEMS = {
-  box: { name: 'Mystery Box', value: 2 },
-  gadget: { name: 'Gadget', value: 7 },
-  giftset: { name: 'Gift Set', value: 16 },
+  box: { name: 'Mystery Box', value: 2.2 },
+  gadget: { name: 'Gadget', value: 7.7 },
+  giftset: { name: 'Gift Set', value: 17.6 },
 };
 
 /**
@@ -170,79 +181,80 @@ export const BUILD = {
  */
 export const SHOPPERS = {
   hunter: {
-    name: 'Bargain Hunter', hp: 40, speed: 1.4, refund: 10, browses: true, pitch: [0.35, 0.1],
+    name: 'Bargain Hunter', hp: 36, speed: 1.4, refund: 10, browses: true, pitch: [0.35, 0.1],
     sup: { name: 'Doorbuster', from: 6, hp: 3, speed: 1.3 },
   },
   clipper: {
-    name: 'Coupon Clipper', hp: 16, speed: 1.9, refund: 5, browses: true, pitch: [0.3, 0.1],
+    name: 'Coupon Clipper', hp: 14.4, speed: 1.9, refund: 5, browses: true, pitch: [0.3, 0.1],
     sup: { name: 'Extreme Couponer', from: 8, hp: 2.5, speed: 1.6 },
   },
   // The super dad does not slip and his patience runs out half as fast.
   dad: {
-    name: 'Dad', hp: 34, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, hopsBelts: true, gawks: true, pitch: [0.2, 0.3],
+    name: 'Dad', hp: 30.6, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, hopsBelts: true, gawks: true, pitch: [0.2, 0.3],
     sup: { name: 'Dad on a Mission', from: 7, hp: 2.5, speed: 1.25, drain: 0.5, steady: true, pitch: [0.1, 0.45] },
   },
   // The super Karen slows towers twice as far away, and to a quarter speed instead of half.
   // (She stops at the salesman to argue with him, never to hurry.)
   karen: {
-    name: 'Karen', hp: 170, speed: 0.9, refund: 40, nag: true, pitch: [0.4, 0],
+    name: 'Karen', hp: 153, speed: 0.9, refund: 40, nag: true, pitch: [0.4, 0],
     sup: { name: 'Karen Supreme', from: 10, hp: 4, nagRange: 5, nagRate: 0.25 },
   },
   scooter: {
-    name: 'Mobility Scooter', hp: 95, speed: 1.2, refund: 20, steady: true, pitch: [0.8, 0],
+    name: 'Mobility Scooter', hp: 85.5, speed: 1.2, refund: 20, steady: true, pitch: [0.8, 0],
     sup: { name: 'Turbo Scooter', from: 13, hp: 2.5, speed: 1.8 },
   },
   // messy: drops a mess every few seconds that slows everyone else (and can make a dad slip).
   // The super one drops three times as many and they last twice as long.
   teen: {
-    name: 'Teenager', hp: 45, speed: 1.15, refund: 12, messy: true, gawks: true, pitch: [0.05, 0.25],
+    name: 'Teenager', hp: 40.5, speed: 1.15, refund: 12, messy: true, gawks: true, pitch: [0.05, 0.25],
     sup: { name: 'Teen Influencer', from: 11, hp: 2, messEvery: 1.6, messSecs: 24 },
   },
   // kid: once, the child escapes and runs ahead, straight through everything; she sprints round
-  // the maze after him, past the samples. The super one (twice) sprints three times as fast after
-  // a child who escapes sooner and runs twice as far.
+  // the maze after him, past the samples. The super one (twice) sprints twice as fast as an
+  // ordinary mom after a child who escapes sooner and runs twice as far. (Her chaseSpeed is twice
+  // TUNE.chaseSpeed; it was three times until 0.2.10, when the owner found it far too fast.)
   mom: {
-    name: 'Mom and Kid', hp: 55, speed: 1.3, refund: 20, browses: true, kid: true, pitch: [0.3, 0.15],
-    sup: { name: 'Soccer Mom', from: 9, hp: 2, chaseSpeed: 7.125, kidChance: 0.45, kidSpeed: 9, kidMin: 12, kidMax: 34, kidRest: 2, kidRuns: 2, crawlTimes: 2 },
+    name: 'Mom and Kid', hp: 49.5, speed: 1.3, refund: 20, browses: true, kid: true, pitch: [0.3, 0.15],
+    sup: { name: 'Soccer Mom', from: 9, hp: 2, chaseSpeed: 4.75, kidChance: 0.45, kidSpeed: 9, kidMin: 12, kidMax: 34, kidRest: 2, kidRuns: 2, crawlTimes: 2 },
   },
   // bolts: pepper spray makes the guide dog bolt, dragging him along fast for a moment. The dog
   // also steers him around puddles and messes (steady), and he cannot see free samples, or the
   // salesman's television.
   // The super one's dogs bolt from forklift and barcode laser hits too, for longer and faster.
   blind: {
-    name: 'Man with Guide Dog', hp: 70, speed: 1.1, refund: 20, steady: true, bolts: true, pitch: [0, 0],
+    name: 'Man with Guide Dog', hp: 63, speed: 1.1, refund: 20, steady: true, bolts: true, pitch: [0, 0],
     sup: { name: 'Man with Two Guide Dogs', from: 14, hp: 2.5, boltSecs: 3.2, boltSpeed: 3.2, boltsOnAny: true },
   },
   // smashes: walks straight through crate stacks (stopping to hit one that is still standing),
   // hits any crate stack he passes, and now and then something else next to him. The super one
   // hits more, more often.
   gymbro: {
-    name: 'Gym Bro', hp: 85, speed: 1.5, refund: 30, smashes: true, pitch: [0.3, 0.1],
+    name: 'Gym Bro', hp: 76.5, speed: 1.5, refund: 30, smashes: true, pitch: [0.3, 0.1],
     sup: { name: 'Roid Rager', from: 12, hp: 2.5, speed: 1.2, smashEvery: 0.9, smashOther: 0.4 },
   },
   // sways: his speed changes every couple of seconds, and going round a corner he may fall over and
   // lie there, which slows everyone else crossing that tile. The super one falls more often and
   // stays down longer.
   drinker: {
-    name: 'Day Drinker', hp: 50, speed: 1.3, refund: 15, sways: true, pitch: [0.35, 0.15],
+    name: 'Day Drinker', hp: 45, speed: 1.3, refund: 15, sways: true, pitch: [0.35, 0.15],
     sup: { name: 'Bottomless Bruncher', from: 12, hp: 2.5, speed: 1.1, fallChance: 0.5, fallSecs: 6, swayMax: 2.2 },
   },
   // pees: stops to pee on security it passes (not wet floor signs), which switches it off for a
   // while. The super one switches it off for twice as long, from further away, more often.
   dog: {
-    name: 'Stray Dog', hp: 22, speed: 2.6, refund: 5, pees: true, pitch: [0.1, 0.5],
+    name: 'Stray Dog', hp: 19.8, speed: 2.6, refund: 5, pees: true, pitch: [0.1, 0.5],
     sup: { name: 'Great Dane', from: 13, hp: 2.5, speed: 1.15, peeSecs: 12, peeRange: 2.2, peeCool: 5 },
   },
   // flashes: every few seconds she opens her bathrobe; dads and teenagers nearby stop and stare.
   // The super one does it twice as often, to a bigger audience, who stare for longer.
   flasher: {
-    name: 'Exhibitionist', hp: 60, speed: 1, refund: 15, flashes: true, pitch: [0.2, 0.2],
+    name: 'Exhibitionist', hp: 54, speed: 1, refund: 15, flashes: true, pitch: [0.2, 0.2],
     sup: { name: 'Nudist Nan', from: 14, hp: 2.5, flashEvery: 3, flashRange: 4, gawkSecs: 3 },
   },
   // shields: his costume is so big that shots meant for anyone close to him hit him instead.
   // The super one shields from further away, and takes only half the damage of what he soaks up.
   cosplay: {
-    name: 'Cosplayer', hp: 150, speed: 1.25, refund: 30, shields: true, pitch: [0.3, 0.1],
+    name: 'Cosplayer', hp: 135, speed: 1.25, refund: 30, shields: true, pitch: [0.3, 0.1],
     sup: { name: 'Full Mech Suit', from: 15, hp: 2.5, shield: 1.6, soak: 0.5 },
   },
   // pops: when her patience runs out she does not storm off, she pops, and this many babies (BABY
@@ -252,7 +264,7 @@ export const SHOPPERS = {
   // grabs goods off belts (nesting), and the TV Salesman's barbecues stop her often; she cannot
   // hurry. Octomom: two dozen.
   preggo: {
-    name: 'Pregnant Lady', hp: 130, speed: 0.85, refund: 30, browses: true, pops: 12, pitch: [0.45, 0],
+    name: 'Pregnant Lady', hp: 117, speed: 0.85, refund: 30, browses: true, pops: 12, pitch: [0.45, 0],
     sup: { name: 'Octomom', from: 14, hp: 2.5, pops: 24 },
   },
 };
@@ -284,12 +296,12 @@ export const BOSS = {
   name: 'Regional Manager',
   titles: ['Regional Manager', 'Area Director', 'Vice President of Returns', 'The CEO'],
   boss: true,
-  // hp 320 (eight Bargain Hunters) with only 60% of the usual crowd round him (TUNE.bossCrowd):
+  // hp 288 (eight Bargain Hunters; 320 before 0.2.10 made Normal the baseline, the same in play) with only 60% of the usual crowd round him (TUNE.bossCrowd):
   // the owner's choice, to make the event about him. With the first tuning (160 and 75%) the
   // scripted players in tools/balance.mjs only just drove him out; with this one they still do,
   // because the smaller crowd lets security reach him sooner. Towers shoot whoever is nearest
   // the tills, so a slow man at the back of a big crowd is hit late.
-  hp: 320, speed: 0.8, refund: 150, steady: true, pitch: [0, 0],
+  hp: 288, speed: 0.8, refund: 150, steady: true, pitch: [0, 0],
   pepEvery: 7, pepRange: 3.5, pepHeal: 0.2,
 };
 
@@ -309,7 +321,7 @@ export const BOSS = {
  */
 export const BABY = {
   name: 'Baby', baby: true,
-  hp: 5, speed: 3.2, refund: 5, pitch: [0, 0],
+  hp: 4.5, speed: 3.2, refund: 5, pitch: [0, 0],
   // Each baby runs at its own share of `speed`, spread evenly between these two, so a litter
   // strings out as it runs instead of moving as one clump. Worked out from the baby's id (see
   // babyPace in step.js): no field in the state, no random draw.
@@ -378,7 +390,7 @@ export const TUNE = {
   // 3 of 20 (a bigger share than before) cost the scripted players about one sales event; 2 of 20
   // brought them back to where they were.
   bossRefunds: 2,
-  bossBounty: 150, // driving him out pays the store this much per tier (times the difficulty's pay)
+  bossBounty: 165, // driving him out pays the store this much per tier (times the difficulty's pay, rounded; 150 times Normal's old x1.1 until 0.2.10)
   // Upgrades: each track's next level costs upGrowth times its last (unless the track has its own
   // `grow`), up to maxLevel levels per track (unless it has its own `max`). See BUILD[k].up.
   upGrowth: 1.6,
@@ -393,8 +405,9 @@ export const TUNE = {
   // gentle early, steep late.
   hpGrowth: 0.15,
   hpGrowth2: 0.016,
-  waveBonus: 80, // cash for finishing a wave...
-  waveBonusStep: 15, // ...plus this much per wave number
+  // (80 and 15 times Normal's old x1.1 pay until 0.2.10: the same money on Normal.)
+  waveBonus: 88, // cash for finishing a wave (times the difficulty's pay, rounded)...
+  waveBonusStep: 16.5, // ...plus this much per wave number
   wetSlow: 0.5, // speed multiplier on a wet floor tile
   slipChance: 0.35, // chance a dad slips when stepping onto a wet floor tile
   slipSecs: 1.5,
@@ -458,6 +471,11 @@ export const TUNE = {
   fallChance: 0.25, // chance he falls over going round a corner
   fallSecs: 4, // how long he lies there
   fallSlow: 0.35, // speed multiplier for anyone else crossing the tile he lies on
+  // Training shift: a lesson's shoppers walk in with base patience divided by this. The lessons
+  // were written (and their test plays them) for the base numbers as they were before 0.2.10,
+  // when Normal's x0.9 was not yet folded into them; dividing it back out keeps every lesson
+  // exactly as it was. (A training game uses no difficulty and no patience multiplier.)
+  trainingPatienceDivisor: 0.9,
   // Pregnant Lady.
   popSpread: 0.35, // her babies appear up to this far (in tiles) from where she stood, so they are not one dot
 };
@@ -485,6 +503,10 @@ export const OFFICE = {
   maxGroups: 24, // most groups in one plan
   maxSize: 200, // most shoppers in one group
   maxAt: 60, // latest a group may start arriving, in seconds after the doors open
+  // A shopper's price is his patience x speed x his kind's weight, divided by this (then times
+  // perHead). It was 10 until 0.2.10; patience then became Normal's (x0.9), and 9 keeps every
+  // price exactly as it was.
+  patiencePerDollar: 9,
   kinds: {
     hunter: { from: 1, weight: 1, gap: 0.6 },
     dad: { from: 2, weight: 1.5, gap: 0.3 },

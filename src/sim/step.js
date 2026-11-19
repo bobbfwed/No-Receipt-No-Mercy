@@ -50,8 +50,9 @@ export function patienceScaleAt(n) {
  * lessons play as written.
  */
 export function patienceFor(state, def) {
-  const mul = state.training ? 1 : difficultyOf(state).hp * patienceScaleAt(state.wave);
-  return def.hp * patienceGrowth(state.wave) * mul;
+  // (A lesson's shopper: see TUNE.trainingPatienceDivisor.)
+  if (state.training) return (def.hp / TUNE.trainingPatienceDivisor) * patienceGrowth(state.wave);
+  return def.hp * patienceGrowth(state.wave) * (difficultyOf(state).hp * patienceScaleAt(state.wave));
 }
 
 /**
@@ -251,7 +252,7 @@ function spawn(state, ev) {
     // same way every time.
     const single = k === 'dad' || state.training;
     // (The boss is not one of the flood: the patience multiplier, patienceScaleAt, is not for him.)
-    const hp = def.boss ? bossPatience(state.wave, state.training ? 1 : difficultyOf(state).hp) : patienceFor(state, def);
+    const hp = def.boss ? bossPatience(state.wave, state.training ? 1 / TUNE.trainingPatienceDivisor : difficultyOf(state).hp) : patienceFor(state, def);
     const s = {
       id: state.nextId++, k,
       x: (door % W) + 0.5, y: ((door / W) | 0) + 0.5, vx: 0, vy: 0,

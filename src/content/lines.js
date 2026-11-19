@@ -455,7 +455,7 @@ export const LINES = {
     press: [
       '{p} bought a Press. Expensive, loud, and it will take ages to pay for itself. A bit like a son.',
       u("{p} has a Press. It crushes things flat under enormous pressure. {p} knows the feeling. He's met his mother-in-law."),
-      r("{p} bought a Press. It takes forty-four Gadgets to pay for itself. He's done the math. He did it wrong, but he did it."),
+      r("{p} bought a Press. It takes thirty-seven Gadgets to pay for itself. He's done the math. He did it wrong, but he did it."),
     ],
     chute: [
       "{p} built a shipping chute. Things go in, money comes out. It's the only hole in this building that pays.",
@@ -967,7 +967,7 @@ export const SUPER_INTRO = {
   hunter: 'New and worse: the Doorbuster. A Bargain Hunter with three times the patience. She camped outside since Tuesday. She has nothing to go home to. You two should talk.',
   dad: "New and worse: Dad on a Mission. Faster, far more patient, and he does not slip. He has the receipt, the box and a tee time. God help you.",
   clipper: 'New and worse: the Extreme Couponer. Faster, tougher, and she has a binder. Nobody with a binder has ever been reasoned with.',
-  mom: 'New and worse: the Soccer Mom. Her kid gets away twice, and she chases him three times as fast. Nothing in this building moves like a woman late for practice.',
+  mom: 'New and worse: the Soccer Mom. Her kid gets away twice, and she chases him twice as fast. Nothing in this building moves like a woman late for practice.',
   karen: 'New and worse: Karen Supreme. Four times the patience, and security slows to a crawl twice as far away. She does not want the manager. She wants the owner. And his mother.',
   teen: 'New and worse: the Teen Influencer. Three times the mess and he is filming it. Smile, {p}, you are content now.',
   gymbro: "New and worse: the Roid Rager. He wrecks nearly everything he passes. It isn't anger, he says. It's 'pre-workout'.",

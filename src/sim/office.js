@@ -27,7 +27,7 @@ import { waveSpec } from './step.js';
 export function priceOf(k, sup = 0) {
   const def = sup ? SUPERS[k] : SHOPPERS[k];
   // (The old price, rounded, then scaled: so a super stays at least twice the ordinary one.)
-  const each = Math.max(1, Math.round((def.hp * def.speed * OFFICE.kinds[k].weight) / 10));
+  const each = Math.max(1, Math.round((def.hp * def.speed * OFFICE.kinds[k].weight) / OFFICE.patiencePerDollar));
   return Math.round(each * perHead());
 }
 

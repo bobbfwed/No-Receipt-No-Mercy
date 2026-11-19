@@ -19,7 +19,8 @@
     view and never build, even with a building held, even when the second finger lands late;
     a tap builds; a drag lays a belt line facing the way it was dragged; the rotate button turns
     what is held, and a tapped building; tapping a building opens its sheet, whose buttons
-    upgrade and remove; the Upgrade tool upgrades with a tap; the Remove tool removes with a drag;
+    upgrade and remove; the Upgrade tool upgrades with a tap; the Remove tool removes with a drag, and with a tap
+    (a one-tile building, and a bigger one tapped off its top-left tile) without an error banner;
     tapping the held tool's button again puts it down, as does the put-down button; the map and
     home buttons move the view.
   Open it at phone size with touch emulation, and read the results from the page:
@@ -259,6 +260,28 @@
     if (count() !== n0 - inRow) log(`before: ${before}\nafter: ${list()}`, true);
     check('a drag with the Remove tool removes everything along it, and nothing else', [0, 1, 2, 3, 4].every((i) => !b(run5.x + i, run5.y)) && count() === n0 - inRow,
       `${n0} -> ${count()} buildings; row: ${[0, 1, 2, 3, 4].map((i) => b(run5.x + i, run5.y)?.k || '-').join(',')}`);
+
+    // 11b. The Remove tool removes with a single tap too: a one-tile building, and a bigger one
+    // tapped on a tile that is not its top-left. (Until 0.2.09 a tap threw an error instead, which
+    // the page showed as a red banner across the top, and nothing was removed.)
+    const errRows = () => [...doc.querySelectorAll('.err-banner .err-row code')].map((c) => c.textContent);
+    const errs0 = errRows().length;
+    s().players[me].cash += 3000;
+    const [wf] = freeTiles('wetfloor', 1);
+    session.send({ c: 'place', k: 'wetfloor', x: wf.x, y: wf.y, d: 0 });
+    const [ts] = freeTiles('salesman', 1).filter((t) => t.x !== wf.x || t.y !== wf.y);
+    session.send({ c: 'place', k: 'salesman', x: ts.x, y: ts.y, d: 0 });
+    await wait(80);
+    check('(set-up) a wet floor sign and a TV Salesman to remove', b(wf.x, wf.y)?.k === 'wetfloor' && b(ts.x, ts.y)?.k === 'salesman');
+    // The Remove tool is still held from the drag above.
+    await tap(at(wf.x, wf.y));
+    await wait(80);
+    check('a tap with the Remove tool removes a one-tile building', !b(wf.x, wf.y), `at ${wf.x},${wf.y}: ${b(wf.x, wf.y)?.k || 'gone'}`);
+    await tap(at(ts.x + 1, ts.y + 1));
+    await wait(80);
+    check('... and a TV Salesman tapped on its bottom-right tile, all of it', [0, 1].every((dx) => [0, 1].every((dy) => !b(ts.x + dx, ts.y + dy))),
+      `${b(ts.x, ts.y)?.k || 'gone'}`);
+    check('... without an error banner', errRows().length === errs0, errRows().join(' | '));
     click(doc.querySelector('.tc-drop'));
 
     // 12. The camera buttons.
