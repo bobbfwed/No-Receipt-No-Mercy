@@ -101,9 +101,11 @@ test('the boss comes on waves 5, 10, 15 ... only, at the right tier, about 12 se
     assert.equal(boss.tr, tier);
     assert.equal(came.tier, tier);
     assert.equal(s.tiles[(came.y | 0) * s.w + (came.x | 0)], 'D', 'through an entrance');
-    // His patience: grown by wave and difficulty like everyone's, and by half again for each tier.
-    const want = BOSS.hp * patienceGrowth(n) * 0.9 * (1 + 0.5 * (tier - 1));
-    assert.ok(Math.abs(boss.mhp - want) < 1e-6 && Math.abs(bossPatience(n, 0.9) - want) < 1e-6);
+    // His patience: grown by wave like everyone's (Normal is x1), and by half again for each tier.
+    const want = BOSS.hp * patienceGrowth(n) * (1 + 0.5 * (tier - 1));
+    assert.ok(Math.abs(boss.mhp - want) < 1e-6 && Math.abs(bossPatience(n, 1) - want) < 1e-6);
+    // The same as before 0.2.10, when his base was 320 and Normal was x0.9.
+    assert.ok(Math.abs(boss.mhp - 320 * 0.9 * patienceGrowth(n) * (1 + 0.5 * (tier - 1))) < 1e-6);
   }
 
   // Never in training, whatever is queued.
@@ -262,7 +264,8 @@ test('driving the boss out pays a bounty, shared like any income, and says so', 
     return false;
   });
   assert.ok(out, 'he stormed off');
-  const bounty = Math.round(TUNE.bossBounty * 2 * 1.1);
+  const bounty = Math.round(TUNE.bossBounty * 2);
+  assert.equal(bounty, 330, 'on Normal, what a tier-2 bounty paid before 0.2.10 (150 x 2 x 1.1)');
   const i = out.findIndex((e) => e.e === 'left');
   assert.ok(i >= 0 && out[i].k === 'boss' && out[i].by === 0);
   assert.deepEqual(out[i + 1], { e: 'bossOut', tier: 2, x: boss.x, y: boss.y, bounty }, 'the usual "left", then the bounty');

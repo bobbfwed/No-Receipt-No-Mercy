@@ -217,10 +217,11 @@ test('sales, wave bonuses and refunds are split evenly between the players', () 
   place(s, 'belt', 4, 3, 0);
   place(s, 'chute', 5, 3);
   const before = s.players.map((p) => p.cash);
-  let sales = 0;
-  for (let i = 0; i < 20 * TICK_HZ; i++) sales += step(s).filter((e) => e.e === 'sale').length;
+  let sales = 0, paid = 0;
+  for (let i = 0; i < 20 * TICK_HZ; i++) for (const e of step(s)) if (e.e === 'sale') { sales++; paid += e.v; }
   assert.ok(sales >= 5);
-  const share = (sales * ITEMS.box.value) / 3;
+  assert.equal(paid, sales * 2, 'a box pays $2 on Normal');
+  const share = paid / 3;
   for (const p of s.players) assert.ok(Math.abs(p.cash - before[p.id] - share) < 0.01, `${p.name} got a third`);
 
   // A wave with no defence: every refund is split three ways, and the bonus is paid to each.
@@ -248,7 +249,7 @@ test('sales, wave bonuses and refunds are split evenly between the players', () 
   let more = 0;
   for (let i = 0; i < 10 * TICK_HZ; i++) more += step(s).filter((e) => e.e === 'sale').length;
   assert.equal(s.players[2].cash, gaz);
-  assert.ok(Math.abs(s.players[0].cash - dave - (more * ITEMS.box.value) / 2) < 0.01);
+  assert.ok(Math.abs(s.players[0].cash - dave - (more * 2) / 2) < 0.01, 'a box pays $2 on Normal, split two ways');
 });
 
 test('a player can give money to another, but not more than he has', () => {
@@ -364,7 +365,9 @@ test('every shopper has a super version at least twice as strong', () => {
     assert.notEqual(sup.name, def.name);
   }
   assert.equal(SUPERS.karen.hp, SHOPPERS.karen.hp * 4, 'a super Karen has four times the patience');
-  assert.ok(Math.abs(SUPERS.mom.chaseSpeed - TUNE.chaseSpeed * 3) < 1e-9, 'a super mom chases three times as fast');
+  // (Three times until 0.2.10; the owner found it far too fast.)
+  assert.equal(SUPERS.mom.chaseSpeed, TUNE.chaseSpeed * 2, 'a super mom chases exactly twice as fast as an ordinary one');
+  assert.equal(SHOPPERS.mom.chaseSpeed, undefined, 'the ordinary mom uses TUNE.chaseSpeed');
   assert.ok(SUPERS.mom.kidMin >= TUNE.kidMin * 2 && SUPERS.mom.kidMax >= TUNE.kidMax * 2, 'and her kid runs twice as far');
 });
 
@@ -712,8 +715,9 @@ test('a production line across the marked floor needs belts, and sells at full p
   const sales = [];
   for (let i = 0; i < 60 * TICK_HZ; i++) sales.push(...step(s).filter((e) => e.e === 'sale'));
   assert.ok(sales.length >= 5);
-  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === Math.round(16 * SETTINGS.difficulty.normal.pay)));
-  assert.equal(ITEMS.gadget.value, 7);
+  // $18 on Normal, as before 0.2.10 (16 x 1.1, rounded); now the base is 17.6 and Normal is x1.
+  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === 18 && e.v === Math.round(ITEMS.giftset.value * SETTINGS.difficulty.normal.pay)));
+  assert.equal(SETTINGS.difficulty.normal.pay, 1);
 });
 
 test('the Press and the Packer are a serious purchase', () => {

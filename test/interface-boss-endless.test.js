@@ -25,9 +25,10 @@ test('an endless game reads sensibly: no "of 0", and sample sales events that go
   assert.equal(eventOf(7, 20), '7 / 20');
   assert.equal(eventOf(7, 0), '7');
   assert.deepEqual(sampleWaves(0), [1, 5, 10, 20, 30, 40]);
-  assert.deepEqual(sampleWaves(20), [1, 5, 10, 15, 20], 'other lengths as before');
-  assert.deepEqual(bossWaves(20), [5, 10, 15, 20]);
-  assert.deepEqual(bossWaves(10), [5, 10]);
+  // Since 0.2.10 every finite game's handbook goes up to the longest game on offer (30).
+  assert.deepEqual(sampleWaves(20), [1, 5, 10, 15, 20, 25, 30]);
+  assert.deepEqual(bossWaves(20), [5, 10, 15, 20, 25, 30]);
+  assert.deepEqual(bossWaves(10), [5, 10, 15, 20, 25, 30]);
   assert.deepEqual(bossWaves(0), [5, 10, 15, 20, 25, 30, 40, 50]);
   for (const n of bossWaves(0)) assert.ok(bossTier(n) > 0, `${n} is a boss event`);
 });
@@ -40,7 +41,7 @@ test('the boss facts are the rules\' own numbers', () => {
   assert.deepEqual(f.titles.map((t) => t.from), [5, 10, 15, 20]);
   assert.equal(f.refunds, TUNE.bossRefunds);
   assert.equal(f.speed, BOSS.speed);
-  assert.deepEqual(f.waves.map((w) => w.n), [5, 10, 15, 20]);
+  assert.deepEqual(f.waves.map((w) => w.n), [5, 10, 15, 20, 25, 30], 'up to the longest game on offer, whatever this one\'s length');
   for (const w of f.waves) {
     assert.equal(w.hp, bossPatience(w.n, hard.hp));
     assert.equal(w.title, bossTitle(bossTier(w.n)));

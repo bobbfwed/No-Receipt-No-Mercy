@@ -60,25 +60,39 @@ export const lengthText = (waves) => (waves > 0 ? `${waves} sales events` : 'End
 /** "7 / 20", or just "7" in an endless game, which has no last sales event to count towards. */
 export const eventOf = (n, waves) => (waves > 0 ? `${n} / ${waves}` : `${n}`);
 
-/** The waves shown for an endless game (waves 0), which has no last one to stop at. */
-export const ENDLESS_SAMPLE = [1, 5, 10, 20, 30, 40];
+/**
+ * The longest game the length drop-down offers (the biggest of SETTINGS.waves; 0 there means
+ * endless). The handbook's tables go this far whatever the length of the game it is opened in,
+ * so they follow if the list changes.
+ */
+export const LONGEST = Math.max(...SETTINGS.waves.filter((n) => n > 0));
 
-/** The waves worth showing in a table for a game of `waves` waves: 1, 5, 10 ... and the last. */
+/** The waves shown for an endless game (waves 0), which has no last one to stop at: 1, 5, then every tenth to past the longest game. */
+export const ENDLESS_SAMPLE = [1, 5];
+for (let n = 10; n <= LONGEST + 10; n += 10) ENDLESS_SAMPLE.push(n);
+
+/**
+ * The waves worth showing in a table: 1, 5, 10 ... up to the longest game on offer (LONGEST), for
+ * a game of any length; further for an endless game (waves 0).
+ */
 export function sampleWaves(waves = SETTINGS.defaults.waves) {
   if (!(waves > 0)) return [...ENDLESS_SAMPLE];
   const out = [1];
-  for (let n = 5; n < waves; n += 5) out.push(n);
-  out.push(waves);
+  for (let n = 5; n < LONGEST; n += 5) out.push(n);
+  out.push(LONGEST);
   return out;
 }
 
-/** The boss waves worth showing for a game of `waves` waves (0: endless, where they go on). */
+/**
+ * The boss waves worth showing: every one up to the longest game on offer (LONGEST), for a game
+ * of any length; for an endless game (waves 0), on past it.
+ */
 export function bossWaves(waves = SETTINGS.defaults.waves) {
   const out = [];
-  const last = waves > 0 ? waves : 50;
+  const last = waves > 0 ? LONGEST : LONGEST + 20;
   for (let n = TUNE.bossEvery; n <= last; n += TUNE.bossEvery) {
-    // An endless table would get too wide: after 30, every tenth.
-    if (!(waves > 0) && n > 30 && n % 10) continue;
+    // An endless table would get too wide: past the longest game, every tenth.
+    if (!(waves > 0) && n > LONGEST && n % 10) continue;
     out.push(n);
   }
   return out;
@@ -164,7 +178,7 @@ export function shopperTraits(k, sup = 0) {
 
 /**
  * The main numbers for a shopper kind, normal and super, as they are in an ordinary game: hp is
- * the patience in the first sales event at x1 difficulty (that event's patience multiplier
+ * the patience in the first sales event at Normal difficulty (x1) (that event's patience multiplier
  * included; see patienceAt for any other event), refund the cash taken at a till (perHead included).
  */
 export function shopperFacts(k) {

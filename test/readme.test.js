@@ -11,7 +11,7 @@ import {
 } from '../src/sim/index.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, firstWave, countIn,
-  sampleWaves, levelRows, trackRows, factoryFacts,
+  sampleWaves, bossWaves, LONGEST, levelRows, trackRows, factoryFacts,
 } from '../src/content/facts.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP } from '../src/content/help.js';
 
@@ -47,8 +47,21 @@ test('the handbook covers every shopper and building', () => {
     assert.ok(shopperTraits(k, 0).some(([label]) => label === 'TV Salesman'), `${k}: what the salesman does to him`);
   }
   for (const k of FACTORY_ORDER) assert.ok(factoryFacts(k).length >= 3);
-  assert.deepEqual(sampleWaves(20), [1, 5, 10, 15, 20]);
-  assert.deepEqual(sampleWaves(10), [1, 5, 10]);
+  // Every game length shows up to the longest the length drop-down offers (taken from SETTINGS);
+  // an endless game goes further.
+  const longest = Math.max(...SETTINGS.waves.filter((n) => n > 0));
+  assert.equal(LONGEST, longest);
+  for (const waves of SETTINGS.waves) {
+    const sample = sampleWaves(waves);
+    if (waves > 0) {
+      assert.equal(sample[sample.length - 1], longest, `a ${waves}-event game's handbook reaches event ${longest}`);
+      assert.equal(bossWaves(waves).at(-1), Math.floor(longest / TUNE.bossEvery) * TUNE.bossEvery);
+    } else {
+      assert.ok(sample.at(-1) > longest && bossWaves(waves).at(-1) > longest, 'an endless game goes further');
+    }
+    assert.ok(sample.length <= 7, 'the table stays readable');
+  }
+  assert.deepEqual(sampleWaves(10), [1, 5, 10, 15, 20, 25, 30]);
   assert.deepEqual(sampleWaves(30), [1, 5, 10, 15, 20, 25, 30]);
   assert.deepEqual(sampleWaves(0), [1, 5, 10, 20, 30, 40], 'an endless game has no last one to stop at');
 });

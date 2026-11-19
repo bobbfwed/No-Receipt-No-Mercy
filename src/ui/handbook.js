@@ -7,7 +7,7 @@ import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, track
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt,
+  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST,
 } from '../content/facts.js';
 import { trackName } from './upgradetext.js';
 import { worded } from '../content/touch.js';
@@ -65,10 +65,15 @@ function shopperCard(k, ctx) {
   const dash = '–';
   const rows = [
     ['Patience', ...waves.map((n) => (n >= f.first ? fmt(patienceAt(k, 0, n, ctx.hp)) : dash))],
-    [`Patience, ${f.superName}`, ...waves.map((n) => (n >= f.superFrom ? fmt(patienceAt(k, 1, n, ctx.hp)) : dash))],
-    [`How many${ctx.players > 1 ? ` (${ctx.players} players)` : ''}`, ...waves.map((n) => {
+    // (Not "Patience, Man with Two Guide Dogs": the super's name is in his section just below, and
+    // a short label leaves room on a phone for every sample event.)
+    ['Patience, super', ...waves.map((n) => (n >= f.superFrom ? fmt(patienceAt(k, 1, n, ctx.hp)) : dash))],
+    // (How many, and how many of those are super, on rows of their own: one short number a cell
+    // keeps the table narrow enough for every sample event up to the longest game.)
+    [`How many${ctx.players > 1 ? ` (${ctx.players} players)` : ''}`, ...waves.map((n) => String(countIn(k, n, ctx.players).all || dash))],
+    ['Of them, super', ...waves.map((n) => {
       const c = countIn(k, n, ctx.players);
-      return c.all ? `${c.all}${c.sup ? ` (${c.sup} super)` : ''}` : dash;
+      return c.all && n >= f.superFrom ? String(c.sup) : dash;
     })],
   ];
   // Only the traits the super version changes.
@@ -81,7 +86,7 @@ function shopperCard(k, ctx) {
     h('p', null, help.trick),
     h('p', { class: 'hb-beat' }, h('b', null, 'Beat it with: '), help.beat),
     facts(shopperTraits(k, 0)),
-    h('h4', null, 'Through the game'),
+    h('h4', null, ctx.waves > 0 ? `Sales event by sales event, up to ${LONGEST} (the longest game)` : 'Sales event by sales event, in an endless game'),
     table('hb-waves', ['Sales event', ...waves.map(String)], rows),
     h('section', { class: 'hb-super' },
       h('header', { class: 'hb-head' }, shopperPortrait(k, { sup: true }),
@@ -99,10 +104,12 @@ function shopperCard(k, ctx) {
 function bossCard(ctx) {
   const b = bossFacts({ hpMul: ctx.hp, pay: ctx.pay, waves: ctx.waves });
   const pct0 = (m) => `${Math.round(m * 100)}%`;
+  // A title a word to a line ("Vice President / of / Returns"), so six of them fit a phone.
+  const stacked = (title) => title.split(' ').flatMap((word, i) => (i ? [h('br'), word] : [word]));
   const rows = [
-    ['Title', ...b.waves.map((w) => w.title)],
+    ['Title', ...b.waves.map((w) => stacked(w.title))],
     ['Patience', ...b.waves.map((w) => fmt(w.hp))],
-    ['Refund if he gets through', ...b.waves.map((w) => money(w.refund))],
+    ['Refund at a till', ...b.waves.map((w) => money(w.refund))],
     [`Bounty${ctx.players > 1 ? ' (split)' : ''}`, ...b.waves.map((w) => money(w.bounty))],
   ];
   return h('article', { class: 'hb-card hb-wide hb-boss' },
@@ -124,7 +131,7 @@ function bossCard(ctx) {
       ['The rest of the crowd', `${pct0(b.crowd)} of its usual size in a boss event`],
       ['Head Office', 'cannot buy him, and cannot stop him coming'],
     ]),
-    h('h4', null, ctx.waves > 0 ? 'Every boss event in this game' : 'Boss events in an endless game'),
+    h('h4', null, ctx.waves > 0 ? `Every boss event up to ${LONGEST} (the longest game)` : 'Boss events in an endless game'),
     table('hb-waves', ['Sales event', ...b.waves.map((w) => String(w.n))], rows));
 }
 
@@ -180,7 +187,8 @@ export function handbook({ state = null, onClose }) {
   const ctx = {
     waves: state ? state.waves : SETTINGS.defaults.waves,
     players: state ? shareCount(state) : 1,
-    hp: state && state.training ? 1 : diff.hp, pay: diff.pay, name: diff.name,
+    // (A training game's shoppers: see TUNE.trainingPatienceDivisor.)
+    hp: state && state.training ? 1 / TUNE.trainingPatienceDivisor : diff.hp, pay: diff.pay, name: diff.name,
   };
   const close = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: onClose }, 'Close');
   const body = h('div', { class: 'hb-body' });
@@ -193,7 +201,8 @@ export function handbook({ state = null, onClose }) {
     if (id === 'shoppers') {
       note.textContent = `Numbers are for ${game}: ${ctx.name} difficulty, ${lengthText(ctx.waves).toLowerCase()}, ${ctx.players} player${ctx.players > 1 ? 's' : ''}. `
         + `Half as many shoppers come as used to, and they get tougher faster as the sales events go on: up to double the patience by event ${TUNE.patienceFull}. `
-        + `Every shopper's patience grows each sales event: ×${fmt(toughnessAt(2))} in the second, ×${fmt(toughnessAt(10))} by the tenth, ×${fmt(toughnessAt(20))} by the twentieth${ctx.waves > 0 ? '' : `, ×${fmt(toughnessAt(40))} by the fortieth`}. Speed and refunds never change. A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone.`;
+        + `Every shopper's patience grows each sales event: ×${fmt(toughnessAt(2))} in the second, ×${fmt(toughnessAt(10))} by the tenth, ×${fmt(toughnessAt(20))} by the twentieth, ×${fmt(toughnessAt(LONGEST))} by event ${LONGEST}${ctx.waves > 0 ? '' : `, ×${fmt(toughnessAt(LONGEST + 10))} by event ${LONGEST + 10}`}. `
+        + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds never change. A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone.`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
       note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price; everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;

@@ -235,7 +235,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   function touchTap(t) {
     if (!t || !session.state || isOffice()) { selected = null; return; }
     if (tool === 'upgrade') { hover = t; selected = anchorTile(t); return; }
-    if (builds() && BUILD[tool].size) { hover = t; send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
+    // (The Remove tool also "builds" but is not in BUILD: test the kind, or a tap with it throws.)
+    if (builds() && BUILD[tool]?.size) { hover = t; send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
     if (builds()) { hover = t; startTouchBuild(t); endTouchBuild(); return; }
     // Nothing held: select the building there (touch.js offers what can be done with it).
     selected = anchorTile(t);

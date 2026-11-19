@@ -93,7 +93,9 @@ test('unpacker, belt and chute turn boxes into cash', () => {
   const sales = ev.filter((e) => e.e === 'sale');
   assert.ok(sales.length >= 5, `expected several sales, got ${sales.length}`);
   assert.ok(sales.every((e) => e.kind === 'box'));
-  assert.equal(s.players[0].cash, cash + sales.length * ITEMS.box.value);
+  // A box pays $2 on Normal: its value (2.2) rounded to whole dollars.
+  assert.ok(sales.every((e) => e.v === 2 && e.v === Math.round(ITEMS.box.value)));
+  assert.equal(s.players[0].cash, cash + sales.length * 2);
   assert.equal(s.players[0].all.shipped, sales.length);
 });
 
