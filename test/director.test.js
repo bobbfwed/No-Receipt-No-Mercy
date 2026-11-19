@@ -47,6 +47,7 @@ const VARS = {
   reportPerfect: 'p', pee: 'pk', flash: 'pn', fall: 'p', pitchStop: 'pk', pitchRush: 'pk',
   kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
   pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw', early: 'pnm',
+  pop: 'pn', nopop: 'p',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -63,10 +64,12 @@ const AT_LEAST = {
   bossEscape: 12, pep: 12, endless: 8, endlessMark: 10, foodCourt: 12, early: 6,
   // Version 0.2.08: the Car Park.
   carPark: 12,
+  // Version 0.2.09: the Pregnant Lady.
+  pop: 12, nopop: 9,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
-const NEW_KINDS = ['dog', 'cosplay', 'flasher', 'drinker'];
+const NEW_KINDS = ['dog', 'cosplay', 'flasher', 'drinker', 'preggo'];
 
 /** Each bank of LINES as [name, list], with nested banks (placed, upgradedBy) flattened out. */
 function lineBanks() {
@@ -168,7 +171,7 @@ test('banks whose number or name can be missing still have lines that need neith
 
 test('every bank has common, uncommon and rare lines, and the friends have lines for every situation', () => {
   for (const key of ['waveStart', 'dadLine', 'manyEscapes', 'report', 'removed', 'smashOther', 'bossOut', 'bossEscape',
-    'pep', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'early', 'rail']) {
+    'pep', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'early', 'rail', 'pop', 'nopop']) {
     const ws = LINES[key].map(weightOf);
     assert.ok(ws.some((w) => w === 1) && ws.some((w) => w < 0.5 && w > 0.2) && ws.some((w) => w <= 0.15), key);
   }
@@ -438,6 +441,10 @@ test('the director handles every new event, with all its fields or none, and ign
     { e: 'pep', x: 1, y: 1, n: 0 },
     { e: 'endless', by: 1 },
     { e: 'early', secs: 40, cash: 320, sold: 9 },
+    { e: 'pop', x: 1, y: 1, n: 12, sup: 0 },
+    { e: 'pop', x: 1, y: 1, n: 24, sup: 1 },
+    { e: 'nopop', x: 1, y: 1, sup: 0 },
+    { e: 'escape', k: 'preggo', sup: 1, x: 1, y: 1, refund: 120, n: 1 },
   ];
   // With a random function that always says yes, every one of them is commented on.
   for (const e of full) {
@@ -461,13 +468,24 @@ test('the director handles every new event, with all its fields or none, and ign
   assert.ok(LINES.dented.some((l) => fill(textOf(l), { p: 'Dave', k: 'Forklift Turret', n: 1 }) === dented), dented);
   // The first appearance of each new kind of shopper, and of its super, is explained.
   const intro = says(createDirector(seeded(1)).handle([{ e: 'waveStart', wave: 9, kinds: NEW_KINDS, supers: NEW_KINDS }], game('Dave')));
-  assert.equal(intro.length, 8);
+  assert.equal(intro.length, NEW_KINDS.length * 2);
+  // Babies are cash only and write no reviews; a Pregnant Lady who popped gets DEB's pop line, not a review.
+  for (const e of [{ e: 'escape', k: 'baby', sup: 0, x: 1, y: 1, refund: 5, n: 0 }, { e: 'left', k: 'baby', sup: 0, x: 1, y: 1, by: 0, why: 'annoyed' },
+    { e: 'left', k: 'preggo', sup: 0, x: 1, y: 1, by: 0, why: 'pop' }]) {
+    assert.deepEqual(createDirector(() => 0).handle([e], game('Dave')), [], JSON.stringify(e));
+  }
+  // Twelve babies at the tills at once are not a run of refunds.
+  const babies = Array.from({ length: 12 }, () => ({ e: 'escape', k: 'baby', sup: 0, x: 1, y: 1, refund: 5, n: 0 }));
+  assert.deepEqual(createDirector(() => 0).handle(babies, game('Dave')), []);
+  // The pop line says how many, when it knows.
+  const popped = says(createDirector(() => 0).handle([{ e: 'pop', x: 1, y: 1, n: 24, sup: 1 }], game('Dave')))[0];
+  assert.ok(LINES.pop.some((l) => fill(textOf(l), { p: 'Dave', n: 24 }) === popped), popped);
 
   // Every event with its fields missing, plus nonsense, and nothing breaks.
   const names = ['pee', 'flash', 'fall', 'pitch', 'kidtv', 'rail', 'shield', 'smash', 'upgraded', 'rebuilt', 'caught',
     'waveStart', 'crawl', 'kid', 'begun', 'side', 'ready', 'gave', 'mess', 'bolt', 'escape', 'left', 'grab', 'slip', 'sale',
     'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'bossIn', 'bossOut', 'pep', 'endless', 'early',
-    'watching', 'somethingNew', undefined];
+    'pop', 'nopop', 'watching', 'somethingNew', undefined];
   for (const random of [() => 0, () => 0.999, seeded(1)]) {
     const director = createDirector(random);
     const state = game('Dave', 'Bobb');

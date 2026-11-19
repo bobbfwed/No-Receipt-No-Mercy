@@ -3,23 +3,42 @@
 // drift from what the simulation actually does. No DOM; runs in Node too.
 import {
   SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, priceOf,
-  tracksOf, defaultTrack, maxIn, levelCost, BOSS, bossTier, bossTitle, bossPatience,
+  tracksOf, defaultTrack, maxIn, levelCost, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
+  patienceScaleAt, patienceGrowth,
 } from '../sim/index.js';
 
 /** The order shoppers are listed in: the order they first turn up. */
-export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'flasher', 'cosplay'];
+export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'flasher', 'preggo', 'cosplay'];
 export const FACTORY_ORDER = ['belt', 'unpacker', 'press', 'packer', 'chute', 'crate'];
 export const SECURITY_ORDER = ['sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman'];
 
 /** What each upgrade track is called, for tables. */
 export const TRACK_NAMES = { dmg: 'Damage', spd: 'Speed', rng: 'Range', dur: 'Durability' };
 
-/** How much more patient shoppers are in wave n than in wave 1. */
-export const patienceGrowth = (n) => 1 + TUNE.hpGrowth * (n - 1) + TUNE.hpGrowth2 * (n - 1) ** 2;
+/** How much more patient shoppers are in wave n than in wave 1, by growth alone (the simulation's own). */
+export { patienceGrowth };
 
-/** A shopper's patience when it walks in during wave n. `hpMul` is the difficulty's multiplier. */
+/**
+ * How much more patient shoppers (not the boss) are in wave n of an ordinary game than in wave 1:
+ * the growth times the wave's patience multiplier (patienceScaleAt, 1 in the first events).
+ */
+export const toughnessAt = (n) => patienceGrowth(n) * patienceScaleAt(n);
+
+/**
+ * A shopper's patience when it walks in during wave n of an ordinary game (the wave's patience
+ * multiplier included). `hpMul` is the difficulty's multiplier. k may also be 'baby'.
+ */
 export function patienceAt(k, sup, n, hpMul = 1) {
-  return (sup ? SUPERS[k] : SHOPPERS[k]).hp * patienceGrowth(n) * hpMul;
+  const def = k === 'baby' ? BABY : sup ? SUPERS[k] : SHOPPERS[k];
+  return def.hp * toughnessAt(n) * hpMul;
+}
+
+/**
+ * A Pregnant Lady's babies (not one of SHOPPERS: nobody picks them, Head Office cannot buy them).
+ * hp is their patience as the first sales event's would be at that difficulty, before it grows.
+ */
+export function babyFacts(hpMul = 1) {
+  return { name: BABY.name, hp: BABY.hp * patienceScaleAt(1) * hpMul, speed: BABY.speed, refund: BABY.refund };
 }
 
 /** The first wave the automatic waves include this kind. */
@@ -107,7 +126,12 @@ export function shopperTraits(k, sup = 0) {
   else if (d.ignoresSigns) out.push(['Wet floors and messes', `not slowed; ${pct(TUNE.slipChance)} chance to slip (stunned ${fmt(TUNE.slipSecs)} s)`]);
   else out.push(['Wet floors and messes', `slowed to ${pct(TUNE.wetSlow)} speed`]);
   if (d.hopsBelts) out.push(['Conveyor belts', 'steps over them']);
-  if (d.drain) out.push(['Patience lost by itself', `${fmt(d.drain)} a second`]);
+  if (d.drain) {
+    // It grows with the patience multiplier, so wasting his time works as well all game.
+    const late = d.drain * TUNE.patienceScale;
+    out.push(['Patience lost by itself', late === d.drain ? `${fmt(d.drain)} a second`
+      : `${fmt(d.drain * patienceScaleAt(1))} a second, rising after sales event ${TUNE.patienceFrom} to ${fmt(late)} by event ${TUNE.patienceFull}`]);
+  }
   if (d.nag) out.push(['Security near her', `within ${fmt(v('nagRange'))} tiles works at ${pct(v('nagRate'))} speed`]);
   if (d.messy) out.push(['Messes', `one every ${fmt(v('messEvery'))} s, each lasting ${fmt(v('messSecs'))} s`]);
   if (d.kid) {
@@ -125,6 +149,11 @@ export function shopperTraits(k, sup = 0) {
   if (d.pees) out.push(['Security he passes', `within ${fmt(v('peeRange'))} tiles (not wet floor signs): pees on it, switching it off for ${fmt(v('peeSecs'))} s; again after ${fmt(v('peeCool'))} s`]);
   if (d.flashes) out.push(['Bathrobe', `opens it about every ${fmt(v('flashEvery'))} s; dads and teenagers within ${fmt(v('flashRange'))} tiles stop and stare for ${fmt(v('gawkSecs'))} s`]);
   if (d.shields) out.push(['Costume', `shots at anyone within ${fmt(v('shield'))} tiles of him hit him instead${v('soak') < 1 ? `, for ${pct(v('soak'))} of the damage` : ''}`]);
+  if (d.pops) {
+    out.push(['Out of patience', `pops: ${d.pops} babies run for the tills from where she stood. None if a Barcode Laser finishes her`]);
+    const b = babyFacts();
+    out.push(['Her babies', `${fmt(b.hp)} patience each (growing like everyone's), ${fmt(b.speed)} tiles a second, and nothing distracts them; one at a till takes $${b.refund} but is not a refund toward the limit`]);
+  }
   if (d.gawks) out.push(['Exhibitionists', 'stops and stares']);
   if (d.pitch) {
     const [stop, rush] = d.pitch;
@@ -133,13 +162,18 @@ export function shopperTraits(k, sup = 0) {
   return out;
 }
 
-/** The main numbers for a shopper kind, normal and super. */
+/**
+ * The main numbers for a shopper kind, normal and super, as they are in an ordinary game: hp is
+ * the patience in the first sales event at x1 difficulty (that event's patience multiplier
+ * included; see patienceAt for any other event), refund the cash taken at a till (perHead included).
+ */
 export function shopperFacts(k) {
   const d = SHOPPERS[k], s = SUPERS[k];
+  const hp = patienceScaleAt(1), cash = perHead();
   return {
     k, name: d.name, superName: s.name, first: firstWave(k), superFrom: d.sup.from,
-    hp: d.hp, speed: d.speed, refund: d.refund,
-    superHp: s.hp, superSpeed: s.speed, superRefund: s.refund,
+    hp: d.hp * hp, speed: d.speed, refund: d.refund * cash,
+    superHp: s.hp * hp, superSpeed: s.speed, superRefund: s.refund * cash,
     price: priceOf(k, 0), superPrice: priceOf(k, 1),
   };
 }

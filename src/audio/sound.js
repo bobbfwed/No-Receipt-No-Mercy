@@ -158,14 +158,21 @@ export function createSound() {
         case 'shot': fire('shot'); break;
         case 'escape':
           if (lost) break;
-          // The boss at the tills (five refunds) is a disaster of his own, not one more refund.
+          // The boss at the tills (two refunds) is a disaster of his own, not one more refund;
+          // a Pregnant Lady's baby ($5, no refund) is much less than one.
           if (e.k === 'boss') fire('bossEscape', { tier: e.tier | 0 });
+          else if (e.k === 'baby') fire('babyTill');
           else fire('escape', { k: e.k, sup: e.sup | 0 }, { sub: e.k });
           break;
         case 'left':
           if (e.k === 'boss' && bossOut) break;
+          // A Pregnant Lady who popped: the pop carries the sound.
+          if (e.k === 'preggo' && e.why === 'pop') break;
+          if (e.k === 'baby') { fire('waah'); break; }
           fire('left', { k: e.k, sup: e.sup | 0 }, { sub: e.k });
           break;
+        case 'pop': fire('pop', { n: e.n | 0, sup: e.sup | 0 }); break;
+        case 'nopop': fire('nopop', { sup: e.sup | 0 }); break;
         case 'bossIn': fire('bossIn', { tier: e.tier | 0 }); break;
         case 'pep': fire('pep', { n: e.n | 0 }); break;
         case 'bossOut': fire('bossOut', { tier: e.tier | 0, bounty: e.bounty | 0 }); break;

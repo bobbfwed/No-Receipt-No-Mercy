@@ -13,15 +13,22 @@
 //   ready   he has said the doors may open early
 // If he has bought nothing when the doors open, the usual automatic wave comes instead.
 // The boss (every fifth wave) cannot be bought: he is not in SHOPPERS, so a plan naming him is
-// refused as 'bad', and he walks in on top of whatever was bought.
-import { SHOPPERS, SUPERS, OFFICE } from './constants.js';
+// refused as 'bad', and he walks in on top of whatever was bought. Nor can a Pregnant Lady's babies
+// ('baby', also not in SHOPPERS): he gets them by buying her.
+import { SHOPPERS, SUPERS, OFFICE, perHead } from './constants.js';
 import { shareCount } from './state.js';
 import { waveSpec } from './step.js';
 
-/** What one shopper costs Head Office. Tougher, faster and trickier shoppers cost more. */
+/**
+ * What one shopper costs Head Office. Tougher, faster and trickier shoppers cost more. The price
+ * is per head, so it is multiplied by perHead(): with half the crowd, each shopper costs twice as
+ * much, and his budget (a share of what the automatic wave is worth) buys half as many.
+ */
 export function priceOf(k, sup = 0) {
   const def = sup ? SUPERS[k] : SHOPPERS[k];
-  return Math.max(1, Math.round((def.hp * def.speed * OFFICE.kinds[k].weight) / 10));
+  // (The old price, rounded, then scaled: so a super stays at least twice the ordinary one.)
+  const each = Math.max(1, Math.round((def.hp * def.speed * OFFICE.kinds[k].weight) / 10));
+  return Math.round(each * perHead());
 }
 
 /**
@@ -47,7 +54,7 @@ export function officePlayer(state) {
 
 /** True if this kind (or its super) can be bought for wave n. */
 export function canBuy(k, sup, n) {
-  const kind = OFFICE.kinds[k];
+  const kind = Object.hasOwn(OFFICE.kinds, k) ? OFFICE.kinds[k] : null;
   if (!kind || n < kind.from) return false;
   return !sup || n >= SHOPPERS[k].sup.from;
 }
@@ -68,7 +75,8 @@ export function checkPlan(state, groups) {
   if (!Array.isArray(groups) || groups.length > OFFICE.maxGroups) return 'bad';
   const wave = state.wave + 1;
   for (const g of groups) {
-    if (!g || typeof g !== 'object' || !SHOPPERS[g.k]) return 'bad';
+    // (Only real kinds: not the boss, not a baby, not a name that happens to be on every object.)
+    if (!g || typeof g !== 'object' || typeof g.k !== 'string' || !Object.hasOwn(SHOPPERS, g.k)) return 'bad';
     if (!Number.isInteger(g.n) || g.n < 1 || g.n > OFFICE.maxSize) return 'bad';
     if (!(g.at >= 0 && g.at <= OFFICE.maxAt)) return 'bad';
     if (!Number.isInteger(g.door) || g.door < 0) return 'bad';

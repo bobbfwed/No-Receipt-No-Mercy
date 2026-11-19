@@ -5,7 +5,7 @@
 //
 // Resuming makes that browser the host of the saved game again. Everyone else in it counts as
 // away until he joins with the new room code; he gets his place and his money back by name.
-import { MAP_DESIGNS, MAP_SIZES } from '../sim/index.js';
+import { MAP_DESIGNS, MAP_SIZES, STATE_VERSION } from '../sim/index.js';
 import { versionText } from '../version.js';
 
 const KEY = 'returns-dept.save';
@@ -60,7 +60,8 @@ export function readSave({ storage = browserStorage() } = {}) {
   try { save = JSON.parse(storage?.getItem(KEY) || 'null'); } catch { return null; }
   const s = save && save.state;
   // A save from a different version of the rules may not load properly: only trust what looks right.
-  if (!save || save.v !== 1 || !s || s.v !== 3 || !worthSaving(s)) return null;
+  // Version 3 (before 0.2.09) is still accepted: resuming it runs migrateSave (see HostSession).
+  if (!save || save.v !== 1 || !s || !(s.v === 3 || s.v === STATE_VERSION) || !worthSaving(s)) return null;
   if (!Array.isArray(s.players) || !s.players.length || !Array.isArray(s.grid) || s.grid.length !== s.w * s.h) return null;
   const host = s.players[s.host | 0] || s.players[0];
   const design = MAP_DESIGNS[s.map?.design], size = MAP_SIZES[s.map?.size];

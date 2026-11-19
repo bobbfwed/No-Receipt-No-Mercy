@@ -65,7 +65,9 @@ export function centreOf(state, ai, b = state.grid[ai]) {
 /**
  * @typedef {Object} Shopper
  * @property {number} id
- * @property {string} k   kind, a key of SHOPPERS, or 'boss' (see BOSS in constants.js)
+ * @property {string} k   kind, a key of SHOPPERS, or 'boss' (see BOSS in constants.js), or 'baby'
+ *                        (one of a Pregnant Lady's babies, see BABY; they have none of the extra
+ *                        fields below and are never super)
  * @property {number} [sup] 1 if this is the super version of its kind (see SUPERS in constants.js)
  * @property {number} x   position in tiles (tile centre is n + 0.5)
  * @property {number} y
@@ -156,7 +158,8 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
   const plan = makeMap(design, size, map ? map.slots ?? MAX_PLAYERS : 1);
   const set = cleanSettings(settings);
   const state = {
-    v: 3,
+    /** The version of the state's shape and rules (see STATE_VERSION and migrateSave). */
+    v: STATE_VERSION,
     seed,
     training,
     /** Training mode only: the groups for the next wave, or null. */
@@ -230,6 +233,31 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
   };
   openDoors(state);
   return state;
+}
+
+/**
+ * The version of the game state. 4 since 0.2.09, when the refund limit was halved (20, plus 5 a
+ * player) with the crowd; saves of version 3 are brought up to date by migrateSave.
+ */
+export const STATE_VERSION = 4;
+
+/**
+ * Brings a saved game from an older version up to this one, once, when it is resumed. A save
+ * from this version on is left alone.
+ * From 3: the refund limit was 40 plus 10 a player, and the state keeps it (it is recalculated
+ * only when a new player joins, which would then drop it to the new formula with the old count:
+ * 25 of 40 would become 25 of 25). So the limit is set from today's formula for the save's
+ * players and the refunds are scaled by the same ratio, rounded down: the save keeps the share of
+ * its limit it had used.
+ * @returns {boolean} whether anything was changed
+ */
+export function migrateSave(state) {
+  if (!state || (state.v | 0) >= STATE_VERSION) return false;
+  const limit = TUNE.refundLimit + TUNE.refundPerPlayer * Math.max(0, state.players.length - 1);
+  if (state.refundLimit > 0) state.refunds = Math.floor(((state.refunds || 0) * limit) / state.refundLimit);
+  state.refundLimit = limit;
+  state.v = STATE_VERSION;
+  return true;
 }
 
 /** Deterministic random number in [0, 1). The generator's state lives in the game state. */

@@ -2,7 +2,7 @@
 // Walls, floor, the machines' marked floor tinted in each kind's colour, tills, entrances (light
 // when open, dark when shut), buildings coloured by group over their whole footprint
 // (factory orange, security blue), shoppers as dots (dads light blue, supers bigger and gold, the
-// boss a big pink star), the food court's furniture in its own colours (tables white, stalls red,
+// boss a big pink star, a Pregnant Lady's babies tiny and pale pink), the food court's furniture in its own colours (tables white, stalls red,
 // the fountain blue...), the car park's tarmac and what is parked on it (cars in two tones, so a
 // row reads as a row of cars; the prick's car gold, the burger van orange, trolley shelters glassy
 // blue, islands green), wreckage, and a white frame showing what the main view shows.
@@ -31,7 +31,7 @@ const FURN = {
   i: [92, 128, 66], l: [232, 214, 120], m: [60, 98, 168], a: [196, 202, 210], o: [255, 140, 26], v: [235, 120, 40],
 };
 const CAR_DARK = { c: FURN.c.map((v) => Math.round(v * 0.82)), C: FURN.C.map((v) => Math.round(v * 0.8)) };
-const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f', BOSS_COL = '#ff2a6d';
+const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f', BOSS_COL = '#ff2a6d', BABY = '#ffb3d9';
 
 const rgb = (hex) => {
   const n = parseInt(hex.slice(1), 16);
@@ -130,13 +130,21 @@ export function createMinimap(canvas, session, renderer) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(img, mx, my, mw * k, mh * k);
     ctx.imageSmoothingEnabled = true;
-    // Shoppers: normal ones as small dots, then dads, then supers on top.
+    // Shoppers: a Pregnant Lady's babies as tiny pink dots underneath, then normal shoppers as
+    // small dots, then dads, then supers on top.
     const r = Math.max(1.2, k * 0.45);
+    const rb = Math.max(0.8, r * 0.6);
+    ctx.beginPath();
+    for (const sh of s.shoppers) {
+      if (sh.k === 'baby') ctx.rect(mx + sh.x * k - rb, my + sh.y * k - rb, rb * 2, rb * 2);
+    }
+    ctx.fillStyle = BABY;
+    ctx.fill();
     for (let pass = 0; pass < 3; pass++) {
       ctx.beginPath();
       for (const sh of s.shoppers) {
         const sup = !!sh.sup, dad = sh.k === 'dad';
-        if ((pass === 2) !== sup || (pass === 1) !== (dad && !sup)) continue;
+        if (sh.k === 'baby' || (pass === 2) !== sup || (pass === 1) !== (dad && !sup)) continue;
         const rr = sup ? r * 1.7 : r;
         ctx.rect(mx + sh.x * k - rr, my + sh.y * k - rr, rr * 2, rr * 2);
       }

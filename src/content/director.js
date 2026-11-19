@@ -132,6 +132,9 @@ export const TOPICS = {
   // Said at round-numbered events of an endless game, instead of the usual opening.
   endlessMark: { important: true, loud: true },
   early: { chance: 0.5, gap: 120 },
+  // A Pregnant Lady popping is the thing to learn from, so it is said more than most.
+  pop: { important: true, gap: 20 },
+  nopop: { gap: 25 },
 };
 
 /** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
@@ -450,7 +453,16 @@ export function createDirector(random = Math.random) {
       case 'bolt':
         say(out, state, 'bolt', LINES.bolt, {}, { mood: 'angry' });
         break;
+      case 'pop':
+        say(out, state, 'pop', LINES.pop, { n: e.n > 0 ? Math.round(e.n) : undefined }, { mood: 'angry' });
+        break;
+      case 'nopop':
+        say(out, state, 'nopop', LINES.nopop, {}, { mood: 'smug' });
+        break;
       case 'escape':
+        // A Pregnant Lady's baby at a till takes cash but is no refund (its n is 0): it does not
+        // count toward a run of refunds, and babies do not write reviews.
+        if (e.k === 'baby') break;
         escapes.push(state.tick);
         escapes = escapes.filter((t) => state.tick - t < 6 * TICK_HZ);
         if (e.k === 'boss') {
@@ -465,6 +477,8 @@ export function createDirector(random = Math.random) {
         review(out, state, own(ESCAPE_REVIEWS, e.k), e.k, e.k === 'dad' ? 1 : e.k === 'boss' ? 0 : 4);
         break;
       case 'left':
+        // Babies write no reviews, and a Pregnant Lady who popped has DEB's pop line instead.
+        if (e.k === 'baby' || e.why === 'pop') break;
         // The boss storming off always gets his review; anyone else only now and then.
         if (e.k === 'boss') review(out, state, LEFT_REVIEWS.boss, e.k, 0);
         else if (random() < 0.35) review(out, state, own(LEFT_REVIEWS, e.k), e.k, 6);

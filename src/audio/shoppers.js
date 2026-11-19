@@ -1,10 +1,10 @@
 // The noises of shoppers leaving the store: storming out with no refund (`left`), or getting one
-// at the tills (`escape`). Each of the nine kinds has its own voice and a few versions of it, and
+// at the tills (`escape`). Each kind has its own voice and a few versions of it, and
 // the "super" version of each is bigger: lower, louder, and with an extra prop at the end.
 //
 // Each function draws into a voice `v` (see synth.js) from time `t`, with `x` the variation for
 // this play (see vary() in synth.js: x.shape picks the version, x.j() jitters).
-import { tone, noise, formant, say, babble, mtof } from './synth.js';
+import { tone, noise, formant, say, babble, mtof, filter } from './synth.js';
 
 /** How many versions each kind has (the table entry's `shapes`). */
 export const SHAPES = 3;
@@ -24,6 +24,9 @@ export const LEFT_ABOUT = {
   cosplay: ['Cosplayer: a muffled grumble from inside the foam head, the costume rustling and a plastic sword clattering.', 'Full Mech Suit: servo whirrs, a muffled "mmph" and a heavy clunking walk away.'],
   flasher: ['Exhibitionist: an offended "well!" (or "hmph", or "oh!"), the robe pulled shut and slippers slapping away.', 'Nudist Nan: a cackling old lady and a cheeky slap.'],
   drinker: ['Day Drinker: a hiccup, a slurred mumble and a bottle clinking.', 'Bottomless Bruncher: a champagne cork pops and she goes "woo!".'],
+  // (She storms off like this only when a Barcode Laser finished her; when she pops, the pop in
+  // preggo.js carries the sound and sound.js drops this one.)
+  preggo: ['Pregnant Lady: a strained "oof" with a hand on her back, Lamaze breathing ("hoo-hoo-hee") or a huff and a moan, then two slow heavy steps.', 'Octomom: deeper and slower, and a muffled crowd of babies wailing inside her.'],
   // The boss has no super version. (When the players drive him out, boss.js plays the bigger
   // payoff instead and this one is skipped; this is for a boss who leaves on his own.)
   boss: ['The boss: a pompous "HAR-rumph", "well, I NEVER" or an "ahem", then his briefcase snaps shut.'],
@@ -473,6 +476,38 @@ const LEFT = {
       glass(v, t + 0.53, 2700 * x.j(0.1), 0.05);
     }
   },
+
+  // Pregnant Lady: a strained "oof" with a hand on her back, Lamaze breathing ("hoo-hoo-hee"), or a
+  // huff and a long moan; then two slow, heavy steps. Octomom is deeper and slower, and the babies
+  // inside her are wailing, muffled.
+  preggo(v, t, x, big) {
+    const p = x.j(0.06) * (big ? 0.86 : 1);
+    if (x.shape === 0) {
+      say(v, { t, vowel: 'oo', scale: 1.15, f: 270 * p, f1: 185 * p, glide: 0.22, peak: 0.48, a: 0.015, h: 0.07, d: 0.13, breath: 0.7 });
+    } else if (x.shape === 1) {
+      babble(v, { scale: 1.15, sylls: [
+        { t, len: 0.08, f: 250 * p, vowel: 'oo', peak: 0.38 },
+        { t: t + 0.13, len: 0.08, f: 255 * p, vowel: 'oo', peak: 0.38 },
+        { t: t + 0.26, len: 0.15, f: 310 * p, f1: 285 * p, vowel: 'ee', peak: 0.42 },
+      ] });
+      noise(v, { t: t + 0.27, type: 'bandpass', f: 2400, q: 1, peak: 0.06, a: 0.02, h: 0.08, d: 0.06 }); // the breath out
+    } else {
+      noise(v, { t, type: 'bandpass', f: 1100 * x.j(0.1), q: 0.8, peak: 0.16, a: 0.01, h: 0.04, d: 0.06 }); // a huff
+      say(v, { t: t + 0.1, vowel: 'oh', scale: 1.15, f: 240 * p, f1: 200 * p, glide: 0.3, peak: 0.45, a: 0.03, h: 0.14, d: 0.12, vib: { rate: 5, depth: 30 } });
+    }
+    // Heavy flat-footed steps, far apart (the waddle).
+    const step = big ? 0.22 : 0.15;
+    [0, 1].forEach((i) => thud(v, t + 0.3 + i * step, 0.2 - i * 0.03, (big ? 80 : 100) * x.j(0.08)));
+    if (big) {
+      // The two dozen inside her, heard through her.
+      const lp = filter(v, 'lowpass', 900, 0.7);
+      lp.connect(v.out);
+      babble(v, { scale: 1.65, to: lp, sylls: [
+        { t: t + 0.12, len: 0.18, f: 430 * x.j(0.06), f1: 340, vowel: 'ah', peak: 0.3 },
+        { t: t + 0.36, len: 0.2, f: 480 * x.j(0.06), f1: 380, vowel: 'ah', peak: 0.3 },
+      ] });
+    }
+  },
 };
 
 /** A briefcase snapped shut: two sharp clasp clacks. */
@@ -518,7 +553,8 @@ export function leftVoice(v, t, o, x) {
 
 /**
  * A refund paid: coins tumbling and a sad "bloop", in a different order and pitch each time.
- * Dads get a smug kazoo instead; Karen a satisfied "mm-HM"; the guide dog barks. A super shopper
+ * Dads get a smug kazoo instead; Karen a satisfied "mm-HM"; the guide dog barks; the Pregnant Lady
+ * a contented "mmm" and a pat on the bump. (A baby's $5 is babyTill in preggo.js.) A super shopper
  * takes twice the refund: more coins and the till drawer slams.
  */
 export function escapeVoice(v, t, o, x) {
@@ -577,6 +613,12 @@ export function escapeVoice(v, t, o, x) {
     tone(v, { t: b, f: 150 * x.j(0.07), f1: 260, glide: 0.05, type: 'triangle', peak: 0.26, a: 0.004, h: 0.015, d: 0.04 });
     glass(v, b + 0.12, 3200 * x.j(0.1));
     if (big) { tone(v, { t: b + 0.3, f: 330, f1: 1400, glide: 0.05, peak: 0.22, a: 0.002, d: 0.06 }); noise(v, { t: b + 0.3, type: 'bandpass', f: 1600, q: 1, peak: 0.25, a: 0.002, d: 0.05 }); }
+  }
+  if (o.k === 'preggo') {
+    // A contented "mmm" and two pats on the bump (Octomom's has a muffled giggle in it).
+    say(v, { t: b, vowel: 'mm', scale: 1.15, f: 250 * x.j(0.05), f1: 225, peak: 0.36, a: 0.02, h: 0.08, d: 0.1 });
+    [0.2, 0.3].forEach((dt) => noise(v, { t: b + dt, type: 'bandpass', f: 700, q: 1.2, peak: 0.16, a: 0.002, d: 0.03 }));
+    if (big) [0, 1].forEach((i) => tone(v, { t: b + 0.42 + i * 0.07, f: 900, f1: 1100, glide: 0.04, type: 'triangle', lp: 1400, peak: 0.07, a: 0.004, h: 0.02, d: 0.03 }));
   }
   if (big) {
     noise(v, { t: b + 0.2, type: 'bandpass', f: 1500, q: 1, peak: 0.25, a: 0.003, d: 0.06 }); // the drawer

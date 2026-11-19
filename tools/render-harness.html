@@ -70,9 +70,23 @@
                    wreckage and every effect at &fxage=350 ms old; &pan=x,y scrolls it (logical
                    pixels) for close-ups with a big &zoom. Columns: walking right, walking left,
                    browsing (or watching, for the newer kinds), stunned, leaving, then each kind's
-                   own extra poses (listed in the code), then the super versions. The last row is
-                   the boss at his four ranks (walking, standing, pep talk, storming off), with
+                   own extra poses (listed in the code), then the super versions. Above the boss:
+                   the Pregnant Lady (extras: watching the TV, about to pop; Octomom on the right)
+                   and her babies, with her effects beside the babies (a pop, an Octomom's pop,
+                   "NOT TODAY", a baby giving up, five babies' refunds at one till). The last row
+                   is the boss at his four ranks (walking, standing, pep talk, storming off), with
                    his effects to the right of it.
+    &pop=sprinkler a real Pregnant Lady popping, through the real rules: with no demo layout, a
+                   Pepper Sprinkler is placed beside the route three tiles inside the first
+                   entrance (any design and size), one Pregnant Lady walks in with one patience
+                   left, the game runs until she pops, then &after=12 more ticks (the babies run
+                   off; &after=90 to see them spread along the route), and stops there (the clock
+                   still runs for the animations). Her 'left' and 'pop' events are sent again every
+                   &every=500 ms; one still showing is not restarted, so the effect is on screen
+                   nearly all the time. &pop=laser: a Barcode Laser across the route instead, so she
+                   does not pop ('nopop', no babies). &octo=1 makes her an Octomom (24 babies).
+                   Starts at sales event 14 unless &wave= is given. The bottom-right corner says
+                   what happened. Example, whole map: ?pop=sprinkler&octo=1&size=s&fitview=1&after=60
     &allfx=1       inject one of every effect event every &every=1200 ms at fixed places
     &zoom=1.6&at=24,7   close-up: that many times the whole-map zoom, centred on that tile
     &magnify=3     draw the game into a window a third the size and show it three times bigger,
@@ -135,6 +149,10 @@ function magnify() {
 }
 /** &showcase=1, and the mom in it who leaves her cart behind a moment after it starts. */
 const SHOW = { on: q.get('showcase') === '1', lateMom: null };
+/** &pop=sprinkler|laser: the events of the moment she popped (or did not), shown again and again. */
+const POP = { on: q.has('pop'), laser: q.get('pop') === 'laser', events: null, note: '' };
+/** A building's facing (0 east, 1 south, 2 west, 3 north) for a direction in tiles. */
+const DIR_OF = (dx, dy) => (dx > 0 ? 0 : dy > 0 ? 1 : dx < 0 ? 2 : 3);
 
 let session;
 if (q.get('null') === '1') {
@@ -153,7 +171,7 @@ if (q.get('null') === '1') {
   if (q.get('cursors') === '1' && s.players.length < 3) { addPlayer(s, 'Steve'); addPlayer(s, 'Kev'); }
   const place = (k, x, y, d) => applyCommand(s, 0, { c: 'place', k, x, y, d });
   const showcase = SHOW.on;
-  if (q.get('demo') !== '0' && !showcase) {
+  if (q.get('demo') !== '0' && !showcase && !POP.on) {
     const problems = applyDemoLayout(s, 0);
     if (problems.length) console.warn('demo layout:', problems.length, 'pieces did not fit');
   }
@@ -235,9 +253,27 @@ if (q.get('null') === '1') {
   // &cash=5000  the player's money (so a preview can show green for something expensive)
   if (q.has('cash')) me.cash = num('cash', 400);
   if (q.has('wave')) s.wave = Math.max(0, num('wave', 1) - 1);
+  else if (POP.on) s.wave = 13;
+  if (POP.on) {
+    me.cash += 1e5;
+    // Three tiles inside the first entrance: a sprinkler beside the route, or a Barcode Laser a
+    // few tiles to one side, facing across the route so its beam crosses it (as in
+    // test/preggo.test.js). Works on any design and size: the first spot the rules accept is used.
+    const door = s.doors[0], W = s.w;
+    const dx = door.reduce((a, i) => a + (i % W), 0) / door.length, dy = door.reduce((a, i) => a + ((i / W) | 0), 0) / door.length;
+    const [ix, iy] = dx < 1 ? [1, 0] : dx > W - 2 ? [-1, 0] : dy < 1 ? [0, 1] : [0, -1]; // inward
+    const [px, py] = [-iy, ix]; // along the wall
+    const ax = Math.round(dx + ix * 3), ay = Math.round(dy + iy * 3);
+    const tries = POP.laser
+      ? [3, 4, 5, 6].flatMap((o) => [-1, 1].map((sd) => [ax + px * o * sd, ay + py * o * sd, DIR_OF(-px * sd, -py * sd)]))
+      : [-1, 1, 0, -2, 2].map((o) => [ax + px * o, ay + py * o, 0]);
+    const done = tries.find(([x, y, d]) => place(POP.laser ? 'railgun' : 'sprinkler', x, y, d).ok);
+    if (!done) showErr('pop: could not place a ' + (POP.laser ? 'Barcode Laser' : 'sprinkler') + ' near the entrance');
+  }
   if (q.get('nostart') !== '1') session.send({ c: 'start' });
   session.fastForward(num('ff', 0));
   if (showcase) showcaseCrowd(s);
+  if (POP.on) stagePop(s);
   // &supers=1  every third shopper becomes a super one
   if (q.get('supers') === '1') s.shoppers.forEach((sh, n) => { if (n % 3 === 0) sh.sup = 1; });
   // &fx=sale,shot  only pass these event types to the renderer (debugging); fx=none drops them all
@@ -390,9 +426,17 @@ if (q.get('allfx') === '1' && session.fx) {
   inject();
   setInterval(inject, num('every', 1200));
 }
+// &pop=: show her pop (or the laser stopping it) again every &every ms, and say what happened.
+if (POP.on && POP.events) {
+  // (A pop still showing is not started again, so a short interval keeps one on screen nearly all
+  // the time, each played out in full.)
+  setInterval(() => session.fx.push(...POP.events.map((e) => ({ ...e }))), num('every', 500));
+}
+if (POP.on) stats.textContent = POP.note;
 // &freeze=1 keeps the game paused after the fast-forward (still drawn every frame). The showcase
-// never runs the rules (its crowd would walk off), but its clock moves, for the animations.
-if (q.get('freeze') !== '1' && !SHOW.on) session.start();
+// never runs the rules (its crowd would walk off), but its clock moves, for the animations; nor
+// does &pop= after the moment it shows.
+if (q.get('freeze') !== '1' && !SHOW.on && !POP.on) session.start();
 const showT0 = performance.now(), showTick0 = session.state ? session.state.tick : 0;
 function frame(t) {
   if (SHOW.on && session.state) {
@@ -433,8 +477,9 @@ let drawn = 0;
 const maxFrames = num('frames', Infinity);
 if (q.get('lineup') === '1') {
   // Every shopper kind in every state, drawn large, for checking the art.
-  // Rows: the thirteen kinds. Columns: five main poses (walking right, walking left, browsing or
-  // watching, stunned, leaving; the newer kinds use them for their own poses, see ROWS), then each
+  // Rows: the fourteen kinds, the babies and the boss. Columns: five main poses (walking right,
+  // walking left, browsing or watching, stunned, leaving; the newer kinds use them for their own
+  // poses, see ROWS), then each
   // kind's extra poses, then its super version in the columns on the right.
   // To the right of that: messes, wreckage, badges and one of each effect, frozen part way.
   const { drawShopper, drawKid, drawCart, createShopperSprites, drawBossTag } = await import('../src/render/shoppers.js');
@@ -473,6 +518,11 @@ if (q.get('lineup') === '1') {
       [R, { st: ST.WATCH, f: 1, vx: 0, fl: 30 }, L]],
     ['drinker', [{ ...R, sv: 1.7 }, { ...L, sv: 0.6 }, TV, { ...STUN, t: 100 }, LEAVE], [{ ...STUN, f: -1, t: 30 }],
       [{ ...R, sv: 1.6 }, { ...STUN, t: 150 }, { ...L, sv: 0.6 }]],
+    // The Pregnant Lady: extras are watching the TV, then about to pop (hp under 30%) walking and
+    // stopped at the samples. Octomom: walking, at the samples, about to pop.
+    ['preggo', base, [TV, { ...R, hp: 5 }, { ...BROWSE, hp: 5 }], [R, BROWSE, { ...L, hp: 5 }]],
+    // Her babies (no super): the three colour variants crawling right in the extra columns.
+    ['baby', base, [{ ...R, id: 300 }, { ...R, id: 301 }, { ...R, id: 302 }], []],
     // The boss (no super): the four tiers walking, then tier 1 walking left, tier 2 standing,
     // tier 3 giving a pep talk, tier 4 pep talk, and tier 1 and 4 storming off. Spaced wider.
     ['boss', [{ ...R, tr: 1 }, { ...R, tr: 2 }, { ...R, tr: 3 }, { ...R, tr: 4 }],
@@ -482,12 +532,15 @@ if (q.get('lineup') === '1') {
   const colX = (c) => 36 + c * 64;
   const extraX = (n) => 362 + n * 66;
   const supX = (n) => 712 + n * 82;
-  const rowH = (k) => (k === 'cosplay' ? 96 : k === 'dog' ? 76 : 66);
+  const rowH = (k) => (k === 'cosplay' ? 96 : k === 'dog' ? 76 : k === 'preggo' ? 84 : k === 'baby' ? 44 : 66);
   const rowYs = [];
-  { let y = 54; for (const [k] of ROWS) { if (k === 'cosplay') y += 26; if (k === 'boss') y += 70; rowYs.push(y); y += rowH(k); } }
+  // (Extra room above the boss's row for the Pregnant Lady's effects, beside the babies.)
+  { let y = 54; for (const [k] of ROWS) { if (k === 'cosplay') y += 26; if (k === 'boss') y += 140; if (k === 'preggo') y += 24; rowYs.push(y); y += rowH(k); } }
+  // The boss's effects sit beside his row, which moved down when the Pregnant Lady's rows came in.
+  const bossDy = (rowYs[ROWS.findIndex(([k]) => k === 'boss')] - 1048) / 40;
   canvas.width = innerWidth; canvas.height = innerHeight;
-  // Logical size of the line-up is about 1460 x 1240; fit it unless &zoom is given.
-  const z = num('zoom', Math.min(canvas.width / 1460, canvas.height / 1240));
+  // Logical size of the line-up is about 1460 x 1460; fit it unless &zoom is given.
+  const z = num('zoom', Math.min(canvas.width / 1460, canvas.height / 1460));
   sprites.setScale(z);
   messSprites.setScale(z);
   // One of each effect, frozen at &fxage ms old (default 350).
@@ -500,7 +553,7 @@ if (q.get('lineup') === '1') {
   const ti = (x, y) => y * LW + x;
   // What the effects look up in it: a barcode laser facing east, a sprinkler, a salesman, and the
   // rubble of a barcode laser that faced south.
-  const fakeState = { w: LW, h: 31, grid: [], rubble: [{ i: ti(35, 20), k: 'railgun', d: 1 }] };
+  const fakeState = { w: LW, h: 36, grid: [], rubble: [{ i: ti(35, 20), k: 'railgun', d: 1 }] };
   fakeState.grid[ti(26, 18)] = { k: 'railgun', d: 0, o: 0 };
   fakeState.grid[ti(27, 19)] = { k: 'sprinkler', o: 0 };
   fakeState.grid[ti(30, 21)] = { k: 'salesman', o: 0 };
@@ -592,9 +645,21 @@ if (q.get('lineup') === '1') {
     run(['dmg', 'spd', 'rng', 'dur'].map((tr, n) => ({ e: 'upgraded', k: 'sprinkler', x: 26 + n * 2, y: 23, t: tr, lv: n + 2 })));
     // The boss's effects, beside his row: walking in, a pep talk, driven out, reaching a till.
     run([
-      { e: 'bossIn', tier: 3, x: 29, y: 26.6 }, { e: 'pep', x: 27.5, y: 29.5, n: 3 },
-      { e: 'bossOut', tier: 2, x: 31.5, y: 29.8, bounty: 300 },
-      { e: 'escape', k: 'boss', sup: 0, x: 35.5, y: 29.8, refund: 600, n: 5, tier: 4 },
+      { e: 'bossIn', tier: 3, x: 29, y: 26.6 + bossDy }, { e: 'pep', x: 27.5, y: 29.5 + bossDy, n: 3 },
+      { e: 'bossOut', tier: 2, x: 31.5, y: 29.8 + bossDy, bounty: 300 },
+      { e: 'escape', k: 'boss', sup: 0, x: 35.5, y: 29.8 + bossDy, refund: 600, n: 2, tier: 4 },
+    ]);
+    // The Pregnant Lady's, beside the babies' row: a pop, an Octomom's pop, a Barcode Laser stopping
+    // one ('nopop'), a baby giving up, and five babies reaching the same till (their refunds add
+    // up in one small figure) beside one ordinary refund for comparison.
+    const py = (rowYs[ROWS.findIndex(([k]) => k === 'baby')]) / 40 + 1.2;
+    run([
+      { e: 'left', k: 'preggo', sup: 0, x: 16.5, y: py, why: 'pop' }, { e: 'pop', x: 16.5, y: py, n: 12, sup: 0 },
+      { e: 'left', k: 'preggo', sup: 1, x: 23, y: py + 0.3, why: 'pop' }, { e: 'pop', x: 23, y: py + 0.3, n: 24, sup: 1 },
+      { e: 'left', k: 'preggo', sup: 0, x: 28.6, y: py, why: 'annoyed' }, { e: 'nopop', x: 28.6, y: py, sup: 0 },
+      { e: 'left', k: 'baby', sup: 0, x: 31.5, y: py - 0.6, why: 'annoyed' },
+      ...[0, 1, 2, 3, 4].map((j) => ({ e: 'escape', k: 'baby', sup: 0, x: 33.2 + j * 0.05, y: py - 0.4, refund: 5, n: 0 })),
+      { e: 'escape', k: 'hunter', sup: 0, x: 36.4, y: py - 0.4, refund: 20 },
     ]);
   };
   const loop = (t) => { lineup(t); requestAnimationFrame(loop); };
@@ -614,6 +679,31 @@ if (q.get('lineup') === '1') {
   session.stop();
 } else {
   requestAnimationFrame(frame);
+}
+
+// --- &pop= ---------------------------------------------------------------------------------------
+
+/**
+ * One Pregnant Lady (an Octomom with &octo=1) walks in with one patience left; the game runs tick by
+ * tick until she pops or a Barcode Laser stops it, then &after more ticks. Keeps that moment's
+ * 'left' and 'pop' / 'nopop' events in POP.events and a line saying what happened in POP.note.
+ */
+function stagePop(s) {
+  s.shoppers.length = 0;
+  s.spawnQ = [[s.tick + 1, 'preggo', q.get('octo') === '1' ? 1 : 0, -1]];
+  for (let n = 0; n < 40 * TICK_HZ && !POP.events; n++) {
+    session.fastForward(1);
+    const her = s.shoppers.find((m) => m.k === 'preggo');
+    if (her && her.hp > 1) her.hp = 1;
+    const ev = session.fx.slice(-12);
+    const at = ev.findIndex((e) => e.e === 'pop' || e.e === 'nopop');
+    if (at >= 0) POP.events = ev.filter((e) => e.e === 'pop' || e.e === 'nopop' || (e.e === 'left' && e.k === 'preggo'));
+  }
+  if (!POP.events) { POP.note = `pop: she never ran out of patience (phase ${s.phase}, tick ${s.tick})`; return; }
+  session.fastForward(num('after', 12));
+  const p = POP.events.find((e) => e.e !== 'left');
+  const babies = s.shoppers.filter((m) => m.k === 'baby').length;
+  POP.note = `${p.e} at ${p.x.toFixed(2)},${p.y.toFixed(2)} (tick ${s.tick}): ${p.e === 'pop' ? p.n + ' babies' : 'no babies'}, ${babies} on the floor`;
 }
 
 // --- &showcase=1 ---------------------------------------------------------------------------------

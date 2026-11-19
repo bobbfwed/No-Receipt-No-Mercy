@@ -42,7 +42,9 @@ test('prices follow how tough, fast and tricky a shopper is', () => {
     assert.ok(priceOf(k, 1) >= priceOf(k, 0) * 2, `a super ${k} costs at least twice as much`);
   }
   assert.ok(waveValue(10) > waveValue(5) * 2);
-  assert.ok(waveValue(5, 3) > waveValue(5, 1) * 1.5);
+  // (Event 6, not 5: since the crowd was halved in 0.2.09, most groups of the boss's event 5 are a
+  // single shopper whatever the number of players.)
+  assert.ok(waveValue(6, 3) > waveValue(6, 1) * 1.5);
 });
 
 test('the first wave a kind can be bought for is the wave the automatic waves first use it', () => {

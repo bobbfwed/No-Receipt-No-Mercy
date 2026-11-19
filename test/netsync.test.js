@@ -90,7 +90,8 @@ test('a busy game sends each client at least ten times less than the old scheme,
   });
   const sent = conns.map((c, k) => c.sent - start[k]);
   assert.equal(st.wave, 11);
-  assert.ok(st.shoppers.length > 150, `a big crowd (${st.shoppers.length})`);
+  // (Over 150 until 0.2.09 halved the crowd; the old scheme's bytes were measured with the bigger one.)
+  assert.ok(st.shoppers.length > 100, `a big crowd (${st.shoppers.length})`);
   assert.ok(st.grid.filter(Boolean).length > 60, 'plenty was built');
   for (const [k, name] of ['Steve', 'Gaz'].entries()) {
     const ratio = OLD_BYTES[name] / sent[k];

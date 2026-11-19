@@ -203,6 +203,7 @@ test('later waves contain every kind, and stay deterministic through a snapshot'
     for (let y = 1; y <= 12; y++) place(g, 'crate', 9, y);
     for (let x = 3; x <= 24; x += 5) { place(g, 'samples', x, 5); place(g, 'sprinkler', x + 1, 9); place(g, 'wetfloor', x + 2, 8); }
     g.wave = 8;
+    g.refundLimit = 1e9; // (the store would close before the wave is out: the limit is 20 since 0.2.09)
     applyCommand(g, 0, { c: 'start' });
     return g;
   };

@@ -212,7 +212,7 @@ test('his pep talk gives nearby shoppers a fifth of their patience back, never a
   assert.equal(more.length, 3);
 });
 
-test('a boss who reaches a till counts as five refunds and takes a big one', () => {
+test('a boss who reaches a till counts as two refunds and takes a big one', () => {
   const s = stage(4);
   send(s, [{ k: 'boss', n: 1, gap: 1, at: 0 }]);
   const cash = s.players[0].cash;
@@ -223,15 +223,16 @@ test('a boss who reaches a till counts as five refunds and takes a big one', () 
   assert.equal(esc[0].n, TUNE.bossRefunds);
   assert.equal(esc[0].tier, 1);
   assert.equal(esc[0].refund, BOSS.refund);
-  assert.equal(s.refunds, 5);
+  assert.equal(TUNE.bossRefunds, 2, 'two of a limit of 20 since 0.2.09 (it was five of 40)');
+  assert.equal(s.refunds, 2);
   assert.equal(s.ws.escaped, 1);
-  assert.equal(s.players[0].cash, cash - BOSS.refund);
+  assert.equal(s.players[0].cash, cash - BOSS.refund, 'his refund is his own: not scaled with the crowd');
 
-  // Five refunds can close the store.
+  // Two refunds can close the store.
   const g = before(10);
   open(g);
   bossOnly(g);
-  g.refunds = g.refundLimit - 4;
+  g.refunds = g.refundLimit - 1;
   const end = play(g, 200);
   assert.equal(g.phase, 'lost');
   assert.equal(g.refunds, g.refundLimit + 1);
