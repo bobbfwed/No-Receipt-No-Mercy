@@ -197,7 +197,9 @@ test('later waves contain every kind, and stay deterministic through a snapshot'
   assert.ok(!waveSpec(2).some((g) => ['teen', 'mom', 'blind', 'gymbro'].includes(g.k)), 'the new kinds do not appear in the first waves');
 
   const make = () => {
-    const g = createGame({ seed: 77 });
+    // (Seed 79: whether the one guide dog of wave 9 bolts is down to luck, and with the crowd of
+    // 0.2.11 it does not on seed 77, which this used until then.)
+    const g = createGame({ seed: 79 });
     addPlayer(g, 'Dave');
     g.players[0].cash = 100000;
     for (let y = 1; y <= 12; y++) place(g, 'crate', 9, y);

@@ -394,22 +394,23 @@ test('supers arrive from the middle of the game and grow in number', () => {
 test('later waves have many more shoppers than the early growth alone would give', () => {
   const total = (n) => waveSpec(n).reduce((sum, g) => sum + g.n, 0);
   assert.equal(waveSpec(1)[0].n, 5, 'wave 1: eight bargain hunters, a quarter more (TUNE.crowdCurve), halved (TUNE.crowdScale)');
-  assert.ok(total(20) > total(10) * 3);
+  // (2.5 times, not 3, since 0.2.11: the owner's curve sends 25% fewer shoppers by wave 20.)
+  assert.ok(total(20) > total(10) * 2.5);
 });
 
-test('the crowd follows the curve the owner asked for: 25% more in wave 1, level in 10, 20% fewer in 20, 30% fewer from 30', () => {
+test('the crowd follows the curve the owner asked for: 25% more in wave 1, 5% fewer in 10, 25% fewer in 20, 35% fewer from 30', () => {
   const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-12, `${msg}: ${a} is not ${b}`);
   near(crowdShiftAt(1), 1.25, 'wave 1');
-  near(crowdShiftAt(10), 1, 'wave 10');
-  near(crowdShiftAt(20), 0.8, 'wave 20');
-  near(crowdShiftAt(30), 0.7, 'wave 30');
-  near(crowdShiftAt(200), 0.7, 'an endless game keeps the last share');
+  near(crowdShiftAt(10), 0.95, 'wave 10');
+  near(crowdShiftAt(20), 0.75, 'wave 20');
+  near(crowdShiftAt(30), 0.65, 'wave 30');
+  near(crowdShiftAt(200), 0.65, 'an endless game keeps the last share');
   // Straight lines between the points.
-  near(crowdShiftAt(4), 1.25 - 0.25 * 3 / 9, 'wave 4');
-  near(crowdShiftAt(15), 0.9, 'wave 15');
-  near(crowdShiftAt(25), 0.75, 'wave 25');
-  // Wave 5 alone sends 5% fewer again.
-  near(crowdShiftAt(5), (1.25 - 0.25 * 4 / 9) * 0.95, 'wave 5');
+  near(crowdShiftAt(4), 1.25 - 0.3 * 3 / 9, 'wave 4');
+  near(crowdShiftAt(15), 0.85, 'wave 15');
+  near(crowdShiftAt(25), 0.7, 'wave 25');
+  // Wave 5 alone sends 7% fewer again.
+  near(crowdShiftAt(5), (1.25 - 0.3 * 4 / 9) * 0.93, 'wave 5');
   assert.ok(crowdShiftAt(5) < crowdShiftAt(6), 'wave 5 dips below the line');
   // What a wave sends follows it. Take the curve away and the old crowd comes back.
   const heads = (n) => waveSpec(n).reduce((sum, g) => sum + (g.k === 'boss' ? 0 : g.n), 0);
@@ -421,10 +422,10 @@ test('the crowd follows the curve the owner asked for: 25% more in wave 1, level
   try { old = at.map(heads); } finally { [TUNE.crowdCurve, TUNE.crowdTrim] = keep; }
   assert.deepEqual(old, [4, 37, 149, 500, 320], 'the crowd before 0.2.11 (waves 10, 20 and 30 are boss waves: smaller crowds)');
   assert.equal(now[0], 5, 'wave 1: 25% more');
-  assert.equal(now[1], old[1], 'wave 10: the same as before');
-  assert.ok(Math.abs(now[2] / old[2] - 0.8) < 0.03, `wave 20: 20% fewer (${now[2]} of ${old[2]})`);
-  assert.ok(Math.abs(now[3] / old[3] - 0.71) < 0.02, `wave 29: 29% fewer (${now[3]} of ${old[3]})`);
-  assert.ok(Math.abs(now[4] / old[4] - 0.7) < 0.02, `wave 30: 30% fewer (${now[4]} of ${old[4]})`);
+  assert.ok(Math.abs(now[1] / old[1] - 0.95) < 0.04, `wave 10: 5% fewer (${now[1]} of ${old[1]})`);
+  assert.ok(Math.abs(now[2] / old[2] - 0.75) < 0.03, `wave 20: 25% fewer (${now[2]} of ${old[2]})`);
+  assert.ok(Math.abs(now[3] / old[3] - 0.66) < 0.02, `wave 29: 34% fewer (${now[3]} of ${old[3]})`);
+  assert.ok(Math.abs(now[4] / old[4] - 0.65) < 0.02, `wave 30: 35% fewer (${now[4]} of ${old[4]})`);
 });
 
 test('the boss walks at 0.7 tiles a second', () => {

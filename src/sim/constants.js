@@ -374,12 +374,12 @@ export const TUNE = {
   patienceFull: 20, // ...and is reached at this one (and kept in an endless game)
   // A busier start and a thinner end (0.2.11, the owner's numbers): on top of everything above,
   // each sales event sends a share of its shoppers read off crowdCurve, a list of [sales event,
-  // share] points joined by straight lines: 25% more in event 1, the same as before in event 10,
-  // 20% fewer in event 20, 30% fewer in event 30, and the last share from then on (crowdShiftAt
-  // in step.js). crowdTrim then multiplies single events: event 5, the first boss, sends 5% fewer
+  // share] points joined by straight lines: 25% more in event 1, 5% fewer in event 10, 25% fewer
+  // in event 20, 35% fewer in event 30, and the last share from then on (crowdShiftAt in
+  // step.js). crowdTrim then multiplies single events: event 5, the first boss, sends 7% fewer
   // again. Only the head count moves: refund cash and prices stay as they are.
-  crowdCurve: [[1, 1.25], [10, 1], [20, 0.8], [30, 0.7]],
-  crowdTrim: { 5: 0.95 },
+  crowdCurve: [[1, 1.25], [10, 0.95], [20, 0.75], [30, 0.65]],
+  crowdTrim: { 5: 0.93 },
   // From wave lateFrom on, every group grows by lateGrowth of its size per wave.
   lateFrom: 8,
   lateGrowth: 0.08,
