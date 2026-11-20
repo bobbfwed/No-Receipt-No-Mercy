@@ -44,6 +44,16 @@ export function patienceScaleAt(n) {
 }
 
 /**
+ * The share of its shoppers wave n sends (see TUNE.crowdFirst): TUNE.crowdFirst in wave 1, falling
+ * in a straight line to TUNE.crowdLast at wave TUNE.crowdLastAt, and that from then on.
+ */
+export function crowdShiftAt(n) {
+  const last = TUNE.crowdLastAt;
+  const t = last > 1 ? Math.min(1, Math.max(0, (n - 1) / (last - 1))) : 1;
+  return TUNE.crowdFirst + (TUNE.crowdLast - TUNE.crowdFirst) * t;
+}
+
+/**
  * The patience a shopper (anyone but the boss: see bossPatience) walks in with in the game's
  * current wave: its base patience, grown by wave, times the difficulty's multiplier and the
  * wave's patience multiplier (patienceScaleAt). A training game uses neither multiplier, so the
@@ -64,6 +74,8 @@ export function patienceFor(state, def) {
  * Every group is TUNE.crowdScale of the size it would be (to the nearest whole number, a half
  * rounded down, never below one, so every kind is still there), arriving over the same length of
  * time: half as many, twice as far apart.
+ * Before that, every group is multiplied by crowdShiftAt(n): more shoppers in the early waves,
+ * fewer in the late ones.
  * However late the wave, the crowd is at most TUNE.maxCrowd times TUNE.crowdScale shoppers per
  * player's worth (the boss aside); beyond that only patience keeps growing.
  * (Training games do not come through here: their waves are queued by the lessons.)
@@ -92,7 +104,7 @@ export function waveSpec(n, players = 1) {
   // same length of time, just closer together.
   const crowd = 1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1);
   const tier = bossTier(n);
-  let grow = (1 + TUNE.lateGrowth * Math.max(0, n - TUNE.lateFrom + 1)) * crowd * (tier ? TUNE.bossCrowd : 1);
+  let grow = (1 + TUNE.lateGrowth * Math.max(0, n - TUNE.lateFrom + 1)) * crowd * (tier ? TUNE.bossCrowd : 1) * crowdShiftAt(n);
   // Fewer, tougher shoppers: each group is TUNE.crowdScale of what it would be, to the nearest
   // whole number, never below one, so a kind that is in the event is still in it. A half is
   // rounded DOWN: always rounding up left the crowd at 53 to 62% of its old size in the early

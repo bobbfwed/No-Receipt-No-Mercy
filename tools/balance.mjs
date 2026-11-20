@@ -1,11 +1,13 @@
 // Plays whole solo games with scripted players and prints how each went, to judge difficulty
 // without a human.
-// Usage: node tools/balance.mjs [seed] [size] [design] [-v] [--endless]
+// Usage: node tools/balance.mjs [seed] [size] [design] [-v] [--endless] [--difficulty=easy]
 //   size       a key of MAP_SIZES (default: s, the size recommended for one player), or "all"
 //   design     a key of MAP_DESIGNS (default: warehouse; the bots' layout suits an open floor)
 //   -v         also print every wave (a boss wave says how the boss did: "boss out", or "boss
 //              through" with the share of his patience he had left)
 //   --endless  play endless games (no last sales event) and print the sales event each lost in
+//   --difficulty=  a key of SETTINGS.difficulty (default: normal). On easy the bots last longer,
+//              which is the only way they get to see the late sales events
 //
 // Bots:
 //   nothing   builds nothing (the game should be lost quickly)
@@ -83,8 +85,9 @@ function extras(s) {
   return out;
 }
 
-function play(bot, seed, map, endless = false) {
-  const s = createGame({ seed, map, settings: endless ? { waves: 0 } : null });
+function play(bot, seed, map, endless = false, difficulty = null) {
+  const settings = { ...(endless ? { waves: 0 } : null), ...(difficulty ? { difficulty } : null) };
+  const s = createGame({ seed, map, settings: Object.keys(settings).length ? settings : null });
   addPlayer(s, 'Bot');
   const me = s.players[0];
   const buyer = bot !== 'nothing';
@@ -203,6 +206,7 @@ function play(bot, seed, map, endless = false) {
 const args = process.argv.slice(2);
 const verbose = args.includes('-v');
 const endless = args.includes('--endless');
+const difficulty = (args.find((a) => a.startsWith('--difficulty=')) || '').slice(13) || null;
 const [seedArg, sizeArg, designArg] = args.filter((a) => !a.startsWith('-'));
 const seed = Number(seedArg) || 11;
 const sizes = sizeArg === 'all' ? Object.keys(MAP_SIZES) : [sizeArg || 's'];
@@ -210,9 +214,9 @@ const design = designArg || 'warehouse';
 
 for (const size of sizes) {
   const z = MAP_SIZES[size];
-  console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player${endless ? ', ENDLESS' : ''}`);
+  console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player${endless ? ', ENDLESS' : ''}${difficulty ? ', ' + difficulty : ''}`);
   for (const bot of ['nothing', 'honest', 'keen', 'focus']) {
-    const r = play(bot, seed, { design, size }, endless);
+    const r = play(bot, seed, { design, size }, endless, difficulty);
     // (An endless game is never won: it is lost, or still going when the time limit ran out.)
     const result = r.result === 'lost' ? 'LOST' : endless ? 'ALIVE' : r.result.toUpperCase();
     console.log(`== ${bot.padEnd(7)} ${result.padEnd(5)} wave ${String(r.wave).padStart(2)}, `

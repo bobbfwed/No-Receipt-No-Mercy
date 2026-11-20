@@ -5,8 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
-  waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt,
-  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE, SETTINGS,
+  waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt, crowdShiftAt,
+  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
 /** A training game (no timer, cannot be lost) with plenty of cash, on the original small map. */
@@ -393,8 +393,33 @@ test('supers arrive from the middle of the game and grow in number', () => {
 
 test('later waves have many more shoppers than the early growth alone would give', () => {
   const total = (n) => waveSpec(n).reduce((sum, g) => sum + g.n, 0);
-  assert.equal(waveSpec(1)[0].n, 4, 'wave 1: eight bargain hunters, halved (TUNE.crowdScale)');
+  assert.equal(waveSpec(1)[0].n, 5, 'wave 1: eight bargain hunters, a quarter more (TUNE.crowdFirst), halved (TUNE.crowdScale)');
   assert.ok(total(20) > total(10) * 3);
+});
+
+test('the crowd is a quarter bigger in wave 1 and a fifth smaller from wave 29, in a straight line between', () => {
+  assert.equal(crowdShiftAt(1), 1.25);
+  assert.ok(Math.abs(crowdShiftAt(29) - 0.8) < 1e-12);
+  assert.ok(Math.abs(crowdShiftAt(30) - 0.8) < 1e-12, 'wave 30 is the same as wave 29');
+  assert.ok(Math.abs(crowdShiftAt(200) - 0.8) < 1e-12, 'and so is an endless game');
+  assert.ok(Math.abs(crowdShiftAt(15) - 1.025) < 1e-12, 'half way between the two');
+  for (let n = 2; n <= 29; n++) {
+    assert.ok(Math.abs((crowdShiftAt(n - 1) - crowdShiftAt(n)) - 0.45 / 28) < 1e-12, `wave ${n}: the same step down every wave`);
+  }
+  // What a wave sends follows it. Take the shift away and the old crowd comes back.
+  const heads = (n) => waveSpec(n).reduce((sum, g) => sum + (g.k === 'boss' ? 0 : g.n), 0);
+  const now = [1, 29, 30].map(heads);
+  const keep = [TUNE.crowdFirst, TUNE.crowdLast];
+  TUNE.crowdFirst = TUNE.crowdLast = 1;
+  let old;
+  try { old = [1, 29, 30].map(heads); } finally { [TUNE.crowdFirst, TUNE.crowdLast] = keep; }
+  assert.deepEqual(old, [4, 500, 320], 'the crowd before 0.2.11 (wave 30 is a boss wave: his crowd is smaller)');
+  assert.equal(now[0], 5, 'wave 1: 25% more');
+  for (const i of [1, 2]) assert.ok(Math.abs(now[i] / old[i] - 0.8) < 0.02, `wave ${[1, 29, 30][i]}: 20% fewer (${now[i]} of ${old[i]})`);
+});
+
+test('the boss walks 10% slower than he did', () => {
+  assert.equal(BOSS.speed, 0.72);
 });
 
 test('a super shopper takes a double refund', () => {

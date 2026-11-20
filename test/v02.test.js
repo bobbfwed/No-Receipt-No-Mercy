@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, canPlace, canUpgrade, step, queueTrainingWave, waveSpec, getDist,
+  createGame, addPlayer, applyCommand, canPlace, canUpgrade, step, queueTrainingWave, waveSpec, crowdShiftAt, getDist,
   footprint, anchorOf, tracksOf, defaultTrack, levelIn, levelOf, upgradeCost, spentOn, statsOf, rebuildDeal,
   priceOf, SHOPPERS, SUPERS, BUILD, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
 } from '../src/sim/index.js';
@@ -777,9 +777,10 @@ test('the four new shoppers: supers twice as strong, Head Office prices, a pitch
   const speeds = Object.entries(SHOPPERS).filter(([k]) => k !== 'cosplay').flatMap(([k]) => [SHOPPERS[k].speed, SUPERS[k].speed]);
   assert.ok(!speeds.includes(SHOPPERS.cosplay.speed) && !speeds.includes(SUPERS.cosplay.speed));
   assert.ok(SHOPPERS.cosplay.hp < SHOPPERS.karen.hp && SHOPPERS.cosplay.hp > SHOPPERS.karen.hp * 0.8);
-  // The first four waves are what they were, except that every group is halved, a half rounded
-  // down and never below one (TUNE.crowdScale, 0.2.09), and arrives over the same time, so its
-  // gaps are longer.
+  // The first four waves are what they were, except that every group is first multiplied by the
+  // wave's crowd shift (TUNE.crowdFirst, 0.2.11: more shoppers early) and rounded, then halved, a
+  // half rounded down and never below one (TUNE.crowdScale, 0.2.09), and arrives over the same
+  // time, so its gaps are longer.
   const old = (n) => {
     const g = [{ k: 'hunter', n: 6 + 2 * n, gap: 0.9, at: 0 }];
     if (n >= 2) g.push({ k: 'dad', n: 1 + n, gap: 0.3, at: 10 });
@@ -787,7 +788,7 @@ test('the four new shoppers: supers twice as strong, Head Office prices, a pitch
     if (n >= 3) g.push({ k: 'mom', n: 1 + Math.floor(n / 3), gap: 3, at: 6 });
     if (n >= 4) g.push({ k: 'teen', n: Math.floor(n / 2), gap: 2.5, at: 3 });
     return g.map((x) => {
-      const half = Math.max(1, Math.floor(x.n / 2));
+      const half = Math.max(1, Math.floor(Math.max(1, Math.round(x.n * crowdShiftAt(n))) * TUNE.crowdScale + 0.5 - 1e-9));
       return { ...x, n: half, gap: (x.gap * x.n) / half, sup: 0 };
     });
   };
