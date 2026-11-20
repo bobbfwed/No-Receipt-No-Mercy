@@ -778,7 +778,7 @@ test('the four new shoppers: supers twice as strong, Head Office prices, a pitch
   assert.ok(!speeds.includes(SHOPPERS.cosplay.speed) && !speeds.includes(SUPERS.cosplay.speed));
   assert.ok(SHOPPERS.cosplay.hp < SHOPPERS.karen.hp && SHOPPERS.cosplay.hp > SHOPPERS.karen.hp * 0.8);
   // The first four waves are what they were, except that every group is first multiplied by the
-  // wave's crowd shift (TUNE.crowdFirst, 0.2.11: more shoppers early) and rounded, then halved, a
+  // wave's crowd shift (TUNE.crowdCurve, 0.2.11: more shoppers early) and rounded, then halved, a
   // half rounded down and never below one (TUNE.crowdScale, 0.2.09), and arrives over the same
   // time, so its gaps are longer.
   const old = (n) => {

@@ -301,9 +301,8 @@ export const BOSS = {
   // scripted players in tools/balance.mjs only just drove him out; with this one they still do,
   // because the smaller crowd lets security reach him sooner. Towers shoot whoever is nearest
   // the tills, so a slow man at the back of a big crowd is hit late.
-  // speed 0.72: 10% slower than the 0.8 he had until 0.2.11 (the owner's number), so security has
-  // longer to work on him.
-  hp: 288, speed: 0.72, refund: 150, steady: true, pitch: [0, 0],
+  // speed 0.7 (the owner's number; 0.8 until 0.2.11), so security has longer to work on him.
+  hp: 288, speed: 0.7, refund: 150, steady: true, pitch: [0, 0],
   pepEvery: 7, pepRange: 3.5, pepHeal: 0.2,
 };
 
@@ -374,12 +373,13 @@ export const TUNE = {
   patienceFrom: 5, // ...which starts rising after this sales event...
   patienceFull: 20, // ...and is reached at this one (and kept in an endless game)
   // A busier start and a thinner end (0.2.11, the owner's numbers): on top of everything above,
-  // sales event 1 sends crowdFirst of its shoppers (25% more) and event crowdLastAt sends
-  // crowdLast (20% fewer), in a straight line between the two, and crowdLast from then on
-  // (crowdShiftAt in step.js). Only the head count moves: refund cash and prices stay as they are.
-  crowdFirst: 1.25,
-  crowdLast: 0.8,
-  crowdLastAt: 29,
+  // each sales event sends a share of its shoppers read off crowdCurve, a list of [sales event,
+  // share] points joined by straight lines: 25% more in event 1, the same as before in event 10,
+  // 20% fewer in event 20, 30% fewer in event 30, and the last share from then on (crowdShiftAt
+  // in step.js). crowdTrim then multiplies single events: event 5, the first boss, sends 5% fewer
+  // again. Only the head count moves: refund cash and prices stay as they are.
+  crowdCurve: [[1, 1.25], [10, 1], [20, 0.8], [30, 0.7]],
+  crowdTrim: { 5: 0.95 },
   // From wave lateFrom on, every group grows by lateGrowth of its size per wave.
   lateFrom: 8,
   lateGrowth: 0.08,

@@ -44,13 +44,21 @@ export function patienceScaleAt(n) {
 }
 
 /**
- * The share of its shoppers wave n sends (see TUNE.crowdFirst): TUNE.crowdFirst in wave 1, falling
- * in a straight line to TUNE.crowdLast at wave TUNE.crowdLastAt, and that from then on.
+ * The share of its shoppers wave n sends: read off TUNE.crowdCurve (points of [wave, share] joined
+ * by straight lines; the first share before the first point, the last after the last), times
+ * TUNE.crowdTrim[n] if that wave has one.
  */
 export function crowdShiftAt(n) {
-  const last = TUNE.crowdLastAt;
-  const t = last > 1 ? Math.min(1, Math.max(0, (n - 1) / (last - 1))) : 1;
-  return TUNE.crowdFirst + (TUNE.crowdLast - TUNE.crowdFirst) * t;
+  const pts = TUNE.crowdCurve;
+  let share = pts[pts.length - 1][1];
+  if (n <= pts[0][0]) share = pts[0][1];
+  else {
+    for (let i = 1; i < pts.length; i++) {
+      const [n0, s0] = pts[i - 1], [n1, s1] = pts[i];
+      if (n <= n1) { share = s0 + (s1 - s0) * ((n - n0) / (n1 - n0)); break; }
+    }
+  }
+  return share * (TUNE.crowdTrim[n] ?? 1);
 }
 
 /**
