@@ -162,3 +162,6 @@ With more than one player in the game, press Enter (or the Chat button) to type 
 - `PLAN.md` has the plan and the decisions taken so far.
 - `docs/architecture.md` explains how the code is organised and the testing tools.
 - `CLAUDE.md` has the project rules for AI assistants.
+
+## License
+Copyright 2026 Brandon Nimon. The game is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE.md), in every version and every commit of this repository. Anyone may play it, change it, share it and build on it for any noncommercial purpose. Nobody may sell it or use it commercially. Anyone who passes on any part of it must include the license and its "Required Notice" line, which credits the original author. `vendor/peerjs.min.js` is PeerJS, under its own MIT licence (see [LICENSE.md](LICENSE.md)).

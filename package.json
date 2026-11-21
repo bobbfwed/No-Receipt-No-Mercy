@@ -2,6 +2,7 @@
   "name": "returns-department",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "description": "Co-op tower defense and factory game for the browser. One player hosts; friends join by room code.",
   "scripts": {
