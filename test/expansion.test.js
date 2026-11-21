@@ -393,39 +393,40 @@ test('supers arrive from the middle of the game and grow in number', () => {
 
 test('later waves have many more shoppers than the early growth alone would give', () => {
   const total = (n) => waveSpec(n).reduce((sum, g) => sum + g.n, 0);
-  assert.equal(waveSpec(1)[0].n, 5, 'wave 1: eight bargain hunters, a quarter more (TUNE.crowdCurve), halved (TUNE.crowdScale)');
-  // (2.5 times, not 3, since 0.2.11: the owner's curve sends 25% fewer shoppers by wave 20.)
-  assert.ok(total(20) > total(10) * 2.5);
+  assert.equal(waveSpec(1)[0].n, 5, 'wave 1: eight bargain hunters, a quarter more (TUNE.crowdCurves), halved (TUNE.crowdScale)');
+  // (Twice, not 3 times, since 0.2.12: the owner's curves send 40% fewer shoppers by wave 20.)
+  assert.ok(total(20) > total(10) * 2);
 });
 
-test('the crowd follows the curve the owner asked for: 25% more in wave 1, 5% fewer in 10, 25% fewer in 20, 35% fewer from 30', () => {
+test('the crowd follows the owner’s two curves multiplied together, and wave 5 is cut again', () => {
   const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-12, `${msg}: ${a} is not ${b}`);
+  // 0.2.11: 25% more in wave 1, 5% fewer in 10, 25% fewer in 20, 35% fewer from 30.
+  // 0.2.12, on top: nothing in waves 1 and 2, 8% fewer in 10, 20% fewer in 20, 25% fewer from 30.
   near(crowdShiftAt(1), 1.25, 'wave 1');
-  near(crowdShiftAt(10), 0.95, 'wave 10');
-  near(crowdShiftAt(20), 0.75, 'wave 20');
-  near(crowdShiftAt(30), 0.65, 'wave 30');
-  near(crowdShiftAt(200), 0.65, 'an endless game keeps the last share');
-  // Straight lines between the points.
-  near(crowdShiftAt(4), 1.25 - 0.3 * 3 / 9, 'wave 4');
-  near(crowdShiftAt(15), 0.85, 'wave 15');
-  near(crowdShiftAt(25), 0.7, 'wave 25');
+  near(crowdShiftAt(2), 1.25 - 0.3 / 9, 'wave 2: the second curve takes nothing off');
+  near(crowdShiftAt(10), 0.95 * 0.92, 'wave 10');
+  near(crowdShiftAt(20), 0.75 * 0.8, 'wave 20');
+  near(crowdShiftAt(30), 0.65 * 0.75, 'wave 30');
+  near(crowdShiftAt(200), 0.65 * 0.75, 'an endless game keeps the last share');
+  // Straight lines between the points of each curve.
+  near(crowdShiftAt(6), (1.25 - 0.3 * 5 / 9) * (1 - 0.08 * 4 / 8), 'wave 6');
+  near(crowdShiftAt(15), 0.85 * 0.86, 'wave 15');
+  near(crowdShiftAt(25), 0.7 * 0.775, 'wave 25');
   // Wave 5 alone sends 7% fewer again.
-  near(crowdShiftAt(5), (1.25 - 0.3 * 4 / 9) * 0.93, 'wave 5');
-  assert.ok(crowdShiftAt(5) < crowdShiftAt(6), 'wave 5 dips below the line');
-  // What a wave sends follows it. Take the curve away and the old crowd comes back.
+  near(crowdShiftAt(5), (1.25 - 0.3 * 4 / 9) * (1 - 0.08 * 3 / 8) * 0.93, 'wave 5');
+  // What a wave sends follows it. Take the curves away and the old crowd comes back.
   const heads = (n) => waveSpec(n).reduce((sum, g) => sum + (g.k === 'boss' ? 0 : g.n), 0);
   const at = [1, 10, 20, 29, 30];
   const now = at.map(heads);
-  const keep = [TUNE.crowdCurve, TUNE.crowdTrim];
-  TUNE.crowdCurve = [[1, 1]]; TUNE.crowdTrim = {};
+  const keep = [TUNE.crowdCurves, TUNE.crowdTrim];
+  TUNE.crowdCurves = []; TUNE.crowdTrim = {};
   let old;
-  try { old = at.map(heads); } finally { [TUNE.crowdCurve, TUNE.crowdTrim] = keep; }
+  try { old = at.map(heads); } finally { [TUNE.crowdCurves, TUNE.crowdTrim] = keep; }
   assert.deepEqual(old, [4, 37, 149, 500, 320], 'the crowd before 0.2.11 (waves 10, 20 and 30 are boss waves: smaller crowds)');
   assert.equal(now[0], 5, 'wave 1: 25% more');
-  assert.ok(Math.abs(now[1] / old[1] - 0.95) < 0.04, `wave 10: 5% fewer (${now[1]} of ${old[1]})`);
-  assert.ok(Math.abs(now[2] / old[2] - 0.75) < 0.03, `wave 20: 25% fewer (${now[2]} of ${old[2]})`);
-  assert.ok(Math.abs(now[3] / old[3] - 0.66) < 0.02, `wave 29: 34% fewer (${now[3]} of ${old[3]})`);
-  assert.ok(Math.abs(now[4] / old[4] - 0.65) < 0.02, `wave 30: 35% fewer (${now[4]} of ${old[4]})`);
+  for (const [i, share] of [[1, 0.874], [2, 0.6], [3, 0.4975], [4, 0.4875]]) {
+    assert.ok(Math.abs(now[i] / old[i] - share) < 0.04, `wave ${at[i]}: ${share} of the old crowd (${now[i]} of ${old[i]})`);
+  }
 });
 
 test('the boss walks at 0.7 tiles a second', () => {
@@ -452,7 +453,9 @@ function corridor(s, kind) {
 }
 
 test('a gym bro wrecks things next to his route: crates always, other things sometimes', (t) => {
-  const wrecked = (kind, seed) => {
+  // (Each attempt that lands uses up one of his few hits, and he rests after it; so the first hit
+  // is the fair comparison: how far down the corridor he gets before something gives.)
+  const walk = (kind, seed) => {
     const s = stage(seed);
     corridor(s, kind);
     send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
@@ -462,36 +465,47 @@ test('a gym bro wrecks things next to his route: crates always, other things som
       assert.equal(e.left, 0, 'a plain building takes one hit');
       assert.equal(s.grid[e.i], 0, 'what he wrecks is gone');
     }
-    return ev.length;
+    return { n: ev.length, first: ev.length ? ev[0].i % 30 : 99 };
   };
   let crates = 0, belts = 0;
-  for (let seed = 1; seed <= 6; seed++) { crates += wrecked('crate', seed); belts += wrecked('belt', seed); }
-  assert.ok(crates >= 6 * 6, `wrecked ${crates} crate stacks in six walks`);
+  for (let seed = 1; seed <= 6; seed++) {
+    const c = walk('crate', seed), b = walk('belt', seed);
+    assert.equal(c.n, TUNE.smashMax, 'a crate stack beside him is always hit: he uses up every hit he has');
+    assert.equal(c.first, 3, 'and the first crate stack he passes takes the first');
+    crates += c.n;
+    belts += b.n;
+  }
   assert.ok(belts >= 3, `wrecked ${belts} belts in six walks`);
-  assert.ok(crates > belts * 2, 'crates go far more often than other things');
+  assert.ok(crates > belts, 'crates go more often than other things');
 
   // The chance for other things is a tuning number: at zero he leaves them alone.
   tune(t, { smashOther: 0 });
-  assert.equal(wrecked('belt', 3), 0);
+  assert.equal(walk('belt', 3).n, 0);
 });
 
-test('a super gym bro wrecks far more than a normal one', () => {
-  const wrecked = (sup) => {
+test('a super gym bro wrecks more than a normal one', () => {
+  const wrecked = (sup, kind) => {
     let n = 0;
     for (let seed = 1; seed <= 6; seed++) {
       const s = stage(seed);
-      corridor(s, 'belt');
+      corridor(s, kind);
       send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0, sup }]);
       n += play(s, 120).filter((e) => e.e === 'smash').length;
     }
     return n;
   };
-  const normal = wrecked(0), big = wrecked(1);
-  assert.ok(big >= normal * 2 && big >= 18, `super wrecked ${big}, normal ${normal}`);
+  // Crates: each uses up every hit he has (two, or three for the Roid Rager).
+  assert.equal(wrecked(0, 'crate'), 6 * TUNE.smashMax);
+  assert.equal(wrecked(1, 'crate'), 6 * SUPERS.gymbro.smashMax);
+  // Other things: the Roid Rager rolls more often, with a better chance, and rests less.
+  const normal = wrecked(0, 'belt'), big = wrecked(1, 'belt');
+  assert.ok(big > normal && big >= 9, `super wrecked ${big} belts, normal ${normal}`);
 });
 
 test('a building with durability takes more hits; the damage is forgotten when the wave ends', (t) => {
-  tune(t, { smashOther: 1 });
+  // (This is about durability, not about his limit, so he may hit as often as he likes here; the
+  // limit is tested below.)
+  tune(t, { smashOther: 1, smashMax: 1000, smashWait: 0 });
   const s = stage(3);
   for (let x = 3; x <= 26; x++) { place(s, 'sprinkler', x, 6); place(s, 'sprinkler', x, 8); }
   for (let x = 3; x <= 26; x++) for (const y of [6, 8]) for (let n = 0; n < 2; n++) applyCommand(s, 0, { c: 'upgrade', x, y, t: 'dur' });
@@ -520,7 +534,9 @@ test('a building with durability takes more hits; the damage is forgotten when t
   assert.ok(s.grid.every((b) => !b || !b.hit));
 });
 
-test('what a gym bro wrecks can be rebuilt in one go by its owner, at half price', () => {
+test('what a gym bro wrecks can be rebuilt in one go by its owner, at half price', (t) => {
+  // (Rebuilding is the point here, so this gym bro may wreck as much as he likes.)
+  tune(t, { smashMax: 1000, smashWait: 0 });
   const s = stage(2);
   addPlayer(s, 'Steve');
   s.players[1].cash = 1000;

@@ -2,7 +2,7 @@
 // which lets every player's browser predict the game between updates from the host.
 import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, BABY, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless } from './state.js';
-import { getField, getFieldTo, modeOf, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
+import { getField, getFieldTo, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 
@@ -43,22 +43,25 @@ export function patienceScaleAt(n) {
   return 1 + (TUNE.patienceScale - 1) * Math.min(1, Math.max(0, t));
 }
 
+/** The height at wave n of a curve of [wave, share] points joined by straight lines. */
+function curveAt(pts, n) {
+  if (n <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    const [n0, s0] = pts[i - 1], [n1, s1] = pts[i];
+    if (n <= n1) return s0 + (s1 - s0) * ((n - n0) / (n1 - n0));
+  }
+  return pts[pts.length - 1][1];
+}
+
 /**
- * The share of its shoppers wave n sends: read off TUNE.crowdCurve (points of [wave, share] joined
- * by straight lines; the first share before the first point, the last after the last), times
+ * The share of its shoppers wave n sends: every curve of TUNE.crowdCurves read at n (the first
+ * share before a curve's first point, the last after its last) and multiplied together, times
  * TUNE.crowdTrim[n] if that wave has one.
  */
 export function crowdShiftAt(n) {
-  const pts = TUNE.crowdCurve;
-  let share = pts[pts.length - 1][1];
-  if (n <= pts[0][0]) share = pts[0][1];
-  else {
-    for (let i = 1; i < pts.length; i++) {
-      const [n0, s0] = pts[i - 1], [n1, s1] = pts[i];
-      if (n <= n1) { share = s0 + (s1 - s0) * ((n - n0) / (n1 - n0)); break; }
-    }
-  }
-  return share * (TUNE.crowdTrim[n] ?? 1);
+  let share = TUNE.crowdTrim[n] ?? 1;
+  for (const pts of TUNE.crowdCurves) share *= curveAt(pts, n);
+  return share;
 }
 
 /**
@@ -84,8 +87,8 @@ export function patienceFor(state, def) {
  * time: half as many, twice as far apart.
  * Before that, every group is multiplied by crowdShiftAt(n): more shoppers in the early waves,
  * fewer in the late ones.
- * However late the wave, the crowd is at most TUNE.maxCrowd times TUNE.crowdScale shoppers per
- * player's worth (the boss aside); beyond that only patience keeps growing.
+ * However late the wave, the crowd is at most TUNE.maxCrowd times TUNE.crowdScale times
+ * crowdShiftAt(n) shoppers per player's worth (the boss aside); beyond that only patience keeps growing.
  * (Training games do not come through here: their waves are queued by the lessons.)
  * @param {number} [players] how many players share the store; more players, more shoppers
  */
@@ -121,7 +124,9 @@ export function waveSpec(n, players = 1) {
   const scaled = (full) => Math.max(1, Math.floor(full * TUNE.crowdScale + 0.5 - 1e-9));
   // An endless game goes on for ever and the crowd would grow without limit (wave 100 would send
   // over 10,000 shoppers to a solo player). Past the cap, every group shrinks by the same share.
-  const most = Math.round(TUNE.maxCrowd * crowd * TUNE.crowdScale);
+  // (The cap takes the wave's crowd share too, since 0.2.12: otherwise an endless game would grow
+  // back to the full cap and undo the owner's "25% fewer from event 30 on".)
+  const most = Math.round(TUNE.maxCrowd * crowd * TUNE.crowdScale * crowdShiftAt(n));
   let total = 0;
   for (const grp of g) total += scaled(Math.max(1, Math.round(grp.n * grow)));
   const capped = total > most;
@@ -286,7 +291,7 @@ function spawn(state, ev) {
     if (def.messy) s.m = secs(tv(def, 'messEvery') * (0.4 + 0.6 * rand(state)));
     if (def.kid) { s.kd = 0; s.kx = s.x; s.ky = s.y; s.kvx = 0; s.kvy = 0; s.kr = 0; s.kc = secs(tv(def, 'kidRest') * 0.5); s.kn = 0; }
     if (def.bolts) s.bt = 0;
-    if (def.smashes) s.sm = 0;
+    if (def.smashes) { s.sm = 0; s.hn = 0; s.hw = 0; }
     if (def.flashes) { s.m = secs(tv(def, 'flashEvery') * (0.4 + 0.6 * rand(state))); s.fl = 0; }
     if (def.sways) s.sv = 1;
     if (def.boss) {
@@ -513,7 +518,7 @@ function stepBuildings(state, fields, ev, only = null) {
     if (d.shields) cosplayers.push(s);
   }
   const beltAdv = TUNE.beltSpeed * DT;
-  const way = (s) => fields[modeOf(s.k)][((s.y | 0) * W) + (s.x | 0)];
+  const way = (s) => fields[routeOf(s)][((s.y | 0) * W) + (s.x | 0)];
 
   const count = only ? only.length : grid.length;
   for (let q = 0; q < count; q++) {
@@ -847,21 +852,33 @@ const RUBBLE_MAX = 400;
  * A gym bro hits the building on a tile (any tile of it). Each building survives statsOf().hits
  * hits in one wave; the last one destroys it, and it is remembered as rubble so it can be rebuilt.
  * @param {boolean} [flatten] destroy it outright (he is standing on it)
+ * @returns {boolean} false if there was nothing on the tile to hit
  */
 function wreck(state, ti, s, ev, flatten = false) {
   const ai = anchorOf(state, ti);
   const b = state.grid[ai];
-  if (!b) return;
+  if (!b) return false;
   state.ws.wrecked++;
   const hits = statsOf(b).hits;
   b.hit = flatten ? hits : (b.hit | 0) + 1;
   const left = Math.max(0, hits - b.hit);
   ev.push({ e: 'smash', i: ai, x: s.x, y: s.y, k: b.k, owner: b.o, left });
-  if (left > 0) return;
+  if (left > 0) return true;
   for (const t of tilesOf(state, ai)) state.grid[t] = 0;
   state.gridVer++;
   state.rubble.push({ i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b) });
   if (state.rubble.length > RUBBLE_MAX) state.rubble.shift();
+  return true;
+}
+
+/**
+ * One of a gym bro's own hits. Every hit he lands uses one up (TUNE.smashMax), even one a
+ * Durability level shrugs off, and he rests after it (TUNE.smashWait). The owner's rule (0.2.12).
+ */
+function landHit(state, ti, s, def, ev) {
+  if (!wreck(state, ti, s, ev)) return;
+  s.hn = (s.hn | 0) + 1;
+  s.hw = secs(tv(def, 'smashWait'));
 }
 
 /**
@@ -883,7 +900,7 @@ function smashAround(state, s, def, i, ev) {
   if (crate < 0 && other < 0) return; // nothing in reach: look again next tick
   s.sm = secs(tv(def, 'smashEvery'));
   const ti = crate >= 0 ? crate : rand(state) < tv(def, 'smashOther') ? other : -1;
-  if (ti >= 0) wreck(state, ti, s, ev);
+  if (ti >= 0) landHit(state, ti, s, def, ev);
 }
 
 /** The direction from tile a to the tile next to it, b (0-3), or -1 if they are not neighbours. */
@@ -962,6 +979,8 @@ function stepShoppers(state, fields, sec, ev) {
     if (s.ru > 0) s.ru--;
     if (s.gz > 0) s.gz--;
     if (s.fl > 0) s.fl--;
+    // A gym bro's rest after a hit runs on whatever he is doing (watching a television included).
+    if (s.hw > 0) s.hw--;
     if (s.st !== ST.WALK) {
       if (--s.t <= 0) s.st = ST.WALK;
       continue;
@@ -986,17 +1005,23 @@ function stepShoppers(state, fields, sec, ev) {
     let here = grid[i];
 
     if (def.smashes) {
-      // A gym bro does not go around a crate stack. He goes through it: if one is in his way, he
-      // stands there and hits it until it is gone.
+      // Standing on a crate stack (he must never be stuck inside one): it goes, at once. This is
+      // not one of his hits, and he does not rest after it.
       if (here && here.k === 'crate') { wreck(state, i, s, ev, true); here = 0; }
       if (s.sm > 0) s.sm--;
-      const ahead = nextTile(state, fields[SMASH], i, s.id);
-      if (ahead !== i && grid[ahead] && grid[ahead].k === 'crate') {
-        if (s.sm <= 0) { s.sm = secs(tv(def, 'smashEvery')); wreck(state, ahead, s, ev); }
-        if (grid[ahead]) continue; // still standing: he waits for his next swing
-      } else if (s.sm <= 0) {
-        smashAround(state, s, def, i, ev);
-        here = grid[i];
+      // A gym bro who can still hit things does not go around a crate stack. He goes through it:
+      // if one is in his way, he stands there and hits it. Each hit he lands makes him rest, and
+      // resting (or spent) he walks round crates like anyone else (routeOf, below).
+      if (smashReady(s, def)) {
+        const ahead = nextTile(state, fields[SMASH], i, s.id);
+        if (ahead !== i && grid[ahead] && grid[ahead].k === 'crate') {
+          if (s.sm <= 0) { s.sm = secs(tv(def, 'smashEvery')); landHit(state, ahead, s, def, ev); }
+          // Still standing, and he can still swing (his last attempt missed): he waits for his next.
+          if (grid[ahead] && smashReady(s, def)) continue;
+        } else if (s.sm <= 0) {
+          smashAround(state, s, def, i, ev);
+          here = grid[i];
+        }
       }
     }
     // A day drinker: his pace changes all the time, and a corner may be too much for him.
@@ -1153,7 +1178,7 @@ function stepShoppers(state, fields, sec, ev) {
       going = ki === i ? moveTo(s.x, s.y, s.kx, s.ky, speed)
         : moveAlong(state, getFieldTo(state, ki), s.x, s.y, s.ox, s.oy, speed, s.id);
     } else {
-      going = moveAlong(state, fields[modeOf(s.k)], s.x, s.y, s.ox, s.oy, speed, s.id);
+      going = moveAlong(state, fields[routeOf(s)], s.x, s.y, s.ox, s.oy, speed, s.id);
     }
     if (going) {
       s.vx = MV.vx;

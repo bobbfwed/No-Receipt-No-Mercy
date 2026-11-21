@@ -130,7 +130,9 @@ test('in a boss wave every other group is a smaller share of its usual size, ove
     assert.ok(Math.abs(real[i].gap * real[i].n - full[i].gap * full[i].n) < 1e-9, 'the group takes as long to arrive');
     a += real[i].n; b += full[i].n;
   }
-  assert.ok(Math.abs(a / b - share) < 0.05, `the crowd is ${a} instead of ${b}`);
+  // (Within 0.08: with the smaller crowds of 0.2.12 several groups are one or two shoppers, and a
+  // group never goes below one.)
+  assert.ok(Math.abs(a / b - share) < 0.08, `the crowd is ${a} instead of ${b}`);
   // A wave without him is untouched.
   assert.deepEqual(waveSpec(9), nine);
 });

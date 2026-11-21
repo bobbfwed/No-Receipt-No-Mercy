@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, queueTrainingWave, waveSpec, priceOf, canBuy, checkPlan, modeOf,
-  patienceGrowth, patienceScaleAt, bossPatience, shopperDef, defOf, perHead, babyPace, migrateSave, STATE_VERSION,
+  patienceGrowth, patienceScaleAt, crowdShiftAt, bossPatience, shopperDef, defOf, perHead, babyPace, migrateSave, STATE_VERSION,
   SHOPPERS, SUPERS, BABY, BOSS, OFFICE, TUNE, SETTINGS, TICK_HZ, NORMAL,
 } from '../src/sim/index.js';
 import { HostSession } from '../src/net/session.js';
@@ -297,8 +297,9 @@ test('it is the last hit that counts: laser first then a forklift pops her; a fo
 
 test('late in an endless game the crowd is at or just under the halved cap, for one player and for several', () => {
   for (const p of [1, 2, 4]) {
-    const most = Math.round(TUNE.maxCrowd * (1 + TUNE.crowdPerPlayer * (p - 1)) * TUNE.crowdScale);
     for (const n of [50, 80, 120]) {
+      // (The cap takes the event's crowd share, like the crowd: see TUNE.crowdCurves.)
+      const most = Math.round(TUNE.maxCrowd * (1 + TUNE.crowdPerPlayer * (p - 1)) * TUNE.crowdScale * crowdShiftAt(n));
       const g = waveSpec(n, p).filter((x) => x.k !== 'boss');
       const total = g.reduce((sum, x) => sum + x.n, 0);
       assert.ok(total <= most && total >= most - g.length, `event ${n}, ${p} players: ${total} (cap ${most})`);

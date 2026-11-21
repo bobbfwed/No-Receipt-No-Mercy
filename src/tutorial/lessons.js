@@ -19,7 +19,7 @@
 // counts of what the shoppers did: kid (a child escaped), crawl (a mom crawled), mess (a teenager
 // spilled), bolt (a guide dog bolted), slip (a dad slipped), smashed (a gym bro wrecked something;
 // smashedCrate for crate stacks), rebuilt (the Rebuild button put something back).
-import { queueTrainingWave, setTrainingCash, levelIn, maxIn } from '../sim/index.js';
+import { queueTrainingWave, setTrainingCash, levelIn, maxIn, TUNE } from '../sim/index.js';
 
 const S = 1; // facing south
 const X = 10; // the column the production line runs down
@@ -437,6 +437,7 @@ export const STEPS = [
     wave: [{ k: 'gymbro', n: 1, gap: 1, at: 0 }],
     text: [
       'A Gym Bro does not go round Crate Stacks. He walks straight through them, smashing any in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a belt, a machine, a sign. Each thing you build survives one hit in a sales event (more for the biggest security), and one more for every level of durability you buy it.',
+      `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that durability soaks up still uses one of his.`,
       'Do this: put Crates (press 6) on the three highlighted tiles by the entrance, so shoppers have to walk round. Then OPEN THE DOORS for one Gym Bro.',
       'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, upgrades and all, for half of what you had spent on it.',
     ],
@@ -454,7 +455,7 @@ export const STEPS = [
     },
     done: (s, f) => f.waveEnds >= 1 && f.smashedCrate >= 1 && !s.rubble.length && DOOR_CRATES.every(([x, y]) => is(s, x, y, 'crate')),
     hint: (s, f) => {
-      if (s.phase === 'wave') return 'Watch him walk straight through the crates.';
+      if (s.phase === 'wave') return 'Watch him smash through the crates, then get his breath back.';
       if (f.waveEnds && s.rubble.length) return 'Press B (or the Rebuild button in the build bar) to put back what he wrecked.';
       for (const [x, y] of DOOR_CRATES) { const h = tileHint(s, x, y, 'crate', undefined, 'Crate'); if (h) return h; }
       if (!DOOR_CRATES.every(([x, y]) => is(s, x, y, 'crate'))) return f.waveEnds ? 'Put Crates on the highlighted tiles (press 6).' : null;

@@ -84,6 +84,11 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [m]   teenager: ticks until the next mess
  * @property {number} [bt]  man with guide dog: ticks left of the dog bolting (he moves fast)
  * @property {number} [sm]  gym bro: ticks until he next tries to wreck something beside him
+ * @property {number} [hn]  gym bro: hits he has landed this visit (he stops at TUNE.smashMax, or his
+ *                          super's own number); absent reads as 0
+ * @property {number} [hw]  gym bro: ticks left of his rest after a hit (TUNE.smashWait); while it
+ *                          runs, and once hn is used up, he walks round crates like anyone else;
+ *                          absent reads as 0
  * @property {number} [kd]  mom: where the child is. 0 in the cart, 1 running away, 2 waiting to be
  *                          caught, 3 carried in her arms (she lost the cart; he never runs again)
  * @property {number} [kx]  mom: the loose child's position in tiles (only meaningful when kd is 1 or 2)

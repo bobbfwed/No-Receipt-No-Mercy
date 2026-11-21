@@ -1,6 +1,13 @@
 // Plain explanations of what each building does and how to use it. Shown in the info card when a
 // building is picked in the build bar, and used by the tutorial. These are the "manual": keep them
-// clear first and funny second. If a number in src/sim/constants.js changes, update the text here.
+// clear first and funny second. If a number in src/sim/constants.js changes, update the text here
+// (the gym bro's limits are read from the rules below).
+import { TUNE, SUPERS } from '../sim/index.js';
+
+/** A small count as a word ("two"), for text that reads better that way. */
+const word = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
+const cap = (t) => t[0].toUpperCase() + t.slice(1);
+const ROID = SUPERS.gymbro;
 
 /** Per building: `does` = what it is for, `use` = how to place it so it works. */
 export const HOW = {
@@ -32,7 +39,7 @@ export const HOW = {
   crate: {
     does: 'A wall, and nothing else.',
     use: 'Use it to shape the route shoppers must walk. It is the cheapest way to stop a dad, who steps over belts but not crates.',
-    maze: 'Blocks all shoppers, dads included.',
+    maze: 'Blocks all shoppers, dads included, except a gym bro with a hit left in him, who smashes through.',
   },
   sprinkler: {
     does: 'Wears down the patience of up to four shoppers within about 2 tiles, twice a second. In a crowd it picks the four nearest the tills.',
@@ -79,7 +86,10 @@ export const SHOPPER_HELP = {
   karen: { trick: 'Enormous patience. Security near her works at half speed while she asks for the manager.', beat: 'Long routes and forklifts out of her reach. Do not rely on one cluster of towers.' },
   blind: { trick: 'The guide dog steers him around puddles and messes, and he cannot see free samples. Pepper spray makes the dog bolt, dragging him along fast.', beat: 'Forklifts. Sprinklers make him faster.' },
   scooter: { trick: 'Cannot be slowed by anything.', beat: 'Raw damage over a long route.' },
-  gymbro: { trick: 'Walks straight through crate stacks, wrecks every crate stack he passes, and now and then wrecks something else beside him: a belt, a machine, a tower.', beat: 'Stop him early, before he reaches anything expensive. Durability upgrades let a building take more hits (they reset every sales event), and a durable crate stack holds him up. Press B to rebuild what he wrecked at half price.' },
+  gymbro: {
+    trick: `Walks straight through crate stacks, wrecking any in his way and any he passes, and now and then something else beside him: a belt, a machine, a tower. But he only has ${word(TUNE.smashMax)} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else.`,
+    beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts, even one a Durability upgrade soaks up (the damage is forgotten every sales event), so a durable crate stack where he first meets your maze takes a hit off him for nothing, and makes him walk the long way round. Press B to rebuild what he wrecked at half price.',
+  },
   drinker: { trick: 'Weaves along at a speed that keeps changing. At corners of the route he may fall over and lie there for 4 seconds, and everyone else has to squeeze past him at a third of their speed.', beat: 'Corners near your security: when he goes down, the queue behind him stands in the spray.' },
   dog: { trick: 'Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.', beat: 'Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.' },
   flasher: { trick: 'A woman in a bathrobe who opens it every few seconds. Dads and teenagers within 2.5 tiles stop and stare for 2 seconds.', beat: 'She helps you: let her walk with the dad line, in range of something that hurts.' },
@@ -109,7 +119,7 @@ export const SUPER_HELP = {
   karen: 'Four times the patience. Slows security twice as far away, to a quarter speed.',
   blind: 'Two and a half times the patience. The dogs bolt from forklift hits too, further and faster.',
   scooter: 'Two and a half times the patience and nearly twice the speed.',
-  gymbro: 'Two and a half times the patience. Wrecks things much more often.',
+  gymbro: `Two and a half times the patience, and faster. ${cap(word(ROID.smashMax))} hits instead of ${word(TUNE.smashMax)}, only ${ROID.smashWait} seconds apart, and he goes for things that are not crates far more often.`,
   drinker: 'Two and a half times the patience. Falls over at half the corners and stays down 6 seconds.',
   dog: 'Two and a half times the patience and faster. Switches security off for 12 seconds, from further away, and more often.',
   flasher: 'Two and a half times the patience. No robe at all: stops dads and teenagers within 4 tiles for 3 seconds, every few seconds.',
@@ -119,7 +129,7 @@ export const SUPER_HELP = {
 
 /** What the Upgrade tool does, for the same info card. */
 export const HOW_UPGRADE = {
-  does: 'Upgrades a building. Each building has its own kinds of upgrade, bought separately: damage, speed, range and durability for security; speed and durability for factory machines (expensive); durability only for belts, chutes and crates.',
+  does: 'Upgrades a building. Each building has its own kinds of upgrade, bought separately: damage, speed, range and durability for security; speed and durability for factory machines; durability only for belts, chutes and crates.',
   use: 'Click a building and choose what to upgrade. Each level of one kind costs more than the last. Durability is how many gym bro hits it survives in one sales event.',
   maze: '',
 };

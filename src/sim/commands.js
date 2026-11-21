@@ -2,7 +2,7 @@
 // The host validates every command here, so a confused or cheating client cannot break the game.
 import { BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf } from './state.js';
-import { computeDist, banksOpen, modeOf, UNREACHABLE } from './path.js';
+import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './path.js';
 import { beginWave, skipBuild } from './step.js';
 import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
@@ -88,11 +88,13 @@ export function canPlace(state, k, x, y, pid = 0, d = 0) {
     // In a store with two banks of tills, both stay open: walling one off would turn it back into
     // an ordinary store, and the crowd choosing between them is the point of it.
     if (!banksOpen(state, block)) return 'bank';
-    // Dads and gym bros get through things others cannot, so each is checked on his own map.
+    // Dads get through things others cannot, so each is checked on his own map. A gym bro is
+    // checked as an ordinary shopper: at any moment he may be resting after a hit, or spent, and
+    // then he walks round crates like anyone else, so crates must not wall him in either.
     const fields = [dist, null, null];
     for (const s of state.shoppers) {
       if (s.st === ST.LEAVE) continue;
-      const mode = modeOf(s.k);
+      const mode = modeOf(s.k) === SMASH ? NORMAL : modeOf(s.k);
       const field = (fields[mode] ||= computeDist(state, block, mode));
       if (field[tileOf(state, s)] === UNREACHABLE) return 'blocked';
     }

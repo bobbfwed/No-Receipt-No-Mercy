@@ -949,7 +949,7 @@ export const INTRO = {
   karen: 'New today: Karens. Security near one works at half speed, because she is asking it for the manager.',
   blind: 'New today: a man with a guide dog. Pepper spray makes the dog bolt, so sprinklers speed him UP. Use forklifts.',
   scooter: 'New today: mobility scooters. Nothing slows them. Not wet floors, not free samples, not shame.',
-  gymbro: 'New today: gym bros. They walk through crate stacks and wreck whatever is next to them: crates always, your machines when the mood takes them. Stop them early. Or use a mirror.',
+  gymbro: 'New today: gym bros. They walk through crate stacks and wreck whatever is next to them: crates first, your machines when the mood takes them. A couple of hits and they need a sit-down. Still more stamina than {p}. Stop them early.',
   dog: 'New today: stray dogs. One cocks his leg on your security and it switches off for a few seconds. Get rid of him before he finds a sprinkler he likes.',
   cosplay: 'New today: cosplayers. His huge costume soaks up shots meant for the shoppers next to him. Twenty years of being ignored, and now everyone wants to stand near him.',
   flasher: 'New today: the exhibitionist. A woman in a bathrobe. When she opens it, dads and teenagers stop dead to stare. She is on your side. Put your security where she works.',
@@ -970,7 +970,7 @@ export const SUPER_INTRO = {
   mom: 'New and worse: the Soccer Mom. Her kid gets away twice, and she chases him twice as fast. Nothing in this building moves like a woman late for practice.',
   karen: 'New and worse: Karen Supreme. Four times the patience, and security slows to a crawl twice as far away. She does not want the manager. She wants the owner. And his mother.',
   teen: 'New and worse: the Teen Influencer. Three times the mess and he is filming it. Smile, {p}, you are content now.',
-  gymbro: "New and worse: the Roid Rager. He wrecks nearly everything he passes. It isn't anger, he says. It's 'pre-workout'.",
+  gymbro: "New and worse: the Roid Rager. One more hit in him than a gym bro, and half the sit-down between them. It isn't anger, he says. It's 'pre-workout'.",
   scooter: 'New and worse: the Turbo Scooter. Still cannot be slowed, now nearly twice as fast. He removed the limiter himself. He removed the brakes by accident.',
   blind: 'New and worse: a man with TWO guide dogs. They bolt from forklift hits as well, further and faster. You are being outrun by a blind man. Reflect on that.',
   // The names of these supers are not settled, so the lines do not use them.

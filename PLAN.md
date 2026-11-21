@@ -318,6 +318,34 @@ The owner: late events were a flood nobody could read, and he wants players to c
   - Left as the owner asked. If the start proves too hard for people as well, the first point of `TUNE.crowdCurve` is the number to lower.
 - **A mistake in the chart of 2026-11-18 was found and corrected:** the script behind the first "patience per sales event" chart counted a whole group as supers as soon as one of them was, overstating every event from 6 on (event 29: 1,961,466 shown, 1,077,740 right). The game was never wrong, only the chart.
 
+## Version 0.2.12: a Gym Bro who runs out of hits, fewer shoppers again, cheaper factory speed upgrades (owner's requests of 2026-11-20, built the same day, not yet played by a person)
+- **The Gym Bro can hit 2 things in a visit, 10 seconds apart; the Roid Rager 3 things, 5 seconds apart** (owner's numbers: `TUNE.smashMax`, `TUNE.smashWait`, and the Roid Rager's own in `SHOPPERS.gymbro.sup`). Until now he hit every Crate Stack he passed and anything else on a roll of the dice, as often as every 1.5 seconds, for the whole walk.
+  - **Every hit counts** (owner): a hit that a Durability level absorbs uses one up and starts the rest, so one Durability level on a crate soaks up a hit.
+  - **Resting after a hit, and once his hits are gone, he walks round Crate Stacks like an ordinary shopper** (owner) and hits nothing. With a hit ready he goes straight through crates as before. He never stands waiting at a crate through a rest. Which route he is on is `routeOf(shopper)` in `src/sim/path.js`; towers that aim by distance to the tills use it too. His hits made and rest left are `hn` and `hw` on the shopper; a game saved before this reads them as 0.
+  - The time between attempts that miss (`smashEvery`: 1.5 s, Roid Rager 0.9 s) and the chance of hitting something that is not a crate (`smashOther`: 15%, Roid Rager 40%) are unchanged.
+  - **A side effect on building:** a crate may no longer be placed where it would wall in a gym bro who is already in the store (it could before, because he walked through crates). Resting or spent he needs the ordinary route like everyone else.
+  - Nothing on screen shows that a gym bro is resting or spent; players see him walk round crates. Three of DEB's jokes ("Men like that never go around anything") are now only loosely true and were left as jokes.
+  - (The 0.1 notes above that say gym bros wreck every crate stack beside their route describe the rule before this version.)
+- **Fewer shoppers again** (owner: "reduce the number of shoppers at sales event 1 and 2 by 0%; sales event 10 by 8%; sales event 20 by 20%, sales event 30 by 25%", and "event 5 gets about 4% fewer than it is right now"). The cuts are against the game as it was in 0.2.11, so they are a second curve multiplied onto the first: `TUNE.crowdCurves` is now a list of curves, each a list of [sales event, share] points joined by straight lines, and `crowdShiftAt(n)` multiplies them (and `TUNE.crowdTrim`, still 0.93 for event 5). Against the crowd of 0.2.10 that is 125% in event 1, 87% in event 10, 60% in event 20 and 49% from event 30 on. Shoppers per event, solo, 0.2.10 / 0.2.11 / 0.2.12 (the boss not counted): event 1, 4 / 5 / 5; event 2, 6 / 8 / 8; event 4, 15 / 18 / 18; event 5, 14 / 14 / 14; event 6, 25 / 28 / 26; event 10, 37 / 36 / 33; event 15, 87 / 71 / 65; event 20, 149 / 110 / 88; event 25, 225 / 155 / 121; event 29, 500 / 330 / 249; event 30, 320 / 206 / 153.
+  - Event 5's 3% (the line between events 2 and 10) is too little to remove anyone from a solo game: it is 14 shoppers before and after.
+  - **The endless cap follows the share** (decided for the owner): `TUNE.maxCrowd` is multiplied by the event's crowd share as well. Otherwise an endless game would have grown back to the full cap of 550 by about event 65 and undone "25% fewer from event 30 on"; now it levels off at about 268 for one player.
+  - Tests that leaned on the size of the crowd were adjusted: event 20 must have twice event 10's crowd (it was 2.5 times, and 3 before 0.2.11); a boss event's crowd is within 0.08 of 60% of an ordinary one (0.05 before: with so few shoppers several groups are one or two people and a group never goes below one); and the two tests of the endless cap use the cap times the share.
+- **Factory speed upgrades are cheaper** (owner): the first level costs $100 on an Unpacker (25% of the $400 it was), $300 on a Press (50% of $600) and $540 on a Packer (60% of $900). Each later level is still 1.8 times the last, five levels at most, so every level is the same share of its old price: Unpacker $100, $180, $324, $583, $1,050; Press $300, $540, $972, $1,750, $3,149; Packer $540, $972, $1,750, $3,149, $5,669. A machine's sale value and half-price rebuild are worked out from today's prices, so a machine upgraded in a game saved before this is worth less than was paid for it.
+- **Balance** (`tools/balance.mjs`, Normal, one-player Open Warehouse, eight seeds: 11, 5, 23, 7, 42, 3, 99, 1234; the sales event each scripted player loses in, honest / keen / focus, averaged):
+
+  | | honest | keen | focus | refunds after event 5, of 20 |
+  |---|---|---|---|---|
+  | 0.2.10 | 10.3 | 15.1 | 14.9 | 5.6 |
+  | 0.2.11 | 9.0 | 11.4 | 11.6 | 8.8 |
+  | 0.2.12, the crowd change only | 9.1 | 12.0 | 12.0 | 8.8 |
+  | **0.2.12** | 9.1 | 12.3 | 12.3 | 8.8 |
+
+  - **The start is unchanged, and still where the scripted players fail.** Events 1 to 5 send the same shoppers as 0.2.11, so the same three seeds (23, 7, 99) are lost in event 6 or 7 with 14 or 15 of 20 refunds gone by the end of event 5.
+  - **On the other five seeds the game is now a little easier than 0.2.10:** honest 11 / 11 / 11 / 10 / 10 (10 / 11 / 10 / 10 / 10 in 0.2.10), keen 16 / 16 / 16 / 15 / 15 (16 / 15 / 15 / 15 / 15), focus 16 / 16 / 16 / 15 / 15 (15 / 15 / 15 / 14 / 15), seeds 11, 5, 42, 3, 1234.
+  - **Gym bros wreck far less.** Seed 11, pieces wrecked in the whole game, 0.2.10 to 0.2.12: honest 73 to 10, keen 116 to 26, focus 108 to 25. The honest player ends with $6,408 unspent against $4,787.
+  - **On Easy, where the scripted players get far enough to feel the smaller late crowds** (endless, the same seeds): honest 12.0 / keen 17.9 / focus 16.8 in 0.2.10; 12.0 / 18.4 / 17.4 in 0.2.11; 12.0 / 20.6 / 18.8 in 0.2.12.
+  - **Not measured:** the cheaper factory upgrades. The scripted players never buy a factory speed upgrade, so these results are the same with or without them.
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.

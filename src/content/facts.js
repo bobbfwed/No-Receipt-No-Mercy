@@ -155,7 +155,11 @@ export function shopperTraits(k, sup = 0) {
     out.push(['Out of patience with the kid loose', `crawls to him at ${pct(TUNE.crawlSpeed)} speed, untouchable; gets up with ${pct(TUNE.crawlBack)} patience, ${times === 1 ? 'once' : `up to ${times} times`}; the last time she leaves the cart and carries him`]);
   }
   if (d.bolts) out.push(['Dog bolts when sprayed', `${fmt(v('boltSecs'))} s at ${fmt(d.speed * v('boltSpeed'))} tiles a second${d.boltsOnAny ? ' (forklift and barcode laser hits too)' : ''}`]);
-  if (d.smashes) out.push(['Wrecking', `stops to hit any crate stack in his way, and every crate stack beside him; every ${fmt(v('smashEvery'))} s a ${pct(v('smashOther'))} chance of hitting something else`]);
+  if (d.smashes) {
+    const max = v('smashMax');
+    out.push(['Hits', `${max === 1 ? 'one' : `up to ${max}`} a visit, at least ${fmt(v('smashWait'))} s apart; one a Durability level soaks up still counts`]);
+    out.push(['Wrecking', `with a hit ready, stops to hit any crate stack in his way, and any crate stack beside him; every ${fmt(v('smashEvery'))} s a ${pct(v('smashOther'))} chance of hitting something else. Resting after a hit, or spent, walks round crates like anyone else`]);
+  }
   if (d.sways) {
     out.push(['Walking speed', `changes every ${fmt(TUNE.swayEvery)} s, between ${fmt(d.speed * v('swayMin'))} and ${fmt(d.speed * v('swayMax'))} tiles a second`]);
     out.push(['Corners', `${pct(v('fallChance'))} chance to fall over for ${fmt(v('fallSecs'))} s; anyone crossing him goes at ${pct(TUNE.fallSlow)} speed`]);
@@ -263,6 +267,8 @@ export function factoryFacts(k, pay = 1) {
     out.push(['Adds', `$${gain} an item; pays for itself after ${Math.ceil(def.cost / Math.max(1, gain))} items`]);
   }
   if (k === 'chute') out.push(['Sells', Object.keys(ITEMS).map((i) => `${ITEMS[i].name} $${worth(i)}`).join(', ')]);
-  if (k === 'crate') out.push(['Gym bros', 'stop and smash it, then walk through; each Durability level makes him swing once more']);
+  if (k === 'crate') {
+    out.push(['Gym bros', `with a hit ready, stop and hit it, and walk through if it falls; each Durability level soaks up one of their hits (a Gym Bro has ${TUNE.smashMax}, a ${SUPERS.gymbro.name} ${SUPERS.gymbro.smashMax ?? TUNE.smashMax}), and resting after a hit they walk round`]);
+  }
   return out;
 }

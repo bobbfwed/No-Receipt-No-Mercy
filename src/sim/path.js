@@ -3,21 +3,43 @@
 // There are four such maps, because some shoppers get through things others cannot:
 //   NORMAL  most shoppers: belts, machines and crates all block
 //   HOP     dads: they step over conveyor belts
-//   SMASH   gym bros: they walk through crate stacks (and wreck them)
+//   SMASH   gym bros: they walk through crate stacks (and wreck them), while they still can hit
+//           things; resting after a hit, or spent, they walk by NORMAL (see routeOf)
 //   GHOST   runaway children: only the store's own walls stop them
-import { DIRS, BUILD, SHOPPERS } from './constants.js';
+import { DIRS, BUILD, SHOPPERS, TUNE, defOf } from './constants.js';
 
 export const UNREACHABLE = 65535;
 export const NORMAL = 0, HOP = 1, SMASH = 2, GHOST = 3;
 
 const cache = new WeakMap();
 
-/** Which map a kind of shopper walks by. */
+/** Which map a kind of shopper walks by (a gym bro's when he can hit things: see routeOf). */
 export function modeOf(kind) {
   // (The boss is not in SHOPPERS; he walks like anyone else.)
   const def = SHOPPERS[kind];
   if (!def) return NORMAL;
   return def.hopsBelts ? HOP : def.smashes ? SMASH : NORMAL;
+}
+
+/**
+ * True if a gym bro may hit something right now: he has hits left this visit (TUNE.smashMax) and
+ * is not resting after his last one (TUNE.smashWait). A shopper saved before these limits existed
+ * has neither field, which reads as no hits made and no rest.
+ * @param {Object} s a shopper from the game state
+ * @param {Object} [def] his definition, if the caller already has it
+ */
+export function smashReady(s, def = defOf(s)) {
+  return !(s.hw > 0) && (s.hn | 0) < (def.smashMax ?? TUNE.smashMax);
+}
+
+/**
+ * The map one shopper in the game walks by right now. A gym bro who is resting after a hit, or
+ * has used up his hits, walks round crates like anyone else.
+ * @param {Object} s a shopper from the game state
+ */
+export function routeOf(s) {
+  const mode = modeOf(s.k);
+  return mode === SMASH && !smashReady(s) ? NORMAL : mode;
 }
 
 /**

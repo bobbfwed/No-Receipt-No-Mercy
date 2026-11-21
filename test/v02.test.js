@@ -233,8 +233,9 @@ test('each kind has the upgrade tracks it should, and a plain upgrade means dama
   for (const k of ['sprinkler', 'forklift', 'wetfloor', 'samples']) for (const t of tracksOf(k)) assert.ok(upgradeCost({ k }, t) < BUILD[k].cost, `${k} ${t}`);
 });
 
-test('a factory machine gets a quarter faster a level, at most five, very expensive and growing x1.8', () => {
-  for (const [k, base] of [['unpacker', 400], ['press', 600], ['packer', 900]]) {
+test('a factory machine gets a quarter faster a level, at most five, each level x1.8 the last', () => {
+  // (The first level cost $400, $600 and $900 until 0.2.12; the owner cut them to 25%, 50% and 60%.)
+  for (const [k, base] of [['unpacker', 100], ['press', 300], ['packer', 540]]) {
     const tr = BUILD[k].up.spd;
     assert.deepEqual([tr.mul, tr.base, tr.grow, tr.max], [1.25, base, 1.8, 5]);
     const b = { k, u: {} };
@@ -308,7 +309,8 @@ test('canUpgrade gives every reason, and a faster tower really fires more often'
 // ---------------------------------------------------------------- durability, rubble and rebuilding
 
 test('a gym bro takes two hits to destroy a big building, and its rubble remembers everything', (t) => {
-  tune(t, { smashOther: 1 });
+  // (About big buildings and rubble, not his limit, so this one may hit as often as he likes.)
+  tune(t, { smashOther: 1, smashMax: 1000, smashWait: 0 });
   const s = stage(4);
   // A corridor along row 7 lined with barcode lasers, one with upgrades.
   for (let x = 3; x <= 24; x += 3) { place(s, 'railgun', x, 6, 0); place(s, 'railgun', x, 8, 0); }
@@ -339,33 +341,42 @@ test('a gym bro takes two hits to destroy a big building, and its rubble remembe
   }
 });
 
-test('a crate with durability stops a gym bro: he stands and hits it until it is gone, and never gets stuck', () => {
+test('a crate with durability soaks up a gym bro\'s hit: he does not stand at it, he walks round, and never gets stuck', (t) => {
+  tune(t, { smashOther: 0 });
   const crossing = (dur, sup = 0) => {
     const s = stage(2);
     // A wall of belts with a crate in it on the gym bro's way, and a gap far away for everyone else.
-    const old = TUNE.smashOther;
-    TUNE.smashOther = 0;
     for (let y = 1; y <= 13; y++) assert.ok(place(s, y === 7 ? 'crate' : 'belt', 12, y, 1).ok);
     for (let n = 0; n < dur; n++) applyCommand(s, 0, { c: 'upgrade', x: 12, y: 7, t: 'dur' });
     send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0, sup }]);
-    arrival(s, 'gymbro').hp = 1e9;
+    const sh = arrival(s, 'gymbro');
+    sh.hp = 1e9;
     const hits = [];
-    let ticks = 0;
-    try {
-      const ev = play(s, 200, (e) => { ticks++; for (const x of e) if (x.e === 'smash' && x.i === at(12, 7)) hits.push([s.tick, x.left]); });
-      assert.equal(ev.filter((e) => e.e === 'escape').length, 1, 'he gets out in the end');
-    } finally { TUNE.smashOther = old; }
-    return { hits, ticks };
+    let ticks = 0, still = 0, round = false;
+    const ev = play(s, 200, (e) => {
+      ticks++;
+      for (const x of e) if (x.e === 'smash' && x.i === at(12, 7)) hits.push([s.tick, x.left]);
+      if (!s.shoppers.includes(sh)) return;
+      if (hits.length && sh.st === ST.WALK && sh.vx === 0 && sh.vy === 0) still++;
+      if ((sh.y | 0) === 14 && (sh.x | 0) === 12) round = true;
+    });
+    assert.equal(ev.filter((e) => e.e === 'escape').length, 1, 'he gets out in the end');
+    return { hits, ticks, still, round, standing: !!s.grid[at(12, 7)] };
   };
-  const plain = crossing(0), tough = crossing(3);
-  assert.deepEqual(plain.hits.map((h) => h[1]), [0]);
-  assert.deepEqual(tough.hits.map((h) => h[1]), [3, 2, 1, 0], 'four hits for a crate with three levels of durability');
-  for (let n = 1; n < tough.hits.length; n++) {
-    assert.ok(tough.hits[n][0] - tough.hits[n - 1][0] >= Math.round(TUNE.smashEvery * TICK_HZ) - 1, 'one swing every smashEvery seconds');
+  const plain = crossing(0);
+  assert.deepEqual(plain.hits.map((h) => h[1]), [0], 'a plain crate falls to his first hit');
+  assert.equal(plain.round, false, 'and he walks through where it stood');
+  for (const sup of [0, 1]) {
+    const tough = crossing(1, sup);
+    assert.equal(tough.hits[0][1], 1, 'the first hit only uses up the level of durability...');
+    assert.ok(tough.hits.length <= 2);
+    assert.equal(tough.still, 0, '...and he does not stand there waiting to hit it again');
+    if (tough.standing) assert.ok(tough.round, 'with the crate still up, he went round by the gap, like anyone else');
   }
-  assert.ok(tough.ticks > plain.ticks + 3 * TUNE.smashEvery * TICK_HZ * 0.9, 'so a durable crate holds him up');
-  // The most durable crate there is still falls.
-  assert.equal(crossing(TUNE.maxLevel).hits.pop()[1], 0);
+  // The most durable crate there is does not hold him up for ever, or stop him.
+  const toughest = crossing(TUNE.maxLevel);
+  assert.equal(toughest.hits[0][1], TUNE.maxLevel);
+  assert.ok(toughest.round && toughest.standing);
 });
 
 test('rebuilding costs half of what was spent, with upgrades; short of that, the cheapest levels it can afford', () => {
@@ -778,7 +789,7 @@ test('the four new shoppers: supers twice as strong, Head Office prices, a pitch
   assert.ok(!speeds.includes(SHOPPERS.cosplay.speed) && !speeds.includes(SUPERS.cosplay.speed));
   assert.ok(SHOPPERS.cosplay.hp < SHOPPERS.karen.hp && SHOPPERS.cosplay.hp > SHOPPERS.karen.hp * 0.8);
   // The first four waves are what they were, except that every group is first multiplied by the
-  // wave's crowd shift (TUNE.crowdCurve, 0.2.11: more shoppers early) and rounded, then halved, a
+  // wave's crowd shift (TUNE.crowdCurves: more shoppers early) and rounded, then halved, a
   // half rounded down and never below one (TUNE.crowdScale, 0.2.09), and arrives over the same
   // time, so its gaps are longer.
   const old = (n) => {

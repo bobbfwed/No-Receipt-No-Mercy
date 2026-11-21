@@ -94,17 +94,20 @@ export const BUILD = {
   // belt carries up to 4 items a second, so even a machine at the top level is never held up by it.
   unpacker: {
     name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: 2.5, makes: 'box', zone: 'u',
-    up: { spd: { mul: 1.25, base: 400, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
+    // (Speed levels start at $100: a quarter of the $400 they cost until 0.2.12, the owner's number.)
+    up: { spd: { mul: 1.25, base: 100, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Opens pallets and spits out a Mystery Box every 2.5 seconds.',
   },
   press: {
     name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: 2.5, zone: 'p',
-    up: { spd: { mul: 1.25, base: 600, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
+    // (Speed levels start at $300: half of the $600 they cost until 0.2.12, the owner's number.)
+    up: { spd: { mul: 1.25, base: 300, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Crushes a Mystery Box into a Gadget.',
   },
   packer: {
     name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: 3, zone: 'k',
-    up: { spd: { mul: 1.25, base: 900, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
+    // (Speed levels start at $540: 60% of the $900 they cost until 0.2.12, the owner's number.)
+    up: { spd: { mul: 1.25, base: 540, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Wraps a Gadget into a Gift Set, the same thing at more than twice the price.',
   },
   chute: {
@@ -226,11 +229,13 @@ export const SHOPPERS = {
     sup: { name: 'Man with Two Guide Dogs', from: 14, hp: 2.5, boltSecs: 3.2, boltSpeed: 3.2, boltsOnAny: true },
   },
   // smashes: walks straight through crate stacks (stopping to hit one that is still standing),
-  // hits any crate stack he passes, and now and then something else next to him. The super one
-  // hits more, more often.
+  // hits any crate stack he passes, and now and then something else next to him. But he only has
+  // a few hits in him (TUNE.smashMax) with a rest after each (TUNE.smashWait); while resting, and
+  // once they are used up, he walks round crates like anyone else. The super one hits more
+  // things, more often, with shorter rests. (smashMax and smashWait are the owner's numbers, 0.2.12.)
   gymbro: {
     name: 'Gym Bro', hp: 76.5, speed: 1.5, refund: 30, smashes: true, pitch: [0.3, 0.1],
-    sup: { name: 'Roid Rager', from: 12, hp: 2.5, speed: 1.2, smashEvery: 0.9, smashOther: 0.4 },
+    sup: { name: 'Roid Rager', from: 12, hp: 2.5, speed: 1.2, smashEvery: 0.9, smashOther: 0.4, smashMax: 3, smashWait: 5 },
   },
   // sways: his speed changes every couple of seconds, and going round a corner he may fall over and
   // lie there, which slows everyone else crossing that tile. The super one falls more often and
@@ -372,13 +377,22 @@ export const TUNE = {
   patienceScale: 2, // the full multiplier...
   patienceFrom: 5, // ...which starts rising after this sales event...
   patienceFull: 20, // ...and is reached at this one (and kept in an endless game)
-  // A busier start and a thinner end (0.2.11, the owner's numbers): on top of everything above,
-  // each sales event sends a share of its shoppers read off crowdCurve, a list of [sales event,
-  // share] points joined by straight lines: 25% more in event 1, 5% fewer in event 10, 25% fewer
-  // in event 20, 35% fewer in event 30, and the last share from then on (crowdShiftAt in
-  // step.js). crowdTrim then multiplies single events: event 5, the first boss, sends 7% fewer
-  // again. Only the head count moves: refund cash and prices stay as they are.
-  crowdCurve: [[1, 1.25], [10, 0.95], [20, 0.75], [30, 0.65]],
+  // A busier start and a thinner end (the owner's numbers): on top of everything above, each
+  // sales event sends a share of its shoppers worked out from crowdCurves. Each curve is a list
+  // of [sales event, share] points joined by straight lines (the first share before the first
+  // point, the last after the last), and the curves are multiplied together (crowdShiftAt in
+  // step.js). The owner tunes this in rounds, each one "so many per cent fewer than it is now",
+  // so each round is its own curve:
+  //   0.2.11: 25% more in event 1, 5% fewer in event 10, 25% fewer in event 20, 35% fewer from 30.
+  //   0.2.12: on top of that, nothing in events 1 and 2, 8% fewer in event 10, 20% fewer in
+  //           event 20, 25% fewer from event 30.
+  // Together: 125% of the crowd of 0.2.10 in event 1, 87% in event 10, 60% in event 20, 49% from 30.
+  // crowdTrim then multiplies single events: event 5, the first boss, sends 7% fewer again.
+  // Only the head count moves: refund cash and prices stay as they are.
+  crowdCurves: [
+    [[1, 1.25], [10, 0.95], [20, 0.75], [30, 0.65]],
+    [[2, 1], [10, 0.92], [20, 0.8], [30, 0.75]],
+  ],
   crowdTrim: { 5: 0.93 },
   // From wave lateFrom on, every group grows by lateGrowth of its size per wave.
   lateFrom: 8,
@@ -451,6 +465,11 @@ export const TUNE = {
   boltSpeed: 2.3, // speed multiplier while it does
   smashEvery: 1.5, // seconds between a gym bro's attempts to hit something next to him (or in his way)
   smashOther: 0.15, // chance an attempt hits something that is not a crate stack (crates always do)
+  // The owner found a gym bro wrecked too much (0.2.12): he now lands only so many hits in his
+  // whole visit, and rests after each. Every hit counts, even one a Durability level shrugs off.
+  // While resting, and once he is spent, he walks round crates like an ordinary shopper.
+  smashMax: 2, // hits a gym bro can land in one visit to the store
+  smashWait: 10, // seconds after a hit before he can hit anything again
 
   // TV Salesman.
   pitchCool: 9, // seconds before any salesman can pitch to the same shopper again
