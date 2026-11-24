@@ -365,6 +365,10 @@ Measured with the keen bot in endless Easy games that cannot be lost (5 seeds, o
 
 **0.2.15: a big REBUILD button** (owner: on a phone the build bar has to be scrolled to notice anything is broken). While anything of the player's is wrecked, an orange REBUILD button floats over the bottom middle of the floor (left of DEB's bubble, clear of the entrances, tills, camera pad and the small map), saying how many and what putting them all back costs ("REBUILD 3 · $120"); it does what B does. When B would be refused right now it stays, greyed, with the reason ("Too broke. Need $40", "Some idiot is standing in the hole", "It would wall the shoppers in"). The auto-rebuild switch sits beside it. 48 px high on a phone; it stands on the held tool's card or a tapped building's sheet when one is up. Screenshots: `.claude/reports/img/2026-11-23-rebuild-button-desktop.png` and `-phone.png` (made with a temporary hack that wrecked three demo buildings, not committed).
 
+**0.2.16: no second auto-rebuild switch on a desktop** (owner: the one in the top bar is enough). The switch beside the big REBUILD button is hidden on desktop-sized screens with a mouse; phones and touch screens keep it.
+
+**0.2.17: babies have 50% more patience** (owner). `BABY.hp` 4.5 to 6.75, for the Pregnant Lady's dozen and the Octomom's two dozen alike. Balance, Normal, one player, seed 11, honest / keen / focus: 11 / 15 / 16, against 11 / 17 / 16 just before the change (the keen bot loses two events sooner; the other two are unmoved).
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.

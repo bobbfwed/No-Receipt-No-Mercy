@@ -343,8 +343,9 @@ export const BOSS = {
  * shopper (the handbook, Head Office's shop, the line banks, the tests that every kind has a super)
  * should pick them up. Nobody can choose them, Head Office cannot buy them, and they have no super
  * version. Shoppers in the state have `k: 'baby'`; `defOf()` and `shopperDef()` give this.
- * hp is their base patience (about an eighth of a Bargain Hunter's), grown by wave, difficulty and
- *   the sales event's patience multiplier like everyone's.
+ * hp is their base patience (under a fifth of a Bargain Hunter's), grown by wave, difficulty and
+ *   the sales event's patience multiplier like everyone's. It was 4.5 until 0.2.17, when the owner
+ *   asked for 50% more: a litter was being mopped up too easily.
  * speed: the fastest thing in the store.
  * refund: the cash one takes at a till. A baby counts as no refund toward the limit (the owner's
  *   choice: babies are cash only), and its $5 is not scaled by TUNE.crowdScale like a real refund.
@@ -353,7 +354,7 @@ export const BOSS = {
  */
 export const BABY = {
   name: 'Baby', baby: true,
-  hp: 4.5, speed: 3.2, refund: 5, pitch: [0, 0],
+  hp: 6.75, speed: 3.2, refund: 5, pitch: [0, 0],
   // Each baby runs at its own share of `speed`, spread evenly between these two, so a litter
   // strings out as it runs instead of moving as one clump. Worked out from the baby's id (see
   // babyPace in step.js): no field in the state, no random draw.

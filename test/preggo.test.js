@@ -351,7 +351,9 @@ test('babies are in none of the lists of kinds, and Head Office cannot buy them'
   assert.equal(modeOf('baby'), NORMAL, 'they walk like most shoppers');
   // Very fast, very little patience, and nothing distracts them.
   for (const [k, d] of Object.entries(SHOPPERS)) assert.ok(BABY.speed > d.speed && BABY.speed > SUPERS[k].speed, `faster than ${k}`);
-  assert.ok(BABY.hp <= SHOPPERS.hunter.hp / 8);
+  // (Half as much again since 0.2.17, the owner's request: 6.75, still under a fifth of a Bargain Hunter's.)
+  assert.equal(BABY.hp, 6.75);
+  assert.ok(BABY.hp <= SHOPPERS.hunter.hp / 5);
   assert.ok(!BABY.browses && !BABY.gawks && !BABY.steady && !BABY.ignoresSigns);
   assert.deepEqual(BABY.pitch, [0, 0]);
   for (let n = 1; n <= 30; n++) assert.ok(!waveSpec(n).some((g) => g.k === 'baby'));
