@@ -186,8 +186,10 @@ function blankStats() {
  *   most tests are written for.
  * @param {boolean} [o.zones] mark out the floor areas the factory machines must be built on.
  *   On by default when a map is given; off for the bare default map.
- * @param {{waves?: number, startCash?: number, difficulty?: string}} [o.settings] the host's
- *   choices (see SETTINGS in constants.js); anything left out or not on the list is the default.
+ * @param {{waves?: number, startCash?: number, difficulty?: string, cardsOn?: boolean}} [o.settings]
+ *   the host's choices (see SETTINGS in constants.js); anything left out or not on the list is the
+ *   default. cardsOn false (0.3.01, the host's "Cards: Off") means no deal even when `cards` is
+ *   true; it does not touch a forced hand.
  * @param {boolean} [o.lobby] start in the lobby: nothing runs and nothing can be built until
  *   every connected player has said he is ready. The host may change the map there.
  * @param {string|null} [o.holiday] the holiday this game is played in (a key of HOLIDAYS; the
@@ -287,7 +289,10 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
   //   cards  the hand: card ids in the order they are revealed (see cards.js)
   //   dealT  only while the deal is still to come (in the lobby) or under way (the 'cards' phase):
   //          how far into it the game is, in sixtieths of a tick at normal speed (see stepDeal)
-  if (!training && cards === true) {
+  // The host's "Cards: On / Off" setting has no field of its own: cards are on exactly when there
+  // is a hand (cardsOn below). In the lobby the 'settings' command with cardsOn deals a hand or
+  // takes it away (setSettings), and "Back to the lobby" deals again only if the last game had one.
+  if (!training && cards === true && set.cardsOn) {
     state.cards = dealCards(state);
     state.dealT = 0;
     if (!lobby) state.phase = 'cards';
@@ -346,30 +351,51 @@ function openDoors(state) {
   state.gridVer++; // routes are drawn from the entrances
 }
 
-/** Settings with anything missing or not on the list replaced by the default. */
+/**
+ * Settings with anything missing or not on the list replaced by the default. cardsOn (0.3.01):
+ * whether the game is dealt cards; anything but false is on.
+ */
 export function cleanSettings(o) {
   const d = SETTINGS.defaults, s = o || {};
   return {
     waves: SETTINGS.waves.includes(s.waves) ? s.waves : d.waves,
     startCash: SETTINGS.startCash.includes(s.startCash) ? s.startCash : d.startCash,
     difficulty: SETTINGS.difficulty[s.difficulty] ? s.difficulty : d.difficulty,
+    cardsOn: s.cardsOn !== false,
   };
 }
+
+/** True if the game has cards (a hand, dealt or still to be dealt): the host's "Cards" setting. */
+export const cardsOn = (state) => !!(state.cards && state.cards.length);
 
 /**
  * Lobby only: changes the host's settings. Nothing has been spent yet, so every player's cash
  * becomes the new starting cash, and everyone has to press Ready again.
+ * cardsOn (0.3.01, true or false; anything else leaves it as it is): switched off, the hand and the
+ * deal still to come are taken away, so the game goes from the lobby straight to its first build
+ * phase like any game without cards; switched back on, a fresh hand is dealt with rand() (nobody
+ * has seen the old one). Never in a training game.
  * @returns {boolean} false if the game has started
  */
 export function setSettings(state, o) {
   if (state.phase !== 'lobby') return false;
   // Anything not mentioned keeps the value it has.
-  const now = { waves: state.waves, startCash: state.startCash, difficulty: state.difficulty };
-  for (const k of Object.keys(now)) if (o && o[k] !== undefined) now[k] = o[k];
+  const now = { waves: state.waves, startCash: state.startCash, difficulty: state.difficulty, cardsOn: cardsOn(state) };
+  for (const k of ['waves', 'startCash', 'difficulty']) if (o && o[k] !== undefined) now[k] = o[k];
+  if (o && typeof o.cardsOn === 'boolean') now.cardsOn = o.cardsOn;
   const set = cleanSettings(now);
   state.waves = set.waves;
   state.startCash = set.startCash;
   state.difficulty = set.difficulty;
+  if (set.cardsOn !== cardsOn(state) && !state.training) {
+    if (set.cardsOn) {
+      state.cards = dealCards(state);
+      state.dealT = 0;
+    } else {
+      delete state.cards;
+      delete state.dealT;
+    }
+  }
   for (const p of state.players) { p.cash = set.startCash; p.ready = false; }
   return true;
 }

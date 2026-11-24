@@ -274,8 +274,9 @@ export function autoRebuild(state, ev) {
  *                               on, step() rebuilds your wrecks like 'rebuild' does, each no sooner
  *                               than TUNE.autoRebuildSecs after it broke (see autoRebuild)
  *   { c: 'map', design, size }  lobby only, host only (state.host): change the store
- *   { c: 'settings', waves, startCash, difficulty }  lobby only, host only: the game's
- *                               settings (see SETTINGS); anything left out keeps its value
+ *   { c: 'settings', waves, startCash, difficulty, cardsOn }  lobby only, host only: the game's
+ *                               settings (see SETTINGS); anything left out keeps its value.
+ *                               cardsOn false takes the game's cards away, true deals a hand
  *   { c: 'ready', on }          lobby only: say you are ready (or not). The game starts when
  *                               every connected player is
  *   { c: 'skipCards', on }      the deal only (phase 'cards'): ask to see the rest of the cards at
@@ -310,7 +311,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
     }
     if (cmd.c === 'settings') {
       if (pid !== (state.host | 0)) return { ok: false, why: 'host' };
-      setSettings(state, { waves: cmd.waves, startCash: cmd.startCash, difficulty: cmd.difficulty });
+      setSettings(state, { waves: cmd.waves, startCash: cmd.startCash, difficulty: cmd.difficulty, cardsOn: cmd.cardsOn });
       return { ok: true };
     }
     if (cmd.c === 'ready') {

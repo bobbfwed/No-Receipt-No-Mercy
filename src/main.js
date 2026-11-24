@@ -125,9 +125,10 @@ function show(session, options) {
   if (game) game.destroy();
   if (stopSaving) stopSaving();
   // The host of a multiplayer game can take the group back to the lobby when it ends, keeping
-  // the room open. The new game gets a fresh joke director, which remembers only one game.
+  // the room open. The new game gets a fresh joke director, which remembers only one game. Its cards
+  // follow the last game (the host's Cards setting carries over) unless the address says otherwise.
   const onLobby = session.isHost && options.roomKind
-    ? () => session.backToLobby({ seed: opts.seed, director: createDirector(), holiday: holidayNow(), cards: urlCards() ?? true })
+    ? () => session.backToLobby({ seed: opts.seed, director: createDirector(), holiday: holidayNow(), cards: urlCards() })
     : null;
   game = startGame(session, { mount: app, sound, onLobby, ...options });
   // Whoever hosts keeps the game saved in his browser, so it can be carried on another day.

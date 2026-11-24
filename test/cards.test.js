@@ -11,7 +11,7 @@ import {
   createGame, addPlayer, applyCommand, step, canPlace, setPlayerOnline, waveSpec, statsOf, spentOn, upgradeCost,
   levelCost, rebuildDeal, buildPrice, dealCards, cleanHand, hasCard, cardKind, cardKinds, cardParts, cardsShown,
   revealTick, dealLength, idShare, smashReady, patienceFor, bossPatience, CARDS, DEALABLE, CARDS_APART,
-  CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST,
+  CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
 import { cardSlip, cardFall, cardLiftChance, cardLiftReach, cardShield } from '../src/sim/cards.js';
 import { HostSession } from '../src/net/session.js';
@@ -835,4 +835,134 @@ test('the handbook\'s line in a game with cards names them; none without', () =>
   const note = cardsNote(game(['bde', 'hardy:karen']));
   assert.match(note, /Big Dick Energy, Little Blue Pills/);
   assert.match(note, /standard/);
+});
+
+// ---- The host's "Cards: On / Off" setting (0.3.01) ------------------------------------------------
+
+/** A lobby game with two players (the host is player 0), on a small warehouse. */
+function lobbyGame(seed = 6, settings = null) {
+  const s = createGame({ seed, lobby: true, cards: true, settings, map: { design: 'warehouse', size: 's' } });
+  addPlayer(s, 'Host');
+  addPlayer(s, 'Dave');
+  return s;
+}
+/** Everyone presses Ready and the game runs until it leaves the lobby (and, with cards, the deal). */
+function readyUp(s) {
+  for (const p of s.players) applyCommand(s, p.id, { c: 'ready', on: true });
+  const ev = [];
+  for (let i = 0; i < dealLength(5) + 10 && s.phase !== 'build'; i++) ev.push(...step(s));
+  return ev;
+}
+
+test('Cards setting: on by default; Off through createGame deals nothing, a forced hand stays', () => {
+  assert.equal(cleanSettings().cardsOn, true);
+  assert.equal(cleanSettings({ cardsOn: 'no' }).cardsOn, true, 'anything but false is on');
+  assert.equal(cleanSettings({ cardsOn: false }).cardsOn, false);
+  assert.equal(cardsOn(lobbyGame()), true);
+  const off = createGame({ seed: 6, lobby: true, cards: true, settings: { cardsOn: false } });
+  assert.equal('cards' in off, false);
+  assert.equal('dealT' in off, false);
+  assert.equal(cardsOn(off), false);
+  // Without a lobby too: straight into the first build phase.
+  assert.equal(createGame({ seed: 6, cards: true, settings: { cardsOn: false } }).phase, 'build');
+  // A forced hand (tests, the URL option) is not the setting's business.
+  assert.deepEqual(createGame({ seed: 6, cards: ['litter'], settings: { cardsOn: false } }).cards, ['litter']);
+  // Nor is a training game ever dealt any.
+  assert.equal(cardsOn(createGame({ training: true, cards: true })), false);
+});
+
+test('Cards setting: the host switches it in the lobby; nobody else, and not once the game is on', () => {
+  const s = lobbyGame();
+  applyCommand(s, 1, { c: 'ready', on: true });
+  assert.deepEqual(applyCommand(s, 1, { c: 'settings', cardsOn: false }), { ok: false, why: 'host' });
+  assert.equal(cardsOn(s), true);
+  assert.ok(applyCommand(s, 0, { c: 'settings', cardsOn: false }).ok);
+  assert.equal('cards' in s, false);
+  assert.equal('dealT' in s, false);
+  assert.equal(s.players[1].ready, false, 'everyone presses Ready again, as for any setting');
+  // Other settings changed later leave it off; a value that is not true or false leaves it alone.
+  assert.ok(applyCommand(s, 0, { c: 'settings', waves: 10 }).ok);
+  assert.ok(applyCommand(s, 0, { c: 'settings', cardsOn: 'yes' }).ok);
+  assert.equal(cardsOn(s), false);
+  assert.equal(s.waves, 10);
+  // Off, the lobby goes straight to the first build phase, with begun, like a game without cards.
+  const ev = readyUp(s);
+  assert.equal(s.phase, 'build');
+  assert.equal(s.phaseT, -1);
+  assert.ok(ev.some((e) => e.e === 'begun'));
+  assert.ok(!ev.some((e) => e.e === 'deal' || e.e === 'card'));
+  assert.equal(buildPrice(s, 'belt'), BUILD.belt.cost);
+  // Once the game is on it cannot be changed.
+  assert.equal(applyCommand(s, 0, { c: 'settings', cardsOn: true }).ok, false);
+  assert.equal(cardsOn(s), false);
+  const on = lobbyGame();
+  readyUp(on);
+  assert.equal(applyCommand(on, 0, { c: 'settings', cardsOn: false }).ok, false);
+  assert.equal(on.cards.length, 5);
+});
+
+test('Cards setting: switched back on, a fresh legal hand is dealt and the deal runs', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const s = lobbyGame(seed);
+    applyCommand(s, 0, { c: 'settings', cardsOn: false });
+    assert.ok(applyCommand(s, 0, { c: 'settings', cardsOn: true }).ok);
+    assert.equal(s.cards.length, 5);
+    assert.equal(s.dealT, 0);
+    assert.deepEqual(s.cards.map((id) => CARDS[cardParts(id)[0]].side), DEAL_ORDER);
+    for (const id of s.cards) assert.ok(DEALABLE.includes(cardParts(id)[0]), id);
+    assert.equal(new Set(s.cards.map((id) => cardParts(id)[0])).size, 5);
+    if (seed <= 3) {
+      const ev = readyUp(s);
+      assert.equal(ev.filter((e) => e.e === 'card').length, 5);
+      assert.equal(s.phase, 'build');
+    }
+  }
+});
+
+test('Cards setting: created off, a game is tick for tick one without cards; switched off, an ordinary game', () => {
+  // Created with cards off: no hand was ever dealt, so the random stream is untouched.
+  const none = createGame({ seed: 8, lobby: true, map: { design: 'warehouse', size: 's' } });
+  const off = createGame({ seed: 8, lobby: true, cards: true, settings: { cardsOn: false }, map: { design: 'warehouse', size: 's' } });
+  assert.deepEqual(off, none);
+  // Switched off in the lobby: the hand was dealt (and drew random numbers) when the game was made,
+  // so the stream is further along than in a game made without cards. It is still a plain game:
+  // no hand, no deal, the standard numbers.
+  const s = lobbyGame(8);
+  applyCommand(s, 0, { c: 'settings', cardsOn: false });
+  const plain = createGame({ seed: 8, lobby: true, map: { design: 'warehouse', size: 's' } });
+  addPlayer(plain, 'Host');
+  addPlayer(plain, 'Dave');
+  assert.notEqual(s.rng, plain.rng, 'dealing the hand moved the random stream on');
+  assert.deepEqual({ ...s, rng: 0 }, { ...plain, rng: 0 }, 'otherwise the same game');
+  readyUp(s);
+  assert.equal(cardsShown(s), 0);
+  assert.equal(hasCard(s, 'litter'), false);
+  assert.equal(statsOf({ k: 'sprinkler' }, s).range, statsOf({ k: 'sprinkler' }).range);
+  // JSON round trip, both ways.
+  for (const g of [s, lobbyGame(9)]) {
+    const copy = JSON.parse(JSON.stringify(g));
+    assert.deepEqual(copy, g);
+    assert.equal(cardsOn(copy), cardsOn(g));
+  }
+});
+
+test('Cards setting: Back to the lobby carries it over, and the host can turn them back on', () => {
+  const host = new HostSession({ name: 'Dave', seed: 4, cards: true, lobby: true, settings: { cardsOn: false }, map: { design: 'warehouse', size: 's' } });
+  assert.equal(cardsOn(host.state), false);
+  host.send({ c: 'ready', on: true });
+  host.fastForward(3);
+  assert.equal(host.state.phase, 'build');
+  host.state.phase = 'lost';
+  assert.ok(host.backToLobby({ seed: 99 }));
+  assert.equal(cardsOn(host.state), false, 'played without cards, the next lobby starts without');
+  host.send({ c: 'settings', cardsOn: true });
+  assert.equal(host.state.cards.length, 5);
+  assert.equal(host.state.dealT, 0);
+  host.send({ c: 'ready', on: true });
+  host.fastForward(3);
+  assert.equal(host.state.phase, 'cards');
+  host.fastForward(dealLength(5) + 5);
+  host.state.phase = 'won';
+  assert.ok(host.backToLobby({ seed: 7 }));
+  assert.equal(cardsOn(host.state), true, 'played with cards, the next lobby deals again');
 });

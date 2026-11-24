@@ -2692,6 +2692,11 @@ html, body { overscroll-behavior: none; }
 .set-note.set-endless { color: var(--yellow); font-weight: 700; }
 .lobby .set-pick { grid-template-columns: 1fr; }
 @media (max-width: 520px) { .set-pick { grid-template-columns: 1fr; } }
+/* The Cards setting (0.3.01): what it means sits beside it (under it in the lobby's one column). */
+.set-pick .set-note.set-cards { grid-column: 2 / -1; align-self: center; margin: 0; }
+.set-pick .set-note.set-cards.is-off { color: #fca5a5; }
+.lobby .set-pick .set-note.set-cards { grid-column: 1 / -1; }
+@media (max-width: 520px) { .set-pick .set-note.set-cards { grid-column: 1 / -1; } }
 
 /* The lobby panel is long now: keep READY in reach at the bottom, and the floor key compact. */
 .lobby .btn-ready { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -0.5rem 0.6rem rgba(31, 37, 44, 0.95); }

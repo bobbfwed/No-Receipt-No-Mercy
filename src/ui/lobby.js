@@ -1,7 +1,7 @@
 // The lobby: what players see between joining a game and the game starting. Everyone can look
 // at the store (it is drawn behind, whole), the host can change its design and size, and each
 // player presses Ready. The game starts when every connected player is ready.
-import { MAP_DESIGNS, MAP_SIZES, ZONES } from '../sim/index.js';
+import { MAP_DESIGNS, MAP_SIZES, ZONES, cardsOn } from '../sim/index.js';
 import { h, setText, setClass, safeColor } from './dom.js';
 import { createSettings, labelSizes } from './settings.js';
 
@@ -22,9 +22,9 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
     Object.entries(MAP_SIZES).map(([k, z]) => h('option', { value: k },
       `${z.name} (${z.w}x${z.h}): ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'original'}`)));
   const about = h('p', { class: 'lobby-about' });
-  // Length, difficulty and starting cash: the host's to change, everyone's to see.
+  // Length, difficulty, starting cash and cards: the host's to change, everyone's to see.
   const settings = createSettings({
-    idPrefix: 'lobby', disabled: !host, value: session.state || {},
+    idPrefix: 'lobby', disabled: !host, value: session.state ? { ...session.state, cardsOn: cardsOn(session.state) } : {},
     onChange: (v) => session.send({ c: 'settings', ...v }),
   });
   let setSig = '';
@@ -70,8 +70,8 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
     }
     if (!on) return false;
 
-    const ss = `${s.waves},${s.startCash},${s.difficulty}`;
-    if (ss !== setSig) { setSig = ss; settings.set(s); }
+    const ss = `${s.waves},${s.startCash},${s.difficulty},${cardsOn(s)}`;
+    if (ss !== setSig) { setSig = ss; settings.set({ waves: s.waves, startCash: s.startCash, difficulty: s.difficulty, cardsOn: cardsOn(s) }); }
     const sig = `${s.map.design},${s.map.size},${s.players.filter((p) => p.on).length}`;
     if (sig !== mapSig) {
       const mapChanged = sig.split(',').slice(0, 2).join() !== mapSig.split(',').slice(0, 2).join();
