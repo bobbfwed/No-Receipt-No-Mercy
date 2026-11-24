@@ -346,6 +346,10 @@ The owner: late events were a flood nobody could read, and he wants players to c
   - **On Easy, where the scripted players get far enough to feel the smaller late crowds** (endless, the same seeds): honest 12.0 / keen 17.9 / focus 16.8 in 0.2.10; 12.0 / 18.4 / 17.4 in 0.2.11; 12.0 / 20.6 / 18.8 in 0.2.12.
   - **Not measured:** the cheaper factory upgrades. The scripted players never buy a factory speed upgrade, so these results are the same with or without them.
 
+**0.2.13: the TV Salesman lets go** (owner). His first pitch to a shopper uses the chance as before; each later pitch from the same stand has half the stop chance of the last (`TUNE.pitchRepeat`), counted per shopper per stand, so a second salesman still gets his full first go. The scripted players never build him, so balance is not measured.
+
+**0.2.13: every factory machine works at the same pace** (owner). Unpacker, Press and Packer all take 2.5 s an item (`MACHINE_SECS`; the Packer was 3 s) and share one speed track (`MACHINE_SPD`: x1.25 a level, price x1.8 a level, five levels). Each keeps its own price for the first level ($100 / $300 / $540, the owner's numbers). Because a full line used to run at the Packer's 3 s, the Gift Set's value went down by the same share, 17.6 to 14.7 ($18 to $15 on Normal), so a line earns what it did. Balance, seed 11, honest / keen / focus: 11 / 16 / 16, the same as 0.2.12 (honest ends with $6,378 unspent against $6,408).
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.

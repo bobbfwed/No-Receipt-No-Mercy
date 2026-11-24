@@ -40,14 +40,25 @@ export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater
 /**
  * Things that ride on belts. `value` is the cash for one reaching a shipping chute, before it is
  * rounded to whole dollars (times the difficulty's pay): on Normal a box pays $2, a gadget $8 and a
- * gift set $18. (2, 7 and 16 times Normal's old x1.1 until 0.2.10; anything shown to a player is
- * the rounded amount.)
+ * gift set $15. (2, 7 and 16 times Normal's old x1.1 until 0.2.10; anything shown to a player is
+ * the rounded amount.) The gift set was 17.6 ($18) until 0.2.13, when the Packer was 3 seconds an
+ * item; with every machine now at the same speed it is 17.6 x 2.5 / 3, so a full production line
+ * (which the Packer held to its pace) still earns what it did.
  */
 export const ITEMS = {
   box: { name: 'Mystery Box', value: 2.2 },
   gadget: { name: 'Gadget', value: 7.7 },
-  giftset: { name: 'Gift Set', value: 17.6 },
+  giftset: { name: 'Gift Set', value: 14.7 },
 };
+
+/**
+ * Every factory machine (Unpacker, Press, Packer) works at the same pace and speeds up the same
+ * way, so at equal levels none outruns another (the owner's request). MACHINE_SECS is the time
+ * for one item at level 0; MACHINE_SPD is the shared speed track (each machine adds only its own
+ * `base` price for the first level).
+ */
+export const MACHINE_SECS = 2.5;
+export const MACHINE_SPD = { mul: 1.25, grow: 1.8, max: 5 };
 
 /**
  * Marked areas of the floor. Each of the four factory machines may only be built on its own
@@ -90,25 +101,26 @@ export const BUILD = {
     up: { dur: { add: 1, cost: 1 } },
     desc: 'Moves goods. Shoppers cannot cross it. Dads step right over.',
   },
-  // Factory machines get faster by a quarter a level, and it is deliberately very expensive: a
-  // belt carries up to 4 items a second, so even a machine at the top level is never held up by it.
+  // Factory machines all share MACHINE_SECS and MACHINE_SPD: faster by a quarter a level, and it is
+  // deliberately very expensive. A belt carries up to 4 items a second, so even a machine at the
+  // top level (about 1.2 a second) is never held up by it.
   unpacker: {
-    name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: 2.5, makes: 'box', zone: 'u',
+    name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: MACHINE_SECS, makes: 'box', zone: 'u',
     // (Speed levels start at $100: a quarter of the $400 they cost until 0.2.12, the owner's number.)
-    up: { spd: { mul: 1.25, base: 100, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
+    up: { spd: { ...MACHINE_SPD, base: 100 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Opens pallets and spits out a Mystery Box every 2.5 seconds.',
   },
   press: {
-    name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: 2.5, zone: 'p',
+    name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: MACHINE_SECS, zone: 'p',
     // (Speed levels start at $300: half of the $600 they cost until 0.2.12, the owner's number.)
-    up: { spd: { mul: 1.25, base: 300, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
+    up: { spd: { ...MACHINE_SPD, base: 300 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Crushes a Mystery Box into a Gadget.',
   },
   packer: {
-    name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: 3, zone: 'k',
+    name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: MACHINE_SECS, zone: 'k',
     // (Speed levels start at $540: 60% of the $900 they cost until 0.2.12, the owner's number.)
-    up: { spd: { mul: 1.25, base: 540, grow: 1.8, max: 5 }, dur: { add: 1, cost: 0.3 } },
-    desc: 'Wraps a Gadget into a Gift Set, the same thing at more than twice the price.',
+    up: { spd: { ...MACHINE_SPD, base: 540 }, dur: { add: 1, cost: 0.3 } },
+    desc: 'Wraps a Gadget into a Gift Set, the same thing at nearly twice the price.',
   },
   chute: {
     name: 'Shipping Chute', cost: 40, group: 'factory', blocks: true, zone: 'c',

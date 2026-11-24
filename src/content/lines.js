@@ -433,7 +433,7 @@ export const LINES = {
       r("{p} built a pepper sprinkler. Legally it's a 'customer experience device'. Ethically it's a war crime with a warranty."),
     ],
     packer: [
-      'A Packer. Same Gadget, nicer box, more than twice the price. {p} finally understands retail. And dating.',
+      'A Packer. Same Gadget, nicer box, nearly twice the price. {p} finally understands retail. And dating.',
       '{p} built a Packer. Wraps a Gadget in a bow and doubles the price. The same thing, presented well. {p} could learn from it.',
       u('A Packer from {p}. It turns any old thing into a gift. If only it worked on {p}.'),
     ],

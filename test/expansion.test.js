@@ -766,8 +766,8 @@ test('a production line across the marked floor needs belts, and sells at full p
   const sales = [];
   for (let i = 0; i < 60 * TICK_HZ; i++) sales.push(...step(s).filter((e) => e.e === 'sale'));
   assert.ok(sales.length >= 5);
-  // $18 on Normal, as before 0.2.10 (16 x 1.1, rounded); now the base is 17.6 and Normal is x1.
-  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === 18 && e.v === Math.round(ITEMS.giftset.value * SETTINGS.difficulty.normal.pay)));
+  // $15 on Normal: the base is 14.7 since 0.2.13 (17.6 before, when the Packer was slower) and Normal is x1.
+  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === 15 && e.v === Math.round(ITEMS.giftset.value * SETTINGS.difficulty.normal.pay)));
   assert.equal(SETTINGS.difficulty.normal.pay, 1);
 });
 
@@ -777,6 +777,21 @@ test('the Press and the Packer are a serious purchase', () => {
   // Each must take a good while to pay for itself: at least forty items.
   assert.ok(BUILD.press.cost / (ITEMS.gadget.value - ITEMS.box.value) >= 40);
   assert.ok(BUILD.packer.cost / (ITEMS.giftset.value - ITEMS.gadget.value) >= 40);
+});
+
+test('every factory machine works at the same pace at every speed level', () => {
+  const kinds = Object.keys(BUILD).filter((k) => BUILD[k].makes);
+  assert.deepEqual(kinds.sort(), ['packer', 'press', 'unpacker']);
+  const secsAt = (k, lv) => { const st = statsOf({ k, u: lv ? { spd: lv } : {} }); return k === 'unpacker' ? st.period : st.time; };
+  const max = BUILD.unpacker.up.spd.max;
+  for (const k of kinds) {
+    assert.equal(BUILD[k].up.spd.max, max, `${k}: as many levels`);
+    assert.equal(BUILD[k].up.spd.mul, BUILD.unpacker.up.spd.mul, `${k}: the same step`);
+    assert.equal(BUILD[k].up.spd.grow, BUILD.unpacker.up.spd.grow, `${k}: the same price growth`);
+    for (const lv of [0, 1, max]) assert.ok(Math.abs(secsAt(k, lv) - secsAt('unpacker', lv)) < 1e-12, `${k} at level ${lv}`);
+  }
+  assert.equal(secsAt('packer', 0), 2.5);
+  assert.ok(Math.abs(secsAt('packer', max) - 2.5 / 1.25 ** max) < 1e-12);
 });
 
 test('a sprinkler reaches only four shoppers at a time, the ones nearest the tills', () => {

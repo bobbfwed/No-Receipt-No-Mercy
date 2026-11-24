@@ -91,13 +91,13 @@ test('spot check per difficulty: the patience a shopper walks in with in sales e
   // Lady walking in in event 9). Normal and Hard: the figures from BEFORE 0.2.10 made Normal the
   // baseline, unchanged. Easy and Brutal: their patience moved from x0.68 / 0.9 to x0.75 and from
   // x1.49 / 0.9 to x1.65, under 1% (before: Easy hunter 111.077547, Brutal hunter 243.390507).
-  // Sale prices on every level are as before: Easy $3 / $10 / $22, Normal $2 / $8 / $18,
-  // Hard $2 / $7 / $15, Brutal $2 / $5 / $12 (a Mystery Box, a Gadget, a Gift Set).
+  // Sale prices on every level: Easy $3 / $10 / $18, Normal $2 / $8 / $15,
+  // Hard $2 / $7 / $12, Brutal $2 / $5 / $10 (a Mystery Box, a Gadget, a Gift Set; the Gift Set lower since 0.2.13).
   const want = {
-    easy: { hunter: 110.2608, karen: 1874.4336, dad: 93.72168, preggo: 895.869, sells: 'Mystery Box $3, Gadget $10, Gift Set $22' },
-    normal: { hunter: 147.0144, karen: 2499.2448, dad: 124.96224, preggo: 1194.492, sells: 'Mystery Box $2, Gadget $8, Gift Set $18' },
-    hard: { hunter: 191.11872, karen: 3249.01824, dad: 162.450912, preggo: 1552.8396, sells: 'Mystery Box $2, Gadget $7, Gift Set $15' },
-    brutal: { hunter: 242.57376, karen: 4123.75392, dad: 206.187696, preggo: 1970.9118, sells: 'Mystery Box $2, Gadget $5, Gift Set $12' },
+    easy: { hunter: 110.2608, karen: 1874.4336, dad: 93.72168, preggo: 895.869, sells: 'Mystery Box $3, Gadget $10, Gift Set $18' },
+    normal: { hunter: 147.0144, karen: 2499.2448, dad: 124.96224, preggo: 1194.492, sells: 'Mystery Box $2, Gadget $8, Gift Set $15' },
+    hard: { hunter: 191.11872, karen: 3249.01824, dad: 162.450912, preggo: 1552.8396, sells: 'Mystery Box $2, Gadget $7, Gift Set $12' },
+    brutal: { hunter: 242.57376, karen: 4123.75392, dad: 206.187696, preggo: 1970.9118, sells: 'Mystery Box $2, Gadget $5, Gift Set $10' },
   };
   for (const [diff, w] of Object.entries(want)) {
     const s = createGame({ seed: 4, settings: { difficulty: diff } });

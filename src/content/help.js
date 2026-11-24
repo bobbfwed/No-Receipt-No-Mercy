@@ -27,7 +27,7 @@ export const HOW = {
     maze: 'Blocks all shoppers.',
   },
   packer: {
-    does: 'Turns a Gadget ($8) into a Gift Set ($18).',
+    does: 'Turns a Gadget ($8) into a Gift Set ($15).',
     use: 'It only goes on GIFT WRAP floor (purple). It only accepts Gadgets, so it comes after a Press. Feed it from the back or either side; the Gift Set comes out of the side with the arrow.',
     maze: 'Blocks all shoppers.',
   },
