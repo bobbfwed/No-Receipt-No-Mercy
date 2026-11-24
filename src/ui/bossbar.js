@@ -1,6 +1,7 @@
 // The boss bar: a strip across the top of the floor that nobody can miss. Before a boss event it
 // says who is coming; once the doors are open it counts down to his arrival; while he is in the
-// store it shows his title and his patience; and for a moment afterwards, how it ended.
+// store it shows his title and his patience; and for a moment afterwards, how it ended. In a holiday
+// game (0.3) the title says what he is wearing: "REGIONAL MANAGER, dressed as Santa".
 // It does the same for a Midnight Release (0.3.01, never in a boss event): before one, how many
 // Card Traders are coming; once the doors are open, how long until they pile in; and while they
 // are in the store, how many of the mob are left.
@@ -9,6 +10,7 @@
 import { ST, TICK_HZ, bossTier, bossTitle, bossPatience, difficultyOf } from '../sim/index.js';
 import { TUNE, releaseNo, releaseSize, shareCount } from '../sim/index.js';
 import { bossBounty } from '../content/facts.js';
+import { outfitText } from '../content/holidays.js';
 import { h, setText, setClass, setStyle, money } from './dom.js';
 
 /** How long the result (driven out, or got through) stays up after he has gone, in ms. */
@@ -27,7 +29,9 @@ const whole = (n) => Math.ceil(n).toLocaleString('en-US');
  */
 export function createBossBar(session) {
   const tag = h('span', { class: 'boss-tag' }, 'BOSS');
-  const title = h('b', { class: 'boss-title' });
+  const titleText = h('span');
+  const dress = h('span', { class: 'boss-dress' });
+  const title = h('b', { class: 'boss-title' }, titleText, dress);
   const fill = h('i');
   const meter = h('div', { class: 'boss-meter', role: 'presentation' }, fill);
   const num = h('span', { class: 'boss-num' });
@@ -49,6 +53,13 @@ export function createBossBar(session) {
   });
 
   let nextKey = -1, nextSeen = 0; // which build phase the "boss next" warning is for, and since when
+  /** His title, and in a holiday game his outfit after it. */
+  function setTitle(tier, s) {
+    setText(titleText, bossTitle(tier).toUpperCase());
+    const wearing = outfitText(s.holiday);
+    setText(dress, wearing ? `, ${wearing}` : '');
+  }
+
   let mode = '';
   function setMode(m) {
     if (m === mode) return;
@@ -67,7 +78,7 @@ export function createBossBar(session) {
     if (boss && boss.st !== ST.LEAVE) {
       setMode('in');
       const tier = boss.tr || 1;
-      setText(title, bossTitle(tier).toUpperCase());
+      setTitle(tier, s);
       const share = Math.max(0, Math.min(1, boss.hp / boss.mhp));
       setStyle(fill, 'width', `${(share * 100).toFixed(1)}%`);
       setText(num, `${whole(boss.hp)} / ${whole(boss.mhp)}`);
@@ -79,7 +90,7 @@ export function createBossBar(session) {
     // Leaving after his patience ran out (he is still walking to the door), or just gone.
     if (result && now < result.until) {
       setMode(result.good ? 'out' : 'through');
-      setText(title, bossTitle(result.tier).toUpperCase());
+      setTitle(result.tier, s);
       setStyle(fill, 'width', result.good ? '0%' : '100%');
       setText(num, '');
       setText(note, result.text);
@@ -94,7 +105,7 @@ export function createBossBar(session) {
       if (!q) { setMode(''); return false; }
       setMode('coming');
       const tier = bossTier(s.wave) || 1;
-      setText(title, bossTitle(tier).toUpperCase());
+      setTitle(tier, s);
       setStyle(fill, 'width', '100%');
       setText(num, `patience ${whole(bossPatience(s.wave, hpMul))}`);
       setText(note, `walks in in ${Math.max(0, Math.ceil((q[0] - s.tick) / TICK_HZ))} s`);
@@ -110,7 +121,7 @@ export function createBossBar(session) {
       if (now - nextSeen < NEXT_MS || ending) {
         setMode('next');
         setText(tag, 'BOSS NEXT');
-        setText(title, bossTitle(next).toUpperCase());
+        setTitle(next, s);
         setStyle(fill, 'width', '100%');
         setText(num, `patience ${whole(bossPatience(s.wave + 1, hpMul))}`);
         setText(note, `bounty +${money(bossBounty(next, pay))}`);
@@ -130,7 +141,10 @@ export function createBossBar(session) {
     const at = (m, label, head, n, text, share) => {
       setMode(m);
       setText(tag, label);
-      setText(title, head);
+      // Into the title's own two parts, not the title itself: replacing the title's text would
+      // throw away the spans the boss's title and holiday outfit are written into.
+      setText(titleText, head);
+      setText(dress, '');
       setStyle(fill, 'width', `${(Math.max(0, Math.min(1, share)) * 100).toFixed(1)}%`);
       setText(num, n);
       setText(note, text);

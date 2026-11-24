@@ -700,3 +700,11 @@ export const OFFICE = {
 };
 OFFICE.perRefund *= perHead();
 for (const kind of Object.values(OFFICE.kinds)) kind.gap *= perHead();
+
+/**
+ * Holidays (0.3): the keys a game's `state.holiday` may hold. From the week before one of these to
+ * the day after it, the host's computer's date gives a new game that holiday (see
+ * src/content/holidays.js, which keeps the calendar outside the simulation): the bosses wear a
+ * festive outfit and DEB has jokes about it. No rule of the game changes with it.
+ */
+export const HOLIDAYS = ['xmas', 'thanksgiving', 'valentine', 'july4', 'halloween', 'stpat', 'easter', 'newyear', 'mardigras'];

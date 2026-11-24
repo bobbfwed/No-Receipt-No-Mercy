@@ -16,6 +16,7 @@ import { versionText } from '../version.js';
 import { h, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { shopperPortrait } from './portrait.js';
+import { HOLIDAY_INFO, outfitText } from '../content/holidays.js';
 
 const TABS = [['shoppers', 'Known offenders'], ['factory', 'Factory'], ['security', 'Security']];
 const pct = (m) => `${Math.round(m * 100)}%`;
@@ -116,7 +117,8 @@ function bossCard(ctx) {
     [`Bounty${ctx.players > 1 ? ' (split)' : ''}`, ...b.waves.map((w) => money(w.bounty))],
   ];
   return h('article', { class: 'hb-card hb-wide hb-boss' },
-    h('header', { class: 'hb-head' }, shopperPortrait('boss'),
+    // In a holiday game he is shown in the outfit he wears this week.
+    h('header', { class: 'hb-head' }, shopperPortrait('boss', { dress: ctx.holiday }),
       h('div', null, h('h3', null, `The boss: ${b.name}`), h('p', { class: 'hb-when' }, `Every ${b.every}th sales event, about ${fmt(b.at)} s after the doors open`)),
       h('div', { class: 'hb-stats' },
         stat('Patience', `${fmt(b.waves[0]?.hp ?? b.hp)} (event ${b.every})`),
@@ -133,6 +135,7 @@ function bossCard(ctx) {
       ['If he storms out', `the store gets a bounty of ${money(TUNE.bossBounty)} times his rank${ctx.pay !== 1 ? ` (times ${ctx.name} pay)` : ''}, split like any income`],
       ['The rest of the crowd', `${pct0(b.crowd)} of its usual size in a boss event`],
       ['Head Office', 'cannot buy him, and cannot stop him coming'],
+      ...(ctx.holiday ? [['Dress code', `${HOLIDAY_INFO[ctx.holiday].name}: every rank comes ${outfitText(ctx.holiday)}. Same patience, same tricks, worse taste`]] : []),
     ]),
     h('h4', null, ctx.waves > 0 ? `Every boss event up to ${LONGEST} (the longest game)` : 'Boss events in an endless game'),
     table('hb-waves', ['Sales event', ...b.waves.map((w) => String(w.n))], rows));
@@ -201,6 +204,8 @@ export function handbook({ state = null, onClose }) {
     players: state ? shareCount(state) : 1,
     // (A training game's shoppers: see TUNE.trainingPatienceDivisor.)
     hp: state && state.training ? 1 / TUNE.trainingPatienceDivisor : diff.hp, pay: diff.pay, name: diff.name,
+    // The game's holiday (0.3), if any: the boss is pictured in its outfit.
+    holiday: state && Object.hasOwn(HOLIDAY_INFO, state.holiday || '') ? state.holiday : null,
   };
   const close = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: onClose }, 'Close');
   const body = h('div', { class: 'hb-body' });

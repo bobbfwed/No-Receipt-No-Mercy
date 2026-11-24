@@ -27,13 +27,17 @@
 // - The three friends (see FRIENDS in lines.js): when a line would name one of them and he is
 //   connected, a share of the time it is one of his own lines instead, and now and then DEB has a
 //   go at one of them unprompted between waves.
+// - Holidays (0.3): in a game with state.holiday, the boss's walk-in, storming off and getting
+//   through come from that holiday's bank in HOLIDAY_LINES (always the first time each, then
+//   TALK.holidayBoss of the time), and once each build pause DEB may tell a holiday joke (the
+//   'holiday' topic), which fades over the game like any other joke. With no holiday, none of it.
 import {
   TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle, maxIn,
 } from '../sim/index.js';
 import { releaseNo, releaseSize, shareCount } from '../sim/index.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, FRIENDS,
-  BUILDING_NAMES, SHOPPER_NOUNS, fill, choose, textOf, friendOf,
+  BUILDING_NAMES, SHOPPER_NOUNS, HOLIDAY_LINES, fill, choose, textOf, friendOf,
 } from './lines.js';
 
 const DEB = 'DEB (HR)';
@@ -98,6 +102,19 @@ export const TALK = {
   jokeDecay: 0.92,
   /** ...down to this share of what it would have been. */
   jokeFloor: 0.15,
+  // Holidays (0.3; see HOLIDAY_LINES in lines.js).
+  /**
+   * In a holiday game, the share of the boss's walk-ins, exits and refunds that get a holiday line
+   * instead of the usual one, after the first of each (which always does).
+   */
+  holidayBoss: 0.6,
+  /**
+   * A holiday joke in a build pause is tried once a pause, this many seconds after the pause
+   * starts (so the performance review has been read)...
+   */
+  holidayDelay: 5,
+  /** ...and not with fewer than this many seconds left (the friends' jabs and the warning come then). */
+  holidayLast: 31,
 };
 
 /**
@@ -170,6 +187,8 @@ export const TOPICS = {
   // A Pregnant Lady popping is the thing to learn from, so it is said more than most.
   pop: { note: true, important: true, gap: 20 },
   nopop: { note: true, gap: 25 },
+  // A holiday joke in a build pause (0.3): tried once a pause, fading like any joke.
+  holiday: { joke: true, chance: 0.7, gap: 90 },
   // The Midnight Release (0.3.01): announced in the build pause before one (it comes on a fixed
   // schedule, so it is news the first time and then fades like any note; the boss bar says so
   // every time), and remarked on when the mob walks in. A ripped pack is news too, but a mob rips
@@ -216,6 +235,9 @@ export function createDirector(random = Math.random) {
   const met = new Set(); // kinds of shopper DEB has already introduced
   const metSuper = new Set(); // and the super versions
   let bossNow = 0; // the tier of this wave's boss, 0 if none (pep talks do not say)
+  const holidayBossSaid = new Set(); // which of the boss's holiday banks DEB has used this game
+  let pauseWave = -1, pauseFrom = 0; // the build pause idle() last saw start, and its tick
+  let holidayTried = -1; // the build pause in which a holiday joke was last tried
 
   /** Picks a line from a bank and fills it in; null if no line fits the variables given. */
   function line(bank, vars) {
@@ -398,6 +420,36 @@ export function createDirector(random = Math.random) {
     say(out, state, 'waveStart', food ? foodBank() : lot ? lotBank() : LINES.waveStart, { w }, { friend: standing(state) });
   }
 
+  /** This game's holiday lines (see HOLIDAY_LINES), or null when it has no holiday. */
+  const holidayOf = (state) => own(HOLIDAY_LINES, state.holiday) || null;
+
+  /**
+   * One of the boss's events in a holiday game: says a line from the holiday's bank `part` (in,
+   * out or through) the first time, and TALK.holidayBoss of the time after that.
+   * @returns {boolean} whether it did; if not, the usual line is said instead
+   */
+  function holidayBoss(out, state, topic, part, vars, mood) {
+    const bank = own(holidayOf(state), part);
+    if (!bank) return false;
+    if (holidayBossSaid.has(part) && random() >= TALK.holidayBoss) return false;
+    if (!say(out, state, topic, bank, vars, { mood })) return false;
+    holidayBossSaid.add(part);
+    return true;
+  }
+
+  /**
+   * Once each build pause of a holiday game, a while after it starts and well before it ends, DEB
+   * may tell a holiday joke. It is a joke topic, so it fades over the game.
+   */
+  function holidayPause(out, state) {
+    const bank = holidayOf(state)?.pause;
+    if (!bank || state.training || holidayTried === state.wave) return;
+    if (pauseWave !== state.wave) { pauseWave = state.wave; pauseFrom = state.tick; }
+    if (state.tick - pauseFrom < TALK.holidayDelay * TICK_HZ || state.phaseT <= TALK.holidayLast * TICK_HZ) return;
+    holidayTried = state.wave;
+    say(out, state, 'holiday', bank, {}, { mood: 'smug' });
+  }
+
   /** Warns once as refunds pass each share of the limit in TALK.nearLimit. */
   function nearLimit(out, state) {
     const limit = state.refundLimit, got = state.refunds || 0;
@@ -427,7 +479,10 @@ export function createDirector(random = Math.random) {
       case 'bossIn': {
         const tier = tierOf(e.tier) || bossNow || bossTier(state.wave | 0) || 1;
         bossNow = tier;
-        say(out, state, 'bossIn', own(LINES.bossIn, bossBank(tier)), { k: titleOf(tier) }, { mood: 'angry' });
+        // In a holiday game, his outfit is announced instead (those lines name him too).
+        if (!holidayBoss(out, state, 'bossIn', 'in', { k: titleOf(tier) }, 'angry')) {
+          say(out, state, 'bossIn', own(LINES.bossIn, bossBank(tier)), { k: titleOf(tier) }, { mood: 'angry' });
+        }
         // The first boss of the game: what he does, after who he is.
         if (!met.has('boss')) {
           met.add('boss');
@@ -439,7 +494,8 @@ export function createDirector(random = Math.random) {
       case 'bossOut': {
         const tier = tierOf(e.tier) || bossNow || 1;
         const bank = [...LINES.bossOut, ...(own(LINES.bossOutBy, bossBank(tier)) || [])];
-        say(out, state, 'bossOut', bank, { k: titleOf(tier), n: e.bounty > 0 ? Math.round(e.bounty) : undefined }, { mood: 'smug' });
+        const vars = { k: titleOf(tier), n: e.bounty > 0 ? Math.round(e.bounty) : undefined };
+        if (!holidayBoss(out, state, 'bossOut', 'out', vars, 'smug')) say(out, state, 'bossOut', bank, vars, { mood: 'smug' });
         break;
       }
       case 'pep': {
@@ -532,9 +588,8 @@ export function createDirector(random = Math.random) {
         escapes = escapes.filter((t) => state.tick - t < 6 * TICK_HZ);
         if (e.k === 'boss') {
           const tier = tierOf(e.tier) || bossNow || 1;
-          say(out, state, 'bossEscape', LINES.bossEscape, {
-            k: titleOf(tier), n: e.n > 0 ? e.n : undefined, m: e.refund > 0 ? Math.round(e.refund) : undefined,
-          }, { mood: 'angry' });
+          const vars = { k: titleOf(tier), n: e.n > 0 ? e.n : undefined, m: e.refund > 0 ? Math.round(e.refund) : undefined };
+          if (!holidayBoss(out, state, 'bossEscape', 'through', vars, 'angry')) say(out, state, 'bossEscape', LINES.bossEscape, vars, { mood: 'angry' });
         }
         nearLimit(out, state);
         if (escapes.length >= 5 && say(out, state, 'manyEscapes', LINES.manyEscapes, { n: escapes.length }, { mood: 'angry' })) escapes = [];
@@ -649,13 +704,18 @@ export function createDirector(random = Math.random) {
     },
 
     /**
-     * Call about once a second. Gives the "ten seconds" warning before the doors open, and now
-     * and then has a go at one of the friends between waves.
+     * Call about once a second. Gives the "ten seconds" warning before the doors open, now and
+     * then has a go at one of the friends between waves, and in a holiday game now and then tells
+     * a holiday joke early in the pause.
      * @returns {Array<Object>} messages to announce
      */
     idle(state) {
       const out = [];
       if (state.phase !== 'build' || !(state.phaseT > 0)) return out;
+      // A holiday joke, at most once a pause. It comes first so that it notes when the pause
+      // started; it never speaks in the pause's first seconds (TALK.holidayDelay), which is when
+      // a coming Midnight Release is announced, so the two do not get in each other's way.
+      holidayPause(out, state);
       // The next sales event is a Midnight Release: said once, early in the build pause.
       if (!state.training && heralded !== state.wave && releaseNo(state.wave + 1)) {
         heralded = state.wave;

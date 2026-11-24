@@ -15,11 +15,18 @@
   Draws one kind of shopper and its super version side by side, with the game's own drawing code.
   The shopper pictures in README.md are photographs of this page, taken by: node tools/readme.mjs --shots
     http://localhost:5173/tools/portrait.html?k=dad
+  ?k=boss&holiday=xmas draws the boss's four ranks in that holiday's outfit instead, as the
+  Employee Handbook shows him in a holiday game (holiday: a key of HOLIDAYS in src/sim/constants.js).
 -->
 <script type="module">
   import { shopperPortrait } from '../src/ui/portrait.js';
-  const k = new URLSearchParams(location.search).get('k') || 'hunter';
-  document.body.append(shopperPortrait(k, { size: 150 }), shopperPortrait(k, { sup: true, size: 150 }));
+  const q = new URLSearchParams(location.search);
+  const k = q.get('k') || 'hunter';
+  if (k === 'boss' && q.get('holiday')) {
+    for (let tier = 1; tier <= 4; tier++) document.body.append(shopperPortrait(k, { size: 150, tier, dress: q.get('holiday') }));
+  } else {
+    document.body.append(shopperPortrait(k, { size: 150 }), shopperPortrait(k, { sup: true, size: 150 }));
+  }
 </script>
 </body>
 </html>

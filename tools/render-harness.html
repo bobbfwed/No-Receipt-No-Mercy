@@ -87,6 +87,13 @@
                    does not pop ('nopop', no babies). &octo=1 makes her an Octomom (24 babies).
                    Starts at sales event 14 unless &wave= is given. The bottom-right corner says
                    what happened. Example, whole map: ?pop=sprinkler&octo=1&size=s&fitview=1&after=60
+    &holiday=xmas  the game's holiday (a key of HOLIDAYS in src/sim/constants.js), so every boss
+                   wears its outfit; works with the normal view, &lineup=1, &showcase=1 and &bosses=1
+    &bosses=1      the boss's holiday outfit (with &holiday=..., else his suit), large: the four ranks
+                   walking right, walking left, mid pep talk and storming off, then a row of all
+                   four at the game's normal zoom (40 px a tile) and one at 16 px a tile, zoomed out
+                   (each drawn small and then enlarged, as the screen would show it). &zoom= scales
+                   the big rows.
     &allfx=1       inject one of every effect event every &every=1200 ms at fixed places
     &zoom=1.6&at=24,7   close-up: that many times the whole-map zoom, centred on that tile
     &magnify=3     draw the game into a window a third the size and show it three times bigger,
@@ -162,7 +169,7 @@ if (q.get('null') === '1') {
   // &zones=1 / &zones=0 turn the machines' marked floor on or off; by default a game has it
   // exactly when it has a chosen map, as in the real game.
   const zones = q.has('zones') ? q.get('zones') === '1' : !!map;
-  const state = createGame({ seed: num('seed', 7), map, zones });
+  const state = createGame({ seed: num('seed', 7), map, zones, holiday: q.get('holiday') });
   session = new HostSession({ name: 'Dave', director: createDirector(), state });
   const s = session.state;
   const me = s.players[0];
@@ -569,7 +576,7 @@ if (q.get('lineup') === '1') {
     g.fillRect(0, 0, canvas.width, canvas.height);
     const [panX, panY] = (q.get('pan') || '0,0').split(',').map(Number);
     g.setTransform(z, 0, 0, z, -panX * z, -panY * z);
-    const F = { time: t / 1000, now: t, alpha: 0 };
+    const F = { time: t / 1000, now: t, alpha: 0, dress: q.get('holiday') || undefined };
     // Messes: fresh (splashing in), settled (both flavours), fading out.
     drawMesses(g, [[ti(27, 14), life - 2], [ti(29, 14), 200], [ti(31, 14), 150], [ti(33, 14), 14]], 0, messSprites, LW);
     // Wreckage of each kind (a barcode laser's and a salesman's over their footprints), and badges.
@@ -674,6 +681,69 @@ if (q.get('lineup') === '1') {
     ]);
   };
   const loop = (t) => { lineup(t); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+  session.stop && session.stop();
+} else if (q.get('bosses') === '1') {
+  // The boss's holiday outfit (0.3), checked by eye: big, then at real sizes.
+  const { drawShopper, createShopperSprites, drawBossTag } = await import('../src/render/shoppers.js');
+  const g = canvas.getContext('2d');
+  canvas.width = innerWidth; canvas.height = innerHeight;
+  const holiday = q.get('holiday') || undefined;
+  const big = num('zoom', Math.min(canvas.width * 0.62 / 460, canvas.height / 560));
+  const sprites = createShopperSprites();
+  sprites.setScale(big);
+  // At a real size: drawn into a small canvas at that many pixels a tile, then enlarged, so the
+  // picture shows what a player would see on screen, only bigger.
+  const small = document.createElement('canvas');
+  const smallSprites = createShopperSprites();
+  const R = { st: ST.WALK, vx: 0.05 };
+  const POSES = [[R, 1], [R, -1], [{ ...R, pp: 9999 }, 1], [{ st: ST.LEAVE, vx: 0, t: 30 }, 1]];
+  const who = (tr, pose) => ({ id: tr * 7, k: 'boss', sup: 0, x: 0, y: 0, vy: 0, hp: 20, mhp: 30, t: 20, cd: 0, kd: 0, bt: 0, tr, pp: 0, ...pose });
+  const draw = (t) => {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = '#8d9093';
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    const F = { time: t / 1000, now: t, alpha: 0, dress: holiday, zoom: 40 };
+    g.setTransform(big, 0, 0, big, 0, 0);
+    // Rows: the four poses. Columns: the four ranks.
+    POSES.forEach(([pose, f], r) => {
+      for (let tr = 1; tr <= 4; tr++) {
+        const sh = who(tr, pose);
+        const x = 72 + (tr - 1) * 112, y = 120 + r * 122;
+        drawShopper(g, sh, x, y, f, F, sprites);
+        if (r === 0) drawBossTag(g, sh, x, y, F);
+      }
+    });
+    // Real sizes, to the right: 40 and 16 pixels a tile (the screen at the game's usual zoom, and
+    // zoomed out).
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    let y0 = 40;
+    const x0 = 470 * big;
+    for (const [px, enlarge] of [[40, 1.6], [16, 3]]) {
+      const z = px / 40, w = 4 * 92, h = 130;
+      small.width = Math.ceil(w * z); small.height = Math.ceil(h * z);
+      smallSprites.setScale(z);
+      const sg = small.getContext('2d');
+      sg.setTransform(z, 0, 0, z, 0, 0);
+      sg.fillStyle = '#8d9093'; sg.fillRect(0, 0, w, h);
+      for (let tr = 1; tr <= 4; tr++) {
+        const sh = who(tr, R);
+        drawShopper(sg, sh, 46 + (tr - 1) * 92, 112, 1, { ...F, zoom: px }, smallSprites);
+        // (Zoomed out, the name plates grow to stay readable and would cover each other here.)
+        if (px === 40) drawBossTag(sg, sh, 46 + (tr - 1) * 92, 112, { ...F, zoom: px });
+      }
+      g.imageSmoothingEnabled = false;
+      g.drawImage(small, x0, y0, small.width * enlarge, small.height * enlarge);
+      g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+      g.fillStyle = '#fff'; g.font = '16px Consolas, monospace';
+      g.fillText(`${px} px a tile, shown x${enlarge}`, x0, y0 + small.height * enlarge + 18);
+      y0 += small.height * enlarge + 40;
+    }
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillStyle = '#fff'; g.font = 'bold 22px Segoe UI, Arial';
+    g.fillText(`holiday: ${holiday || 'none'}`, x0, canvas.height - 20);
+  };
+  const loop = (t) => { draw(t); requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
   session.stop && session.stop();
 } else if (q.has('bench')) {

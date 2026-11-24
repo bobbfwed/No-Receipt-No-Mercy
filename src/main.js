@@ -15,7 +15,10 @@
 //   ?online=host&code=ABCDE       test only: host online with a fixed room code
 //   ?online=join&code=ABCDE       test only: join online straight away
 //   &autostart=1                  test only: open the doors whenever a build phase starts
+//   &holiday=xmas                 test only: play as if it were that holiday (a key of HOLIDAYS),
+//                                 or &holiday=none for no holiday, whatever today's date
 import { showError } from './ui/errors.js';
+import { holidayFor } from './content/holidays.js';
 import { HostSession, ClientSession } from './net/session.js';
 import { createDirector } from './content/director.js';
 import { hostOnline, joinOnline, hostLocal, joinLocal, makeRoomCode } from './net/transports.js';
@@ -65,8 +68,14 @@ function urlMap() {
  *   the original small warehouse with one entrance (which the ready-made demo layout is for).
  */
 function newHost(name, map = urlMap() || DEFAULT_MAP, lobby = flag('lobby'), settings = urlSettings()) {
-  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: lobby && !!map, settings });
+  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: lobby && !!map, settings, holiday: holidayNow() });
 }
+
+/**
+ * The holiday a new game is played in: today's by this computer's date (the host's, since only
+ * the host makes games), or the one the address asks for. See src/content/holidays.js.
+ */
+const holidayNow = () => holidayFor(q.get('holiday'));
 
 /** Game settings named in the address, if any (anything not on the list falls back to the default). */
 function urlSettings() {
@@ -97,7 +106,7 @@ function show(session, options) {
   // The host of a multiplayer game can take the group back to the lobby when it ends, keeping
   // the room open. The new game gets a fresh joke director, which remembers only one game.
   const onLobby = session.isHost && options.roomKind
-    ? () => session.backToLobby({ seed: opts.seed, director: createDirector() })
+    ? () => session.backToLobby({ seed: opts.seed, director: createDirector(), holiday: holidayNow() })
     : null;
   game = startGame(session, { mount: app, sound, onLobby, ...options });
   // Whoever hosts keeps the game saved in his browser, so it can be carried on another day.

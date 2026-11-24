@@ -202,11 +202,13 @@ export class HostSession extends Session {
    * @param {boolean} [o.resume] `state` is a saved game being picked up again. Every player in it
    *   counts as away, with no grace period running and nobody's money shared out: each gets his
    *   place and money back by name whenever he rejoins. This player (found by `name`) is the host.
+   * @param {string|null} [o.holiday] a new game's holiday (see createGame; main.js works it out
+   *   from the date). Ignored with `state`, which keeps its own.
    */
-  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false, resume = false, settings = null }) {
+  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false, resume = false, settings = null, holiday = null }) {
     super();
     this.isHost = true;
-    this.state = state || createGame({ seed, map, lobby, settings });
+    this.state = state || createGame({ seed, map, lobby, settings, holiday });
     const s = this.state;
     if (resume) {
       // A save from an older version of the rules is brought up to date first (once).
@@ -255,12 +257,14 @@ export class HostSession extends Session {
    * @param {Object} [o]
    * @param {number} [o.seed]     the new game's random seed; left out, a new one
    * @param {Object} [o.director] a fresh joke director: the old one remembers what it said this game
+   * @param {string|null} [o.holiday] the new game's holiday (main.js gives today's, which may differ
+   *   from the old game's); left out, the old game's
    * @returns {boolean} false if the game is not over yet
    */
-  backToLobby({ seed = (Date.now() & 0x7fffffff) || 1, director = null } = {}) {
+  backToLobby({ seed = (Date.now() & 0x7fffffff) || 1, director = null, holiday = this.state.holiday } = {}) {
     const old = this.state;
     if (old.phase !== 'won' && old.phase !== 'lost') return false;
-    const s = createGame({ seed, map: old.map, zones: !!old.zones, lobby: true, settings: old });
+    const s = createGame({ seed, map: old.map, zones: !!old.zones, lobby: true, settings: old, holiday });
     // Drawing code keeps pictures of the floor keyed on this number; never let it repeat one.
     s.gridVer = (old.gridVer | 0) + 1;
     const connected = new Set([this.me, ...this.conns.values()]);

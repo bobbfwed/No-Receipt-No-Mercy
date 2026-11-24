@@ -1742,6 +1742,8 @@ kbd {
 .boss-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.18rem; }
 .boss-line { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; line-height: 1; }
 .boss-title { overflow: hidden; text-overflow: ellipsis; font: 900 0.98rem var(--font-heavy); color: var(--yellow); letter-spacing: 0.03em; }
+/* In a holiday game (0.3): what he is wearing, after his title. */
+.boss-dress { font-family: var(--font); font-size: 0.74rem; font-weight: 800; color: #fde68a; letter-spacing: 0; }
 .boss-num { flex: none; font-size: 0.76rem; font-weight: 800; color: #fecaca; font-variant-numeric: tabular-nums; }
 .boss-meter { height: 0.75rem; background: #3b0d0d; border: 0.12rem solid var(--line); border-radius: 0.4rem; overflow: hidden; }
 .boss-meter i { display: block; height: 100%; width: 100%; background: linear-gradient(#f87171, #dc2626); transition: width 0.15s linear; }
@@ -2128,6 +2130,7 @@ html, body { overscroll-behavior: none; }
   }
   .boss-tag { font-size: 0.68rem; padding: 0.15rem 0.3rem; }
   .boss-title { font-size: 0.8rem; }
+  .boss-dress { font-size: 0.62rem; }
   .boss-num { font-size: 0.66rem; }
   .boss-meter { height: 0.6rem; }
   .boss-note { max-width: 6.5rem; font-size: 0.6rem; white-space: normal; line-height: 1.1; }

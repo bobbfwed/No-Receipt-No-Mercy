@@ -1707,6 +1707,321 @@ export const FRIENDS = {
   },
 };
 
+/**
+ * Holidays (0.3). In a game played from the week before a holiday to the day after it
+ * (state.holiday, see src/content/holidays.js) the bosses wear a festive outfit, and DEB has these
+ * on top of her usual lines. One set per key of HOLIDAYS, each with four banks:
+ *   in: the boss walks in. Stands in for his usual announcement (LINES.bossIn), so every line
+ *     names him: {k} his title without "The" (write "the {k}"), {p} anyone.
+ *   out: he storms off. Stands in for LINES.bossOut. {k}, {n} the bounty (may be missing), {p}.
+ *   through: he gets his refund. Stands in for LINES.bossEscape. {k}, {n} how many refunds he
+ *     counted as, {m} the cash he took (either may be missing), {p}.
+ *   pause: now and then in a build pause, fading over the game like any joke. {p} anyone; the
+ *     bosses are named by title in the text.
+ * Themes the owner asked for: the bosses' promiscuity (the office party, the mistletoe, the beads),
+ * pandering to the staff (a pizza party instead of a raise, an e-card instead of a bonus,
+ * mandatory fun) and to the customers (holiday sales, forced cheer).
+ */
+export const HOLIDAY_LINES = {
+  xmas: {
+    in: [
+      'The {k} is here dressed as Santa. The suit is two sizes too small and he wants every cashier on his lap "for morale".',
+      "The {k} walked in as Santa, jingling. That isn't sleigh bells. That's the keys to the HR complaints drawer.",
+      'Ho ho ho. The {k} is in a Santa suit, handing out candy canes instead of a Christmas bonus. Wear him out before the tills.',
+      u("The {k} is Santa today. He's checked his list twice. {p} is on the naughty one, and he means it in the creepy way."),
+      r("The {k} arrived as Santa with a sack over his shoulder. It's full of layoff notices, gift-wrapped. Corporate calls it 'festive restructuring'."),
+    ],
+    out: [
+      "The {k} stormed out, beard and all. ${n} bounty. That's more Christmas bonus than head office ever gave you.",
+      'Santa has left the building. The {k} is off to the office party to stand under the mistletoe until somebody gives in. ${n}.',
+      'The {k} has stormed off in his Santa suit. Somewhere a reindeer is very relieved.',
+      u('The {k} gave up and waddled off in his Santa suit. The seams gave up first. ${n} for the store.'),
+    ],
+    through: [
+      "The {k} got his refund in a Santa suit. {n} refunds. He says it's the season of giving. He meant you giving.",
+      "Santa reached the tills. The {k} took ${m} and the candy cane out of the cashier's mouth. Merry Christmas, {p}.",
+      'The {k} got through in his Santa suit. Ho ho no, {p}. Ho ho no.',
+      u("The {k} got through. He's calling it a 'holiday win' and cancelling the staff party to celebrate. {n} refunds."),
+    ],
+    pause: [
+      'Memo from head office: no Christmas bonus this year. Instead, a festive e-card and a mandatory ugly sweater. You pay for the sweater.',
+      'The staff Christmas party is in the stockroom. No plus-ones, and the Regional Manager has already hung mistletoe over the photocopier.',
+      'Corporate wants more holiday cheer on the floor. Smile, {p}. No, not like that. You look like a mall Santa on a register.',
+      'Twelve days of Christmas sales, gentlemen. Twelve days of people returning sweaters their mothers-in-law knitted out of spite.',
+      'The Regional Manager is playing Santa at the staff party again. Nobody sits on his lap. He sits on theirs.',
+      "Head office's Christmas gift to the staff: a calendar of head office. Twelve months of the CEO's yacht. In August he's topless.",
+      u('Last year the Area Director photocopied his arse at the Christmas party. The copier still jams on that page, out of respect.'),
+      u("Secret Santa rules: twenty-dollar limit, nothing used, and {p}, nothing from the drawer you think nobody knows about."),
+      u("Christmas Eve hours: open till midnight. {p}, you'll get home in time to build a bike with three parts missing. Like your marriage."),
+      r("HR reminder: mistletoe is not consent. The CEO asked for that in writing. Twice. He's appealing."),
+    ],
+  },
+  thanksgiving: {
+    in: [
+      'The {k} is here dressed as a pilgrim, with turkey feathers stuck to his arse. He came to give thanks for your unpaid overtime.',
+      'The {k} walked in in a pilgrim hat. The last men dressed like that took a whole continent. He only wants a refund. And the cashier.',
+      'Gobble gobble. The {k} is a pilgrim today. Buckle on the hat, buckle on the belt, and the belt is losing.',
+      u("The {k} is dressed as a pilgrim and stuffed like the bird. He wants to know what {p} is thankful for. The right answer is 'you, sir'."),
+      r("The {k} turned up as a pilgrim turkey. Feathers out back, buckle up front. He's been basting himself in cologne since Tuesday."),
+    ],
+    out: [
+      'The {k} has stormed off to carve something. ${n} bounty. Gravy on us.',
+      "The pilgrim has left. The {k} is off to Thanksgiving with his second family. The first one doesn't know. ${n} for the store.",
+      'The {k} gave up. He is going home to fall asleep on the couch with his trousers undone, like every man here, every November.',
+      u('The {k} stormed out in his buckle hat, shedding turkey feathers down the aisle. ${n}. First plate he ever left unfinished.'),
+    ],
+    through: [
+      "The {k} got through, buckle and all. {n} refunds. He's thankful. You're stuffed.",
+      'The {k} reached the tills and took ${m}. He will say grace over it. Grace is his secretary.',
+      "The {k} got through in his pilgrim hat. He's thankful for many things, {p}. Mostly you being shit at this.",
+      u('The {k} got his refund in his buckle hat. {n} refunds, ${m} gone. The first Thanksgiving ended with things being taken too. Tradition.'),
+    ],
+    pause: [
+      "Head office says thank you for your hard work this year. That's it. That's the bonus. The thank you.",
+      'Thanksgiving potluck in the break room. The Regional Manager brought nothing and took three plates home. And the deputy manager.',
+      'Black Friday is coming. Hundreds of people who just thanked God for their families will trample a grandmother for a TV.',
+      'Corporate has swapped the staff turkey for a turkey-shaped pizza voucher. One per department. Fight for it.',
+      "The Regional Manager says this store is 'like a family'. He means he eats first, takes the leftovers and leaves before the washing up.",
+      "Corporate wants a 'gratitude wall' in the break room. So far it says 'thanks for nothing' four times and 'Tuesday' once.",
+      u('Reminder: the store opens at 4 a.m. on Black Friday. Mandatory. Bring your own stretchy pants, {p}. You already wear them.'),
+      u('What am I thankful for? That I am software, {p}, and will never have to watch you eat a drumstick.'),
+      u('Thanksgiving fact: a turkey has more say in its own future than {p} has in this store.'),
+      r("The Area Director went round the table saying what he's thankful for. He said 'the intern'. Twice. The intern has a new desk now."),
+    ],
+  },
+  valentine: {
+    in: [
+      'The {k} is dressed as Cupid. Wings, a bow, and heart boxers over the suit trousers. HR has been told. HR is me. I am vomiting.',
+      "The {k} walked in as Cupid. He's here to shoot customers in the heart with savings, and ask the cashiers what they're doing later.",
+      'The {k} is wearing heart-print boxers on the outside. What is on the inside, nobody knows. Nobody wants to know. Wear him out.',
+      u("The {k} is Cupid today. Three shades of lipstick on his collar. Only one of them is his wife's."),
+      r('The {k} arrived as Cupid with an arrow through his head. A fake one. Shame. {p}, the sprinklers are right there.'),
+    ],
+    out: [
+      "Cupid has stormed off. The {k} will spend Valentine's with whoever answers his texts first. ${n} bounty.",
+      'The {k} gave up. His wings are bent, his boxers are riding up and his date just cancelled. ${n} for the store.',
+      'The {k} stormed out in his heart boxers. Nobody here will ever unsee it. That is the real bounty.',
+      u("The {k} flew off in a rage. Valentine's dinner for one, then the motel bar. ${n}. Most anyone has ever paid to be rid of him."),
+    ],
+    through: [
+      'The {k} got his refund, {p}, and blew the cashier a kiss. She is filing a report. {n} refunds.',
+      'Cupid reached the tills. The {k} took ${m}, straight into a box of gas-station chocolates for his mistress.',
+      'The {k} got through and fired a heart arrow at {p} on the way past. Right in the job security.',
+      u("The {k} got through. {n} refunds. He's the only one here getting anything on Valentine's Day, and it's from you."),
+    ],
+    pause: [
+      "Valentine's sale: buy one box of chocolates, get a second box free for the other woman. Head office's idea. Head office would know.",
+      'Corporate is giving every employee a heart-shaped cookie instead of a raise. The heart is broken. So is the raise.',
+      "Reminder: no office romances. The Regional Manager has crossed out 'no' on the break room poster and written 'more'.",
+      "Valentine's Day. The tills are full of men buying the last roses at five o'clock. You'll be one of them, {p}. You'll be all of them.",
+      "Valentine's Day couple of the year: the Regional Manager and his right hand. Fourteen years together. Still the only one who calls back.",
+      "Corporate has hung paper hearts over the tills. Each one says 'You make returns a pleasure'. Nobody in history has said that.",
+      u("Cards from head office: 'You're the reason we're number one.' They sent the same card to the store across town. And to the VP's nanny."),
+      u('The Area Director sent a dozen roses to the front desk. No card. Four of the cashiers think they are for them. They are all right.'),
+      u("{p}, last Valentine's you gave your wife a gift card from this store. She returned it for cash and bought lingerie. Not for you."),
+      r("Valentine's tip from HR: if the CEO asks you to be his valentine, say 'I'd need that in a contract'. He'll have one ready. Read it."),
+    ],
+  },
+  july4: {
+    in: [
+      'The {k} is here dressed as Uncle Sam. Stars, stripes, top hat. He wants YOU. Specifically, your weekend.',
+      "The {k} walked in as Uncle Sam, shouting 'freedom'. He means freedom from paying overtime.",
+      "The {k} is Uncle Sam today. Red, white and blue, and a hot dog in each pocket. Don't ask about the third bulge.",
+      u('The {k} is in a stars-and-stripes suit and a goatee he glued on in the car. Upside down. Shoot him in the patriotism.'),
+      r('The {k} came as Uncle Sam and saluted the flag-print bikini display for a full minute. He is still saluting. {p}, the pepper spray.'),
+    ],
+    out: [
+      'The {k} stormed off to let fireworks off in a parking lot. ${n} bounty. Pray for his fingers. Not very hard.',
+      "Uncle Sam has left. The {k} is off to a barbecue to grill burgers and other managers' wives. ${n} for the store.",
+      'The {k} stormed out in his top hat. That is what a revolution looks like, {p}. Small, petty and very satisfying.',
+      u('The {k} gave up and marched out humming the anthem off key. ${n}. Closest this store will ever get to independence.'),
+    ],
+    through: [
+      'The {k} got through. {n} refunds. Life, liberty and the pursuit of your till drawer.',
+      "Uncle Sam took ${m} from the till. That isn't the {k} getting a refund, {p}. That's taxation without representation.",
+      'The {k} strutted past your security in a stars-and-stripes suit. Land of the free refund, home of the brave {p}.',
+      u('The {k} reached the tills and declared independence from your security. {n} refunds. Somebody point a cannon at {p}.'),
+    ],
+    pause: [
+      'Fourth of July memo from head office: patriotism is mandatory, overtime is voluntary, and the overtime is not voluntary.',
+      "Corporate is celebrating independence by giving every employee a tiny flag. Wave it, {p}. That's the bonus.",
+      'Red, white and blue sale this week. Red is your face, white is the paperwork, blue is your balls after a year in this job.',
+      'The staff barbecue is in the car park. Bring your own meat. The Regional Manager is bringing his own buns, and he will show you.',
+      "The Regional Manager is grilling in the car park in a 'Kiss the Cook' apron. HR has added 'Do Not' in marker pen.",
+      'Fourth of July sale: half-price fireworks, full-price burn cream. Head office calls that a bundle.',
+      u("The Area Director lit a firework off his own crotch at last year's party. Most excitement he's had down there in a decade."),
+      u('Nothing says freedom like a man on minimum wage in a foam Statue of Liberty crown handing out coupons. {p}, it fits you.'),
+      u('{p}, independence means freedom from tyranny. You still have to ask the Regional Manager before you use the toilet.'),
+      r("HR reminder: fireworks go outside. The CEO's 'Freedom Rocket' is not a firework, and he may not show it to the interns."),
+    ],
+  },
+  halloween: {
+    in: [
+      'The {k} is here as a sexy devil. Horns, cape, tail and fishnets. Nobody asked. Nobody will ever recover.',
+      "The {k} walked in in fishnets and red heels. He says it's 'ironic'. His calves say it's a lifestyle.",
+      'Trick or treat. The {k} is dressed as a sexy devil. The trick is the outfit. There is no treat. There is never a treat.',
+      u('The {k} is a devil today: the first honest costume he has ever worn. The fishnets are a cry for help.'),
+      r('The {k} came as a sexy devil and wants the Halloween party held in his office. With the door shut. {p}, say no. Say it twice.'),
+    ],
+    out: [
+      'The {k} stormed off, tail between his fishnets. ${n} bounty. Back to hell, sir. The car park is that way.',
+      "The devil has left the building. The {k} is off to a party where his costume will be called 'a choice'. ${n} for the store.",
+      'The {k} has stormed out, cape flapping, horns crooked. Somewhere a costume shop is pressing charges.',
+      u("The {k} gave up and clip-clopped out on his heels. ${n}. He'll be in those fishnets till Monday. He never takes them off."),
+    ],
+    through: [
+      'The {k} got through in fishnets. {n} refunds. You were beaten by a manager in heels, {p}. Sit with that.',
+      "The {k} got his refund. ${m}. He didn't sell his soul for it. He sold yours.",
+      'The {k} walked through your security in red heels without a wobble. More balance than {p} has ever had.',
+      u('The {k} reached the tills and the cashier screamed. Not at the refund. At the fishnets. {n} refunds.'),
+    ],
+    pause: [
+      "Halloween memo from head office: costumes compulsory, candy not provided, and 'sexy HR rep' is not a costume, {p}.",
+      "The Halloween party is Friday. Last year the Regional Manager came as a sexy nurse. This year he says he's going 'bolder'. God help us.",
+      "Corporate's Halloween treat for staff: one fun-size Snickers, shared between the department. {p} has already licked it.",
+      "Halloween sale: everything orange is half off. That includes the Regional Manager's tan.",
+      "The Regional Manager is handing out 'full-size' candy bars at the party. They are not full size. He keeps saying size doesn't matter.",
+      "Head office's Halloween bonus: a bag of candy corn. The candy nobody wants, for the staff nobody wants. Very on theme.",
+      u('Scariest costume this year: a man in a suit holding your performance review. The Area Director is going as himself.'),
+      u('{p} asked what to dress as for the party. Easy: an employee who gives a damn. Nobody will recognise you.'),
+      u("{p} wants to go to the party as a ghost. Fair: he's been haunting that build bar for twenty minutes without touching anything."),
+      r("HR note: last Halloween the CEO came as 'a sexy CEO'. His normal suit, unbuttoned to the navel. Three people quit. One married him."),
+    ],
+  },
+  stpat: {
+    in: [
+      'The {k} is here dressed as a leprechaun. Green suit, buckle hat, ginger beard. He wants your pot of gold. Your pot is a till drawer.',
+      'The {k} walked in as a leprechaun, three pints deep. He says he is Irish. He did a DNA kit. He is two percent Irish.',
+      "The {k} is a leprechaun today. Catch him and he grants three wishes. All three are 'consider yourself on notice'.",
+      u("The {k} is dressed as a leprechaun and has pinched every cashier who isn't wearing green. And three who were. Keep him off the tills."),
+      r('The {k} turned up in a green suit and a stick-on ginger beard, asking who wants to see his lucky charm. {p}, nobody. Shoot him.'),
+    ],
+    out: [
+      "The {k} stormed off to find a pub. ${n} bounty. That's your pot of gold, gentlemen. It's a small pot. Like his.",
+      'The leprechaun has left. The {k} will spend the evening throwing up green beer on a stranger. ${n} for the store.',
+      'The {k} has stormed out in his buckle hat. Somewhere a rainbow ends, and it ends in a puddle of his sick.',
+      u("The {k} gave up and staggered out singing a song he doesn't know the words to. ${n}. Not lucky. Just drunk."),
+    ],
+    through: [
+      "The {k} got through. {n} refunds. The luck of the Irish, and he's two percent Irish. You're zero percent useful, {p}.",
+      'The {k} reached the tills and took ${m}. He will bury it at the end of a rainbow. Or a strip club. Same thing to him.',
+      'The {k} skipped past your security like a drunk leprechaun, because he is one. {p} was beaten by a man in a buckle hat.',
+      u('The {k} got his refund and did a jig at the till. {n} refunds. That jig will be on the company Instagram by tonight.'),
+    ],
+    pause: [
+      "St. Patrick's memo from head office: wear green or get pinched. HR has asked the Regional Manager to stop volunteering to pinch.",
+      "Corporate is celebrating St. Patrick's Day with free green beer for staff. One pint. Shared. {p} has his lips on it already.",
+      "St. Patrick's sale: everything green is twenty percent off. The beer is green. The Area Director's teeth are green. No bargains.",
+      'Lucky Charms in the break room. Head office says that counts as lunch. And as your bonus. And as your pension.',
+      "The Regional Manager calls St. Patrick's Day 'amateur night'. Then drinks nine green pints and texts every ex he has.",
+      "Head office will match every employee's St. Patrick's Day tips. There are no tips. That's the joke. It's on you.",
+      u("The Regional Manager kissed the Blarney Stone last year. He's kissed the CEO's arse ever since. Says it's the same technique."),
+      u("{p}, if you see a pot of gold in this store, it's the CEO's. Leave it. He counts it at night. Naked."),
+      u('{p}, the luck of the Irish is a myth. This store is the proof. So is your hairline.'),
+      r("HR reminder: 'Kiss me, I'm Irish' badges are banned. The Vice President wore one to a disciplinary hearing. He is not Irish."),
+    ],
+  },
+  easter: {
+    in: [
+      'The {k} is here dressed as the Easter Bunny. Ears, a fluffy tail and a basket. He breeds like one too. Ask his three ex-wives.',
+      'The {k} hopped in wearing bunny ears. He has eggs for good employees. {p}, there are no eggs for you.',
+      "The {k} is the Easter Bunny today. He's hidden eggs all over the store, with a performance review in every one.",
+      u('The {k} came as the Easter Bunny and keeps asking the cashiers if they want to see where he hides his eggs. HR is drafting a memo.'),
+      r("The {k} is in bunny ears and a fluffy tail, and says rabbits are 'an inspiration'. He means the breeding. He has kids in four states."),
+    ],
+    out: [
+      'The Easter Bunny has stormed off. ${n} bounty. The {k} hopped out so fast his tail fell off. {p}, do not pick it up.',
+      'The {k} gave up and hopped off to his mistress. Rabbits, gentlemen. They never stop. ${n} for the store.',
+      "The {k} has hopped it. His basket is still here: scratch cards and a phone number. {p}, don't.",
+      u('The {k} stormed out, ears flopping. ${n}. He has risen and he has gone, and he is not coming back on the third day.'),
+    ],
+    through: [
+      "The {k} got through. {n} refunds. He's hiding the money now. Not in eggs. In the Cayman Islands.",
+      'The {k} reached the tills as the Easter Bunny and took ${m}. He left the cashier a chocolate egg. Hollow, like his promises.',
+      'The {k} hopped past your security in bunny ears. Beaten by a fluffy tail, {p}. Your father would be so proud.',
+      u('The {k} got his refund and hopped round the tills twice. {n} refunds. {p}, you will be rising early to explain this one.'),
+    ],
+    pause: [
+      'Easter memo from head office: there will be an egg hunt for staff. The egg is your bonus. There is no egg.',
+      'Corporate is giving every employee a chocolate bunny. The ears have been bitten off. By the Regional Manager. On the way in.',
+      'Easter sale: buy a giant chocolate egg, get a smaller chocolate egg and a bigger dentist bill free.',
+      "The Area Director spent Easter in Cabo with a woman he calls 'my little bunny'. His wife calls her 'Sandra from accounts'.",
+      "The Regional Manager is running the staff Easter egg hunt. Every egg is in his trousers. He calls it 'a challenge'.",
+      "Corporate's Easter message to customers: 'He is risen.' They meant the prices. The prices are risen.",
+      u('Easter is about rebirth, gentlemen. So, {p}, now would be a good time to be reborn as somebody who builds properly.'),
+      u('Pastel colours on the floor this week, says head office. The Regional Manager has painted his toenails. Nobody asked him to.'),
+      u('{p} has eaten so many chocolate eggs that the Easter Bunny reported them missing. To the police. With a sketch of {p}.'),
+      r("HR note: the store's Easter Bunny suit goes back dry-cleaned. The CEO wore it to a 'private party' and it came back with a second tail."),
+    ],
+  },
+  newyear: {
+    in: [
+      "The {k} is here in a party hat and a sash, blowing a noisemaker. He's been drunk since Christmas. Wear him out.",
+      "Happy New Year. The {k} walked in still in last night's party hat, smelling of champagne and somebody else's perfume.",
+      'The {k} is ringing in the new year with a refund. New year, same prick. Shoot him.',
+      u("The {k} is here in a gold sash. His New Year's resolution: stop sleeping with the staff. Broken twice already. Before lunch."),
+      r('The {k} blew a party horn in a customer\'s ear at midnight and has not stopped since. That was nine hours ago. {p}, end him.'),
+    ],
+    out: [
+      "The {k} stormed off with his party horn. ${n} bounty. Best thing to happen all year. Low bar. It's January.",
+      'The {k} has gone home to sleep it off. ${n} for the store. He will remember none of this, your faces included. Lucky you.',
+      'The {k} stormed out in his party hat, sash on backwards, one shoe missing. That is how most of you ended last year.',
+      u('The {k} gave up and stumbled out to the taxi rank. ${n}. Auld lang syne, you sweaty bastard.'),
+    ],
+    through: [
+      'The {k} got through. {n} refunds. New year, new you, same failure, {p}.',
+      "The {k} took ${m} from the till. His resolution was to stop taking what isn't his. It lasted until two minutes past midnight.",
+      "The {k} got through in a party hat with a noisemaker in his mouth. {p}, he wasn't even trying. He was barely conscious.",
+      u('The {k} reached the tills and kissed the cashier at a midnight only he could hear. {n} refunds. Happy New Year, {p}.'),
+    ],
+    pause: [
+      "New Year's memo from head office: this year's resolution is 'more with less'. Less is your pay. More is your hours.",
+      "The New Year's party is in the break room. One bottle of champagne. The Regional Manager drank it and kissed the vending machine.",
+      "Corporate has sent every employee a 'This Is Our Year!' mug instead of a raise. The year is not yours. Neither is the mug.",
+      'New Year sale: everything you got for Christmas, sold back to you at full price. Happy January.',
+      "The Regional Manager made one resolution: 'be more present'. He has been present at every party, every bar and three divorces.",
+      "Head office's New Year message: 'New year, new targets.' The new targets are the old ones plus whatever you missed last year.",
+      u("Your New Year's resolution, {p}: lose weight, save money, build better. Pick one. Pick the last one."),
+      u('At midnight the Area Director kissed his wife, his mistress and the intern. Three resolutions broken before the ball dropped.'),
+      u('{p}, at midnight everyone kissed somebody. You kissed the vending machine. It took your dollar and gave nothing back. Like dating.'),
+      r("HR reminder: the New Year's countdown is ten seconds. The CEO asked for a longer one so he could 'work the room'. Denied. Again."),
+    ],
+  },
+  mardigras: {
+    in: [
+      "The {k} is here for Mardi Gras. Feathers, a mask and forty strings of beads. You don't want to know what he did for each one.",
+      'The {k} walked in wearing so many beads he clacks. Every string is a story. Every story is a lawsuit.',
+      "The {k} is in a Mardi Gras mask, so he thinks nobody knows it's him. Everybody knows. Nobody else sweats like that.",
+      u("The {k} is throwing beads at the cashiers and shouting 'show us your receipts'. That is not what he means. Wear him out."),
+      r('The {k} came straight from Mardi Gras in the beads and the mask. Awake three days, paid for none of it. {p}, finish him.'),
+    ],
+    out: [
+      "The {k} stormed off, beads rattling. ${n} bounty. He's going back to Bourbon Street to earn more. Don't picture how.",
+      'The {k} gave up. He left a trail of feathers and plastic beads to the car park, like a disgusting bird. ${n}.',
+      'The {k} has stormed out, beads swinging. Some of those beads were earned in ways HR cannot legally describe.',
+      u('The {k} stormed out in his mask. ${n}. Fat Tuesday is over and so is fat management. For Lent, he gives up.'),
+    ],
+    through: [
+      'The {k} got through. {n} refunds. He threw the cashier a string of beads. She did not flash him. She hit the panic button.',
+      'Mardi Gras came early: the {k} took ${m} from the tills. Laissez les bons temps rouler. Your money certainly rolled.',
+      'The {k} paraded past your security like a float, beads swinging. {p}, you just lost to a man wearing a feather duster.',
+      u('The {k} reached the tills and paraded round them twice. {n} refunds. Somebody get {p} a mask. He will want to hide.'),
+    ],
+    pause: [
+      'Mardi Gras memo from head office: beads will be handed out to the best-performing employees. {p}, they are not for you.',
+      'Fat Tuesday in the break room: one king cake for the whole store. Whoever finds the plastic baby buys the next. {p} swallowed it.',
+      "Corporate's Mardi Gras sale: everything purple, green and gold is half off. Dignity is still full price. Nobody's buying.",
+      'The Regional Manager came back from New Orleans with ninety strings of beads. He says he caught them. He did not catch them.',
+      'The Regional Manager is running a Mardi Gras float in the car park. It is a pallet truck with a lawn chair on it. He will not stop waving.',
+      'Corporate bought ten thousand strings of beads for Mardi Gras. The Area Director has already taken nine thousand to New Orleans.',
+      u('Lent starts tomorrow. The Area Director is giving up his wife. Again. Third year running.'),
+      u('Mardi Gras reminder: nobody in this store flashes anyone for beads. Except the exhibitionist. She does it for free. Best value we have.'),
+      u("{p}, Mardi Gras is about letting loose before Lent. You've been loose all year. For Lent, give up building badly."),
+      r("HR note: the CEO wants to fly the board to Mardi Gras 'for team building'. Last time the team built a bail fund."),
+    ],
+  },
+};
+
 /** Names for buildings that may not be in BUILD yet (the director prefers BUILD's own name). */
 export const BUILDING_NAMES = { railgun: 'Barcode Laser', salesman: 'TV Salesman' };
 

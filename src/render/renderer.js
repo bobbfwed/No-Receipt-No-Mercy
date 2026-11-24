@@ -111,7 +111,7 @@ export function createRenderer(canvas, session) {
   let lastZoom = -1, zoomedAt = -1e9;
   let frames = 0;
   /** Everything a building or shopper drawing needs about the current frame. */
-  const F = { time: 0, now: 0, alpha: 0, sprites, fx: fx.timers, w: 30 };
+  const F = { time: 0, now: 0, alpha: 0, sprites, fx: fx.timers, w: 30, dress: undefined };
   /** A fake building used to draw the placement ghost. */
   const ghost = { k: '', o: 0, d: 0, it: [], t: 0, n: 0, out: 0, cd: 0, a: 0 };
   const nameWidths = new Map();
@@ -284,6 +284,8 @@ export function createRenderer(canvas, session) {
     }
     F.w = s.w;
     F.zoom = cam.zoom;
+    // The holiday the bosses dress up for (0.3), or undefined for none: see drawShopper.
+    F.dress = s.holiday;
     fx.handle(events, now, s);
 
     const alpha = session.alpha();

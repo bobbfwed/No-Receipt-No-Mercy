@@ -1,6 +1,6 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
-import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ, BUILD } from './constants.js';
+import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ, BUILD, HOLIDAYS } from './constants.js';
 import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
 
 /**
@@ -168,8 +168,11 @@ function blankStats() {
  *   choices (see SETTINGS in constants.js); anything left out or not on the list is the default.
  * @param {boolean} [o.lobby] start in the lobby: nothing runs and nothing can be built until
  *   every connected player has said he is ready. The host may change the map there.
+ * @param {string|null} [o.holiday] the holiday this game is played in (a key of HOLIDAYS; the
+ *   host works it out from his computer's date, see src/content/holidays.js). Anything else is
+ *   no holiday. Kept as `state.holiday`, absent for none.
  */
-export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false, settings = null } = {}) {
+export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false, settings = null, holiday = null } = {}) {
   const design = (map && map.design) || 'warehouse', size = (map && map.size) || 'xs';
   const plan = makeMap(design, size, map ? map.slots ?? MAX_PLAYERS : 1);
   const set = cleanSettings(settings);
@@ -249,6 +252,9 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     /** The player whose browser runs the game. Changes if the host leaves and another takes over. */
     host: 0,
   };
+  // The holiday (0.3): the bosses' outfits and DEB's holiday jokes. Decoration only: no rule reads
+  // it. Left out altogether when there is none, as in saves from before it existed.
+  if (HOLIDAYS.includes(holiday)) state.holiday = holiday;
   openDoors(state);
   return state;
 }

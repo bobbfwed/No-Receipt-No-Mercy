@@ -7,7 +7,8 @@
 // drinker's bottle in a bag, and the boss in a suit at each of his four ranks (1.6 times life, with
 // his name plate and patience bar drawn over the crowd by drawBossTag), the Pregnant Lady with her
 // bump and pickles (and Octomom, with her bump full of hands and feet), and the babies a Pregnant
-// Lady pops into: tiny, in nappies, sprinting on all fours (no patience bar).
+// Lady pops into: tiny, in nappies, sprinting on all fours (no patience bar). In a holiday game
+// the boss wears that holiday's outfit (DRESS, 0.3).
 // A mom's runaway child is a separate little figure (drawKid); so is a cart a mom left behind
 // (drawCart, for each entry in state.carts).
 // The Card Trader (0.3.01) comes with a backpack, binder, lanyard and deck box, and rips a foil
@@ -20,7 +21,7 @@
 // chasing, carrying or crawling, a dog peeing or sitting, the bathrobe open). Overlays such as the
 // patience bar, the marks over someone watching something, a dog's stream and a drunk's rolling
 // bottle are drawn directly every frame.
-import { ST, TUNE, TICK_HZ, defOf, BOSS } from '../sim/index.js';
+import { ST, TUNE, TICK_HZ, defOf, BOSS, HOLIDAYS } from '../sim/index.js';
 import { TILE, INK, C, rr, paint, box, circle, label, ramp, starPath, text, hazard, font } from './paint.js';
 
 /** Feet sit this far below the shopper's position, so the figure looks centred on its tile. */
@@ -93,8 +94,9 @@ const KIND = {
   cosplay: { n: 12, sc: 1, top: 52, supTop: 64, step: 8, vars: 4, box: [-36, -78, 72, 90], crown: [1, -64] },
   flasher: { n: 13, sc: 1, top: 38, step: 8, vars: 1, crown: [0.5, -39], stillAlt: 2 },
   drinker: { n: 14, sc: 1, top: 36, supTop: 41, step: 9, vars: DRINK_SHIRTS.length, down: true, crown: [1, -41] },
-  // The boss: 1.6 times life, slow and stately; a colour variant per tier (v = tier - 1).
-  boss: { n: 16, sc: 1.6, top: 38, step: 6, vars: 4, box: [-44, -68, 92, 80], crown: [0, 0] },
+  // The boss: 1.6 times life, slow and stately; a colour variant per tier (v = tier - 1). His box
+  // is tall enough for a holiday hat (0.3; see DRESS), which is drawing only: `top` is his height.
+  boss: { n: 16, sc: 1.6, top: 38, step: 6, vars: 4, box: [-44, -94, 92, 106], crown: [0, 0] },
   // The Pregnant Lady waddles (her drawing rocks by itself, so `still`); the crown is Octomom's.
   preggo: { n: 17, sc: 1.06, top: 38, supTop: 45, step: 7, vars: MAT_TOPS.length, still: true, box: [-30, -58, 64, 70], crown: [0.5, -40.5] },
   // Her babies: tiny, on all fours, a fast scrabbling cadence.
@@ -1924,7 +1926,10 @@ function phone(ctx, x, y, a) {
 function boss(ctx, P) {
   const tier = P.v, sw = P.sw;
   const up = P.alt === BOSS_PEP || P.alt === BOSS_STORM;
-  const suit = BOSS_SUIT[tier], dark = BOSS_SUIT_DARK[tier];
+  // A holiday outfit (0.3) may change his colours and adds its own parts (see DRESS).
+  const D = DRESS[P.dress] || NO_DRESS;
+  const suit = D.suit || BOSS_SUIT[tier], dark = D.dark || BOSS_SUIT_DARK[tier];
+  if (D.back) D.back(ctx, P);
   // Behind him: tier 2's wheeled briefcase, tier 4's golf club over his shoulder, and his back arm.
   if (tier === 1) {
     box(ctx, -23, -13, 11, 12.5, 2, '#2b2f34', 1.6);
@@ -1953,10 +1958,9 @@ function boss(ctx, P) {
     circle(ctx, -4.8 - sw * 1.5, -12.5, 1.9, C.skin, 1);
   }
   // Legs: suit trousers and polished black shoes.
-  limb(ctx, -2.5, -10, -2.5 - sw * 2.6, -1.5, dark, 3.6);
-  limb(ctx, 2.5, -10, 2.5 + sw * 2.6, -1.5, suit, 3.6);
-  shoe(ctx, -2.5 - sw * 2.6, -0.8, '#111');
-  shoe(ctx, 2.5 + sw * 2.6, -0.8, '#111');
+  if (D.legs) D.legs(ctx, P);
+  else bossLegs(ctx, sw, D.trousersDark || dark, D.trousers || suit);
+  if (D.hips) D.hips(ctx, P);
   // The Vice President's long camel coat, open over the suit.
   if (tier === 2) {
     ctx.beginPath();
@@ -1977,22 +1981,30 @@ function boss(ctx, P) {
     ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 0.6; ctx.stroke();
     ctx.restore();
   }
+  if (D.body) D.body(ctx, P);
+  // The Regional Manager's free hand holds the outfit's prop, at his side.
+  if (D.hand && tier === 0) {
+    const x = -4.8 - sw * 1.5, y = -12.5;
+    D.hand(ctx, x, y);
+    circle(ctx, x, y, 1.9, C.skin, 1);
+  }
   // Shirt, tie (flung over his shoulder when he storms off), lanyard and its badge.
   ctx.beginPath(); ctx.moveTo(-0.4, -23.8); ctx.lineTo(2.2, -17.5); ctx.lineTo(4.8, -23.8); ctx.closePath();
   paint(ctx, '#ffffff', 1.1);
   if (P.alt === BOSS_STORM) {
     ctx.beginPath(); ctx.moveTo(1.4, -23); ctx.quadraticCurveTo(-3, -27, -7, -24); ctx.lineTo(-6, -22); ctx.quadraticCurveTo(-3, -24.5, 2.6, -22);
     ctx.closePath();
-    paint(ctx, BOSS_TIE[tier], 1);
+    paint(ctx, D.tie || BOSS_TIE[tier], 1);
   } else {
     ctx.beginPath(); ctx.moveTo(1.4, -22.8); ctx.lineTo(3, -22.8); ctx.lineTo(4.2, -13.2); ctx.lineTo(2.2, -11); ctx.lineTo(0.6, -13.2); ctx.closePath();
-    paint(ctx, BOSS_TIE[tier], 1);
+    paint(ctx, D.tie || BOSS_TIE[tier], 1);
   }
   ctx.beginPath(); ctx.moveTo(-0.6, -23.4); ctx.lineTo(5.8, -15.6); ctx.moveTo(4.6, -23.4); ctx.lineTo(6.6, -15.6);
   ctx.strokeStyle = BOSS_LANYARD[tier]; ctx.lineWidth = 1.3; ctx.stroke();
   box(ctx, 4, -16, 5.2, 6.4, 0.8, '#ffffff', 0.9);
   ctx.fillStyle = BOSS_LANYARD[tier]; ctx.fillRect(4.5, -15.4, 4.2, 1.5);
   ctx.fillStyle = '#c9a07a'; ctx.fillRect(4.7, -13.4, 2, 2.2);
+  if (D.over) D.over(ctx, P);
   // A raised arm goes up behind his head (drawn first, so it never crosses his face).
   if (up) {
     limb(ctx, 2.5, -19.5, 10, -34, suit, 3.6);
@@ -2044,6 +2056,7 @@ function boss(ctx, P) {
     ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(hx - 3, hy - 7.6, 5, 1);
   }
   bossFace(ctx, hx, hy + 0.4, P.alt === BOSS_STORM ? 2 : P.alt === BOSS_PEP ? 1 : 0);
+  if (D.head) D.head(ctx, P, hx, hy);
   if (tier === 3 && P.alt !== BOSS_PEP) {
     // A fat cigar, lit.
     ctx.save(); ctx.translate(hx + 6.4, hy + 3.4); ctx.rotate(-0.15);
@@ -2086,6 +2099,506 @@ function boss(ctx, P) {
     clipboard(ctx, 12.6, -19.5, 0.2);
     circle(ctx, 9.6, -15.8, 2, C.skin, 1.1);
   }
+}
+
+// --- the boss's holiday outfits (0.3) ----------------------------------------------------------
+// In a holiday game (state.holiday, see src/content/holidays.js) every boss wears that holiday's
+// outfit over his usual self. His rank's hair, props, lanyard and name plate stay, so the four
+// can still be told apart. An outfit may set his jacket (suit, dark), trouser and tie colours, and
+// draw parts at seven moments: back (behind everything), legs (instead of his trousers), hips (over
+// the trousers, under the jacket), body (over the jacket, under the tie and lanyard), hand (the
+// Regional Manager's free hand, at his side), over (over the tie and lanyard) and head (over the
+// face and hair). `hat` is how far it reaches above his head, so the name plate sits above it.
+// It is all drawing: his size and position on the floor do not change.
+
+/** His legs: trousers (back leg darker) and polished black shoes. */
+function bossLegs(ctx, sw, back, front) {
+  limb(ctx, -2.5, -10, -2.5 - sw * 2.6, -1.5, back, 3.6);
+  limb(ctx, 2.5, -10, 2.5 + sw * 2.6, -1.5, front, 3.6);
+  shoe(ctx, -2.5 - sw * 2.6, -0.8, '#111');
+  shoe(ctx, 2.5 + sw * 2.6, -0.8, '#111');
+}
+
+/** Runs draw() clipped to his jacket, then outlines the jacket again. */
+function onJacket(ctx, draw) {
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(1.2, -16, 8.6, 8.2, 0, 0, TAU); ctx.clip();
+  draw();
+  ctx.restore();
+  ctx.beginPath(); ctx.ellipse(1.2, -16, 8.6, 8.2, 0, 0, TAU);
+  ctx.lineWidth = OUT; ctx.strokeStyle = INK; ctx.stroke();
+}
+
+/** A small heart path, its point at the bottom, about s across, centred on (x, y). */
+function heartPath(ctx, x, y, s) {
+  const k = s / 10;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 4 * k);
+  ctx.bezierCurveTo(x - 6 * k, y - 0.5 * k, x - 3 * k, y - 6 * k, x, y - 2.5 * k);
+  ctx.bezierCurveTo(x + 3 * k, y - 6 * k, x + 6 * k, y - 0.5 * k, x, y + 4 * k);
+  ctx.closePath();
+}
+
+/** A hat's brim and straight crown: brim y, crown height, widths at the bottom and top. */
+function topHat(ctx, hx, hy, h, bottom, top, color, brim = color) {
+  ctx.beginPath(); ctx.ellipse(hx + 0.4, hy - 6.3, 10, 2.3, -0.05, 0, TAU);
+  paint(ctx, brim, 1.3);
+  ctx.beginPath();
+  ctx.moveTo(hx + 0.6 - bottom / 2, hy - 6.6); ctx.lineTo(hx + 0.6 - top / 2, hy - 6.6 - h);
+  ctx.lineTo(hx + 0.6 + top / 2, hy - 6.6 - h); ctx.lineTo(hx + 0.6 + bottom / 2, hy - 6.6);
+  ctx.closePath();
+  paint(ctx, color, 1.3);
+}
+
+/** A band round the bottom of a topHat crown, with an optional gold buckle at the front. */
+function hatBand(ctx, hx, hy, width, color, buckle) {
+  ctx.fillStyle = color;
+  ctx.fillRect(hx + 0.6 - width / 2 + 0.6, hy - 10.2, width - 1.2, 3.2);
+  if (buckle) {
+    box(ctx, hx + 1.4, hy - 11, 4.2, 4.6, 0.5, GOLD, 0.9);
+    ctx.fillStyle = color; ctx.fillRect(hx + 2.5, hy - 9.9, 2, 2.4);
+  }
+}
+
+const DRESS = [
+  null,
+  // Christmas: a Santa suit two sizes too small, belt straining, and the hat.
+  {
+    suit: '#d42a2a', dark: '#a01b1b', hat: 13,
+    body(ctx) {
+      onJacket(ctx, () => {
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(-9, -10.4, 20, 4); // fur trim along the hem
+        ctx.fillStyle = '#16171b'; ctx.fillRect(-9, -15.4, 20, 2.8); // the belt, losing
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillRect(-3.4, -21.5, 1, 4); // a shine on the stretched cloth
+      });
+      box(ctx, -2.6, -16.2, 3.8, 4.4, 0.6, GOLD, 0.9);
+      ctx.fillStyle = '#16171b'; ctx.fillRect(-1.6, -15, 1.8, 2);
+    },
+    hand(ctx, x, y) {
+      // A candy cane.
+      ctx.beginPath(); ctx.moveTo(x, y + 7); ctx.lineTo(x, y - 3); ctx.arc(x - 2, y - 3, 2, 0, Math.PI, true);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.setLineDash([1.2, 1.2]); ctx.strokeStyle = '#e02424'; ctx.stroke(); ctx.setLineDash(NO_DASH);
+    },
+    head(ctx, P, hx, hy) {
+      // The cone flops over backwards to a bobble.
+      ctx.beginPath();
+      ctx.moveTo(hx - 7.4, hy - 5.6);
+      ctx.quadraticCurveTo(hx - 5, hy - 15, hx - 12, hy - 13.5);
+      ctx.quadraticCurveTo(hx + 2, hy - 23, hx + 8, hy - 6);
+      ctx.closePath();
+      paint(ctx, '#d42a2a', 1.3);
+      ctx.save(); ctx.translate(hx + 0.4, hy - 5.6); ctx.rotate(-0.06);
+      box(ctx, -8.8, -2.4, 17.6, 4.4, 2.2, '#ffffff', 1.3);
+      ctx.restore();
+      circle(ctx, hx - 12.4, hy - 13.4, 2.8, '#ffffff', 1.2);
+    },
+  },
+  // Thanksgiving: a pilgrim (black, big white collar, buckles everywhere) with a turkey's tail.
+  {
+    suit: '#34302c', dark: '#211e1b', hat: 12,
+    back(ctx) {
+      const cols = ['#7a3e18', '#c8641e', '#e3a23a', '#b5301c'];
+      for (let k = 0; k < 7; k++) {
+        const a = -Math.PI * 0.98 + k * 0.29;
+        ctx.save(); ctx.translate(-6, -15); ctx.rotate(a);
+        ctx.beginPath(); ctx.ellipse(9.5, 0, 10, 3.2, 0, 0, TAU);
+        paint(ctx, cols[k % cols.length], 1.2);
+        ctx.beginPath(); ctx.ellipse(16.2, 0, 2.8, 2.5, 0, 0, TAU);
+        ctx.fillStyle = '#f4e3c0'; ctx.fill();
+        ctx.restore();
+      }
+    },
+    hips(ctx, P) {
+      // Gold buckles on the shoes.
+      for (const x of [-2.5 - P.sw * 2.6, 2.5 + P.sw * 2.6]) box(ctx, x - 0.2, -2.1, 2.4, 1.8, 0.3, GOLD, 0.6);
+    },
+    body(ctx) {
+      onJacket(ctx, () => { ctx.fillStyle = '#16171b'; ctx.fillRect(-9, -11, 20, 2.6); });
+      box(ctx, -2, -12.2, 4.6, 4.8, 0.5, GOLD, 0.9);
+      ctx.fillStyle = '#16171b'; ctx.fillRect(-0.9, -11.1, 2.4, 2.6);
+    },
+    over(ctx) {
+      // The wide white pilgrim collar, over everything at his neck.
+      ctx.beginPath();
+      ctx.moveTo(-6.4, -24.4); ctx.lineTo(9, -24.4); ctx.lineTo(8, -19.4);
+      ctx.quadraticCurveTo(1.4, -16.8, -5.4, -19.4);
+      ctx.closePath();
+      paint(ctx, '#ffffff', 1.2);
+      ctx.beginPath(); ctx.moveTo(1.4, -24); ctx.lineTo(1.4, -18.2);
+      ctx.strokeStyle = '#c9ced4'; ctx.lineWidth = 0.8; ctx.stroke();
+    },
+    hand(ctx, x, y) {
+      // A turkey drumstick.
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 0.6, y + 3.4);
+      ctx.lineCap = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ctx.stroke();
+      ctx.strokeStyle = '#f6efe2'; ctx.lineWidth = 1.3; ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(x - 1, y + 7, 3.2, 4.2, 0.15, 0, TAU);
+      paint(ctx, '#a0602a', 1.1);
+    },
+    head(ctx, P, hx, hy) {
+      topHat(ctx, hx, hy, 11.4, 11.4, 9.6, '#2b2622');
+      hatBand(ctx, hx, hy, 11.4, '#5a4430', true);
+    },
+  },
+  // Valentine's: Cupid. Wings, heart boxers over the suit trousers, a heart arrow through the head.
+  {
+    tie: '#ff4d8d', hat: 3,
+    back(ctx) {
+      for (const [dx, dy, col] of [[5, -3, '#e9e4f2'], [0, 0, '#ffffff']]) {
+        ctx.save(); ctx.translate(dx, dy);
+        ctx.beginPath();
+        ctx.moveTo(-3, -22);
+        ctx.quadraticCurveTo(-12, -38, -24, -33);
+        ctx.quadraticCurveTo(-20, -29.5, -21.5, -26.5);
+        ctx.quadraticCurveTo(-16.5, -25.5, -18, -21.5);
+        ctx.quadraticCurveTo(-12, -20.5, -4, -16);
+        ctx.closePath();
+        paint(ctx, col, 1.3);
+        ctx.beginPath();
+        ctx.moveTo(-6, -24); ctx.lineTo(-18.5, -31);
+        ctx.moveTo(-6, -21.5); ctx.lineTo(-16, -25);
+        ctx.strokeStyle = '#c9c3d6'; ctx.lineWidth = 0.8; ctx.stroke();
+        ctx.restore();
+      }
+    },
+    hips(ctx, P) {
+      // Heart-print boxers, pulled on over the trousers.
+      const sw = P.sw;
+      limb(ctx, -2.5, -10, -2.5 - sw * 1.4, -5.4, '#e8335f', 5.2);
+      limb(ctx, 2.5, -10, 2.5 + sw * 1.4, -5.4, '#ff4d7a', 5.2);
+      ctx.fillStyle = '#ffffff';
+      for (const [x, y] of [[-2.6 - sw * 0.9, -7], [2.6 + sw * 0.9, -6.6], [3, -9.6], [-3, -9.8]]) { heartPath(ctx, x, y, 2.6); ctx.fill(); }
+    },
+    body(ctx) {
+      // Lipstick kisses on the jacket.
+      ctx.fillStyle = '#ff2e73';
+      for (const [x, y] of [[-4.2, -18.5], [-2.2, -12.6]]) {
+        ctx.beginPath(); ctx.ellipse(x, y - 0.5, 1.3, 0.6, 0, 0, TAU); ctx.ellipse(x, y + 0.6, 1.3, 0.6, 0, 0, TAU); ctx.fill();
+      }
+    },
+    hand(ctx, x, y) {
+      // Cupid's little bow.
+      ctx.beginPath(); ctx.arc(x + 1.5, y + 1, 5.2, Math.PI * 0.55, Math.PI * 1.45);
+      ctx.lineCap = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 2.2; ctx.stroke();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 1; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 0.2, y - 3.9); ctx.lineTo(x - 0.2, y + 5.9);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.6; ctx.stroke();
+    },
+    head(ctx, P, hx, hy) {
+      // A gag arrow through the head: feathered heart behind, heart point in front.
+      ctx.lineCap = 'round';
+      for (const [x1, y1, x2, y2] of [[hx - 13, hy - 5.4, hx - 6.6, hy - 4.6], [hx + 7.4, hy - 4, hx + 12.6, hy - 3.4]]) {
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        ctx.strokeStyle = INK; ctx.lineWidth = 2.4; ctx.stroke();
+        ctx.strokeStyle = '#c9a15a'; ctx.lineWidth = 1.1; ctx.stroke();
+      }
+      heartPath(ctx, hx - 13.6, hy - 5.6, 5.4); paint(ctx, '#ff9ccf', 1);
+      ctx.save(); ctx.translate(hx + 14.4, hy - 3.2); ctx.rotate(-Math.PI / 2);
+      heartPath(ctx, 0, 0, 6); paint(ctx, '#e8335f', 1);
+      ctx.restore();
+      // And a lipstick kiss on the back of his head.
+      ctx.fillStyle = '#ff2e73';
+      ctx.beginPath(); ctx.ellipse(hx - 3.2, hy + 2.2, 1.3, 0.6, 0.3, 0, TAU); ctx.ellipse(hx - 3.5, hy + 3.3, 1.3, 0.6, 0.3, 0, TAU); ctx.fill();
+    },
+  },
+  // Fourth of July: Uncle Sam. Blue starry jacket, striped trousers, the top hat, a white goatee.
+  {
+    suit: '#2149a8', dark: '#173375', trousers: '#d42a2a', trousersDark: '#a01b1b', tie: '#d42a2a', hat: 15,
+    hips(ctx, P) {
+      // A white stripe down each red trouser leg.
+      const sw = P.sw;
+      ctx.lineCap = 'round';
+      for (const [x, s, col] of [[-2.5, -1, '#d6d6d6'], [2.5, 1, '#ffffff']]) {
+        ctx.beginPath(); ctx.moveTo(x, -10); ctx.lineTo(x + s * sw * 2.6, -2.6);
+        ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.stroke();
+      }
+    },
+    body(ctx) {
+      onJacket(ctx, () => {
+        ctx.fillStyle = '#ffffff';
+        for (const [x, y] of [[-5, -20], [-3.4, -14], [-6.2, -11], [-1.2, -9], [-2, -23]]) { starPath(ctx, x, y, 1.6); ctx.fill(); }
+      });
+    },
+    hand(ctx, x, y) {
+      // A little flag on a stick.
+      ctx.beginPath(); ctx.moveTo(x, y + 2); ctx.lineTo(x - 1, y - 10);
+      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
+      ctx.save(); ctx.translate(x - 1, y - 10);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-6.4, 0, 6.4, 4.4);
+      ctx.fillStyle = '#d42a2a'; for (let k = 0; k < 3; k++) ctx.fillRect(-6.4, k * 1.5, 6.4, 0.75);
+      ctx.fillStyle = '#2149a8'; ctx.fillRect(-6.4, 0, 2.8, 2.2);
+      ctx.lineWidth = 0.8; ctx.strokeStyle = INK; ctx.strokeRect(-6.4, 0, 6.4, 4.4);
+      ctx.restore();
+    },
+    head(ctx, P, hx, hy) {
+      // The goatee.
+      ctx.beginPath(); ctx.moveTo(hx + 2.6, hy + 6.2); ctx.lineTo(hx + 6.4, hy + 6); ctx.lineTo(hx + 4.4, hy + 11);
+      ctx.closePath();
+      paint(ctx, '#f4f4f4', 1);
+      topHat(ctx, hx, hy, 14, 11.6, 11.6, '#ffffff', '#2149a8');
+      ctx.fillStyle = '#d42a2a';
+      ctx.fillRect(hx - 3.2, hy - 20.2, 2.4, 10.4);
+      ctx.fillRect(hx + 1.6, hy - 20.2, 2.4, 10.4);
+      ctx.fillStyle = '#2149a8'; ctx.fillRect(hx - 5.2, hy - 10.4, 11.6, 3.4);
+      ctx.fillStyle = '#ffffff';
+      for (const x of [-2.6, 0.6, 3.8]) { starPath(ctx, hx + x, hy - 8.7, 1.3); ctx.fill(); }
+      ctx.beginPath();
+      ctx.rect(hx + 0.6 - 5.8, hy - 20.6, 11.6, 14);
+      ctx.lineWidth = 1.3; ctx.strokeStyle = INK; ctx.stroke();
+    },
+  },
+  // Halloween: a "sexy devil". Shiny red jacket, cape, tail, horns, fishnets and red heels.
+  {
+    suit: '#d0102e', dark: '#930a20', hat: 7,
+    back(ctx) {
+      // The cape, red-lined, its collar standing up behind his head.
+      ctx.beginPath();
+      ctx.moveTo(-2, -24.5); ctx.quadraticCurveTo(-13, -15, -18, -0.5);
+      ctx.lineTo(-5, -1.5); ctx.quadraticCurveTo(-5, -13, 1, -22);
+      ctx.closePath();
+      paint(ctx, '#16171b', 1.4);
+      ctx.beginPath();
+      ctx.moveTo(-3.6, -22.5); ctx.quadraticCurveTo(-12, -14, -15.6, -1.6); ctx.lineTo(-12.6, -1.8);
+      ctx.quadraticCurveTo(-9.5, -13, -2.4, -21.2);
+      ctx.closePath();
+      ctx.fillStyle = '#b30d27'; ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-1.4, -24.6); ctx.lineTo(-9.6, -34); ctx.lineTo(-6.4, -24); ctx.closePath();
+      paint(ctx, '#b30d27', 1.2);
+      // The tail, out from under the jacket and past the cape, with its arrowhead.
+      ctx.beginPath(); ctx.moveTo(-5, -10); ctx.quadraticCurveTo(-15, -4, -21, -11.4);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = '#ff2a4a'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-19.6, -10.4); ctx.lineTo(-24.4, -14.2); ctx.lineTo(-19.4, -14.6); ctx.closePath();
+      paint(ctx, '#ff2a4a', 1.1);
+    },
+    legs(ctx, P) {
+      // Bare legs in fishnet stockings, on red stilettos.
+      const sw = P.sw;
+      for (const [x0, x1, col] of [[-2.5, -2.5 - sw * 2.6, C.skinDark], [2.5, 2.5 + sw * 2.6, C.skin]]) {
+        limb(ctx, x0, -10, x1, -1.8, col, 3.2);
+        // The net: thin dark bands across the leg, and a seam down it.
+        ctx.beginPath(); ctx.moveTo(x0, -10); ctx.lineTo(x1, -1.8);
+        ctx.lineCap = 'butt';
+        ctx.setLineDash([0.35, 1.1]); ctx.strokeStyle = 'rgba(20,20,24,0.7)'; ctx.lineWidth = 3.2; ctx.stroke();
+        ctx.setLineDash(NO_DASH);
+        ctx.strokeStyle = 'rgba(20,20,24,0.55)'; ctx.lineWidth = 0.5; ctx.stroke();
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x1 - 1.4, -0.6); ctx.lineTo(x1 - 1.8, 1.6);
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(x1 + 1, -1, 2.8, 1.5, -0.25, 0, TAU);
+        paint(ctx, '#d0102e', 1.2);
+      }
+    },
+    body(ctx) {
+      // Shiny plastic.
+      onJacket(ctx, () => {
+        ctx.beginPath(); ctx.ellipse(-2.6, -19.5, 2, 4.4, 0.5, 0, TAU);
+        ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fill();
+      });
+    },
+    hand(ctx, x, y) {
+      // A plastic pitchfork.
+      ctx.beginPath(); ctx.moveTo(x + 0.5, y + 7); ctx.lineTo(x - 0.8, y - 9);
+      ctx.moveTo(x - 3.2, y - 9.6); ctx.lineTo(x - 2.8, y - 6.8); ctx.lineTo(x + 1.6, y - 7.2); ctx.lineTo(x + 1.4, y - 10.2);
+      ctx.moveTo(x - 0.8, y - 9); ctx.lineTo(x - 0.95, y - 11);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = INK; ctx.lineWidth = 2.2; ctx.stroke();
+      ctx.strokeStyle = '#d0102e'; ctx.lineWidth = 1; ctx.stroke();
+    },
+    head(ctx, P, hx, hy) {
+      for (const [x, dir] of [[hx - 3.4, -1], [hx + 3.8, 1]]) {
+        ctx.beginPath();
+        ctx.moveTo(x - 1.7, hy - 5.8);
+        ctx.quadraticCurveTo(x - 1.4, hy - 10.2, x + dir * 2.4, hy - 13);
+        ctx.quadraticCurveTo(x + 0.4, hy - 9.8, x + 1.7, hy - 6);
+        ctx.closePath();
+        paint(ctx, '#d0102e', 1.2);
+      }
+    },
+  },
+  // St. Patrick's Day: a leprechaun. Green suit, buckled green hat, a ginger beard, a pint.
+  {
+    suit: '#1f8a3a', dark: '#156629', tie: '#ff8c1a', hat: 12,
+    body(ctx) {
+      // A shamrock on the lapel.
+      for (const [dx, dy] of [[0, -1.3], [-1.2, 0.4], [1.2, 0.4]]) circle(ctx, -3 + dx, -20 + dy, 1.2, '#7ee07e', 0.6);
+      ctx.beginPath(); ctx.moveTo(-3, -19.6); ctx.lineTo(-2.2, -17.4); ctx.strokeStyle = '#0d4a1c'; ctx.lineWidth = 0.7; ctx.stroke();
+    },
+    hand(ctx, x, y) {
+      // A pint of green beer.
+      box(ctx, x - 2.6, y - 0.6, 5.2, 7.2, 0.8, '#47c45a', 1.1);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 0.2, 4, 1.4);
+      ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fillRect(x + 0.8, y + 1.6, 0.8, 4);
+    },
+    head(ctx, P, hx, hy) {
+      // A ginger beard round the jaw, leaving his mouth free to shout.
+      ctx.beginPath();
+      ctx.moveTo(hx - 6.6, hy - 0.4);
+      ctx.quadraticCurveTo(hx - 5.4, hy + 11, hx + 3, hy + 10.6);
+      ctx.quadraticCurveTo(hx + 8.2, hy + 10, hx + 8.4, hy + 5);
+      ctx.quadraticCurveTo(hx + 2.4, hy + 8.6, hx - 4.4, hy + 0.8);
+      ctx.closePath();
+      paint(ctx, '#e2621b', 1.1);
+      topHat(ctx, hx, hy, 10.4, 10, 12.4, '#1f8a3a');
+      hatBand(ctx, hx, hy, 10.4, '#16171b', true);
+      for (const [dx, dy] of [[0, -1.2], [-1.1, 0.4], [1.1, 0.4]]) circle(ctx, hx - 2.4 + dx, hy - 13 + dy, 1.1, '#7ee07e', 0.5);
+    },
+  },
+  // Easter: the Easter Bunny. Pastel suit, ears, a fluffy tail, a pink nose and whiskers, a basket.
+  {
+    suit: '#b9a3e3', dark: '#9580c4', tie: '#ff9ccf', hat: 17,
+    body(ctx) {
+      // The fluffy tail, on his backside.
+      circle(ctx, -8.4, -9.6, 3.4, '#ffffff', 1.2);
+      circle(ctx, -9.6, -11.6, 2, '#ffffff', 0);
+      circle(ctx, -7.4, -7.6, 1.8, '#ffffff', 0);
+    },
+    hand(ctx, x, y) {
+      // A basket of eggs, hanging from his hand.
+      ctx.beginPath(); ctx.arc(x, y + 3.6, 3.6, Math.PI, 0);
+      ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = '#c8924f'; ctx.lineWidth = 0.9; ctx.stroke();
+      for (const [dx, col] of [[-2, '#ff9ccf'], [0.4, '#7fd3ff'], [2.4, '#ffe14a']]) {
+        ctx.beginPath(); ctx.ellipse(x + dx, y + 3.4, 1.3, 1.8, 0, 0, TAU); paint(ctx, col, 0.7);
+      }
+      box(ctx, x - 4.2, y + 3.6, 8.4, 4.4, 1.2, '#c8924f', 1.1);
+      ctx.beginPath(); ctx.moveTo(x - 3.6, y + 5.8); ctx.lineTo(x + 3.6, y + 5.8);
+      ctx.strokeStyle = '#96652d'; ctx.lineWidth = 0.7; ctx.stroke();
+    },
+    head(ctx, P, hx, hy) {
+      for (const [x, a] of [[hx - 2.6, -0.42], [hx + 2.4, 0.08]]) {
+        ctx.save(); ctx.translate(x, hy - 5.8); ctx.rotate(a);
+        ctx.beginPath(); ctx.ellipse(0, -7.4, 2.9, 7.6, 0, 0, TAU);
+        paint(ctx, '#ffffff', 1.3);
+        ctx.beginPath(); ctx.ellipse(0, -7.4, 1.4, 5.6, 0, 0, TAU);
+        ctx.fillStyle = '#ffb3c8'; ctx.fill();
+        ctx.restore();
+      }
+      ctx.beginPath(); ctx.arc(hx, hy, 7.6, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.strokeStyle = '#ff9ccf'; ctx.lineWidth = 1.6; ctx.stroke();
+      // A pink nose and whiskers.
+      ctx.beginPath(); ctx.moveTo(hx + 7.2, hy + 1.6); ctx.lineTo(hx + 11, hy + 0.6);
+      ctx.moveTo(hx + 7.2, hy + 2.2); ctx.lineTo(hx + 11.2, hy + 2.4);
+      ctx.strokeStyle = INK; ctx.lineWidth = 0.6; ctx.stroke();
+      circle(ctx, hx + 7.4, hy + 1.6, 1.2, '#ff7eb6', 0.7);
+    },
+  },
+  // New Year's Eve: party hat, gold sash, confetti, a noisemaker in his mouth, champagne.
+  {
+    hat: 13,
+    body(ctx) {
+      onJacket(ctx, () => {
+        const cols = ['#ffd23f', '#ff3d7f', '#5cc8ff', '#7ee07e'];
+        [[-5, -20], [-2.5, -13], [-6, -14.5], [-0.5, -9], [6.5, -21], [-3.5, -23.5], [7.5, -11]].forEach(([x, y], k) => {
+          ctx.fillStyle = cols[k % cols.length]; ctx.fillRect(x, y, 1.4, 1);
+        });
+      });
+    },
+    over(ctx) {
+      // The sash, shoulder to hip.
+      ctx.beginPath(); ctx.moveTo(6.4, -23.4); ctx.lineTo(-6.6, -10);
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = INK; ctx.lineWidth = 4.4; ctx.stroke();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 2.8; ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      for (const t of [0.25, 0.55, 0.85]) { starPath(ctx, 6.4 - 13 * t, -23.4 + 13.4 * t, 1); ctx.fill(); }
+      ctx.lineCap = 'round';
+    },
+    hand(ctx, x, y) {
+      // A bottle of champagne, by the neck.
+      ctx.save(); ctx.translate(x, y); ctx.rotate(0.35);
+      box(ctx, -2.2, 1.6, 4.4, 8, 1.4, '#1f5f3a', 1.1);
+      box(ctx, -1.1, -1.4, 2.2, 3.4, 0.5, GOLD, 0.8);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(-1.6, 4.4, 3.2, 2.4);
+      ctx.restore();
+    },
+    head(ctx, P, hx, hy) {
+      ctx.save(); ctx.translate(hx + 1.6, hy - 6.6); ctx.rotate(-0.28);
+      ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(0, -13.4); ctx.lineTo(5, 0); ctx.closePath();
+      paint(ctx, '#ffd23f', 1.3);
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(0, -13.4); ctx.lineTo(5, 0); ctx.closePath(); ctx.clip();
+      ctx.fillStyle = '#ff3d7f';
+      ctx.fillRect(-6, -4.6, 12, 1.8); ctx.fillRect(-6, -9.4, 12, 1.6);
+      ctx.restore();
+      ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(0, -13.4); ctx.lineTo(5, 0); ctx.closePath();
+      ctx.lineWidth = 1.3; ctx.strokeStyle = INK; ctx.stroke();
+      circle(ctx, 0, -13.8, 2, '#5cc8ff', 1);
+      ctx.restore();
+      // A party horn in his mouth (not the CEO's: he has his cigar; not while he storms off).
+      if (P.v !== 3 && P.alt !== BOSS_STORM) {
+        ctx.beginPath(); ctx.moveTo(hx + 6, hy + 4); ctx.lineTo(hx + 12.6, hy + 3);
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = INK; ctx.lineWidth = 2.8; ctx.stroke();
+        ctx.strokeStyle = '#ff3d7f'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(hx + 12.6, hy + 3); ctx.lineTo(hx + 15.6, hy + 2.2);
+        ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.stroke();
+        ctx.strokeStyle = GOLD; ctx.lineWidth = 2.2; ctx.stroke();
+      }
+    },
+  },
+  // Mardi Gras: a mask, a plume of feathers and far too many beads.
+  {
+    hat: 14,
+    over(ctx) {
+      // Strand after strand, the longest hanging to his belly.
+      const cols = ['#c06cf0', '#3ee07f', '#ffd23f', '#c06cf0', '#3ee07f', '#ffd23f', '#c06cf0'];
+      ctx.lineCap = 'round';
+      // (They hang down the side of his chest his front arm does not cover, deeper and deeper.)
+      cols.forEach((col, k) => {
+        const deep = -19.4 + k * 1.6; // the bottom of the loop
+        ctx.beginPath();
+        ctx.moveTo(-5.6 - k * 0.2, -23.4);
+        ctx.quadraticCurveTo(-2.4 - k * 0.35, 2 * deep + 23.6, 4.6, -23.8);
+        ctx.setLineDash([0.01, 2]);
+        ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ctx.stroke();
+        ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.stroke();
+      });
+      ctx.setLineDash(NO_DASH);
+    },
+    head(ctx, P, hx, hy) {
+      // The plume, at the back of his head.
+      [['#8e44ad', -0.75], ['#27ae60', -0.35], ['#ffd23f', 0.05]].forEach(([col, a]) => {
+        ctx.save(); ctx.translate(hx - 3, hy - 6); ctx.rotate(a);
+        ctx.beginPath(); ctx.ellipse(0, -7.4, 2, 7.2, 0, 0, TAU);
+        paint(ctx, col, 1.1);
+        ctx.beginPath(); ctx.moveTo(0, -1); ctx.lineTo(0, -13);
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 0.6; ctx.stroke();
+        ctx.restore();
+      });
+      circle(ctx, hx - 3, hy - 6, 1.8, GOLD, 1);
+      // The mask over his eyes, with the eyes showing through.
+      ctx.beginPath(); ctx.moveTo(hx - 1.6, hy - 1.2); ctx.lineTo(hx - 7, hy - 2);
+      ctx.strokeStyle = INK; ctx.lineWidth = 0.9; ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(hx - 1.8, hy - 0.6);
+      ctx.quadraticCurveTo(hx - 1, hy - 4.6, hx + 3.3, hy - 2.6);
+      ctx.quadraticCurveTo(hx + 7.4, hy - 4.8, hx + 8.4, hy - 0.4);
+      ctx.quadraticCurveTo(hx + 6.4, hy + 2.6, hx + 3.3, hy + 0.8);
+      ctx.quadraticCurveTo(hx + 0.2, hy + 2.6, hx - 1.8, hy - 0.6);
+      ctx.closePath();
+      paint(ctx, '#7b2cbf', 1.1);
+      for (const x of [1.4, 5.2]) {
+        ctx.beginPath(); ctx.ellipse(hx + x, hy - 0.2, 1.5, 1.2, 0, 0, TAU); ctx.fillStyle = '#ffffff'; ctx.fill();
+        ctx.beginPath(); ctx.arc(hx + x + 0.2, hy - 0.2, 0.9, 0, TAU); ctx.fillStyle = INK; ctx.fill();
+      }
+      ctx.fillStyle = GOLD;
+      for (const x of [-0.6, 3.3, 7.4]) ctx.fillRect(hx + x - 0.4, hy - 2.4 - (x === 3.3 ? 0 : 0.6), 0.8, 0.8);
+    },
+  },
+];
+/** No outfit. */
+const NO_DRESS = {};
+
+/** The boss's outfit (an index of DRESS) for a game's holiday key: 0 for none. */
+function dressOf(key) {
+  return typeof key === 'string' ? HOLIDAYS.indexOf(key) + 1 : 0;
 }
 
 // --- the Pregnant Lady, Octomom and the babies ------------------------------------------------
@@ -2504,7 +3017,7 @@ function dilate(src, r, colour) {
 
 // --- sprite cache ----------------------------------------------------------------------------
 
-const pose = { v: 0, sw: 0, moving: false, alt: 0, ph: 0, down: false, face: 1, sup: false };
+const pose = { v: 0, sw: 0, moving: false, alt: 0, ph: 0, down: false, face: 1, sup: false, dress: 0 };
 
 /**
  * Pre-rendered shopper poses. Call setScale() whenever the screen scale changes; sprites are
@@ -2520,11 +3033,11 @@ export function createShopperSprites() {
 
   /**
    * A pose's sprite. A super shopper's (sup) is bigger and has room round it for the glow; draw
-   * it with the box from supBox().
+   * it with the box from supBox(). dress: the boss's holiday outfit (see DRESS), 0 for none.
    */
-  function get(K, v, face, frame, alt, sup = false) {
+  function get(K, v, face, frame, alt, sup = false, dress = 0) {
     alt = alt | 0; // a number 0-7 (true counts as 1)
-    const key = (((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 8) + alt) * 2 + (sup ? 1 : 0);
+    const key = ((((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 8) + alt) * 2 + (sup ? 1 : 0)) * 16 + (dress & 15);
     let c = map.get(key);
     if (c) return c;
     const pad = sup ? SUP_PAD : 0, z = sup ? SUP_SCALE : 1;
@@ -2543,6 +3056,7 @@ export function createShopperSprites() {
     pose.alt = alt;
     pose.face = face > 0 ? 1 : -1;
     pose.sup = !!sup;
+    pose.dress = dress & 15;
     g.scale(face * K.sc, K.sc);
     // Lean into the walk (scooters do not lean, nor a crawling mom or a dog cocking his leg).
     if (pose.moving && !K.still && !((K.stillAlt || 0) & (1 << alt))) g.rotate(0.07);
@@ -2750,6 +3264,8 @@ function eyes(ctx, x, y, gawk, tv, pack = false) {
  *   the renderer from what is round him: `pee` [x, y] in tiles a dog is peeing at, `gawk` staring
  *   at an exhibitionist, `tv` watching the salesman's television. Optional. `noBar` leaves the
  *   patience bar out (portraits).
+ * F.dress: the game's holiday (state.holiday, a key of HOLIDAYS), which the boss dresses up for;
+ *   anything else, or nothing, and he wears his usual suit.
  */
 export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   const K = KIND[s.k] || KIND.hunter;
@@ -2792,7 +3308,8 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   const isBoss = s.k === 'boss';
   const v = isBoss ? bossV(s) : K.vars > 1 ? s.id % K.vars : 0;
   const sup = !!s.sup && !isBoss; // he has no super version
-  const img = sprites.get(K, v, face, frame, alt, sup);
+  // In a holiday game the boss wears its outfit (F.dress is state.holiday).
+  const img = sprites.get(K, v, face, frame, alt, sup, isBoss ? dressOf(F.dress) : 0);
   const fy = sy + FEET;
   // The sprite's box around the feet; a super's is padded for the glow and drawn bigger. Babies
   // are drawn a little bigger when zoomed far out, so a swarm still reads as babies.
@@ -2940,7 +3457,8 @@ export function drawBossTag(ctx, s, sx, sy, F) {
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
-  const top = fy - K.top * K.sc - 4;
+  // (Raised over a holiday hat, so the plate does not cover it.)
+  const top = fy - (K.top + (DRESS[dressOf(F.dress)]?.hat || 0)) * K.sc - 4;
   // Patience bar: wide, red-framed, always shown.
   const f = Math.max(0, Math.min(1, s.hp / Math.max(1e-6, s.mhp)));
   const hw = 20 * k, hh = 3.2 * k;

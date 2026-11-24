@@ -12,9 +12,11 @@ const spriteSets = new Map();
  * @param {boolean} [o.sup] the super version
  * @param {number} [o.size] width and height in CSS pixels
  * @param {number} [o.tier] for the boss: which of his four ranks (1 to 4; default 1)
+ * @param {string} [o.dress] for the boss: the game's holiday (state.holiday), whose outfit he
+ *   wears; left out, his suit
  * @returns {HTMLCanvasElement}
  */
-export function shopperPortrait(k, { sup = false, size = 72, tier = 1 } = {}) {
+export function shopperPortrait(k, { sup = false, size = 72, tier = 1, dress } = {}) {
   // The boss has no super version: asked for one, he is drawn as himself.
   const boss = k === 'boss';
   if (boss) sup = false;
@@ -35,7 +37,9 @@ export function shopperPortrait(k, { sup = false, size = 72, tier = 1 } = {}) {
   const dane = k === 'dog' && sup;
   // The Pregnant Lady brings a baby or two that got out early (Octomom, being bigger, needs room).
   const preggo = k === 'preggo';
-  const box = boss ? 84 : dane ? 96 : tall ? (sup ? 122 : 84) : preggo ? (sup ? 106 : 74) : (sup ? 82 : 58) + (wide ? 6 : 0);
+  // A boss in a holiday outfit needs room above him for the hat (or ears, or feathers).
+  const hat = boss && dress ? 24 : 0;
+  const box = boss ? 84 + hat : dane ? 96 : tall ? (sup ? 122 : 84) : preggo ? (sup ? 106 : 74) : (sup ? 82 : 58) + (wide ? 6 : 0);
   const z = (size * dpr) / box;
   const key = Math.round(z * 1000);
   if (!spriteSets.has(key)) { const made = createShopperSprites(); made.setScale(z); spriteSets.set(key, made); }
@@ -46,9 +50,9 @@ export function shopperPortrait(k, { sup = false, size = 72, tier = 1 } = {}) {
     id: 3, k, sup: sup ? 1 : 0, x: 0, y: 0, vx: 0.05, vy: 0, hp: 30, mhp: 30, st: ST.WALK, t: 0, cd: 0,
     kd: k === 'mom' ? 2 : 0, kx: 0, ky: 0, kvx: 0, kvy: 0, bt: 0, tr: tier, pp: 0,
   };
-  const F = { time: 0.35, now: 350, alpha: 0 };
+  const F = { time: 0.35, now: 350, alpha: 0, dress: boss ? dress : undefined };
   const x = box / 2 - (k === 'mom' ? 12 : k === 'blind' ? 5 : boss ? 2 : dane ? 8 : preggo ? (sup ? -8 : -6) : 0);
-  const y = box / 2 + (boss ? 30 : dane ? 28 : tall ? (sup ? 37 : 18) : preggo ? (sup ? 28 : 14) : sup ? 17 : 10);
+  const y = box / 2 + (boss ? 30 + hat / 2 : dane ? 28 : tall ? (sup ? 37 : 18) : preggo ? (sup ? 28 : 14) : sup ? 17 : 10);
   // Her babies scrabble along behind her (Octomom's also at her feet, in front of her).
   const babies = !preggo ? [] : sup ? [[-41, 1, 1], [-14, 12, 2]] : [[-28, 4, 0]];
   const baby = ([dx, dy, id]) => drawShopper(g, { ...s, id, k: 'baby', sup: 0, vx: 0.1 }, x + dx, y + dy, 1, F, sprites, { noBar: true });
