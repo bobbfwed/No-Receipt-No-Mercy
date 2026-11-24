@@ -202,8 +202,9 @@ export function handbook({ state = null, onClose }) {
     if (id === 'shoppers') {
       note.textContent = `Numbers are for ${game}: ${ctx.name} difficulty, ${lengthText(ctx.waves).toLowerCase()}, ${ctx.players} player${ctx.players > 1 ? 's' : ''}. `
         + `Half as many shoppers come as used to, and they get tougher faster as the sales events go on: up to double the patience by event ${TUNE.patienceFull}. `
+        + `After event ${TUNE.surgeFrom} it stops being polite: every event brings ${fmt((TUNE.surgeHp - 1) * 100)}% more patience and ${fmt((TUNE.surgeCrowd - 1) * 100)}% more shoppers than the last, compounding, until your lazy-ass maze folds. `
         + `Every shopper's patience grows each sales event: ×${fmt(toughnessAt(2))} in the second, ×${fmt(toughnessAt(10))} by the tenth, ×${fmt(toughnessAt(20))} by the twentieth, ×${fmt(toughnessAt(LONGEST))} by event ${LONGEST}${ctx.waves > 0 ? '' : `, ×${fmt(toughnessAt(LONGEST + 10))} by event ${LONGEST + 10}`}. `
-        + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds never change. A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone.`;
+        + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds never change. A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
       note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price; everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;

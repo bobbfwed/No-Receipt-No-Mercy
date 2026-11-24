@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, setPlayerOnline, applyCommand, step, waveSpec, crowdShiftAt, cleanSettings, isEndless, patienceGrowth,
+  createGame, addPlayer, setPlayerOnline, applyCommand, step, waveSpec, crowdShiftAt, surgeCrowdAt, cleanSettings, isEndless, patienceGrowth,
   SETTINGS, TUNE, TICK_HZ,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
@@ -134,7 +134,7 @@ test('one wave sends at most TUNE.maxCrowd (times TUNE.crowdScale) shoppers per 
   t.after(() => { TUNE.maxCrowd = old; });
   for (const p of [1, 2, 3, 7]) {
     // (The cap takes the wave's crowd share, like the crowd itself: see TUNE.crowdCurves.)
-    const capAt = (n) => Math.round(old * (1 + TUNE.crowdPerPlayer * (p - 1)) * TUNE.crowdScale * crowdShiftAt(n));
+    const capAt = (n) => Math.round(old * (1 + TUNE.crowdPerPlayer * (p - 1)) * TUNE.crowdScale * crowdShiftAt(n) * surgeCrowdAt(n));
     for (let n = 1; n <= 30; n++) assert.ok(total(waveSpec(n, p)) <= capAt(n), `wave ${n} for ${p} is under the cap`);
     assert.deepEqual(capped[`${p}:30`], waveSpec(30, p), 'so wave 30 is as it was');
     // (46 and not 40: a boss wave's smaller crowd does not reach the cap until later.)

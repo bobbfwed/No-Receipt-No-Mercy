@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
-  waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt, crowdShiftAt,
+  waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt, crowdShiftAt, bossPatience,
   MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
@@ -1117,4 +1117,35 @@ test('the grace period is the same length on the clock at any game speed', () =>
   // At 3x the game runs three ticks in the time of one, so it takes three times as many ticks:
   // the same 90 seconds on the clock.
   assert.ok(Math.abs(fast - normal * 3) <= 2, `at 3x speed it took ${fast} ticks, at 1x ${normal}`);
+});
+
+test('the late surge: events up to 30 as before, then patience and crowds compound', () => {
+  const total = (spec) => spec.filter((g) => g.k !== 'boss').reduce((a, g) => a + g.n, 0);
+  /** waveSpec and patienceScaleAt for event n with the surge switched off (as before 0.2.13). */
+  const without = (n, players) => {
+    const keep = [TUNE.surgeHp, TUNE.surgeCrowd];
+    TUNE.surgeHp = 1; TUNE.surgeCrowd = 1;
+    try { return { spec: waveSpec(n, players), hp: patienceScaleAt(n), boss: bossPatience(n) }; } finally { [TUNE.surgeHp, TUNE.surgeCrowd] = keep; }
+  };
+  assert.deepEqual([TUNE.surgeFrom, TUNE.surgeHp, TUNE.surgeCrowd], [30, 1.055, 1.02]);
+  for (const players of [1, 3]) {
+    for (let n = 1; n <= 30; n++) {
+      const old = without(n, players);
+      assert.deepEqual(waveSpec(n, players), old.spec, `event ${n}, ${players} players`);
+      assert.equal(patienceScaleAt(n), old.hp);
+      assert.equal(bossPatience(n), old.boss);
+    }
+  }
+  for (const [n, hp, crowd] of [[40, 1.055 ** 10, 1.02 ** 10], [50, 1.055 ** 20, 1.02 ** 20]]) {
+    const old = without(n, 1);
+    assert.ok(Math.abs(patienceScaleAt(n) / old.hp - hp) < 1e-9, `event ${n}: patience x${hp}`);
+    assert.ok(Math.abs(bossPatience(n) / old.boss - hp) < 1e-9, `event ${n}: the boss too`);
+    const ratio = total(waveSpec(n, 1)) / total(old.spec);
+    assert.ok(Math.abs(ratio - crowd) < 0.03, `event ${n}: crowd x${ratio}, want x${crowd}`);
+    const threat = ratio * hp;
+    assert.ok(n === 40 ? threat > 1.9 && threat < 2.3 : threat > 4 && threat < 5, `event ${n}: threat x${threat}`);
+  }
+  // Deterministic: the same event gives the same answer every time.
+  assert.deepEqual(waveSpec(47, 2), waveSpec(47, 2));
+  assert.equal(patienceScaleAt(63), patienceScaleAt(63));
 });

@@ -29,18 +29,24 @@ const bossGroup = (tier) => ({ k: 'boss', n: 1, gap: 1, at: TUNE.bossAt, sup: 0,
  */
 export function bossPatience(n, hpMul = 1) {
   const tier = bossTier(n) || 1;
-  return BOSS.hp * patienceGrowth(n) * hpMul * (1 + TUNE.bossTierHp * (tier - 1));
+  return BOSS.hp * patienceGrowth(n) * hpMul * (1 + TUNE.bossTierHp * (tier - 1)) * surgeHpAt(n);
 }
+
+/** The late surge's patience multiplier for wave n: 1 up to TUNE.surgeFrom, then compounding. */
+export const surgeHpAt = (n) => TUNE.surgeHp ** Math.max(0, n - TUNE.surgeFrom);
+/** The late surge's head-count multiplier for wave n: 1 up to TUNE.surgeFrom, then compounding. */
+export const surgeCrowdAt = (n) => TUNE.surgeCrowd ** Math.max(0, n - TUNE.surgeFrom);
 
 /**
  * The patience multiplier for wave n (see TUNE.crowdScale): 1 up to and including wave
  * TUNE.patienceFrom, then rising in a straight line to TUNE.patienceScale at wave
- * TUNE.patienceFull, and that from then on. It also multiplies a dad's drain.
+ * TUNE.patienceFull, and that from then on; past TUNE.surgeFrom the late surge multiplies it
+ * again (surgeHpAt). It also multiplies a dad's drain.
  */
 export function patienceScaleAt(n) {
   const from = TUNE.patienceFrom, full = TUNE.patienceFull;
   const t = full > from ? (n - from) / (full - from) : n > from ? 1 : 0;
-  return 1 + (TUNE.patienceScale - 1) * Math.min(1, Math.max(0, t));
+  return (1 + (TUNE.patienceScale - 1) * Math.min(1, Math.max(0, t))) * surgeHpAt(n);
 }
 
 /** The height at wave n of a curve of [wave, share] points joined by straight lines. */
@@ -88,7 +94,8 @@ export function patienceFor(state, def) {
  * Before that, every group is multiplied by crowdShiftAt(n): more shoppers in the early waves,
  * fewer in the late ones.
  * However late the wave, the crowd is at most TUNE.maxCrowd times TUNE.crowdScale times
- * crowdShiftAt(n) shoppers per player's worth (the boss aside); beyond that only patience keeps growing.
+ * crowdShiftAt(n) times surgeCrowdAt(n) shoppers per player's worth (the boss aside); beyond that
+ * only patience and the late surge keep growing.
  * (Training games do not come through here: their waves are queued by the lessons.)
  * @param {number} [players] how many players share the store; more players, more shoppers
  */
@@ -115,7 +122,9 @@ export function waveSpec(n, players = 1) {
   // same length of time, just closer together.
   const crowd = 1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1);
   const tier = bossTier(n);
-  let grow = (1 + TUNE.lateGrowth * Math.max(0, n - TUNE.lateFrom + 1)) * crowd * (tier ? TUNE.bossCrowd : 1) * crowdShiftAt(n);
+  // (The late surge, past TUNE.surgeFrom, multiplies both the crowd and its cap below.)
+  const surge = surgeCrowdAt(n);
+  let grow = (1 + TUNE.lateGrowth * Math.max(0, n - TUNE.lateFrom + 1)) * crowd * (tier ? TUNE.bossCrowd : 1) * crowdShiftAt(n) * surge;
   // Fewer, tougher shoppers: each group is TUNE.crowdScale of what it would be, to the nearest
   // whole number, never below one, so a kind that is in the event is still in it. A half is
   // rounded DOWN: always rounding up left the crowd at 53 to 62% of its old size in the early
@@ -126,7 +135,7 @@ export function waveSpec(n, players = 1) {
   // over 10,000 shoppers to a solo player). Past the cap, every group shrinks by the same share.
   // (The cap takes the wave's crowd share too, since 0.2.12: otherwise an endless game would grow
   // back to the full cap and undo the owner's "25% fewer from event 30 on".)
-  const most = Math.round(TUNE.maxCrowd * crowd * TUNE.crowdScale * crowdShiftAt(n));
+  const most = Math.round(TUNE.maxCrowd * crowd * TUNE.crowdScale * crowdShiftAt(n) * surge);
   let total = 0;
   for (const grp of g) total += scaled(Math.max(1, Math.round(grp.n * grow)));
   const capped = total > most;

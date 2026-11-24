@@ -409,6 +409,15 @@ export const TUNE = {
   // From wave lateFrom on, every group grows by lateGrowth of its size per wave.
   lateFrom: 8,
   lateGrowth: 0.08,
+  // The late surge (0.2.13, the owner's request: past event 25 the game got easier, and he reached
+  // event 70 without touching his maze). Up to and including event surgeFrom nothing changes; each
+  // event after it multiplies everyone's patience by surgeHp and the head count by surgeCrowd once
+  // more, compounding. Together about 2 times the threat at event 40 and 4.3 at event 50. Most of
+  // it is patience, so the screen does not drown in shoppers. Rewards do not follow: refund cash,
+  // the end-of-event bonus and the boss's bounty stay as they were.
+  surgeFrom: 30,
+  surgeHp: 1.055,
+  surgeCrowd: 1.02,
   // Super shoppers: the share of a group that is super once its kind has them (see SHOPPERS.sup.from).
   superShare: 0.08, // in the wave they first appear...
   superShareStep: 0.012, // ...growing by this each wave after

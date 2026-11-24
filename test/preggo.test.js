@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, queueTrainingWave, waveSpec, priceOf, canBuy, checkPlan, modeOf,
-  patienceGrowth, patienceScaleAt, crowdShiftAt, bossPatience, shopperDef, defOf, perHead, babyPace, migrateSave, STATE_VERSION,
+  patienceGrowth, patienceScaleAt, crowdShiftAt, surgeHpAt, surgeCrowdAt, bossPatience, shopperDef, defOf, perHead, babyPace, migrateSave, STATE_VERSION,
   SHOPPERS, SUPERS, BABY, BOSS, OFFICE, TUNE, SETTINGS, TICK_HZ, NORMAL,
 } from '../src/sim/index.js';
 import { HostSession } from '../src/net/session.js';
@@ -299,7 +299,7 @@ test('late in an endless game the crowd is at or just under the halved cap, for 
   for (const p of [1, 2, 4]) {
     for (const n of [50, 80, 120]) {
       // (The cap takes the event's crowd share, like the crowd: see TUNE.crowdCurves.)
-      const most = Math.round(TUNE.maxCrowd * (1 + TUNE.crowdPerPlayer * (p - 1)) * TUNE.crowdScale * crowdShiftAt(n));
+      const most = Math.round(TUNE.maxCrowd * (1 + TUNE.crowdPerPlayer * (p - 1)) * TUNE.crowdScale * crowdShiftAt(n) * surgeCrowdAt(n));
       const g = waveSpec(n, p).filter((x) => x.k !== 'boss');
       const total = g.reduce((sum, x) => sum + x.n, 0);
       assert.ok(total <= most && total >= most - g.length, `event ${n}, ${p} players: ${total} (cap ${most})`);
@@ -399,7 +399,7 @@ test('patience is phased in: unchanged early, a straight line, then double; a da
   assert.equal(TUNE.patienceFull, 20);
   for (let n = 1; n <= 5; n++) assert.equal(patienceScaleAt(n), 1, `event ${n}: unchanged`);
   for (let n = 6; n < 20; n++) assert.ok(Math.abs(patienceScaleAt(n) - (1 + (n - 5) / 15)) < 1e-12, `event ${n}: on the line`);
-  for (const n of [20, 21, 30, 100]) assert.equal(patienceScaleAt(n), 2, `event ${n}: double`);
+  for (const n of [20, 21, 30, 100]) assert.ok(Math.abs(patienceScaleAt(n) / surgeHpAt(n) - 2) < 1e-12, `event ${n}: double (before the late surge)`);
   for (const [n, mul] of [[3, 1], [12, 1 + 7 / 15], [20, 2], [25, 2]]) {
     const s = real(n, [['hunter', 0], ['dad', 0]]);
     const hunter = arrive(s, 'hunter');
