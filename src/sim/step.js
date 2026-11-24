@@ -300,7 +300,9 @@ function spawn(state, ev) {
     if (sup) s.sup = 1;
     // Extra fields for the shoppers with a trick (documented in state.js).
     if (def.messy) s.m = secs(tv(def, 'messEvery') * (0.4 + 0.6 * rand(state)));
-    if (def.kid) { s.kd = 0; s.kx = s.x; s.ky = s.y; s.kvx = 0; s.kvy = 0; s.kr = 0; s.kc = secs(tv(def, 'kidRest') * 0.5); s.kn = 0; }
+    // (A kid's first escape: his own time, see kidFirst. In training the old short fixed wait, so the
+    // Mom and Kid lesson plays out the same every time in its small store.)
+    if (def.kid) { s.kd = 0; s.kx = s.x; s.ky = s.y; s.kvx = 0; s.kvy = 0; s.kr = 0; s.kc = secs(state.training ? tv(def, 'kidRest') * 0.5 : kidFirst(def, s.id)); s.kn = 0; }
     if (def.bolts) s.bt = 0;
     if (def.smashes) { s.sm = 0; s.hn = 0; s.hw = 0; }
     if (def.flashes) { s.m = secs(tv(def, 'flashEvery') * (0.4 + 0.6 * rand(state))); s.fl = 0; }
@@ -406,6 +408,18 @@ const kidLoose = (s) => s.kd === 1 || s.kd === 2;
 export function babyPace(id) {
   const f = (id * 0.6180339887498949) % 1;
   return BABY.paceMin + (BABY.paceMax - BABY.paceMin) * f;
+}
+
+/**
+ * How many seconds a child stays in the cart before he can first escape: between kidFirstMin and
+ * kidFirstMax, from his mom's id alone (like babyPace: nothing stored, nothing drawn at random, and
+ * the golden ratio spreads moms who walk in together evenly over the range). Without it every kid
+ * got out within a few seconds of the door and they all waited in the same few spots.
+ */
+export function kidFirst(def, id) {
+  const f = (id * 0.6180339887498949) % 1;
+  const lo = tv(def, 'kidFirstMin'), hi = tv(def, 'kidFirstMax');
+  return lo + (hi - lo) * f;
 }
 
 /**

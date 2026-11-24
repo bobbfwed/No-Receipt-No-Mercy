@@ -499,7 +499,14 @@ export const TUNE = {
   leaveSecs: 0.8, // how long the storming-out animation lasts
   messEvery: 5, // seconds between a teenager's messes (each teen starts at a random point in this)
   messSecs: 12, // how long a mess stays on the floor
-  kidChance: 0.22, // chance per second that a child in the cart escapes
+  // How long a child sits in the cart before he can first escape: every child gets his own time
+  // between these two (seconds; worked out from his mom's id, see kidFirst in step.js). It was a
+  // flat 2 seconds until 0.2.17, and with kidChance on top nearly every kid was out within a few
+  // seconds of the door, so they all ended up waiting in the same few spots (the owner). The wide
+  // spread puts them all over the store.
+  kidFirstMin: 3,
+  kidFirstMax: 20,
+  kidChance: 0.22, // chance per second that a child in the cart escapes, once he can
   kidRuns: 1, // how many times one child can run away
   kidSpeed: 4.2, // tiles per second: children are very fast
   kidMin: 6, // a runaway child runs between this many...

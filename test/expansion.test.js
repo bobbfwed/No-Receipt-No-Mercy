@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
   waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt, crowdShiftAt, bossPatience,
-  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, ITEMS, TUNE, TICK_HZ, NORMAL, UNREACHABLE, SETTINGS,
+  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, ITEMS, TUNE, TICK_HZ, kidFirst, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
 /** A training game (no timer, cannot be lost) with plenty of cash, on the original small map. */
@@ -585,7 +585,7 @@ function longWayRound(s) {
 test('a runaway child runs straight through the maze and waits further along the route', (t) => {
   // He can only escape once, so let him out near the wall: after eight seconds in the cart he
   // escapes at once, and runs six tiles.
-  tune(t, { kidChance: 100, kidMin: 6, kidMax: 6, kidRest: 16 });
+  tune(t, { kidChance: 100, kidMin: 6, kidMax: 6, kidRest: 16, kidFirstMin: 8, kidFirstMax: 8 });
   const s = stage(6);
   longWayRound(s);
   send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
@@ -611,8 +611,8 @@ test('a runaway child runs straight through the maze and waits further along the
 
 test('chasing her child gets a mom through the maze sooner; a super mom much sooner', (t) => {
   const cross = (kidChance, sup = 0) => {
-    const old = TUNE.kidChance;
-    TUNE.kidChance = kidChance;
+    const old = TUNE.kidChance, oldMin = TUNE.kidFirstMin, oldMax = TUNE.kidFirstMax;
+    TUNE.kidChance = kidChance; TUNE.kidFirstMin = TUNE.kidFirstMax = 2;
     try {
       const s = stage(6);
       longWayRound(s);
@@ -620,7 +620,7 @@ test('chasing her child gets a mom through the maze sooner; a super mom much soo
       const ev = play(s, 200);
       assert.equal(ev.filter((e) => e.e === 'escape').length, 1);
       return s.tick;
-    } finally { TUNE.kidChance = old; }
+    } finally { TUNE.kidChance = old; TUNE.kidFirstMin = oldMin; TUNE.kidFirstMax = oldMax; }
   };
   const calm = cross(0), chasing = cross(100);
   assert.ok(chasing < calm * 0.9, `chasing ${chasing} ticks, calm ${calm}`);
@@ -630,7 +630,7 @@ test('chasing her child gets a mom through the maze sooner; a super mom much soo
 });
 
 test('building on a waiting child sends him running again instead of stranding his mother', (t) => {
-  tune(t, { kidChance: 100, kidMin: 4, kidMax: 4 });
+  tune(t, { kidChance: 100, kidMin: 4, kidMax: 4, kidFirstMin: 2, kidFirstMax: 2 });
   const s = stage(6);
   send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
   let done = false;
@@ -916,7 +916,7 @@ test('laying a belt over a belt turns it for free and keeps its goods', () => {
 // ---------------------------------------------------------------- mom on her knees, players leaving
 
 test('a mom taken down while her child is loose crawls to him, untouchable, then gets up', (t) => {
-  tune(t, { kidChance: 100, kidMin: 8, kidMax: 8 });
+  tune(t, { kidChance: 100, kidMin: 8, kidMax: 8, kidFirstMin: 2, kidFirstMax: 2 });
   const s = stage(6);
   send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
   // Wait until the child has run off and is waiting somewhere ahead.
@@ -1148,4 +1148,39 @@ test('the late surge: events up to 30 as before, then patience and crowds compou
   // Deterministic: the same event gives the same answer every time.
   assert.deepEqual(waveSpec(47, 2), waveSpec(47, 2));
   assert.equal(patienceScaleAt(63), patienceScaleAt(63));
+});
+
+// ---------------------------------------------------------------- when a kid first escapes (0.2.17)
+test('every kid gets his own first-escape time, spread widely (the owner: they all ran off by the door)', () => {
+  const def = SHOPPERS.mom, lo = TUNE.kidFirstMin, hi = TUNE.kidFirstMax;
+  assert.ok(lo >= 3 && hi - lo >= 15, 'later than the old flat 2 seconds, and a wide window');
+  const waits = [];
+  for (let id = 1; id <= 40; id++) waits.push(kidFirst(def, id));
+  for (const w of waits) assert.ok(w >= lo && w <= hi);
+  assert.equal(kidFirst(def, 7), kidFirst(def, 7), 'from the id alone: host and clients agree');
+  // Forty moms in a row cover the whole window, and no two neighbours share a time.
+  assert.ok(Math.min(...waits) < lo + (hi - lo) * 0.1 && Math.max(...waits) > hi - (hi - lo) * 0.1);
+  for (let i = 1; i < waits.length; i++) assert.ok(Math.abs(waits[i] - waits[i - 1]) > 1);
+  // The Soccer Mom's kid uses the same window.
+  assert.equal(kidFirst(SUPERS.mom, 5), kidFirst(def, 5));
+});
+
+test('a kid stays in the cart until his own time is up, even when he would escape at once', (t) => {
+  tune(t, { kidChance: 100, kidMin: 6, kidMax: 6 });
+  const s = stage(6);
+  longWayRound(s);
+  send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
+  // (The stage is a training store, where a kid keeps the old short fixed wait so the lesson
+  // always plays out the same. This test is about a real game.)
+  s.training = false;
+  let mom = null, ticks = 0, born = -1, ran = -1;
+  play(s, 60, () => {
+    ticks++;
+    mom = s.shoppers[0] || mom;
+    if (mom && born < 0) born = ticks;
+    if (mom && mom.kd && ran < 0) ran = ticks;
+  });
+  assert.ok(ran > 0, 'he does escape');
+  const waited = (ran - born) / TICK_HZ, due = kidFirst(SHOPPERS.mom, mom.id);
+  assert.ok(Math.abs(waited - due) < 0.5, `escaped after ${waited} s, due at ${due} s`);
 });

@@ -79,7 +79,11 @@ test('a dad can slip on a mess', () => {
   assert.ok(slips > 10, `dads slipped ${slips} times across six runs`);
 });
 
-test('a child escapes, runs ahead a limited distance, and the mom sprints after him', () => {
+test('a child escapes, runs ahead a limited distance, and the mom sprints after him', (t) => {
+  // An open floor is a short walk: let him out after 2 seconds, as before 0.2.17.
+  const first = [TUNE.kidFirstMin, TUNE.kidFirstMax];
+  TUNE.kidFirstMin = TUNE.kidFirstMax = 2;
+  t.after(() => { [TUNE.kidFirstMin, TUNE.kidFirstMax] = first; });
   const s = stage(11);
   send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
   let maxLead = 0, sawRun = false, sawWait = false, chaseSpeed = 0, walkSpeed = 0;

@@ -747,7 +747,7 @@ test('a running child may stop to watch the television, and waits there for his 
       return { ev, tv };
     } finally { TUNE.kidTv = old; }
   };
-  tune(t, { kidChance: 100, kidMin: 15, kidMax: 15 });
+  tune(t, { kidChance: 100, kidMin: 15, kidMax: 15, kidFirstMin: 2, kidFirstMax: 2 });
   assert.equal(TUNE.kidTv, 0.7);
   const watched = runs(1);
   assert.equal(watched.ev.filter((e) => e.e === 'kidtv').length, 1);
@@ -767,7 +767,7 @@ test('a forklift reaches six tiles', () => {
 // ---------------------------------------------------------------- moms
 
 test('a child runs away once; a Soccer Mom\'s twice; never closer than two tiles of walking to a till', (t) => {
-  tune(t, { kidChance: 100, kidRest: 2 });
+  tune(t, { kidChance: 100, kidRest: 2, kidFirstMin: 1, kidFirstMax: 1 });
   assert.deepEqual([TUNE.kidMin, TUNE.kidMax, SUPERS.mom.kidMin, SUPERS.mom.kidMax], [6, 17, 12, 34]);
   assert.deepEqual([TUNE.kidRuns, SUPERS.mom.kidRuns, TUNE.crawlTimes, SUPERS.mom.crawlTimes, TUNE.crawlSpeed], [1, 2, 1, 2, 0.7]);
   const runs = (sup) => {
@@ -812,7 +812,7 @@ test('a mom does not take her refund while her child is loose', () => {
 });
 
 test('the last time she goes down, a mom leaves her cart and carries the child, who never runs again', (t) => {
-  tune(t, { kidChance: 100, kidMin: 8, kidMax: 8 });
+  tune(t, { kidChance: 100, kidMin: 8, kidMax: 8, kidFirstMin: 2, kidFirstMax: 2 });
   const s = stage(6);
   send(s, [{ k: 'mom', n: 1, gap: 1, at: 0 }]);
   let mom = null;

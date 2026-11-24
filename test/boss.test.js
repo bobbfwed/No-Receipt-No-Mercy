@@ -327,7 +327,7 @@ test('a game with a boss in it stays identical on a copy made mid-wave', () => {
 
 /** A mom whose child is loose and waiting, about to run out of patience, with a forklift on her. */
 function momGoingDown(t, sup) {
-  tune(t, { kidChance: 100, kidMin: 8, kidMax: 8 });
+  tune(t, { kidChance: 100, kidMin: 8, kidMax: 8, kidFirstMin: 2, kidFirstMax: 2 });
   const s = stage(6);
   send(s, [{ k: 'mom', n: 1, gap: 1, at: 0, sup: sup ? 1 : 0 }]);
   let mom = null;

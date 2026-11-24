@@ -150,7 +150,7 @@ export function shopperTraits(k, sup = 0) {
   if (d.messy) out.push(['Messes', `one every ${fmt(v('messEvery'))} s, each lasting ${fmt(v('messSecs'))} s`]);
   if (d.kid) {
     const runs = v('kidRuns'), times = v('crawlTimes');
-    out.push(['Kid escapes', `${runs === 1 ? 'once' : `up to ${runs} times`} (a ${pct(v('kidChance'))} chance each second in the cart); runs ${fmt(v('kidMin'))} to ${fmt(v('kidMax'))} tiles, never closer than ${TUNE.kidTill} to a till`]);
+    out.push(['Kid escapes', `${runs === 1 ? 'once' : `up to ${runs} times`} (first after ${fmt(v('kidFirstMin'))} to ${fmt(v('kidFirstMax'))} seconds in the store, a different time for every kid; then a ${pct(v('kidChance'))} chance each second in the cart); runs ${fmt(v('kidMin'))} to ${fmt(v('kidMax'))} tiles, never closer than ${TUNE.kidTill} to a till`]);
     out.push(['Chasing speed', `${fmt(d.speed * v('chaseSpeed'))} tiles a second; no refund until she has him back`]);
     out.push(['Out of patience with the kid loose', `crawls to him at ${pct(TUNE.crawlSpeed)} speed, untouchable; gets up with ${pct(TUNE.crawlBack)} patience, ${times === 1 ? 'once' : `up to ${times} times`}; the last time she leaves the cart and carries him`]);
   }

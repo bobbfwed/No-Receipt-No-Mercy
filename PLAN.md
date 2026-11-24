@@ -369,6 +369,8 @@ Measured with the keen bot in endless Easy games that cannot be lost (5 seeds, o
 
 **0.2.17: babies have 50% more patience** (owner). `BABY.hp` 4.5 to 6.75, for the Pregnant Lady's dozen and the Octomom's two dozen alike. Balance, Normal, one player, seed 11, honest / keen / focus: 11 / 15 / 16, against 11 / 17 / 16 just before the change (the keen bot loses two events sooner; the other two are unmoved).
 
+**0.2.17: kids run off at different times** (owner: nearly every kid escaped within seconds of the door, so they all waited in the same few spots). A kid's first escape was possible after a flat 2 seconds; now every kid has his own wait of 3 to 20 seconds (`kidFirstMin`, `kidFirstMax`, worked out from his mom's id by `kidFirst` in `step.js`, no random draw), and only then does the 22%-a-second chance start. The Soccer Mom's kid uses the same window. Training games keep the old fixed 2 seconds so the Mom and Kid lesson always plays out the same. On a bare small floor about one kid in eight now reaches the tills without ever escaping; with any maze nearly all still do. Balance, seed 11, with this and the babies' change: 11 / 17 / 16.
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
