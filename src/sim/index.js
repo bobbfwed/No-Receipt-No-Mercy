@@ -14,5 +14,8 @@ export { releaseNo, releaseSize, releaseDoor } from './step.js';
 export {
   dealCards, cleanHand, hasCard, cardKind, cardParts, cardKinds, cardsShown, revealTick, dealLength, dealTicks, DEAL_ORDER,
   idShare, cardPicks, buildPrice, cardPatience, cardSpeed, cardCrowd, cardSell, cardRefund,
+  // (The cards that change how shoppers behave: who they pick, by id.)
+  cardKidRuns, kidBack, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance,
 } from './cards.js';
+export { getBackField } from './path.js';
 export { freeWorth } from './upgrades.js';

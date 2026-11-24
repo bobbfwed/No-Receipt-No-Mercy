@@ -171,6 +171,20 @@ export function getFieldTo(state, tile) {
   return f;
 }
 
+/**
+ * Distance from every tile to the nearest open entrance, as a runaway child runs (only the store's
+ * walls stop him). A child who runs the wrong way (the wrongway card) runs down it. Worked out
+ * when the layout or the number of open entrances changes.
+ */
+export function getBackField(state) {
+  const hit = cacheOf(state);
+  if (!hit.back || hit.back.open !== state.open) {
+    const doors = new Set(state.doors.slice(0, state.open).flat());
+    hit.back = { open: state.open, f: flood(state, (i) => doors.has(i), -1, GHOST) };
+  }
+  return hit.back.f;
+}
+
 /** The map most shoppers walk by. */
 export const getDist = (state) => getField(state, NORMAL);
 /** The map for dads, who step over belts. */

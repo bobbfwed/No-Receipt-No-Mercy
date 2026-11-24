@@ -162,6 +162,7 @@ export function createSound() {
           // a Pregnant Lady's baby ($5, no refund) is much less than one.
           if (e.k === 'boss') fire('bossEscape', { tier: e.tier | 0 });
           else if (e.k === 'baby') fire('babyTill');
+          else if (e.k === 'pup') fire('pupTill'); // (a pregnant dog's puppy: the spayed card)
           else fire('escape', { k: e.k, sup: e.sup | 0 }, { sub: e.k });
           break;
         case 'left':
@@ -169,9 +170,12 @@ export function createSound() {
           // A Pregnant Lady who popped: the pop carries the sound.
           if (e.k === 'preggo' && e.why === 'pop') break;
           if (e.k === 'baby') { fire('waah'); break; }
+          // (The cards: a pregnant dog bursting has its litter sound; one of her puppies whimpers.)
+          if (e.k === 'dog' && e.why === 'pop') break;
+          if (e.k === 'pup') { fire('whimper'); break; }
           fire('left', { k: e.k, sup: e.sup | 0 }, { sub: e.k });
           break;
-        case 'pop': fire('pop', { n: e.n | 0, sup: e.sup | 0 }); break;
+        case 'pop': fire(e.pup ? 'litter' : 'pop', { n: e.n | 0, sup: e.sup | 0 }); break;
         case 'nopop': fire('nopop', { sup: e.sup | 0 }); break;
         case 'release': fire('release', { n: e.n | 0 }); break;
         case 'rip': fire('rip', { n: e.n | 0, sup: e.sup | 0 }); break;
@@ -183,7 +187,12 @@ export function createSound() {
         case 'grab': fire('grab'); break;
         case 'sample': fire('sample'); break;
         case 'mess': fire('mess'); break;
-        case 'kid': fire('kid'); break;
+        case 'kid': fire(e.back ? 'wrongway' : 'kid'); break;
+        // The cards that change how shoppers behave (0.3.01).
+        case 'drunk': fire('drunk', { sup: e.sup | 0 }); break;
+        case 'bought': fire('bought', { v: e.v | 0 }); break;
+        case 'trail': fire('trail'); break;
+        case 'pet': fire('pet', { n: e.n | 0 }); break;
         case 'crawl': fire('crawl'); break;
         case 'bolt': fire('bolt'); break;
         case 'caught': fire('caught', { carry: e.carry | 0 }); break;

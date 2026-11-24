@@ -31,6 +31,10 @@ const BABY_MERGE = 650;
 /** The line in a bubble over a pop (an Octomom's are her own). */
 const POP_QUIPS = ["WHO'S THE DAD?", 'CLEAN-UP ON AISLE 5', 'SOMEBODY CALL MAURY', "THEY'RE ALL YOURS", 'NO RECEIPT FOR THOSE'];
 const OCTO_QUIPS = ['THAT IS NOT A LITTER, IT IS A FLEET', 'MAURY CAN NOT HELP YOU NOW', 'SHE WAS CARRYING A CLOWN CAR'];
+/** The same for a pregnant Stray Dog's litter (the spayed card, 0.3.01). */
+const PUP_QUIPS = ['WHO LET THE DOGS OUT?', 'SHOULD HAVE HAD HER DONE', 'SHE MET A BOXER IN THE CAR PARK', 'BITCHES BE BITCHES'];
+/** What a runaway child shouts when he runs back toward the entrance (the wrongway card). */
+const BACK_LINES = ['WRONG WAY!', 'BYE MOM', 'TO THE CAR!'];
 /** What the boss shouts in a pep talk, in turn. */
 const PEP_WORDS = [
   'SYNERGY!', 'CIRCLE BACK!', "LET'S ALIGN!", 'TOUCH BASE!', 'MOVE THE NEEDLE!', 'PIVOT!',
@@ -179,7 +183,8 @@ export function createEffects() {
             if (f) { pick++; f.text = '-$' + e.refund; f.t2 = BOSS_WINS[pick % BOSS_WINS.length]; f.sz = e.n || 2; }
             break;
           }
-          if (e.k === 'baby') { babyCash(e, now, tillNear(s, e.x, e.y)); break; }
+          // (A pregnant dog's puppy takes $5 like a baby, and adds up the same way.)
+          if (e.k === 'baby' || e.k === 'pup') { babyCash(e, now, tillNear(s, e.x, e.y)); break; }
           f = add(TEXT, now, e.x * T - 22, e.y * T - 6);
           if (f) { f.text = '-$' + e.refund; f.color = '#ff5a4e'; }
           break;
@@ -216,11 +221,11 @@ export function createEffects() {
           break;
         case 'left':
           if (e.k === 'boss') break; // his exit is the bossOut effect
-          if (e.k === 'preggo' && e.why === 'pop') break; // the pop says it all
-          if (e.k === 'baby') {
+          if ((e.k === 'preggo' || e.k === 'dog') && e.why === 'pop') break; // the pop says it all
+          if (e.k === 'baby' || e.k === 'pup') {
             // A small wail, not a speech bubble each: a dozen at once would bury the screen.
             f = add(MARK, now, e.x * T, e.y * T - 20);
-            if (f) { f.text = 'waah'; f.color = '#7dd3fc'; f.st = 0; }
+            if (f) { f.text = e.k === 'pup' ? 'yip' : 'waah'; f.color = e.k === 'pup' ? '#f0c38a' : '#7dd3fc'; f.st = 0; }
             break;
           }
           f = add(BLIP, now, e.x * T, e.y * T - 30);
@@ -248,7 +253,7 @@ export function createEffects() {
           timers.sprayAt[e.i] = now;
           f = add(SPRAY, now, (e.i % W) * T + T / 2, ((e.i / W) | 0) * T + T / 2);
           const b = s && s.grid[e.i];
-          if (f) f.w = (b && b.k === 'sprinkler' ? statsOf(b).range : BUILD.sprinkler.range) * T;
+          if (f) f.w = (b && b.k === 'sprinkler' ? statsOf(b, s).range : BUILD.sprinkler.range) * T;
           break;
         }
         case 'shot':
@@ -262,7 +267,29 @@ export function createEffects() {
           break;
         case 'kid':
           f = add(BLIP, now, e.x * T + 6, e.y * T - 24);
-          if (f) { pick++; f.text = KID_LINES[pick % KID_LINES.length]; f.color = '#e8590c'; f.sz = 12; }
+          if (f) { pick++; const said = e.back ? BACK_LINES : KID_LINES; f.text = said[pick % said.length]; f.color = '#e8590c'; f.sz = 12; }
+          break;
+        // The cards that change how shoppers behave (0.3.01).
+        case 'drunk':
+          // A booze table got him: he is a Day Drinker now.
+          f = add(POP, now, e.x * T, e.y * T - 40);
+          if (f) { f.text = 'HIC!'; f.color = '#f0a830'; f.r = 0.14; f.st = JAGGED; f.sz = 14; }
+          break;
+        case 'bought':
+          // A shopper actually bought something: the money over the stand, and SOLD.
+          f = add(TEXT, now, e.x * T, e.y * T - 30);
+          if (f) { f.text = '+$' + (e.v | 0); f.color = '#ffd23f'; }
+          // (Beside the stand, low: the money floats up and away from it.)
+          f = add(POP, now, e.x * T + 40, e.y * T - 14);
+          if (f) { f.text = 'SOLD!'; f.color = '#4ade80'; f.r = -0.12; f.st = STAR; f.sz = 13; }
+          break;
+        case 'trail':
+          f = add(MARK, now, e.x * T + 8, e.y * T - 40);
+          if (f) { f.text = 'hubba hubba'; f.color = '#ff3d7f'; f.st = 1; }
+          break;
+        case 'pet':
+          f = add(MARK, now, e.x * T + 18, e.y * T - 34);
+          if (f) { f.text = e.n > 1 ? 'AWWW x' + e.n : 'AWWW'; f.color = '#ff8fc4'; f.st = 1; }
           break;
         case 'caught':
           f = add(POP, now, e.x * T, e.y * T - 34);
@@ -281,7 +308,7 @@ export function createEffects() {
           if (f) {
             f.x2 = f.x + dx * (e.len || 10) * T; f.y2 = f.y + dy * (e.len || 10) * T;
             const b = s && s.grid[e.i];
-            f.w = (b && b.k === 'railgun' ? statsOf(b).width : BUILD.railgun.width) * 2 * T;
+            f.w = (b && b.k === 'railgun' ? statsOf(b, s).width : BUILD.railgun.width) * 2 * T;
             f.sz = e.n | 0;
           }
           break;
@@ -330,19 +357,20 @@ export function createEffects() {
           if (f) f.r = hash2(now | 0, 3) * 6;
           break;
         case 'pop':
-          // A Pregnant Lady popped: e.n babies came out where she stood.
+          // A Pregnant Lady popped: e.n babies came out where she stood. (pup: a pregnant Stray
+          // Dog and her puppies, the spayed card; st says which.)
           f = add(BURST, now, e.x * T, e.y * T);
           if (f) {
             pick++;
-            const quips = e.sup ? OCTO_QUIPS : POP_QUIPS;
-            f.sz = e.n | 0; f.r = e.sup ? 1 : 0; f.t2 = quips[pick % quips.length];
+            const quips = e.pup ? PUP_QUIPS : e.sup ? OCTO_QUIPS : POP_QUIPS;
+            f.sz = e.n | 0; f.r = e.sup ? 1 : 0; f.t2 = quips[pick % quips.length]; f.st = e.pup ? 1 : 0;
             f.x2 = Math.round(e.x * 97 + e.y * 31); // seeds where the bits fly
           }
           break;
         case 'nopop':
           // A Barcode Laser finished her: no babies. Says so, so the players learn the counter.
           f = add(NO_POP, now, e.x * T, e.y * T);
-          if (f) f.r = e.sup ? 1 : 0;
+          if (f) { f.r = e.sup ? 1 : 0; f.st = e.pup ? 1 : 0; }
           break;
         case 'bolt':
           f = add(POP, now, e.x * T + 14, e.y * T - 30);
@@ -427,10 +455,12 @@ export function createEffects() {
   /**
    * Draws live effects. layer 0 is under the shoppers (sprinkler bursts, the ring of a pep talk),
    * layer 1 above them. zoom: screen pixels a tile; the boss's effects grow when zoomed out so they
-   * can still be read.
+   * can still be read. bossGrow: how much bigger the boss is drawn (the bde card), so his pep talk
+   * still comes out over his head.
    */
-  function draw(ctx, now, layer, sprites, zoom = 40) {
+  function draw(ctx, now, layer, sprites, zoom = 40, bossGrow = 1) {
     ZK = Math.max(1, 36 / zoom);
+    BG = bossGrow;
     for (let k = 0; k < POOL; k++) {
       const e = pool[k];
       if (!e.type) continue;
@@ -467,6 +497,8 @@ export function createEffects() {
 
 /** How much bigger the boss's effects are drawn this frame (zoomed out: bigger). */
 let ZK = 1;
+/** How much bigger the boss himself is drawn this frame (the bde card), for what sits over his head. */
+let BG = 1;
 
 /** The boss's title at a tier, from the rules (with a fallback if they have none). */
 function titleOf(tier) {
@@ -552,7 +584,7 @@ function pepWord(ctx, e, k) {
   ctx.globalAlpha = fadeOut(k, 0.65);
   const s = k < 0.1 ? 0.5 + (k / 0.1) * 0.6 : k < 0.18 ? 1.1 - (k - 0.1) * 1.25 : 1;
   ctx.save();
-  ctx.translate(e.x + 34 * z, e.y - 70 * z - k * 10 * z);
+  ctx.translate(e.x + 34 * z * BG, e.y - 70 * z * BG - k * 10 * z);
   ctx.rotate(e.r);
   ctx.scale(s, s);
   const size = 13 * z;
@@ -677,6 +709,14 @@ function bottle(ctx, s) {
  * with how many babies came out, and a line in a bubble. Octomom's (e.r 1) is half as big again.
  * Grows when zoomed out, like the boss's effects, so a pop is seen at whole-map zoom.
  */
+/** A dog's bone, centred on the origin, s about its half-length. */
+function bone(ctx, s) {
+  ctx.beginPath();
+  ctx.rect(-s, -s * 0.28, s * 2, s * 0.56);
+  for (const [x, y] of [[-s, -s * 0.32], [-s, s * 0.32], [s, -s * 0.32], [s, s * 0.32]]) { ctx.moveTo(x + s * 0.34, y); ctx.arc(x, y, s * 0.34, 0, TAU); }
+  paint(ctx, '#fff4dc', 1);
+}
+
 function popBurst(ctx, e, k, worldW) {
   const z = ZK, sc = (e.r ? 1.45 : 1) * z;
   const seed = e.x2 | 0;
@@ -710,7 +750,11 @@ function popBurst(ctx, e, k, worldW) {
     ctx.translate(x, y);
     ctx.rotate(a + k * (h1 > 0.5 ? 7 : -7));
     const kind = j % 6;
-    if (kind === 0 || kind === 3) nappy(ctx, 3.4 * sc, j % 4 ? '#7dd3fc' : '#ff9ccf');
+    if (e.st === 1) {
+      // A litter: bones and tufts of fur instead of nappies.
+      if (kind % 2 === 0) bone(ctx, 3.2 * sc);
+      else { ctx.fillStyle = ['#c27a32', '#f6e2b8', '#d4d8dc'][j % 3]; ctx.beginPath(); ctx.arc(0, 0, 2.6 * sc, 0, TAU); ctx.fill(); }
+    } else if (kind === 0 || kind === 3) nappy(ctx, 3.4 * sc, j % 4 ? '#7dd3fc' : '#ff9ccf');
     else if (kind === 1) dummy(ctx, 0, 0, 2.4 * sc, j % 4 ? '#ff7eb6' : '#5cc8ff');
     else if (kind === 4 && j % 4 === 0) bottle(ctx, 3 * sc);
     else {
@@ -728,8 +772,8 @@ function popBurst(ctx, e, k, worldW) {
   ctx.scale(s, s);
   burstPath(ctx, 0, 0, 27 * sc, 12, 0.2);
   paint(ctx, '#fff0f7', 2.2 * z);
-  label(ctx, 'POP!', 0, -1 * sc, 21 * sc, '#ff3d8b', INK, 5 * z);
-  if (e.sz > 0) label(ctx, `+${e.sz} BABIES`, 0, 27 * sc, 10 * sc, '#7dd3fc', INK, 3.2 * z);
+  label(ctx, e.st === 1 ? 'WHELP!' : 'POP!', 0, -1 * sc, (e.st === 1 ? 18 : 21) * sc, '#ff3d8b', INK, 5 * z);
+  if (e.sz > 0) label(ctx, `+${e.sz} ${e.st === 1 ? 'PUPPIES' : 'BABIES'}`, 0, 27 * sc, 10 * sc, e.st === 1 ? '#f0c38a' : '#7dd3fc', INK, 3.2 * z);
   ctx.restore();
   if (k > 0.14 && e.t2) quip(ctx, e.t2, e.x + 24 * z, e.y - 100 * sc - k * 8 * z, 10 * z, '#c2307a', worldW, fadeOut(k, 0.75));
   ctx.globalAlpha = 1;
@@ -750,7 +794,7 @@ function noPop(ctx, e, k) {
   ctx.scale(s, s);
   ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU);
   paint(ctx, '#ffffff', 2 * z);
-  dummy(ctx, 0, 3.5 * z, 3.9 * z, '#ff7eb6');
+  if (e.st === 1) { ctx.save(); ctx.translate(0, 1 * z); bone(ctx, 4.4 * z); ctx.restore(); } else dummy(ctx, 0, 3.5 * z, 3.9 * z, '#ff7eb6');
   ctx.beginPath(); ctx.arc(0, 0, R - 1.8 * z, 0, TAU);
   ctx.moveTo(-R * 0.64, -R * 0.64); ctx.lineTo(R * 0.64, R * 0.64);
   ctx.strokeStyle = '#e11d2a'; ctx.lineWidth = 3.8 * z; ctx.lineCap = 'round'; ctx.stroke();

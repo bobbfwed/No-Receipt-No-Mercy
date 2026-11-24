@@ -221,7 +221,7 @@ export function cardPatience(state, k) {
     const card = CARDS[c];
     if (!card) continue;
     if (c === 'hardy' || c === 'frail') { if (kind === k) m *= card.hp; }
-    else if (c === 'bulkbuy' || c === 'flashmob') { if (k !== 'baby' && k !== 'trader') m *= card.hp; }
+    else if (c === 'bulkbuy' || c === 'flashmob') { if (k !== 'baby' && k !== 'pup' && k !== 'trader') m *= card.hp; }
     else if (c === 'fathersday' || c === 'openbar') { if (k === card.who) m *= card.hp; }
     else if (c === 'mallwalkers') m *= card.hp;
     else if (c === 'convention') { if (k === 'cosplay') m *= card.hp; }
@@ -375,5 +375,60 @@ export const cardShield = (state, def) => (def.shields && hasCard(state, 'conven
 export const cardLiftChance = (state, def) => (def.rips ? 1 : mul(state, 'klepto', 'chance'));
 export const cardLiftReach = (state, def) => (!def.rips && hasCard(state, 'klepto') ? CARDS.klepto.reach : 0);
 
-/** What a shopper who storms out pays the store on his way (restocking; not babies). */
-export const cardFee = (state, s) => (s.k !== 'baby' && hasCard(state, 'restocking') ? CARDS.restocking.fee : 0);
+/** What a shopper who storms out pays the store on his way (restocking; not babies or puppies). */
+export const cardFee = (state, s) => (s.k !== 'baby' && s.k !== 'pup' && hasCard(state, 'restocking') ? CARDS.restocking.fee : 0);
+
+// ---- The cards that change how shoppers behave (0.3.01, second round) ----------------------------
+// Each is asked only where its rule lives in step.js; each answers "no" (or 1, or 0) in a game
+// without the card, without drawing a random number, so such a game plays as before.
+
+/** How many times as often a mom's child may run off (offleash: a share of moms, by id). */
+export const cardKidRuns = (state, s) => (cardPicks(state, 'offleash', s) ? CARDS.offleash.runs : 1);
+
+/**
+ * True if this run of a mom's child is back toward the entrance (wrongway: a share of the runs,
+ * not of the kids). Worked out from her id and how many times he has run (`kn`, already counted
+ * for this run), so every run is its own chance, and nothing new is stored or drawn.
+ */
+export const kidBack = (state, s) => hasCard(state, 'wrongway') && idShare(s.id * 31 + (s.kn | 0), 'wrongway') < CARDS.wrongway.share;
+
+/** True if a runaway child runs on along the shoppers' own route, further than usual (freerange). */
+export const kidAlong = (state) => hasCard(state, 'freerange');
+
+/**
+ * How many puppies this shopper bursts into when her patience runs out: 0 unless she is a pregnant
+ * Stray Dog (spayed: a share of dogs, by id), else CARDS.spayed.pups, or supPups for a Great Dane.
+ */
+export const pupsOf = (state, s) => (s.k === 'dog' && cardPicks(state, 'spayed', s) ? (s.sup ? CARDS.spayed.supPups : CARDS.spayed.pups) : 0);
+
+/** True if this dad is one of those who fall in behind an Exhibitionist (eyesup: a share, by id). */
+export const trailsFlasher = (state, s) => s.k === 'dad' && cardPicks(state, 'eyesup', s);
+
+/** True if this Man with Guide Dog has an emotional support dog instead (supportdog: a share, by id). */
+export const supportDog = (state, s) => s.k === 'blind' && cardPicks(state, 'supportdog', s);
+
+/**
+ * True if a shopper of this definition may stop to pet a support dog: not dads, the boss, babies
+ * or puppies (they never stop), and not the men with dogs of their own.
+ */
+export const stopsToPet = (def) => !def.boss && !def.baby && !def.bolts && !def.hopsBelts;
+
+/**
+ * Whether a Free Sample table being put down hands out booze (eightyproof: a share of tables,
+ * with rand(), decided once when it is bought new and kept on the building as `bz`). False, with
+ * no random number drawn, in a game without the card.
+ */
+export const boozeRoll = (state, k) => k === 'samples' && hasCard(state, 'eightyproof') && rand(state) < CARDS.eightyproof.share;
+
+/**
+ * True if a shopper of this definition can be turned into a Day Drinker by a booze table: an
+ * adult who stops at sample tables, so not moms, Pregnant Ladies or babies (and not Teenagers,
+ * who never stop anyway).
+ */
+export const drinks = (def) => !!def.browses && !def.kid && !def.pops && !def.baby;
+
+/** The chance a shopper turns into a Day Drinker at a booze table, after `n` others (eightyproof). */
+export const boozeChance = (n) => Math.min(1, CARDS.eightyproof.chance + CARDS.eightyproof.step * n);
+
+/** True if a Teenager's mess also covers the four tiles beside it (slushie). */
+export const wideMess = (state) => hasCard(state, 'slushie');

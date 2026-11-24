@@ -382,8 +382,22 @@ export const BABY = {
   paceMin: 0.85, paceMax: 1.15,
 };
 
-/** The definition of a kind of shopper: SHOPPERS[k], SUPERS[k] if sup, BOSS for 'boss', BABY for 'baby'. */
-export const shopperDef = (k, sup = 0) => (k === 'boss' ? BOSS : k === 'baby' ? BABY : sup ? SUPERS[k] : SHOPPERS[k]);
+/**
+ * A pregnant Stray Dog's puppies (the spayed card, 0.3.01): she bursts into a litter of them when
+ * she runs out of patience, as a Pregnant Lady does into babies (CARDS.spayed says how many). They
+ * are babies in every way that counts (`baby`: a $5 refund that is no refund toward the limit, not
+ * counted as shoppers stopped, no reviews, nothing distracts them, the same tiny patience and the
+ * same speed), and kept out of SHOPPERS and SUPERS for the same reason. They do not pee on
+ * anything. Shoppers in the state have `k: 'pup'`; `defOf()` and `shopperDef()` give this.
+ */
+export const PUP = {
+  name: 'Puppy', baby: true, pup: true,
+  hp: BABY.hp, speed: BABY.speed, refund: BABY.refund, pitch: [0, 0],
+  paceMin: BABY.paceMin, paceMax: BABY.paceMax,
+};
+
+/** The definition of a kind of shopper: SHOPPERS[k], SUPERS[k] if sup, BOSS for 'boss', BABY for 'baby', PUP for 'pup'. */
+export const shopperDef = (k, sup = 0) => (k === 'boss' ? BOSS : k === 'baby' ? BABY : k === 'pup' ? PUP : sup ? SUPERS[k] : SHOPPERS[k]);
 
 /** The definition a shopper plays by: s is a shopper from the game state. */
 export const defOf = (s) => shopperDef(s.k, s.sup);
@@ -669,9 +683,9 @@ export const TUNE = {
  * side: 'bad', 'good' or 'odd'. per: 'kind' for a card that picks a kind of shopper when dealt
  *   (its id in a hand is then 'hardy:karen'). share: the share of shoppers (or tables, or runaways)
  *   it touches, picked by id (see idShare in cards.js), never by a random draw.
- * The cards marked "behaviour" in the design (freerange, offleash, spayed, eyesup, wrongway,
- * slushie, eightyproof, warranty, supportdog, and the larger drawing of bde) have their numbers
- * here but no rule yet; DEALABLE lists the cards whose rules exist.
+ * The cards that change how shoppers behave (freerange, offleash, spayed, eyesup, wrongway,
+ * slushie, eightyproof, warranty, supportdog, and the larger drawing of bde) came in a second
+ * round of 0.3.01; their rules are in step.js, with helpers in cards.js.
  */
 export const CARDS = {
   // ---- Bad for the players
@@ -728,9 +742,9 @@ export const CARDS = {
 };
 
 /**
- * The cards that can be dealt today: those whose rules exist (the "simple" ones). A card whose rule
- * is still to be written joins this list when it is. A forced hand (createGame({ cards: [...] }))
- * may hold any card in CARDS.
+ * The cards that can be dealt: those whose rules exist (all 48 since the second round of 0.3.01).
+ * A card whose rule is still to be written stays off this list until it is. A forced hand
+ * (createGame({ cards: [...] })) may hold any card in CARDS.
  */
 export const DEALABLE = [
   'litter', 'doubledip', 'preworkout', 'bde', 'hardy', 'hurry', 'clearance', 'klepto', 'shrinkflation',
@@ -739,6 +753,8 @@ export const DEALABLE = [
   'staffdiscount', 'overtime', 'mopmike', 'restocking', 'firecode', 'happyhour',
   'convention', 'bulkbuy', 'flashmob', 'artisanal', 'premature', 'fathersday', 'payday', 'mallwalkers',
   'openbar', 'rentacop', 'sweatshop',
+  // (The cards that change how shoppers behave, 0.3.01's second round.)
+  'freerange', 'offleash', 'spayed', 'eyesup', 'wrongway', 'slushie', 'eightyproof', 'warranty', 'supportdog',
 ];
 
 /**

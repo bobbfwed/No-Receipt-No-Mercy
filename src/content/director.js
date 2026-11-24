@@ -204,6 +204,15 @@ export const TOPICS = {
   releaseNext: { note: true, important: true, loud: true },
   releaseIn: { note: true, important: true, loud: true },
   rip: { note: true, gap: 15 },
+  // The cards that change how shoppers behave (0.3.01): each only happens in a game with that card,
+  // and fades like any other note. A litter is the thing to learn from (the laser), so it is
+  // important; a petting or a sale at a stand can happen many times a minute, so they wait longer.
+  litter: { note: true, important: true, gap: 20 },
+  drunk: { note: true, gap: 25 },
+  bought: { note: true, gap: 30 },
+  trail: { note: true, gap: 30 },
+  wrongway: { note: true, gap: 25 },
+  pet: { note: true, gap: 35 },
 };
 
 /** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
@@ -525,8 +534,10 @@ export function createDirector(random = Math.random) {
       case 'crawl':
         say(out, state, 'crawl', LINES.crawl, {}, { mood: 'angry' });
         break;
+      // (A child running back toward the entrance, the wrongway card, has his own lines.)
       case 'kid':
-        say(out, state, 'kid', LINES.kid);
+        if (e.back) say(out, state, 'wrongway', LINES.wrongway, {}, { mood: 'smug' });
+        else say(out, state, 'kid', LINES.kid);
         break;
       case 'caught':
         say(out, state, 'caught', e.carry ? LINES.caughtCarry : LINES.caught);
@@ -586,15 +597,32 @@ export function createDirector(random = Math.random) {
         say(out, state, 'bolt', LINES.bolt, {}, { mood: 'angry' });
         break;
       case 'pop':
-        say(out, state, 'pop', LINES.pop, { n: e.n > 0 ? Math.round(e.n) : undefined }, { mood: 'angry' });
+        // (A pregnant Stray Dog's litter, the spayed card, has its own lines.)
+        if (e.pup) say(out, state, 'litter', LINES.litter, { n: e.n > 0 ? Math.round(e.n) : undefined }, { mood: 'angry' });
+        else say(out, state, 'pop', LINES.pop, { n: e.n > 0 ? Math.round(e.n) : undefined }, { mood: 'angry' });
         break;
       case 'nopop':
-        say(out, state, 'nopop', LINES.nopop, {}, { mood: 'smug' });
+        // (The nopop lines are about the Pregnant Lady; a dog stopped by the laser goes unremarked.)
+        if (!e.pup) say(out, state, 'nopop', LINES.nopop, {}, { mood: 'smug' });
+        break;
+      case 'drunk':
+        say(out, state, 'drunk', LINES.drunk, {}, { mood: 'smug' });
+        break;
+      case 'bought':
+        // The stand by name; a Free Sample table reads better as a table.
+        say(out, state, 'bought', LINES.bought, { n: e.v > 0 ? Math.round(e.v) : undefined, k: e.k === 'samples' ? 'sample table' : thing(e.k) }, { mood: 'smug' });
+        break;
+      case 'trail':
+        say(out, state, 'trail', LINES.trail, {}, { mood: 'smug' });
+        break;
+      case 'pet':
+        say(out, state, 'pet', LINES.pet, { n: e.n >= 2 ? e.n : undefined }, { mood: 'flat' });
         break;
       case 'escape':
         // A Pregnant Lady's baby at a till takes cash but is no refund (its n is 0): it does not
         // count toward a run of refunds, and babies do not write reviews.
-        if (e.k === 'baby') break;
+        // (Nor do a pregnant dog's puppies, the spayed card.)
+        if (e.k === 'baby' || e.k === 'pup') break;
         escapes.push(state.tick);
         escapes = escapes.filter((t) => state.tick - t < 6 * TICK_HZ);
         if (e.k === 'boss') {
@@ -609,7 +637,7 @@ export function createDirector(random = Math.random) {
         break;
       case 'left':
         // Babies write no reviews, and a Pregnant Lady who popped has DEB's pop line instead.
-        if (e.k === 'baby' || e.why === 'pop') break;
+        if (e.k === 'baby' || e.k === 'pup' || e.why === 'pop') break;
         // The boss storming off always gets his review; anyone else only now and then.
         if (e.k === 'boss') review(out, state, LEFT_REVIEWS.boss, e.k, 0);
         else if (random() < 0.35) review(out, state, own(LEFT_REVIEWS, e.k), e.k, 6);

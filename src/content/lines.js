@@ -1021,6 +1021,73 @@ export const LINES = {
     u("Ripped pack, {n} onlookers. That's the biggest audience a man in that crowd will ever have for something he did with his hands."),
     r("He ripped one of your boxes, pulled nothing, and smelled the cardboard. Deeply. {p}, look away. I couldn't."),
   ],
+  // The cards that change how shoppers behave (0.3.01). Each bank is a topic of its own in the
+  // director's TOPICS, fading like any other note.
+  // A pregnant Stray Dog (the spayed card) burst into puppies. {n} how many (may be missing), {p} anyone.
+  litter: [
+    'A stray dog just popped. {n} puppies, all running for the tills. Somebody in the car park has a lot of explaining to do.',
+    "That dog was pregnant, {p}. Now she's {n} puppies. At least one creature in this store got lucky this year.",
+    'Litter on aisle four. Literally. {n} puppies, no father, no receipts. Very relatable for half of you.',
+    "Puppies everywhere. You can't spray a puppy, {p}. Well, you can. You did. That's how we got here.",
+    "{n} puppies, five dollars each, and every one of them more house-trained than {p}.",
+    u("The stray was knocked up, and she's emptied out at the worst possible moment. Like {p} on a first date."),
+    u("Puppies loose. Barcode laser next time, {p}. One beam and they stay where they are. Nature's pull-out method."),
+    r('{n} puppies just hit the floor. I have never seen so many bastards in one place. Including the staff meeting.'),
+  ],
+  // A booze table (the eightyproof card) turned a shopper into a Day Drinker. {p} anyone.
+  drunk: [
+    "Free samples of eighty-proof vodka. One bargain hunter in and he's already slurring. Corporate calls it customer engagement.",
+    "Another one turned. Came in for a discount, leaving with a liver condition. Just like your stag do, {p}.",
+    "The booze table claims another. He's swaying now. He'll fall over a corner in a minute. Make sure there are corners.",
+    'One sample too many. He was a coupon man. Now he is a day drinker. Next week he will be a regular. Same as {p}.',
+    "Somebody just got drunk off a paper cup at your sample table. Cheapest date in this store's history. Beating {p}'s record.",
+    u("He's drunk. He's going to tell a stranger he loves her. He's going to mean it. {p}, you've been there."),
+    u('Booze table worked. He walked in sober and is staggering out a liability. Like every one of your weddings.'),
+    r("Free shots in aisle three. The man's eyes have gone. He's wandering. He's singing. {p}, that's your karaoke voice."),
+  ],
+  // A shopper actually bought something at a stand (the warranty card). {n} what he paid, {k} the stand, {p} anyone.
+  bought: [
+    'Somebody actually bought something. ${n}. Mark the date, {p}. Frame the receipt.',
+    "A customer paid ${n}, on purpose, at the {k}. I didn't know they did that. Neither did you.",
+    "${n} from a real paying customer. He's the first person in years to come in here and leave satisfied.",
+    "A sale at the {k}. ${n}. Whoever's on that stand is crying. He hasn't heard a yes since his vasectomy consultation.",
+    'Somebody bought the extended warranty. ${n}. They actually think this place will be here next year.',
+    u("${n}, freely given. {p}, that's more than anyone has ever paid for anything you've offered."),
+    u("A man just paid for something. With money. I had to check the definition. It's like watching a unicorn wank."),
+    r("${n} from one shopper. Do not get used to it, {p}. This is the retail equivalent of your wife saying yes on a Tuesday."),
+  ],
+  // A dad fell in behind an Exhibitionist (the eyesup card) and will not pass her. {p} anyone.
+  trail: [
+    "A dad's fallen in behind the Exhibitionist. He's keeping a respectful distance. The distance is about a tile and a half. Respect is not involved.",
+    "One of the dads has stopped racing for the tills. He's found something better to follow. You'd follow it too, {p}.",
+    "Dad's trailing the woman in the bathrobe. He told his wife he'd be two minutes. He has never been so happy to be lying.",
+    'A dad is tailing the Exhibitionist like a cocker spaniel behind a sausage. He will not pass her. He will not blink.',
+    "There goes a dad, three steps behind a naked pensioner. Eyes up here, Dad. He can't hear me. Blood's gone elsewhere.",
+    u("That dad's walking at her speed now, {p}. First time he's matched a woman's pace since the honeymoon."),
+    u('A dad behind the Exhibitionist. Watch him. That is exactly how {p} walks behind anyone with a bakery bag.'),
+    r("The dad's in a trance behind her robe. If she walks out the front door he'll follow her into traffic. Let's find out."),
+  ],
+  // A mom's child ran back toward the entrance (the wrongway card). {p} anyone.
+  wrongway: [
+    'Wrong way, kid. He has bolted back to the entrance and mom has to walk the whole maze again. Best thing a child has ever done for you.',
+    "A kid's running back toward the doors. He has his father's sense of direction, and, judging by the mom's face, his father is gone.",
+    "Kid went the wrong way. She's going back for him. That's more backtracking than {p}'s browser history.",
+    'Runaway child, heading for the exit. Smart boy. If I had legs I would follow him.',
+    "That kid's running back to the car. He's seen your layout, {p}. He wants no part of it.",
+    u("Kid ran the wrong way. Mom's turning round. {p}, this is the only time a woman will walk back toward you."),
+    r('A child just sprinted back to the entrance, and his mother has to fetch him the long way round. Vasectomies are cheaper, lads. Remember that.'),
+  ],
+  // Shoppers stopped to pet an emotional support dog (the supportdog card). {n} how many (may be missing), {p} anyone.
+  pet: [
+    'Everyone stops to pet the support dog. Nobody has ever stopped to pet any of you, and you have been begging.',
+    '{n} shoppers petting the emotional support dog. It is the only creature in this store with a job it is good at.',
+    "Shoppers queueing to stroke the dog. {p}, that's the closest you'll get to watching a crowd want to touch something.",
+    "The support dog's getting fussed over. He doesn't need it. He's emotionally stable. Unlike the man holding the lead.",
+    'Petting zoo in aisle six. Free. Effective. Better security than anything {p} has paid for.',
+    u("They stop for the dog, {p}. Give that dog a lanyard. Give it your job. It's already doing it."),
+    u('{n} grown adults cooing at a spaniel in a vest. The vest says SUPPORT. The dog says nothing. Best colleague you have.'),
+    r('The dog has been petted more times today than {p} has in his whole adult life. It is not close. The dog is a virgin too.'),
+  ],
 };
 
 /**

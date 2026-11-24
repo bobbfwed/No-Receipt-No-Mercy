@@ -21,6 +21,7 @@ import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvW
 import { bossWave, bossIn, pep, bossOut, bossEscape, endless } from './boss.js';
 import { popSound, noPop, waah, babyTill, nursery } from './preggo.js';
 import { releaseSound, ripSound } from './trader.js';
+import { litterSound, whimper, pupTill, kennel, drunkSound, boughtSound, trailSound, wrongway, petSound } from './cardfx.js';
 
 /**
  * The fifteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
@@ -906,6 +907,86 @@ export const SOUNDS = {
       { label: 'Scalper', opts: { n: 0, sup: 1 }, about: 'The Scalper checking stock: the same tear, a lower voice.' },
     ],
     play: ripSound,
+  },
+
+  // The cards that change how shoppers behave (0.3.01, cardfx.js).
+  litter: {
+    about: 'A pregnant stray dog bursts into puppies (the spayed card): a balloon bang, her startled yelp (or a howl, or a whine), then three puppies yipping over each other.',
+    max: 1.0,
+    shapes: 3,
+    variants: [
+      { label: 'Stray Dog, 5', opts: {} },
+      { label: 'Great Dane, 8', opts: { sup: 1 }, about: 'A Great Dane: lower, and four puppies.' },
+    ],
+    play: litterSound,
+  },
+
+  whimper: {
+    about: 'One puppy gives up: a tiny falling whine, or two little whimpers. Short and quiet, because a whole litter can go at once.',
+    max: 0.4,
+    shapes: 3,
+    play: whimper,
+  },
+
+  pupTill: {
+    about: 'One puppy reaches a till ($5, not a refund toward the limit): one coin and a yap or two. As small as a sale.',
+    max: 0.35,
+    shapes: 3,
+    play: pupTill,
+  },
+
+  kennel: {
+    about: 'Many puppies at once (played over the single ones when they pile up): yapping over each other, claws skittering on the floor.',
+    max: 1.0,
+    shapes: 1,
+    play: kennel,
+  },
+
+  drunk: {
+    about: 'A booze sample turns a shopper into a Day Drinker (the eightyproof card): glug glug, a hiccup, then a slurred "woooo", "heyyy" or "aaah".',
+    max: 1.0,
+    shapes: 3,
+    variants: [
+      { label: 'shopper', opts: {} },
+      { label: 'super', opts: { sup: 1 }, about: 'A super shopper: the same, a little lower.' },
+    ],
+    play: drunkSound,
+  },
+
+  bought: {
+    about: 'A shopper actually buys something at a stand (the warranty card): the till drawer, the bell and a few coins. The TV Salesman\'s hundreds ring twice, with more coins.',
+    max: 0.75,
+    shapes: 3,
+    variants: [
+      { label: 'Free Samples, $50', opts: { v: 50 } },
+      { label: 'TV Salesman, $250', opts: { v: 250 } },
+    ],
+    play: boughtSound,
+  },
+
+  trail: {
+    about: 'A dad falls in behind the Exhibitionist (the eyesup card): a low two-note wolf whistle, or a gravelly "phwoar".',
+    max: 0.75,
+    shapes: 3,
+    play: trailSound,
+  },
+
+  wrongway: {
+    about: 'A runaway child heads back for the entrance (the wrongway card): three reversing-lorry beeps, then a high "wheee".',
+    max: 1.0,
+    shapes: 3,
+    play: wrongway,
+  },
+
+  pet: {
+    about: 'Shoppers stop to pet a support dog (the supportdog card): a soft "awww" (a second voice when several stop) and a happy dog panting.',
+    max: 0.85,
+    shapes: 3,
+    variants: [
+      { label: 'one', opts: { n: 1 } },
+      { label: 'several', opts: { n: 3 } },
+    ],
+    play: petSound,
   },
 
   endless: {

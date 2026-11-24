@@ -117,6 +117,18 @@ export const RULES = {
   // its boxes, so it is not background.
   release: { gap: 2, delay: 0, always: true },
   rip: { gap: 0.12, soft: 2, per: 2 },
+  // The cards that change how shoppers behave (0.3.01). A litter is the Pregnant Lady's pop for a
+  // dog: always heard. Its puppies are her babies again: tiny, thinned hard, merging into `kennel`.
+  // The rest are a few a minute at most, except a petting crowd or a run of sales, thinned like a grab.
+  litter: { gap: 0.35, delay: 0.2, always: true },
+  whimper: { gap: 0.09, soft: 2, per: 2, common: true, merge: { at: 5, sound: 'kennel', every: 1.4 } },
+  pupTill: { gap: 0.08, soft: 2, per: 2, merge: { at: 5, sound: 'kennel', every: 1.4 } },
+  kennel: { gap: 1.2, delay: 0, always: true },
+  drunk: { gap: 0.4, soft: 2, per: 2 },
+  bought: { gap: 0.3, soft: 2, per: 2 },
+  trail: { gap: 0.6, soft: 2, per: 2 },
+  wrongway: { gap: 0.5, soft: 2, per: 2 },
+  pet: { gap: 0.4, soft: 2, per: 2, common: true },
   // The merged crowd sounds stand in for many single ones, so they skip the caps (`always`).
   kerching: { gap: 1.0, delay: 0, always: true },
   walkout: { gap: 1.2, delay: 0, always: true },

@@ -38,7 +38,7 @@
 // their other tiles (`part`) are skipped everywhere.
 import {
   BUILD, ZONES, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, canUpgrade, statsOf, levelOf,
-  levelIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint,
+  levelIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint, hasCard, supportDog, CARDS,
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
@@ -118,7 +118,7 @@ export function createRenderer(canvas, session) {
   /** Visible tiles this frame, with a margin (exclusive end). */
   const vis = { x0: 0, y0: 0, x1: 0, y1: 0 };
   /** Context for one shopper's drawing (see drawShopper): reused. */
-  const how = { pee: null, gawk: false, tv: false, pack: false };
+  const how = { pee: null, gawk: false, tv: false, pack: false, pet: false };
   const peeAt = [0, 0];
   /** Exhibitionists with the bathrobe open this frame, for who is staring at whom. */
   const flashing = [];
@@ -286,6 +286,13 @@ export function createRenderer(canvas, session) {
     F.zoom = cam.zoom;
     // The holiday the bosses dress up for (0.3), or undefined for none: see drawShopper.
     F.dress = s.holiday;
+    // The game itself, for drawing code that reads a building's numbers (statsOf with the state,
+    // so the game's cards count), and the cards that change how things are drawn (0.3.01): pregnant
+    // dogs (spayed), support dogs (supportdog), bigger bosses (bde).
+    F.game = s;
+    F.spayed = hasCard(s, 'spayed');
+    F.esa = hasCard(s, 'supportdog');
+    F.bde = hasCard(s, 'bde');
     fx.handle(events, now, s);
 
     const alpha = session.alpha();
@@ -324,9 +331,10 @@ export function createRenderer(canvas, session) {
     drawBuildings(s, now);
 
     if (view.route) drawRoutes(ctx, s, now / 1000);
-    fx.draw(ctx, now, 0, sprites, cam.zoom);
+    const bossGrow = F.bde ? CARDS.bde.size : 1;
+    fx.draw(ctx, now, 0, sprites, cam.zoom, bossGrow);
     drawShoppers(s, alpha);
-    fx.draw(ctx, now, 1, sprites, cam.zoom);
+    fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
     drawPreview(s, view);
     if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now, s.w, s.h);
     ctx.restore();
@@ -536,7 +544,7 @@ export function createRenderer(canvas, session) {
         const m = sh.m;
         kidShadowPath(ctx, (m.kx + m.kvx * alpha) * T, (m.ky + m.kvy * alpha) * T);
       } else if (sh.st !== ST.LEAVE) {
-        shadowPath(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T, faceOf(sh.id, sh.vx));
+        shadowPath(ctx, sh, (sh.x + sh.vx * alpha) * T, (sh.y + sh.vy * alpha) * T, faceOf(sh.id, sh.vx), F);
       }
     }
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -553,7 +561,7 @@ export function createRenderer(canvas, session) {
       }
       const px = (sh.x + sh.vx * alpha) * T, py = (sh.y + sh.vy * alpha) * T;
       let face = faceOf(sh.id, sh.vx);
-      how.pee = null; how.gawk = false; how.tv = false; how.pack = false;
+      how.pee = null; how.gawk = false; how.tv = false; how.pack = false; how.pet = false;
       if (sh.st === ST.WATCH) face = watching(s, sh, face);
       drawShopper(ctx, sh, px, py, face, F, shopperSprites, how);
       if (sh.k === 'boss') bosses++;
@@ -583,6 +591,19 @@ export function createRenderer(canvas, session) {
    */
   function watching(s, sh, face) {
     const def = defOf(sh);
+    // Petting an emotional support dog (the supportdog card): `pd` is the dog's owner he last
+    // petted; while that dog is still near him, that is what he has stopped for.
+    if (sh.pd !== undefined && F.esa) {
+      const r = CARDS.supportdog.range + 1.5;
+      for (const o of s.shoppers) {
+        if (o.id !== sh.pd || o.st === ST.LEAVE || !supportDog(s, o)) continue;
+        if ((o.x - sh.x) ** 2 + (o.y - sh.y) ** 2 > r * r) break;
+        how.pet = true;
+        // (The dog walks out in front of him.)
+        const dx = o.x + (faceOf(o.id, o.vx) * 0.6) - sh.x;
+        return Math.abs(dx) < 0.05 ? face : dx > 0 ? 1 : -1;
+      }
+    }
     if (def.flashes) return face;
     // A Card Trader stopped to see what another one is pulling out of a pack (TUNE.ripLook).
     if (def.rips) {
@@ -635,7 +656,7 @@ export function createRenderer(canvas, session) {
         const b = grid[y * W + x];
         if (!b || b.k !== 'salesman' || b.part !== undefined) continue;
         const d2 = (x + 1 - sh.x) ** 2 + (y + 1 - sh.y) ** 2;
-        const r = statsOf(b).range + 0.5;
+        const r = statsOf(b, s).range + 0.5;
         if (d2 <= r * r && d2 < bd) { bd = d2; cx = x + 1; }
       }
     }
@@ -723,7 +744,7 @@ export function createRenderer(canvas, session) {
    * the Barcode Laser's beam, or a circle round the middle of its footprint for anything with a range.
    */
   function showRange(s, b, ai, style) {
-    const st = statsOf(b);
+    const st = statsOf(b, s);
     if (!(st.range > 0)) return;
     const r = rectOf(b, ai, s.w);
     const cx = r.x + r.w / 2, cy = r.y + r.h / 2;

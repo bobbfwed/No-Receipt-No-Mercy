@@ -391,6 +391,34 @@ function outItem(ctx, S) {
   if (P.out) drawItem(ctx, S, ITEM_KINDS[P.out], DIRS[P.d][0] * 3, DIRS[P.d][1] * 3 - 2, 15);
 }
 
+/** The eightyproof card's Free Sample table: the same shape as the plain one, as a cheap bar. */
+function boozeTable(ctx) {
+  shadow(ctx, 32, 24);
+  line(ctx, 12, -4, 12, -26, INK, 2);
+  const wv = Math.sin((P.step / 6) * TAU) * 2;
+  ctx.beginPath();
+  ctx.moveTo(12, -26); ctx.quadraticCurveTo(17, -25 + wv, 22, -21 + wv * 0.5); ctx.lineTo(12, -17);
+  ctx.closePath();
+  paint(ctx, '#f0a830', 1.6);
+  box(ctx, -16, -9, 32, 9, 2, '#6b4423', 2.2);
+  box(ctx, -16, -1, 32, 14, 2, '#1c1d22', 2.2);
+  text(ctx, 'SHOTS', 0, 6.5, 8.5, '#ffd23f', 900);
+  // A bottle at the back, then a tray of shot glasses with amber in them.
+  box(ctx, -15, -24, 6, 15, 2, '#2f7d4f', 1.6);
+  box(ctx, -13.5, -29, 3, 6, 1, '#2f7d4f', 1.3);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(-14.5, -19, 5, 4);
+  ctx.beginPath();
+  ctx.ellipse(1, -6, 11, 4, 0, 0, TAU);
+  paint(ctx, '#cfd6dc', 1.6);
+  for (let k = 0; k < 4; k++) {
+    const sx = -6 + k * 4.4, sy = -8 + (k % 2);
+    box(ctx, sx - 1.8, sy - 3.4, 3.6, 4.4, 0.6, '#e8f4ff', 1);
+    ctx.fillStyle = '#e0952a';
+    ctx.fillRect(sx - 1.2, sy - 1.6, 2.4, 2.2);
+  }
+}
+
 const KINDS = {
   unpacker: {
     look(b) {
@@ -647,12 +675,16 @@ const KINDS = {
     },
   },
 
+  // A table that hands out booze (b.bz, the eightyproof card, 0.3.01) is a bar: a black skirt saying
+  // SHOTS, an amber flag, a bottle on the table and shot glasses on the tray.
   samples: {
     look(b, F) {
       P.step = ((((F.time * 4) / TAU) % 1) * 6) | 0; // flag waving
-      return P.step;
+      P.booze = b.bz ? 1 : 0;
+      return P.step + P.booze * 6;
     },
     paint(ctx) {
+      if (P.booze) { boozeTable(ctx); return; }
       shadow(ctx, 32, 24);
       // Flag on a pole behind the table.
       line(ctx, 12, -4, 12, -26, INK, 2);
@@ -686,9 +718,10 @@ const KINDS = {
   // window, facing north at its back end and cable.
   railgun: {
     box() { return P.d & 1 ? RAIL_Y : RAIL_X; },
-    look(b) {
+    look(b, F) {
       P.d = b.d | 0;
-      const full = Math.max(1, Math.round(statsOf(b).cd * TICK_HZ));
+      // (With the game, so its cards count: the premature card makes security fire faster.)
+      const full = Math.max(1, Math.round(statsOf(b, F.game).cd * TICK_HZ));
       const left = Math.max(0, b.cd || 0);
       P.step = left <= 0 ? RAIL_STEPS : Math.min(RAIL_STEPS - 1, ((1 - left / full) * RAIL_STEPS) | 0);
       return P.d * (RAIL_STEPS + 1) + P.step;
@@ -1213,14 +1246,14 @@ export function drawWear(ctx, b, i, F) {
   if (!(b.hit > 0) && !(b.off > 0)) return;
   const r = rectOf(b, i, F.w);
   const x = r.x, y = r.y, w = r.w, h = r.h;
-  if (b.hit > 0) damage(ctx, b, i, F.time, x, y, w, h);
+  if (b.hit > 0) damage(ctx, b, i, F.time, x, y, w, h, F.game);
   // The drips and flies are too small to see when zoomed far out (F.zoom: screen pixels a tile);
   // the grey and the puddle still say it.
   if (b.off > 0 && !(F.zoom < 18)) peedOn(ctx, i, F.time, x, y, w, h);
 }
 
-function damage(ctx, b, i, t, x, y, w, h) {
-  const hits = statsOf(b).hits;
+function damage(ctx, b, i, t, x, y, w, h, game = null) {
+  const hits = statsOf(b, game).hits;
   const hit = Math.min(b.hit, hits);
   const left = hits - hit;
   const sev = hits > 0 ? hit / hits : 1;

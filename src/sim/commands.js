@@ -6,7 +6,7 @@ import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './pa
 import { beginWave, skipBuild } from './step.js';
 import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
-import { buildPrice, freeTrack } from './cards.js';
+import { buildPrice, freeTrack, boozeRoll } from './cards.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
 const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'autoRebuild', 'endless']);
@@ -129,7 +129,8 @@ export function canUpgrade(state, x, y, pid = 0, track = undefined) {
 
 /**
  * A building as it is put down. `card` carries what a card gave it (see the Building fields in
- * state.js): `c` the price paid where it differs from the kind's, `f` and `fn` its free levels.
+ * state.js): `c` the price paid where it differs from the kind's, `f` and `fn` its free levels,
+ * `bz` a Free Sample table that hands out booze (the eightyproof card).
  */
 function newBuilding(k, owner, d, u, card = null) {
   const b = { k, o: owner };
@@ -143,6 +144,7 @@ function newBuilding(k, owner, d, u, card = null) {
       b.f = card.f;
       if ((card.fn ?? 1) !== 1) b.fn = Math.min(card.fn, levelIn(b, card.f));
     }
+    if (card.bz) b.bz = 1;
   }
   if (k === 'belt') b.it = [];
   if (k === 'unpacker') b.t = Math.round((def.period / (def.up.spd.mul ** levelIn(b, 'spd'))) * TICK_HZ);
@@ -349,9 +351,12 @@ export function applyCommand(state, pid, cmd, ev = []) {
       let card = deal ? at.rubble : null, u = deal && deal.u;
       if (!deal) {
         const free = freeTrack(state, cmd.k);
-        if (paid !== def.cost || free) card = {};
+        // (A Free Sample table may hand out booze: the eightyproof card, decided now and kept.)
+        const booze = boozeRoll(state, cmd.k);
+        if (paid !== def.cost || free || booze) card = {};
         if (paid !== def.cost) card.c = paid;
         if (free) { u = { [free.t]: free.n }; card.f = free.t; card.fn = free.n; }
+        if (booze) card.bz = 1;
       }
       put(state, at.tiles, newBuilding(cmd.k, pid, at.d, u, card));
       clearRubble(state, at.tiles);
@@ -362,6 +367,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       const e = { e: 'placed', k: cmd.k, x: at.i % state.w, y: (at.i / state.w) | 0, d: at.d, by: pid };
       if (deal) { e.rebuilt = 1; e.short = deal.lost > 0 ? 1 : 0; }
       if (!deal && card && card.f) e.free = card.f;
+      if (card && card.bz) e.booze = 1;
       ev.push(e);
       return { ok: true };
     }

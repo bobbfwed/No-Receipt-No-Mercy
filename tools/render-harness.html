@@ -94,6 +94,16 @@
                    four at the game's normal zoom (40 px a tile) and one at 16 px a tile, zoomed out
                    (each drawn small and then enlarged, as the screen would show it). &zoom= scales
                    the big rows.
+    &cardshow=puppies  the cards that change how shoppers behave (0.3.01), each in a frozen scene on
+                   the small map like &showcase=1 (with its effects shown again every &every=1500 ms):
+                   puppies (spayed: pregnant dogs, a litter, the pop and the laser stopping one),
+                   booze (eightyproof and warranty: a plain and a booze sample table, a shopper just
+                   turned drunk, sales at the stands), support (supportdog and eyesup: support dogs
+                   walking, bolting and sitting, shoppers petting, a guide dog beside them, a dad
+                   trailing an Exhibitionist), boss (bde: the bigger bosses beside ordinary
+                   shoppers), mess (slushie: a wide mess, one against a wall and a crate, and a
+                   plain one). The card is forced; &cards=a,b forces another hand
+    &cards=a,b     the game's hand (any card ids), with no deal
     &allfx=1       inject one of every effect event every &every=1200 ms at fixed places
     &zoom=1.6&at=24,7   close-up: that many times the whole-map zoom, centred on that tile
     &magnify=3     draw the game into a window a third the size and show it three times bigger,
@@ -129,7 +139,7 @@ import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
 import {
   applyDemoLayout, applyCommand, addPlayer, createGame, BUILD, TUNE, TICK_HZ, ST, tracksOf, maxIn,
-  statsOf, tilesOf, spentOn,
+  statsOf, tilesOf, spentOn, idShare, CARDS,
 } from '../src/sim/index.js';
 import { createRenderer } from '../src/render/renderer.js';
 import { createMinimap } from '../src/render/minimap.js';
@@ -154,8 +164,11 @@ function magnify() {
   m.imageSmoothingEnabled = false;
   m.drawImage(canvas, 0, 0, magCanvas.width, magCanvas.height);
 }
+/** &cardshow=: which scene, and the cards each forces. */
+const CARDSHOW = q.get('cardshow');
+const CARDSHOW_HANDS = { puppies: ['spayed'], booze: ['eightyproof', 'warranty'], support: ['supportdog', 'eyesup'], boss: ['bde'], mess: ['slushie'] };
 /** &showcase=1, and the mom in it who leaves her cart behind a moment after it starts. */
-const SHOW = { on: q.get('showcase') === '1', lateMom: null };
+const SHOW = { on: q.get('showcase') === '1' || !!CARDSHOW, lateMom: null };
 /** &pop=sprinkler|laser: the events of the moment she popped (or did not), shown again and again. */
 const POP = { on: q.has('pop'), laser: q.get('pop') === 'laser', events: null, note: '' };
 /** A building's facing (0 east, 1 south, 2 west, 3 north) for a direction in tiles. */
@@ -169,7 +182,8 @@ if (q.get('null') === '1') {
   // &zones=1 / &zones=0 turn the machines' marked floor on or off; by default a game has it
   // exactly when it has a chosen map, as in the real game.
   const zones = q.has('zones') ? q.get('zones') === '1' : !!map;
-  const state = createGame({ seed: num('seed', 7), map, zones, holiday: q.get('holiday') });
+  const cards = q.has('cards') ? q.get('cards').split(',') : CARDSHOW ? CARDSHOW_HANDS[CARDSHOW] || null : null;
+  const state = createGame({ seed: num('seed', 7), map, zones, holiday: q.get('holiday'), cards });
   session = new HostSession({ name: 'Dave', director: createDirector(), state });
   const s = session.state;
   const me = s.players[0];
@@ -218,7 +232,8 @@ if (q.get('null') === '1') {
       count++;
     }
   }
-  if (showcase) buildShowcase(s, me);
+  if (CARDSHOW) buildCardShow(s, me);
+  else if (showcase) buildShowcase(s, me);
   // The anchor tiles of every building (the other tiles of a big one only point at it).
   const anchors = () => s.grid.map((b, i) => (b && b.part === undefined ? i : -1)).filter((i) => i >= 0);
   // &upgrades=1  upgrade every building, a different mix of tracks on each
@@ -279,7 +294,8 @@ if (q.get('null') === '1') {
   }
   if (q.get('nostart') !== '1') session.send({ c: 'start' });
   session.fastForward(num('ff', 0));
-  if (showcase) showcaseCrowd(s);
+  if (CARDSHOW) cardShowCrowd(s);
+  else if (showcase) showcaseCrowd(s);
   if (POP.on) stagePop(s);
   // &supers=1  every third shopper becomes a super one
   if (q.get('supers') === '1') s.shoppers.forEach((sh, n) => { if (n % 3 === 0) sh.sup = 1; });
@@ -432,6 +448,12 @@ if (q.get('allfx') === '1' && session.fx) {
   );
   inject();
   setInterval(inject, num('every', 1200));
+}
+// &cardshow=: its effects again and again.
+if (CARDSHOW && SHOW.events) {
+  const again = () => session.fx.push(...SHOW.events.map((e) => ({ ...e })));
+  again();
+  setInterval(again, num('every', 1500));
 }
 // &pop=: show her pop (or the laser stopping it) again every &every ms, and say what happened.
 if (POP.on && POP.events) {
@@ -884,6 +906,109 @@ function showcaseCrowd(s) {
   add('mom', 25, 12.4, { ...walkR, kd: 3, nc: 1 });
   add('mom', 14.6, 14.3, { ...walkR, kd: 2, kx: 17.4, ky: 14.4, kvx: 0, kvy: 0, cr: 1, hp: 0, sup: 1, nc: 0 });
   SHOW.lateMom = add('mom', 21.6, 14.3, { ...walkR, kd: 2, kx: 24.8, ky: 14.3, kvx: 0, kvy: 0, cr: 1, hp: 0, nc: 0 });
+}
+
+// --- &cardshow= ----------------------------------------------------------------------------------
+
+/** The first id from `from` that a card picks (or, with inShare false, leaves out). */
+function idFor(card, inShare = true, from = 100) {
+  for (let id = from; ; id++) if ((idShare(id, card) < CARDS[card].share) === inShare) return id;
+}
+
+/** The buildings of a &cardshow= scene. */
+function buildCardShow(s, me) {
+  me.cash += 1e7;
+  const at = (x, y) => y * s.w + x;
+  const put = (k, x, y, d = 0, set = {}) => {
+    const r = applyCommand(s, 0, { c: 'place', k, x, y, d });
+    if (!r.ok) { console.warn('cardshow', k, x, y, r.why); return null; }
+    return Object.assign(s.grid[at(x, y)], set);
+  };
+  if (CARDSHOW === 'booze') {
+    // A plain table and a booze table side by side, and a TV Salesman.
+    const plain = put('samples', 9, 6), booze = put('samples', 14, 6);
+    if (plain) delete plain.bz;
+    if (booze) booze.bz = 1;
+    put('salesman', 22, 5);
+  }
+  if (CARDSHOW === 'puppies') put('railgun', 14, 12, 0);
+  if (CARDSHOW === 'mess') put('crate', 6, 6);
+  me.cash = 400;
+}
+
+/** The shoppers (and messes, and effects) of a &cardshow= scene, after the doors open. */
+function cardShowCrowd(s) {
+  s.shoppers.length = 0;
+  s.spawnQ.length = 0;
+  const W = s.w;
+  let id = 1000;
+  const add = (k, x, y, o = {}) => {
+    const sh = { id: id++, k, sup: 0, x, y, vx: 0, vy: 0, hp: 30, mhp: 40, st: ST.WALK, t: 0, cd: 0, ox: 0, oy: 0, lt: -1, ...o };
+    s.shoppers.push(sh);
+    return sh;
+  };
+  const walkR = { vx: 0.05 }, walkL = { vx: -0.05 };
+  const watch = { st: ST.WATCH, t: 99999 };
+  const ev = (SHOW.events = []);
+  if (CARDSHOW === 'puppies') {
+    // Pregnant dogs (walking, sitting, a Great Dane), an ordinary one beside them, and a litter.
+    add('dog', 4.5, 4.6, { ...walkR, id: idFor('spayed') });
+    add('dog', 7.3, 5.6, { ...watch, id: idFor('spayed', true, 2000) });
+    add('dog', 13, 4.8, { ...walkR, sup: 1, id: idFor('spayed', true, 3000) });
+    add('dog', 18, 4.6, { ...walkL, id: idFor('spayed', false) });
+    for (let n = 0; n < 5; n++) add('pup', 4 + n * 1.15 + (n % 2) * 0.3, 9.4 + (n % 2) * 0.5, { ...walkR, id: 40 + n, hp: 4, mhp: 7 });
+    for (let n = 0; n < 8; n++) add('pup', 13 + n * 0.9, 9.2 + (n % 3) * 0.4, { ...walkR, id: 60 + n, hp: 4, mhp: 7 });
+    ev.push({ e: 'pop', x: 6, y: 13, n: 5, sup: 0, pup: 1 }, { e: 'nopop', x: 19.5, y: 12.5, sup: 0, pup: 1 },
+      { e: 'escape', k: 'pup', sup: 0, x: W - 1.2, y: 8.5, refund: 5, n: 0 }, { e: 'left', k: 'pup', sup: 0, x: 15, y: 13, by: 0, why: 'annoyed' });
+  }
+  if (CARDSHOW === 'booze') {
+    add('hunter', 9.5, 8.2, { st: ST.BROWSE, t: 99999 });
+    add('clipper', 14.5, 8.2, { st: ST.BROWSE, t: 99999, bq: 1 });
+    add('drinker', 16.8, 8.6, { ...walkR, sv: 1.4 });
+    add('hunter', 22.3, 7.8, watch);
+    ev.push({ e: 'drunk', x: 16.8, y: 8.6, k: 'hunter', sup: 0 }, { e: 'bought', i: 6 * W + 9, k: 'samples', v: 50, x: 9.5, y: 6.5, by: 'hunter' },
+      { e: 'bought', i: 5 * W + 22, k: 'salesman', v: 270, x: 23, y: 6, by: 'hunter' });
+  }
+  if (CARDSHOW === 'support') {
+    const esa = idFor('supportdog');
+    add('blind', 5.5, 5.5, { ...walkR, bt: 0, id: esa });
+    add('hunter', 6.4, 6.4, { ...watch, pd: esa, id: 3 });
+    add('karen', 4.6, 6.4, { ...watch, pd: esa, id: 4 });
+    add('blind', 13.5, 5.5, { ...walkR, bt: 30, id: idFor('supportdog', true, esa + 1) });
+    add('blind', 21.5, 5.5, { st: ST.STUN, t: 99999, id: idFor('supportdog', true, esa + 300) });
+    add('blind', 5.5, 9.7, { ...walkR, bt: 0, id: idFor('supportdog', false) });
+    // A dad trailing an Exhibitionist, and one who is not.
+    const her = add('flasher', 16.5, 10.6, { ...walkR, id: 20 });
+    add('dad', 14.6, 10.6, { ...walkR, ex: her.id, id: idFor('eyesup') });
+    add('dad', 21.5, 12.6, { ...walkR, id: idFor('eyesup', false) });
+    ev.push({ e: 'pet', x: 5.5, y: 5.5, n: 2, k: 'hunter' }, { e: 'trail', x: 14.6, y: 10.6 }, { e: 'bolt', x: 13.5, y: 5.5 });
+  }
+  if (CARDSHOW === 'boss') {
+    add('boss', 6.5, 7.7, { ...walkR, tr: 1, pp: 100, mhp: 400, hp: 300 });
+    add('hunter', 9, 7.9, walkR);
+    add('dad', 3.8, 8, walkR);
+    add('boss', 15.5, 7.7, { tr: 4, pp: 99999, mhp: 1000, hp: 450 });
+    add('karen', 18.4, 8.1, walkL);
+    add('dog', 12.5, 9.5, walkR);
+    ev.push({ e: 'pep', x: 15.5, y: 7.7, n: 2 });
+  }
+  if (CARDSHOW === 'mess') {
+    // As the rules lay them: a mess and the four tiles it spilt onto (a third element 1), one
+    // against the top wall, one beside a crate (6,6), and a plain one without the card's spill.
+    const life = Math.round(TUNE.messSecs * TICK_HZ) - 10;
+    const wide = (x, y) => {
+      s.messes.push([y * W + x, life]);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const i = (y + dy) * W + x + dx;
+        if (s.tiles[i] === '.' && !s.grid[i]) s.messes.push([i, life, 1]);
+      }
+    };
+    wide(10, 8); wide(15, 1); wide(6, 7);
+    s.messes.push([8 * W + 21, life]);
+    add('teen', 11.6, 8.7, walkR);
+    add('hunter', 9.4, 9.3, walkR);
+    ev.push({ e: 'mess', i: 8 * W + 10, wide: 4 });
+  }
 }
 </script>
 </body>

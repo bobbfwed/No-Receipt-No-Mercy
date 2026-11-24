@@ -30,6 +30,8 @@ import { dealCards, cleanHand } from './cards.js';
  * @property {string} [f]   the track of its free upgrade levels (the offatruck and mallcop cards):
  *   they are in `u` like any, but spentOn leaves them out
  * @property {number} [fn]  ...how many of them, if not 1
+ * @property {number} [bz]  Free Sample table only: 1 if it hands out booze (the eightyproof card;
+ *   decided when it is bought new, and kept through wrecking and rebuilding: rubble carries it too)
  */
 
 /** A kind's footprint in tiles, [w, h], for a facing: turned on its side facing north or south. */
@@ -74,7 +76,10 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} id
  * @property {string} k   kind, a key of SHOPPERS, or 'boss' (see BOSS in constants.js), or 'baby'
  *                        (one of a Pregnant Lady's babies, see BABY; they have none of the extra
- *                        fields below and are never super)
+ *                        fields below and are never super), or 'pup' (one of a pregnant Stray
+ *                        Dog's puppies, the spayed card; see PUP: the same as a baby). A shopper
+ *                        a booze table turned into a Day Drinker (the eightyproof card) has
+ *                        'drinker' from then on.
  * @property {number} [sup] 1 if this is the super version of its kind (see SUPERS in constants.js)
  * @property {number} x   position in tiles (tile centre is n + 0.5)
  * @property {number} y
@@ -133,6 +138,14 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  *                          is what he is called)
  * @property {number} [pp]  boss: ticks until his next pep talk
  *                          (a dog's `cd` is the ticks until it can pee again)
+ * The game's cards (0.3.01) add a few, all absent in a game without them:
+ * @property {number} [pd]  anyone who stops to pet an emotional support dog (the supportdog card):
+ *                          the id of the dog's owner he last petted, so he does not stop for that
+ *                          dog again
+ * @property {number} [ex]  dad (the eyesup card): the id of the Exhibitionist he has fallen in
+ *                          behind, while he trails her
+ * @property {number} [bq]  a shopper who drinks (the eightyproof card): how many booze tables he
+ *                          has stopped at (each makes the next likelier to turn him)
  */
 
 /**

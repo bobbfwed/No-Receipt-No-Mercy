@@ -21,7 +21,7 @@
 // chasing, carrying or crawling, a dog peeing or sitting, the bathrobe open). Overlays such as the
 // patience bar, the marks over someone watching something, a dog's stream and a drunk's rolling
 // bottle are drawn directly every frame.
-import { ST, TUNE, TICK_HZ, defOf, BOSS, HOLIDAYS } from '../sim/index.js';
+import { ST, TUNE, TICK_HZ, defOf, BOSS, HOLIDAYS, CARDS, idShare } from '../sim/index.js';
 import { TILE, INK, C, rr, paint, box, circle, label, ramp, starPath, text, hazard, font } from './paint.js';
 
 /** Feet sit this far below the shopper's position, so the figure looks centred on its tile. */
@@ -44,6 +44,8 @@ const MOM_TOPS = ['#9b59b6', '#e67e5a', '#16a085', '#e84393'];
 const MOM_HAIR = ['#8a5a2b', '#2b2118', '#c9a15a', '#5a3a1e'];
 const TANKS = ['#ffffff', '#ff3d7f', '#39d353', '#ffd23f'];
 const DOG = '#e2b15f', DOG_DARK = '#b8873a', VEST = '#f4e04d';
+/** (The guide dog's own colours, under names the support dog's drawing can stand in for.) */
+const DOG_COAT = DOG, DOG_COAT_DARK = DOG_DARK, HIVIS = VEST;
 const KID_HAIR = '#e07b24';
 // The mutt is ginger, not grey-brown: the old colours all but vanished on concrete when zoomed out.
 const MUTT = '#c27a32', MUTT_DARK = '#8a4f1e', MUTT_PATCH = '#4f2f16', MUTT_CREAM = '#f6e2b8';
@@ -58,8 +60,10 @@ const BABY_TABS = ['#7dd3fc', '#ff9ccf', '#a3e635'];
 
 /** Mom poses (the `alt` of her sprite). */
 const MOM_CART = 0, MOM_CHASE = 1, MOM_CHASE_NOCART = 2, MOM_CARRY = 3, MOM_CRAWL_CART = 4, MOM_CRAWL = 5;
-/** Dog poses. */
-const DOG_PEE = 1, DOG_SIT = 2;
+/** Dog poses. DOG_BUMP is added to any of them for a pregnant one (the spayed card, 0.3.01). */
+const DOG_PEE = 1, DOG_SIT = 2, DOG_BUMP = 4;
+/** The Man with Guide Dog's poses: bolting, and (added to it) an emotional support dog (the supportdog card). */
+const BLIND_BOLT = 1, BLIND_ESA = 2;
 /** Pregnant Lady pose: her patience nearly gone, about to pop. */
 const PREG_STRAIN = 1;
 /** Below this share of her patience she shows she is about to pop. */
@@ -89,7 +93,7 @@ const KIND = {
   // A little bigger than life (sc), so the mutt still reads at 16 pixels a tile.
   dog: {
     n: 11, sc: 1.12, top: 24, supTop: 43, step: 19, vars: 1, box: [-34, -58, 72, 70], crown: [18, -41],
-    stillAlt: (1 << DOG_PEE) | (1 << DOG_SIT),
+    stillAlt: (1 << DOG_PEE) | (1 << DOG_SIT) | (1 << (DOG_PEE | DOG_BUMP)) | (1 << (DOG_SIT | DOG_BUMP)),
   },
   cosplay: { n: 12, sc: 1, top: 52, supTop: 64, step: 8, vars: 4, box: [-36, -78, 72, 90], crown: [1, -64] },
   flasher: { n: 13, sc: 1, top: 38, step: 8, vars: 1, crown: [0.5, -39], stillAlt: 2 },
@@ -104,6 +108,8 @@ const KIND = {
   // The Card Trader (0.3.01): wide for his backpack behind and, for the Scalper, the hand truck in
   // front. Ripping a pack he stands still (stillAlt).
   trader: { n: 19, sc: 1.02, top: 38, step: 10, vars: 4, box: [-34, -58, 70, 70], crown: [1.5, -37], stillAlt: 1 << 1 },
+  // A pregnant Stray Dog's puppies (the spayed card, 0.3.01): tiny, a fast scrabble, three coats.
+  pup: { n: 20, sc: 1.1, top: 15, step: 32, vars: 3, still: true, box: [-16, -20, 34, 24], crown: [6, -15] },
 };
 /**
  * Super shoppers are drawn this much bigger, with a gold outline and glow and a crown, so they
@@ -703,12 +709,17 @@ function kid(ctx, P) {
   circle(ctx, 5.5, -18.4 - wv, 1.4, C.skin, 1);
 }
 
+/** An emotional support dog (the supportdog card): a cream doodle in a loud pink SUPPORT vest. */
+const DOODLE = '#f1e2c4', DOODLE_DARK = '#c9ab7c', ESA_VEST = '#ff3d8b';
+
 /**
  * A guide dog in a hi-vis harness, facing +x, body centred at x. run: stretched out at a full
- * gallop. Returns nothing; the harness handle meets the body at (x + 0.5, top of the back).
+ * gallop. esa: an emotional support dog instead (cream and curly, a big pink vest saying SUPPORT).
+ * Returns nothing; the harness handle meets the body at (x + 0.5, top of the back).
  */
-function guideDog(ctx, x, P, run) {
+function guideDog(ctx, x, P, run, esa = false) {
   const sw = P.sw;
+  const DOG = esa ? DOODLE : DOG_COAT, DOG_DARK = esa ? DOODLE_DARK : DOG_COAT_DARK;
   const by = run ? -11 : -9.5; // body centre
   const rx = run ? 10.5 : 8.5, ry = run ? 4 : 4.6;
   if (run) {
@@ -731,14 +742,25 @@ function guideDog(ctx, x, P, run) {
   ctx.fillStyle = DOG;
   ctx.fill();
   ctx.clip();
-  ctx.fillStyle = VEST;
-  ctx.fillRect(x - 3, by - 6, 7, 12);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(x - 3, by - 1, 7, 1.6);
+  if (esa) {
+    // The vest covers most of him, and says so.
+    ctx.fillStyle = ESA_VEST;
+    ctx.fillRect(x - rx * 0.75, by - 6, rx * 1.45, 12);
+  } else {
+    ctx.fillStyle = VEST;
+    ctx.fillRect(x - 3, by - 6, 7, 12);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x - 3, by - 1, 7, 1.6);
+  }
   ctx.restore();
   ctx.beginPath();
   ctx.ellipse(x, by, rx, ry, 0, 0, TAU);
   ctx.strokeStyle = INK; ctx.lineWidth = OUT; ctx.stroke();
+  if (esa) {
+    print(ctx, 'SUPPORT', x, by - 0.4, 3.6, '#ffffff', P.face);
+    // Curly topknot.
+    for (let k = 0; k < 3; k++) circle(ctx, x + (run ? 10 : 8) + k * 1.6, by - (run ? 6 : 9.5) - (k % 2), 1.5, DOODLE, 0.9);
+  }
   // Head: forward and low when running, ears flying, tongue out.
   const hx = x + (run ? 12 : 9.5), hy = run ? by - 1.5 : by - 5;
   ctx.beginPath();
@@ -762,7 +784,8 @@ function guideDog(ctx, x, P, run) {
 }
 
 function blind(ctx, P) {
-  const bolt = P.alt; // the dog has bolted and is dragging him along
+  if (P.alt & BLIND_ESA) { esaOwner(ctx, P); return; }
+  const bolt = P.alt & BLIND_BOLT; // the dog has bolted and is dragging him along
   const sw = P.sw;
   const lean = bolt ? -0.3 : P.moving ? 0.07 : 0;
   const cs = Math.cos(lean), sn = Math.sin(lean);
@@ -840,8 +863,75 @@ function blind(ctx, P) {
   circle(ctx, hX, hY, 2, C.skin, 1.2);
 }
 
-/** The guide dog sitting by its fallen owner, waiting. */
-function dogSit(ctx) {
+/**
+ * Someone with an emotional support dog (the supportdog card): the same pair as the Man with Guide
+ * Dog, but a young man who can see perfectly well: no dark glasses, no cane, a man bun and an iced
+ * coffee, the doodle on a pink lead instead of a harness. alt BLIND_BOLT: the dog has bolted (pepper
+ * spray) and drags him along, coffee flying.
+ */
+function esaOwner(ctx, P) {
+  const bolt = P.alt & BLIND_BOLT;
+  const sw = P.sw;
+  const lean = bolt ? -0.3 : P.moving ? 0.07 : 0;
+  const cs = Math.cos(lean), sn = Math.sin(lean);
+  const lhx = bolt ? 12.5 : 9.5, lhy = bolt ? -19 : -15.5;
+  const hX = lhx * cs - lhy * sn, hY = lhx * sn + lhy * cs;
+  const dogX = bolt ? 31 : 22;
+  if (!P.down) guideDog(ctx, dogX, P, bolt, true);
+  if (bolt && P.moving) speedLines(ctx, -11, -27, P.ph, 9, 8);
+  ctx.save();
+  ctx.rotate(lean);
+  const hoodie = '#5fbf9f';
+  if (bolt) {
+    limb(ctx, -2.5, -9, 3 + sw, -1.5, '#c9b28e');
+    shoe(ctx, 3 + sw, -0.8, '#ffffff');
+    limb(ctx, 2, -9, 7 - sw, -1.5, '#d8c29e');
+    shoe(ctx, 7 - sw, -0.8, '#ffffff');
+  } else {
+    limb(ctx, -2.5, -9, -2.5 - sw * 2.4, -1.5, '#c9b28e');
+    shoe(ctx, -2.5 - sw * 2.4, -0.8, '#ffffff');
+    limb(ctx, 2, -9, 2 + sw * 2.4, -1.5, '#d8c29e');
+    shoe(ctx, 2 + sw * 2.4, -0.8, '#ffffff');
+  }
+  ctx.beginPath();
+  ctx.ellipse(0, -15, 7.2, 7.6, 0, 0, TAU);
+  paint(ctx, hoodie, OUT);
+  // Head: a man bun, open eyes, a smug little smile.
+  const x = 1.5, y = -26.5;
+  head(ctx, x, y, 6.6);
+  hairCap(ctx, x, y, 6.6, '#6b4423');
+  circle(ctx, x - 4.6, y - 6.4, 2.6, '#6b4423', 1.2);
+  face(ctx, x, y, bolt ? 2 : 1);
+  if (!bolt) {
+    ctx.beginPath(); // a smug little smile: he is very calm, thank you
+    ctx.moveTo(x + 1.6, y + 2.8); ctx.quadraticCurveTo(x + 3.6, y + 4.6, x + 5.6, y + 2.6);
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.3; ctx.stroke();
+  }
+  // The other hand: an iced coffee with a straw (thrown up in the air when the dog bolts).
+  const cx1 = bolt ? -7 : -4.5, cy1 = bolt ? -27 : -14;
+  limb(ctx, -2, -19.5, cx1, cy1, hoodie, 3);
+  box(ctx, cx1 - 2.2, cy1 - 7, 4.4, 7, 1, '#c98b5a', 1.1);
+  limb(ctx, cx1 + 0.8, cy1 - 7, cx1 + 2, cy1 - 10, '#2fbf71', 1);
+  circle(ctx, cx1, cy1, 1.9, C.skin, 1.1);
+  limb(ctx, 2, -19.5, lhx, lhy, hoodie, 3);
+  ctx.restore();
+  if (!P.down) {
+    // A pink lead, slack, down to the dog's collar.
+    const ax = dogX + 6, ay = (bolt ? -13 : -14);
+    ctx.beginPath();
+    ctx.moveTo(hX, hY);
+    ctx.quadraticCurveTo((hX + ax) / 2, Math.max(hY, ay) + (bolt ? 1 : 6), ax, ay);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ctx.stroke();
+    ctx.strokeStyle = ESA_VEST; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+  circle(ctx, hX, hY, 2, C.skin, 1.2);
+}
+
+/** The guide dog sitting by its fallen owner, waiting (P.v 1: an emotional support dog). */
+function dogSit(ctx, P) {
+  const esa = P && P.v === 1;
+  const DOG = esa ? DOODLE : DOG_COAT, DOG_DARK = esa ? DOODLE_DARK : DOG_COAT_DARK, VEST = esa ? ESA_VEST : HIVIS;
   limb(ctx, -5, -2, -11, -1.2, DOG, 2.2);
   ctx.beginPath();
   ctx.ellipse(-2.5, -5, 5.5, 4.5, 0, 0, TAU);
@@ -1153,6 +1243,22 @@ function dogLeg(ctx, x1, y1, x2, y2, col, w) {
 }
 
 /**
+ * A pregnant dog's belly (the spayed card): a full, low bulge centred on (x, y), in the colour of
+ * her underside, with a row of teats, so a player can pick her out and save the laser for her.
+ */
+/** A pregnant dog's belly: pinker than the rest of her, so it shows at a distance. */
+const BELLY = '#f5c4b0';
+function dogBelly(ctx, x, y, rx, ry, col) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+  paint(ctx, col, DOG_OUT * 0.8);
+  ctx.fillStyle = '#e0457b';
+  ctx.beginPath();
+  for (let k = 0; k < 4; k++) { const tx = x - rx * 0.55 + k * rx * 0.37; ctx.moveTo(tx + 1.1, y + ry * 0.6); ctx.arc(tx, y + ry * 0.6, 1.1, 0, TAU); }
+  ctx.fill();
+}
+
+/**
  * A scruffy stray mutt, fast and low: a ginger coat with a dark saddle, pale chest, muzzle and paws,
  * and a thick outline, so he still shows on grey concrete when zoomed out. alt DOG_PEE: back leg
  * cocked (the stream is drawn live, toward whatever he is peeing on, behind him); DOG_SIT: sitting
@@ -1161,17 +1267,19 @@ function dogLeg(ctx, x1, y1, x2, y2, col, w) {
 function strayDog(ctx, P) {
   if (P.sup) { greatDane(ctx, P); return; }
   const sw = P.sw;
-  if (P.alt === DOG_SIT) {
+  const bump = P.alt & DOG_BUMP, pose = P.alt & 3;
+  if (pose === DOG_SIT) {
     limb(ctx, -6, -2, -13, -1.5, MUTT, 3); // tail on the floor
     shaggy(ctx, -2, -8, 6.6, 7, MUTT, 8, DOG_OUT);
     ctx.beginPath(); ctx.ellipse(-3.8, -10, 3.2, 2.2, 0, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
     ctx.beginPath(); ctx.ellipse(2.4, -9, 2.6, 3.4, 0.2, 0, TAU); ctx.fillStyle = MUTT_CREAM; ctx.fill();
+    if (bump) dogBelly(ctx, 0.5, -3.6, 7, 3.8, BELLY);
     dogLeg(ctx, 0.5, -7, 0.8, -1, MUTT_DARK, 3);
     dogLeg(ctx, 3, -7, 3.4, -1, MUTT, 3.3);
     ctx.save(); ctx.translate(3.8, -17); ctx.rotate(0.3); muttHead(ctx, 0, 0); ctx.restore();
     return;
   }
-  const pee = P.alt === DOG_PEE;
+  const pee = pose === DOG_PEE;
   const by = -11;
   const wag = Math.sin(P.ph * TAU * 2) * 2;
   // Tail up, with a pale tip.
@@ -1183,6 +1291,8 @@ function strayDog(ctx, P) {
   // Dark saddle and a pale chest.
   ctx.beginPath(); ctx.ellipse(-2.5, by - 2.6, 5, 2.6, 0, 0, TAU); ctx.fillStyle = MUTT_PATCH; ctx.fill();
   ctx.beginPath(); ctx.ellipse(8, by + 1.6, 3, 3.2, 0, 0, TAU); ctx.fillStyle = MUTT_CREAM; ctx.fill();
+  // Pregnant: a full belly hanging low between her legs, nearly scraping the floor.
+  if (bump) dogBelly(ctx, 0.5, by + 5.8, 8.8, 5.2, BELLY);
   if (pee) {
     // Back leg cocked up and out behind him.
     limb(ctx, -6, by + 1, -13.5, by - 5, MUTT, 3.3);
@@ -1252,12 +1362,14 @@ function greatDane(ctx, P) {
     ctx.restore();
   };
   const paw = (x, y, col) => { ctx.beginPath(); ctx.ellipse(x + 1, y, 3, 1.9, 0, 0, TAU); paint(ctx, col, 1.4); };
-  if (P.alt === DOG_SIT) {
+  const bump = P.alt & DOG_BUMP, pose = P.alt & 3;
+  if (pose === DOG_SIT) {
     // Sitting up tall: the haunch on the floor, chest up, front legs straight, head held high.
     limb(ctx, -12, -2.5, -22, -1.5, DANE, 2.4); // tail along the floor
     ctx.beginPath(); ctx.ellipse(-6, -9, 9.5, 8.5, 0, 0, TAU); paint(ctx, DANE, OUT);
     ctx.beginPath(); ctx.ellipse(-6, -9, 9.5, 8.5, 0, 0, TAU); patches([-9, -12, 3.6, 2.4, 0.3, -2, -5, 2.6, 1.8, 0]);
     paw(-1, -1.5, DANE);
+    if (bump) dogBelly(ctx, 1, -6, 7.5, 5, DANE);
     limb(ctx, 6, -15, 6.5, -1.5, DANE_DARK, 4.4);
     paw(6.5, -1, DANE_DARK);
     ctx.beginPath(); ctx.ellipse(3, -20, 7.6, 12, 0.28, 0, TAU); paint(ctx, DANE, OUT);
@@ -1269,7 +1381,7 @@ function greatDane(ctx, P) {
     headAt(13, -41);
     return;
   }
-  const pee = P.alt === DOG_PEE;
+  const pee = pose === DOG_PEE;
   // Long thin tail hanging down from the rump, swinging as he walks.
   ctx.beginPath();
   ctx.moveTo(-18, -23); ctx.quadraticCurveTo(-23, -18 + sw, -22 - sw * 1.5, -9);
@@ -1300,6 +1412,8 @@ function greatDane(ctx, P) {
   paint(ctx, DANE, OUT);
   body();
   patches([-11, -23, 4.2, 2.6, 0.3, 1, -25, 3.2, 2, -0.2, 7, -16, 2.8, 2.2, 0, -6, -17, 2.4, 1.6, 0.2]);
+  // Pregnant: the tucked-up belly is not tucked up any more.
+  if (bump) dogBelly(ctx, 1, -11, 10, 5.6, DANE);
   // Near legs.
   if (pee) {
     // Back leg cocked up and out behind him.
@@ -2963,18 +3077,48 @@ function scalper(ctx, P) {
   circle(ctx, 12.6, -25.2, 2, C.skin, 1.1);
 }
 
+/** A puppy's coat by variant: ginger like his mother, grey with spots like a Dane, black lab. */
+const PUP_COATS = [[MUTT, MUTT_DARK], [DANE, DANE_SPOT], ['#3b3028', '#1f1812']];
+
+/**
+ * A pregnant Stray Dog's puppy (the spayed card, 0.3.01): tiny, all head and paws, scrabbling for
+ * the tills with his ears flapping and his tongue out. Like the babies, drawn a little bigger when
+ * zoomed far out so a litter still reads as puppies.
+ */
+function pup(ctx, P) {
+  const sw = P.sw;
+  const [coat, dark] = PUP_COATS[P.v % PUP_COATS.length];
+  if (P.moving) speedLines(ctx, -12, -7, P.ph, 5, 4);
+  const wag = Math.sin(P.ph * TAU * 3) * 2;
+  limb(ctx, -6, -7, -10, -10 + wag, coat, 2.2); // tail up, wagging
+  limb(ctx, -4, -5, -4 - sw * 2.4, -0.8, dark, 2.2);
+  limb(ctx, 3.5, -5, 3.5 + sw * 2.4, -0.8, dark, 2.2);
+  ctx.beginPath(); ctx.ellipse(-0.5, -6.5, 6.4, 3.8, 0, 0, TAU); paint(ctx, coat, 1.8);
+  if (P.v === 1) { ctx.fillStyle = dark; ctx.beginPath(); ctx.ellipse(-2, -7.5, 1.8, 1.2, 0, 0, TAU); ctx.fill(); }
+  limb(ctx, -3, -5, -3 + sw * 2.4, -0.8, coat, 2.4);
+  limb(ctx, 4.5, -5, 4.5 - sw * 2.4, -0.8, coat, 2.4);
+  // The head: too big for him, one ear flying back, tongue out.
+  ctx.beginPath(); ctx.ellipse(10.2, -9.4, 2.8, 2, 0, 0, TAU); paint(ctx, P.v === 2 ? coat : MUTT_CREAM, 1.3);
+  circle(ctx, 6.6, -10.5, 4.2, coat, 1.6);
+  ctx.beginPath(); ctx.ellipse(4.2, -12.2 + Math.abs(sw) * 0.8, 1.6, 3, -0.9, 0, TAU); paint(ctx, dark, 1.1);
+  circle(ctx, 12.6, -10, 1, INK, 0);
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(8.2, -11.6, 0.9, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(8.5, -11.9, 0.35, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(10.4, -7, 0.9, 1.6, 0.2, 0, TAU); paint(ctx, '#ff6b8a', 0.8);
+}
+
 const DRAW = [
   hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit, strayDog, cosplay, flasher, drinker, cartDown,
-  boss, preggo, baby, trader,
+  boss, preggo, baby, trader, pup,
 ];
 
 /** A super shopper's little gold crown, worn at a jaunty angle on top of the head. */
 function crown(ctx, K, P) {
   let [x, y] = K.crown;
-  if (K.n === KIND.dog.n && P.alt === DOG_SIT) [x, y] = [12, -46]; // the Great Dane sitting up
+  if (K.n === KIND.dog.n && (P.alt & 3) === DOG_SIT) [x, y] = [12, -46]; // the Great Dane sitting up
   if (K.n === KIND.blind.n) {
     // He leans back when his dog bolts and a little forward when walking; the crown goes with him.
-    const lean = P.alt ? -0.3 : P.moving ? 0.07 : 0;
+    const lean = P.alt & BLIND_BOLT ? -0.3 : P.moving ? 0.07 : 0;
     const c = Math.cos(lean), s = Math.sin(lean);
     [x, y] = [x * c - y * s, x * s + y * c];
   }
@@ -3034,13 +3178,14 @@ export function createShopperSprites() {
   /**
    * A pose's sprite. A super shopper's (sup) is bigger and has room round it for the glow; draw
    * it with the box from supBox(). dress: the boss's holiday outfit (see DRESS), 0 for none.
+   * grow: drawn that many times bigger (the boss with the bde card), at full sharpness.
    */
-  function get(K, v, face, frame, alt, sup = false, dress = 0) {
+  function get(K, v, face, frame, alt, sup = false, dress = 0, grow = 1) {
     alt = alt | 0; // a number 0-7 (true counts as 1)
-    const key = ((((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 8) + alt) * 2 + (sup ? 1 : 0)) * 16 + (dress & 15);
+    const key = (((((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 8) + alt) * 2 + (sup ? 1 : 0)) * 16 + (dress & 15)) * 2 + (grow !== 1 ? 1 : 0);
     let c = map.get(key);
     if (c) return c;
-    const pad = sup ? SUP_PAD : 0, z = sup ? SUP_SCALE : 1;
+    const pad = sup ? SUP_PAD : 0, z = (sup ? SUP_SCALE : 1) * grow;
     const bw = K.bw + pad * 2, bh = K.bh + pad * 2;
     c = document.createElement('canvas');
     c.width = Math.max(1, Math.ceil(bw * scale * z));
@@ -3129,15 +3274,18 @@ function puff(ctx, x, y, k) {
 }
 
 /** Half-width of each kind's ground shadow (9 if not listed). */
-const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9, boss: 11, preggo: 11, baby: 8, trader: 11 };
+const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9, boss: 11, preggo: 11, baby: 8, trader: 11, pup: 7 };
 
-/** Adds this shopper's ground shadow to the current path (all shadows are filled at once). */
-export function shadowPath(ctx, s, sx, sy, face = 1) {
+/**
+ * Adds this shopper's ground shadow to the current path (all shadows are filled at once).
+ * F: the frame's drawing context (drawShopper's), for the bde card's bigger boss; optional.
+ */
+export function shadowPath(ctx, s, sx, sy, face = 1, F = null) {
   const K = KIND[s.k] || KIND.hunter;
-  const z = s.sup ? SUP_SCALE : 1;
+  const z = (s.sup ? SUP_SCALE : 1) * (s.k === 'boss' ? bossGrow(F) : 1);
   let rx = (SHADOW_RX[s.k] || 9) * K.sc;
   let cx = sx;
-  if (s.k === 'baby') {
+  if (s.k === 'baby' || s.k === 'pup') {
     // Long and low, under all four limbs.
     ctx.moveTo(sx + face + rx, sy + FEET);
     ctx.ellipse(sx + face, sy + FEET, rx, 2.4, 0, 0, TAU);
@@ -3217,14 +3365,49 @@ export function drawDownTile(ctx, tx, ty, t) {
   ctx.fillRect(x + TILE * 0.42, y + TILE * 0.56, 6, 1.6);
 }
 const NO_DASH = [];
-const NO_HOW = { pee: null, gawk: false, tv: false, pack: false };
+const NO_HOW = { pee: null, gawk: false, tv: false, pack: false, pet: false };
+
+/** A little filled heart, its point at the bottom, centred on (x, y). */
+function heart(ctx, x, y, r, col) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + r);
+  ctx.bezierCurveTo(x - r * 1.9, y - r * 0.4, x - r, y - r * 2.2, x, y - r);
+  ctx.bezierCurveTo(x + r, y - r * 2.2, x + r * 1.9, y - r * 0.4, x, y + r);
+  paint(ctx, col, 1);
+}
+
+/** A dog's paw print: a pad and four toes. */
+function pawPrint(ctx, x, y, k, col) {
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.ellipse(x, y + 1.4 * k, 2.4 * k, 2 * k, 0, 0, TAU);
+  for (const [dx, dy] of [[-2.6, -1.4], [-0.9, -2.8], [0.9, -2.8], [2.6, -1.4]]) { ctx.moveTo(x + dx * k + k, y + dy * k); ctx.arc(x + dx * k, y + dy * k, k, 0, TAU); }
+  ctx.fill();
+}
+
+/**
+ * A dad trailing an Exhibitionist (the eyesup card, s.ex): two little hearts rising off his head
+ * in turn, so it is plain why he is dawdling.
+ */
+function smitten(ctx, x, y, t, id) {
+  for (let j = 0; j < 2; j++) {
+    const k = (t * 0.9 + id * 0.13 + j * 0.5) % 1;
+    ctx.globalAlpha = Math.min(1, (1 - k) * 2);
+    heart(ctx, x + (j ? 8 : -5) + Math.sin((k + j) * 6) * 2, y - k * 16, 3.4 + k * 1.6, '#ff3d7f');
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** How much bigger bosses are drawn this frame: CARDS.bde.size with the bde card (F.bde), else 1. */
+const bossGrow = (F) => (F && F.bde ? CARDS.bde.size : 1);
 
 /**
  * Over someone standing still to watch something: a bubble with two big eyes. Staring at an
  * exhibitionist, the eyes are hearts and there is a "!!"; watching the salesman's television, a
- * little TV glows beside them; a Card Trader watching another rip a pack (pack), a shiny card.
+ * little TV glows beside them; a Card Trader watching another rip a pack (pack), a shiny card;
+ * petting an emotional support dog (pet, the supportdog card), a paw print and a heart.
  */
-function eyes(ctx, x, y, gawk, tv, pack = false) {
+function eyes(ctx, x, y, gawk, tv, pack = false, pet = false) {
   circle(ctx, x - 6, y + 8, 1.5, '#ffffff', 1);
   ctx.beginPath();
   ctx.ellipse(x + 2, y - 1, 10, 7, 0, 0, TAU);
@@ -3244,7 +3427,11 @@ function eyes(ctx, x, y, gawk, tv, pack = false) {
     }
   }
   if (gawk) label(ctx, '!!', x + 15, y - 6, 11, '#ff3d7f', INK, 3);
-  else if (pack) {
+  else if (pet) {
+    // Petting a support dog: a paw print and a heart beside the eyes.
+    pawPrint(ctx, x + 16, y - 7, 1.1, '#c98b5a');
+    heart(ctx, x + 22, y - 13, 3, '#ff3d8b');
+  } else if (pack) {
     // A Card Trader craning to see what another one pulled: a card and a glint.
     tcgCard(ctx, x + 16, y - 7, 0.25, true, true);
     glint(ctx, x + 20, y - 12, 2.4);
@@ -3285,10 +3472,14 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     if (crawling) { alt = s.nc ? MOM_CRAWL : MOM_CRAWL_CART; pace = 0.55; } else if (s.kd === 3) alt = MOM_CARRY;
     else if (s.kd === 1 || s.kd === 2) { alt = s.nc ? MOM_CHASE_NOCART : MOM_CHASE; pace = 1.7; }
   } else if (s.k === 'blind') {
-    alt = s.bt > 0 ? 1 : 0; // the dog is bolting
+    alt = s.bt > 0 ? BLIND_BOLT : 0; // the dog is bolting
     if (alt) pace = 2.2;
+    // An emotional support dog instead (the supportdog card: F.esa, and his id).
+    if (F.esa && idShare(s.id, 'supportdog') < CARDS.supportdog.share) alt |= BLIND_ESA;
   } else if (s.k === 'dog') {
     if (watching) alt = how.pee ? DOG_PEE : DOG_SIT;
+    // A pregnant one (the spayed card: F.spayed, and her id): a low belly.
+    if (F.spayed && idShare(s.id, 'spayed') < CARDS.spayed.share) alt |= DOG_BUMP;
   } else if (s.k === 'flasher') {
     if (s.fl > 0 && !leaving) alt = 1; // bathrobe open
   } else if (s.k === 'boss') {
@@ -3308,13 +3499,16 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   const isBoss = s.k === 'boss';
   const v = isBoss ? bossV(s) : K.vars > 1 ? s.id % K.vars : 0;
   const sup = !!s.sup && !isBoss; // he has no super version
-  // In a holiday game the boss wears its outfit (F.dress is state.holiday).
-  const img = sprites.get(K, v, face, frame, alt, sup, isBoss ? dressOf(F.dress) : 0);
+  // In a holiday game the boss wears its outfit (F.dress is state.holiday). With the bde card he is
+  // drawn bigger (only drawn: where he stands and what can hit him are as ever).
+  const grow = isBoss ? bossGrow(F) : 1;
+  const img = sprites.get(K, v, face, frame, alt, sup, isBoss ? dressOf(F.dress) : 0, grow);
   const fy = sy + FEET;
   // The sprite's box around the feet; a super's is padded for the glow and drawn bigger. Babies
-  // are drawn a little bigger when zoomed far out, so a swarm still reads as babies.
-  const isBaby = s.k === 'baby';
-  const z = sup ? SUP_SCALE : isBaby && F.zoom ? Math.min(1.45, Math.max(1, 30 / F.zoom)) : 1;
+  // (and a pregnant dog's puppies) are drawn a little bigger when zoomed far out, so a swarm still
+  // reads as babies.
+  const isBaby = s.k === 'baby' || s.k === 'pup';
+  const z = sup ? SUP_SCALE : isBaby && F.zoom ? Math.min(1.45, Math.max(1, 30 / F.zoom)) : grow;
   const pad = sup ? SUP_PAD : 0;
   const bx = (boxX(K, face) - pad) * z, by = (K.by - pad) * z;
   const bw = (K.bw + pad * 2) * z, bh = (K.bh + pad * 2) * z;
@@ -3325,7 +3519,7 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     ctx.globalAlpha = fade;
     ctx.drawImage(img, sx + bx + Math.sin(F.time * 60) * 1.2, fy + by, bw, bh); // shaking with rage
     ctx.globalAlpha = Math.min(1, fade * 1.6);
-    // (A baby giving up just fades: a dozen puffs of steam would hide the rest of the swarm.)
+    // (A baby or a puppy giving up just fades: a dozen puffs of steam would hide the rest of the swarm.)
     if (!isBaby) puff(ctx, sx, fy - height - 4 - (1 - fade) * 10, 1 - fade);
     ctx.globalAlpha = 1;
     return;
@@ -3355,8 +3549,8 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     top = fy - 22 * z;
   } else if (stunned) {
     if (s.k === 'blind') {
-      // His dog sits by him, ahead, looking back at him.
-      const dimg = sprites.get(DOGSIT, 0, -face, STAND, 0);
+      // His dog sits by him, ahead, looking back at him (in its pink vest, if a support dog).
+      const dimg = sprites.get(DOGSIT, alt & BLIND_ESA ? 1 : 0, -face, STAND, 0);
       ctx.drawImage(dimg, sx + face * 21 * z + boxX(DOGSIT, -face), fy + DOGSIT.by, DOGSIT.bw, DOGSIT.bh);
     }
     // Flat on his back, feet toward where he was going, stars round his head.
@@ -3408,10 +3602,12 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
   }
   // (A Card Trader ripping a pack shows it in his pose: no bubble.)
   if (s.st === ST.BROWSE) { if (s.k !== 'trader') thought(ctx, sx + 10, top - 10, s.k === 'clipper' ? '%' : '$'); }
-  else if (watching && !how.pee && !(s.k === 'flasher')) eyes(ctx, sx + 9, top - 12, how.gawk, how.tv, how.pack);
+  else if (watching && !how.pee && !(s.k === 'flasher')) eyes(ctx, sx + 9, top - 12, how.gawk, how.tv, how.pack, how.pet);
   // On his way over to a salesman's stand (s.sa): eyes on the television all the way there, so it
   // is plain why he has left the route.
   else if (s.sa !== undefined && !stunned) eyes(ctx, sx + 9, top - 12, false, true);
+  // A dad trailing an Exhibitionist (the eyesup card): hearts rising off him.
+  if (s.ex !== undefined && !stunned) smitten(ctx, sx + 2, top - 8, F.time, s.id);
   // (The boss's bar goes with his name plate, drawn over everyone by drawBossTag. Babies have
   // none: two dozen bars over a swarm would be clutter, and they have almost no patience anyway.)
   if (!how.noBar && !isBoss && !isBaby && (s.k === 'dad' || sup || s.hp < s.mhp - 0.01)) patienceBar(ctx, sx, top - 4, s.hp / s.mhp, sup);
@@ -3447,18 +3643,20 @@ export function drawBossTag(ctx, s, sx, sy, F) {
   const zoom = F.zoom || 40;
   const k = Math.max(1, 40 / zoom);
   const fy = sy + FEET;
+  // (Bigger with the bde card: his plate goes over his bigger head, his ring round his bigger feet.)
+  const grow = bossGrow(F);
   if (zoom < 30) {
     const p = 0.5 + 0.5 * Math.sin(F.time * 5);
     ctx.globalAlpha = 0.55 + 0.35 * p;
     ctx.beginPath();
-    ctx.ellipse(sx, fy, (16 + 4 * p) * k, (6 + 1.5 * p) * k, 0, 0, TAU);
+    ctx.ellipse(sx, fy, (16 + 4 * p) * k * grow, (6 + 1.5 * p) * k * grow, 0, 0, TAU);
     ctx.strokeStyle = GOLD;
     ctx.lineWidth = 2.2 * k;
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
   // (Raised over a holiday hat, so the plate does not cover it.)
-  const top = fy - (K.top + (DRESS[dressOf(F.dress)]?.hat || 0)) * K.sc - 4;
+  const top = fy - (K.top + (DRESS[dressOf(F.dress)]?.hat || 0)) * K.sc * grow - 4;
   // Patience bar: wide, red-framed, always shown.
   const f = Math.max(0, Math.min(1, s.hp / Math.max(1e-6, s.mhp)));
   const hw = 20 * k, hh = 3.2 * k;

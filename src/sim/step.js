@@ -1,13 +1,14 @@
 // One tick of the simulation. Deterministic: the same state always produces the same next state,
 // which lets every player's browser predict the game between updates from the host.
-import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, BABY, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
+import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless } from './state.js';
-import { getField, getFieldTo, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
+import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { autoRebuild } from './commands.js';
-import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftReach, cardFee } from './cards.js';
+import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftReach, cardFee,
+  hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
 
@@ -435,14 +436,40 @@ function offer(state, ti, kind, d, ev) {
   if (b.k === 'chute') {
     // Whole dollars, and never nothing, whatever the difficulty (or a card: cardSell) does to the price.
     const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay * cardSell(state, kind)));
-    earn(state, v);
-    state.ws.earned += v;
     bump(state, b.o, 'shipped');
-    bump(state, b.o, 'earned', v);
+    takings(state, v, b.o);
     ev.push({ e: 'sale', i: ti, v, kind });
     return true;
   }
   return false;
+}
+
+/**
+ * The store has sold something for v dollars (already rounded): split between the players like
+ * any income, counted in the sales event's takings, and credited to the player whose building
+ * made the sale. A chute's sale and a shopper actually buying something (the warranty card) both
+ * come through here.
+ */
+function takings(state, v, owner) {
+  earn(state, v);
+  state.ws.earned += v;
+  bump(state, owner, 'earned', v);
+}
+
+/**
+ * The warranty card: a shopper stopped at a stand (a Free Sample table or a TV Salesman, anchor
+ * tile ai) actually buys something, now and then (CARDS.warranty.chance, rolled once per stop).
+ * Paid like any sale, times the difficulty's income multiplier, in whole dollars. Sends `bought`.
+ */
+function maybeBuy(state, s, ai, ev) {
+  if (!hasCard(state, 'warranty')) return;
+  const c = CARDS.warranty, b = state.grid[ai];
+  if (!b || rand(state) >= c.chance) return;
+  const base = b.k === 'salesman' ? c.salesMin + rand(state) * (c.salesMax - c.salesMin) : c.sample;
+  const v = Math.max(1, Math.round(base * difficultyOf(state).pay));
+  takings(state, v, b.o);
+  const [cx, cy] = centreOf(state, ai, b);
+  ev.push({ e: 'bought', i: ai, k: b.k, v, x: cx, y: cy, by: s.k });
 }
 
 function giveUp(state, s, by, why, ev) {
@@ -450,8 +477,8 @@ function giveUp(state, s, by, why, ev) {
   s.t = secs(TUNE.leaveSecs);
   s.hp = 0;
   // A baby who gives up is not a shopper stopped: a dozen of them would swamp the review's count
-  // and its ranking of who did the most.
-  if (s.k !== 'baby') {
+  // and its ranking of who did the most. Nor is a puppy.
+  if (s.k !== 'baby' && s.k !== 'pup') {
     state.ws.stopped++;
     if (by >= 0) bump(state, by, 'stopped');
   }
@@ -507,7 +534,7 @@ export function babyPace(id) {
  * babies (babyPace is theirs) and in a training game, whose lessons expect exact speeds.
  */
 export function walkPace(state, s) {
-  if (state.training || s.k === 'boss' || s.k === 'baby') return 1;
+  if (state.training || s.k === 'boss' || s.k === 'baby' || s.k === 'pup') return 1;
   const f = (s.id * 0.4142135623730951) % 1;
   return 1 + TUNE.paceSpread * (2 * f - 1);
 }
@@ -528,32 +555,39 @@ export function kidFirst(def, id) {
  * A Pregnant Lady has run out of patience. If a Barcode Laser took the last of it, she just storms
  * off like anyone ('left', then 'nopop'). Otherwise she pops: she is gone at once ('left' with why
  * 'pop', then 'pop'), and def.pops babies appear round where she stood and run for the tills.
+ * `pups` (the spayed card): she is a pregnant Stray Dog, and bursts into that many puppies (PUP)
+ * instead, the same way; her 'nopop' and 'pop' events then have `pup: 1`.
  */
-function popOut(state, s, def, by, laser, ev) {
+function popOut(state, s, def, by, laser, ev, pups = 0) {
   const sup = s.sup | 0;
   if (laser) {
     giveUp(state, s, by, 'annoyed', ev);
-    ev.push({ e: 'nopop', x: s.x, y: s.y, sup });
+    const e = { e: 'nopop', x: s.x, y: s.y, sup };
+    if (pups) e.pup = 1;
+    ev.push(e);
     return;
   }
   giveUp(state, s, by, 'pop', ev);
   // No storming off: she is taken away the next time the shoppers move (later this tick if a
   // building did it, as it always is today).
   s.t = 1;
-  // (The game's cards may change how many: cardPops.)
-  const many = cardPops(state);
-  const n = many === 1 ? def.pops : Math.max(1, Math.round(def.pops * many)), hp = patienceFor(state, BABY, 'baby'), r = TUNE.popSpread;
+  // (The game's cards may change how many babies: cardPops. Not puppies: those cards are about her.)
+  const many = pups ? 1 : cardPops(state);
+  const k = pups ? 'pup' : 'baby';
+  const n = pups || (many === 1 ? def.pops : Math.max(1, Math.round(def.pops * many))), hp = patienceFor(state, pups ? PUP : BABY, k), r = TUNE.popSpread;
   // Spread round her, but kept on her own tile: it is floor, and the next one may be a belt or a wall.
   const tx = Math.floor(s.x), ty = Math.floor(s.y);
   const near = (v, t) => Math.min(t + 0.95, Math.max(t + 0.05, v + (rand(state) * 2 - 1) * r));
   for (let j = 0; j < n; j++) {
     const x = near(s.x, tx), y = near(s.y, ty);
     state.shoppers.push({
-      id: state.nextId++, k: 'baby', x, y, vx: 0, vy: 0, hp, mhp: hp, st: ST.WALK, t: 0, cd: 0,
+      id: state.nextId++, k, x, y, vx: 0, vy: 0, hp, mhp: hp, st: ST.WALK, t: 0, cd: 0,
       ox: (rand(state) - 0.5) * 0.5, oy: (rand(state) - 0.5) * 0.5, lt: -1,
     });
   }
-  ev.push({ e: 'pop', x: s.x, y: s.y, n, sup });
+  const e = { e: 'pop', x: s.x, y: s.y, n, sup };
+  if (pups) e.pup = 1;
+  ev.push(e);
 }
 
 /**
@@ -592,12 +626,14 @@ function hurt(state, s, dmg, by, ev, from = '') {
     ev.push({ e: 'crawl', x: s.x, y: s.y });
     return;
   }
-  if (def.pops) {
+  // (A pregnant Stray Dog, the spayed card, goes the same way: pupsOf says how many puppies.)
+  const pups = def.pops ? 0 : pupsOf(state, s);
+  if (def.pops || pups) {
     // Finished while standing on a till (buildings act before shoppers move, so this can happen
     // the tick after she steps onto one): once she has reached a till nothing pops. She storms
     // off without her refund, as any other shopper finished on a till does.
     if (state.tiles[(s.y | 0) * state.w + (s.x | 0)] === 'T') { giveUp(state, s, by, 'annoyed', ev); return; }
-    popOut(state, s, def, by, from === 'railgun', ev);
+    popOut(state, s, def, by, from === 'railgun', ev, pups);
     return;
   }
   giveUp(state, s, by, 'annoyed', ev);
@@ -701,14 +737,15 @@ function stepBuildings(state, fields, ev, only = null) {
         }
         break;
       case 'samples': {
-        const st = statsOf(b);
+        const st = statsOf(b, state);
         const [cx, cy] = centreOf(state, i, b);
-        stands.push([cx, cy, st.range * st.range, secs(st.secs)]);
+        // (Its tile, for the warranty card; and whether it hands out booze, the eightyproof card.)
+        stands.push([cx, cy, st.range * st.range, secs(st.secs), i, b.bz ? 1 : 0]);
         posts.push(i);
         break;
       }
       case 'salesman': {
-        const st = statsOf(b);
+        const st = statsOf(b, state);
         const [cx, cy] = centreOf(state, i, b);
         salesmen.push([cx, cy, st.range * st.range, st, i]);
         posts.push(i);
@@ -881,6 +918,8 @@ function walkToStand(state, s, def, i, ev) {
   s.st = ST.WATCH;
   s.t = s.sw;
   ev.push({ e: 'watching', x: s.x, y: s.y, k: s.k, i: s.sa });
+  // (Now and then he buys the thing: the warranty card.)
+  maybeBuy(state, s, s.sa, ev);
   clearStand(s);
   return true;
 }
@@ -1074,6 +1113,34 @@ function reunite(state, s, def, ev) {
   ev.push({ e: 'caught', x: s.x, y: s.y, carry });
 }
 
+/** True if a loose child may wait on tile t: floor his mother can walk to, not too close to a till. */
+function kidSpot(state, dist, t) {
+  return state.tiles[t] !== 'T' && walkable(state, t, NORMAL) && dist[t] !== UNREACHABLE && dist[t] >= TUNE.kidTill;
+}
+
+/**
+ * The freerange card: how far along his mother's route (in tiles of her walking distance) the
+ * spot a child who has just run off from tile mi would usually stop at is. That run is straight
+ * through everything toward the tills for `s.kr` tiles, then on to the first spot he may wait at
+ * that is nearer the tills than she is (as stepKid does it, leaving out a salesman's television).
+ * If there is no such spot, his usual run length.
+ */
+function routeAhead(state, s, dist, mi) {
+  const ghost = getField(state, GHOST);
+  let t = mi, best = -1;
+  for (let n = 1; n < state.w * state.h; n++) {
+    const next = nextTile(state, ghost, t, s.id);
+    if (next === t || state.tiles[next] === 'T') break;
+    t = next;
+    if (dist[t] !== UNREACHABLE && dist[t] < TUNE.kidTill) break;
+    if (kidSpot(state, dist, t) && dist[t] < dist[mi]) {
+      best = t;
+      if (n >= s.kr) break;
+    }
+  }
+  return best >= 0 ? dist[mi] - dist[best] : s.kr;
+}
+
 /**
  * A mom's child. In the cart he may escape (once; a Soccer Mom's twice). Loose, he runs for the
  * tills straight through everything in the way (only the store's walls stop a child), for a random
@@ -1088,7 +1155,8 @@ function stepKid(state, s, def, dist, salesmen, ev) {
   if (s.kd === 3) return; // in her arms for good
   if (s.kd === 0) {
     if (s.kc > 0) { s.kc--; return; }
-    if ((s.kn | 0) >= tv(def, 'kidRuns')) return;
+    // (The offleash card lets some kids run off more times: cardKidRuns.)
+    if ((s.kn | 0) >= tv(def, 'kidRuns') * cardKidRuns(state, s)) return;
     // Not right by the tills: there would be nowhere left for him to run to.
     if (s.st === ST.WALK && dist[mi] !== UNREACHABLE && dist[mi] > TUNE.kidTill + 1 && rand(state) < tv(def, 'kidChance') * DT) {
       s.kd = 1;
@@ -1097,15 +1165,28 @@ function stepKid(state, s, def, dist, salesmen, ev) {
       s.kl = mi;
       s.kx = s.x; s.ky = s.y;
       s.kr = tv(def, 'kidMin') + rand(state) * (tv(def, 'kidMax') - tv(def, 'kidMin'));
-      ev.push({ e: 'kid', x: s.x, y: s.y });
+      const e = { e: 'kid', x: s.x, y: s.y };
+      // The wrongway card: this run goes back toward the entrance. The freerange card: he runs on
+      // along the shoppers' own route instead of straight through everything, and CARDS.freerange.ahead
+      // times as far along it as his usual spot would have been.
+      if (kidBack(state, s)) e.back = 1;
+      else if (kidAlong(state)) s.kr = CARDS.freerange.ahead * routeAhead(state, s, dist, mi);
+      ev.push(e);
     }
     return;
   }
   // Where he may wait: floor his mother can walk to, not too close to a till.
-  const ok = (t) => state.tiles[t] !== 'T' && walkable(state, t, NORMAL) && dist[t] !== UNREACHABLE && dist[t] >= TUNE.kidTill;
+  const ok = (t) => kidSpot(state, dist, t);
+  // Which way he runs: toward the tills straight through everything (only the store's walls stop
+  // him), along the shoppers' own route (freerange), or back toward the entrances (wrongway). Where
+  // he waits must be ahead of his mother that way: nearer the tills than she is, or (running back)
+  // further from them.
+  const back = kidBack(state, s);
+  const along = !back && kidAlong(state);
+  const ahead = (t) => (back ? dist[t] > dist[mi] : dist[t] < dist[mi]);
   let ki = (s.ky | 0) * W + (s.kx | 0);
   if (s.kd === 1) {
-    const ghost = getField(state, GHOST);
+    const ghost = back ? getBackField(state) : along ? dist : getField(state, GHOST);
     // Is there anywhere further along his run where he may wait, before he gets too close?
     const onward = (from) => {
       for (let t = from, n = 0; n < W * state.h; n++) {
@@ -1135,7 +1216,7 @@ function stepKid(state, s, def, dist, salesmen, ev) {
           return;
         }
       }
-      if ((s.kr <= 0 && dist[ki] < dist[mi]) || !moved || !onward(ki)) s.kd = 2;
+      if ((s.kr <= 0 && ahead(ki)) || !moved || !onward(ki)) s.kd = 2;
       return; // cannot be caught on the tick it runs
     }
     if (moved && onward(ki)) return;
@@ -1183,6 +1264,8 @@ function wreck(state, ti, s, ev, flatten = false) {
   // What a card gave it comes back with it: the price it was bought at, its free levels.
   if (b.c !== undefined) r.c = b.c;
   if (b.f) { r.f = b.f; if (b.fn !== undefined) r.fn = b.fn; }
+  // (A Free Sample table that hands out booze, the eightyproof card, is rebuilt as one.)
+  if (b.bz) r.bz = 1;
   state.rubble.push(r);
   if (state.rubble.length > RUBBLE_MAX) state.rubble.shift();
   return true;
@@ -1263,6 +1346,112 @@ function pepTalk(state, s, def, ev) {
 /** No free-sample stands: what a Card Trader looks at (see stepShoppers). */
 const NO_STANDS = [];
 
+/**
+ * The slushie card: a Teenager's mess on tile i spills onto the four tiles beside it too, where
+ * those are bare floor ('.' with nothing built on it: never a wall, a till, an entrance or a
+ * building). A spilt tile is a mess like any other, with a third element 1 in state.messes (no cup
+ * is drawn on it). A tile that already has a mess keeps the longer of the two times.
+ * @returns {number} how many tiles it spilt onto
+ */
+function spillAround(state, i, ticks) {
+  let n = 0;
+  for (let d = 0; d < 4; d++) {
+    const t = neighbour(state, i, d);
+    if (t < 0 || state.tiles[t] !== '.' || state.grid[t]) continue;
+    const old = state.messes.find((m) => m[0] === t);
+    if (old) old[1] = Math.max(old[1], ticks); else state.messes.push([t, ticks, 1]);
+    n++;
+  }
+  return n;
+}
+
+/**
+ * The eightyproof card: a shopper who drinks (see drinks in cards.js) has stopped at a Free Sample
+ * table that hands out booze. With boozeChance of the booze tables he has stopped at before (`bq`)
+ * he turns into a Day Drinker where he stands: the same shopper (id, place, super or not, what
+ * salesmen have pitched him), with a Day Drinker's patience for this sales event at the share of
+ * his own he had left, swaying from now on. What only a browsing shopper uses goes: a detour to
+ * steal (`lf`, `lw`), a walk over to a salesman (`sa`, `sw`, `sl`) and the booze count. Sends
+ * `drunk` {x,y,k,sup} (k: what he was).
+ */
+function boozeUp(state, s, ev) {
+  const n = s.bq | 0;
+  s.bq = n + 1;
+  if (rand(state) >= boozeChance(n)) return;
+  const was = s.k, share = s.mhp > 0 ? Math.max(0, Math.min(1, s.hp / s.mhp)) : 1;
+  s.k = 'drinker';
+  const hp = patienceFor(state, defOf(s), 'drinker');
+  s.mhp = hp;
+  s.hp = hp * share;
+  s.sv = 1;
+  delete s.dr;
+  delete s.bq;
+  clearLift(s);
+  clearStand(s);
+  ev.push({ e: 'drunk', x: s.x, y: s.y, k: was, sup: s.sup | 0 });
+}
+
+/**
+ * The supportdog card: every shopper who may (stopsToPet in cards.js), walking, not chasing a child
+ * or crawling to one, and not on his way over to a salesman, who comes within CARDS.supportdog.range
+ * of an emotional support dog's owner stops for CARDS.supportdog.secs to pet it (ST.WATCH). Once
+ * per dog: `pd` remembers the owner of the last dog he petted, so he will not stop for that one
+ * again (only the last: a second dog in between would let him pet the first again, which is rare
+ * and keeps it to one field). A dog bolting from pepper spray cannot be petted. Sends `pet`
+ * {x,y,n,k} for each dog that stopped anyone: n how many, k the kind of the first.
+ */
+function petDogs(state, ev) {
+  const c = CARDS.supportdog, r2 = c.range * c.range, S = state.shoppers;
+  for (const dog of S) {
+    if (dog.st === ST.LEAVE || dog.bt > 0 || !supportDog(state, dog)) continue;
+    let n = 0, k = null;
+    for (const o of S) {
+      if (o === dog || o.st !== ST.WALK || o.pd === dog.id || o.cr === 1 || o.sa !== undefined || kidLoose(o)) continue;
+      if ((o.x - dog.x) ** 2 + (o.y - dog.y) ** 2 > r2 || !stopsToPet(defOf(o))) continue;
+      o.st = ST.WATCH;
+      o.t = secs(c.secs);
+      o.pd = dog.id;
+      if (!n) k = o.k;
+      n++;
+    }
+    if (n) ev.push({ e: 'pet', x: dog.x, y: dog.y, n, k });
+  }
+}
+
+/**
+ * The eyesup card: one tick of a dad who falls in behind an Exhibitionist (`ex` is her id while he
+ * does). She must be ahead of him: nearer the tills by her own map (she walks the ordinary one)
+ * than he is by his (he steps over belts), and within CARDS.eyesup.range tiles. Of several, he
+ * falls in behind the nearest ahead of him, the one with the furthest still to walk. He will not
+ * step onto a tile that leaves him less than CARDS.eyesup.gap tiles of walking (by his map) behind
+ * her (by hers), so he can never reach a till before she does. It ends when she leaves the store,
+ * either way, or is out of range; he may then fall in behind another. Sends `trail` {x,y} when he
+ * falls in.
+ * @returns {boolean} true if he must not step this tick
+ */
+function trailing(state, s, i, fields, ev) {
+  const c = CARDS.eyesup, r2 = c.range * c.range, S = state.shoppers, W = state.w;
+  const hop = fields[HOP], dist = fields[NORMAL];
+  const near = (o) => o.st !== ST.LEAVE && (o.x - s.x) ** 2 + (o.y - s.y) ** 2 <= r2;
+  const left = (o) => dist[(o.y | 0) * W + (o.x | 0)];
+  let her = null;
+  if (s.ex !== undefined) {
+    her = S.find((o) => o.id === s.ex) || null;
+    if (!her || !near(her)) { delete s.ex; her = null; }
+  }
+  if (!her) {
+    for (const o of S) {
+      if (!near(o) || !defOf(o).flashes || left(o) >= hop[i]) continue;
+      if (!her || left(o) > left(her)) her = o;
+    }
+    if (!her) return false;
+    s.ex = her.id;
+    ev.push({ e: 'trail', x: s.x, y: s.y });
+  }
+  const next = nextTile(state, hop, i, s.id);
+  return next !== i && hop[next] < left(her) + c.gap;
+}
+
 function stepShoppers(state, fields, sec, ev) {
   const { stands, salesmen, posts } = sec;
   const S = state.shoppers, grid = state.grid, W = state.w;
@@ -1276,6 +1465,10 @@ function stepShoppers(state, fields, sec, ev) {
   for (const s of S) {
     if (s.st === ST.STUN && defOf(s).sways) (downAt ||= new Set()).add((s.y | 0) * W + (s.x | 0));
   }
+  // Emotional support dogs (the supportdog card) stop the shoppers round them to be petted.
+  if (hasCard(state, 'supportdog')) petDogs(state, ev);
+  // Dads who fall in behind an Exhibitionist (the eyesup card).
+  const eyes = hasCard(state, 'eyesup');
 
   for (let n = 0; n < S.length; n++) {
     const s = S[n];
@@ -1383,8 +1576,12 @@ function stepShoppers(state, fields, sec, ev) {
       if (state.tiles[i] === '.' && !here) {
         const ticks = secs(tv(def, 'messSecs'));
         const old = state.messes.find((m) => m[0] === i);
-        if (old) old[1] = Math.max(old[1], ticks); else state.messes.push([i, ticks]);
-        ev.push({ e: 'mess', i });
+        if (old) { old[1] = Math.max(old[1], ticks); if (old.length > 2) old.length = 2; } else state.messes.push([i, ticks]);
+        const e = { e: 'mess', i };
+        // The slushie card: it also covers the four tiles beside it, where those are bare floor (not
+        // a wall, a till, an entrance or a building).
+        if (wideMess(state)) e.wide = spillAround(state, i, ticks);
+        ev.push(e);
       }
     }
     // An exhibitionist opens her bathrobe now and then. Dads and teenagers nearby stop and stare.
@@ -1482,6 +1679,10 @@ function stepShoppers(state, fields, sec, ev) {
           s.t = st[3];
           s.cd = secs(TUNE.browseCooldown);
           ev.push({ e: 'sample', x: s.x, y: s.y });
+          // The game's cards: now and then he buys something (warranty); a table handing out booze
+          // may turn him into a Day Drinker (eightyproof).
+          maybeBuy(state, s, st[4], ev);
+          if (st[5] && drinks(def) && hasCard(state, 'eightyproof')) boozeUp(state, s, ev);
           stopped = true;
           break;
         }
@@ -1506,6 +1707,14 @@ function stepShoppers(state, fields, sec, ev) {
       const ki = (s.ky | 0) * W + (s.kx | 0);
       going = ki === i ? moveTo(s.x, s.y, s.kx, s.ky, speed)
         : moveAlong(state, getFieldTo(state, ki), s.x, s.y, s.ox, s.oy, speed, s.id);
+    } else if (chasing && s.kd === 1 && kidBack(state, s)) {
+      // Her child is running back toward the entrance (the wrongway card): she stops dead and
+      // watches him go, then walks back for him once he stops.
+      going = false;
+    } else if ((s.ex !== undefined || (eyes && trailsFlasher(state, s))) && trailing(state, s, i, fields, ev)) {
+      // Trailing an Exhibitionist (the eyesup card), close enough behind her that his next step
+      // would take him past her: he waits.
+      going = false;
     } else {
       going = moveAlong(state, fields[routeOf(s, state)], s.x, s.y, s.ox, s.oy, speed, s.id);
     }
@@ -1563,6 +1772,17 @@ function stepShoppers(state, fields, sec, ev) {
  *   fall {x,y} a day drinker fell over going round a corner
  *   early {secs,cash,sold} the doors were opened that many seconds early; the factory sold `sold`
  *     items for `cash` (the whole store's takings, before it is split) in the time skipped
+ *   The cards that change how shoppers behave (0.3.01) add:
+ *   kid also has back 1 when the child runs back toward the entrance (wrongway)
+ *   pop, nopop also have pup 1 for a pregnant Stray Dog (spayed): n puppies (k 'pup'), which
+ *     reach a till ('escape', n 0) or give up ('left') exactly as babies do
+ *   mess also has wide (how many tiles beside it it spilt onto) with the slushie card
+ *   trail {x,y} a dad fell in behind an Exhibitionist (eyesup)
+ *   drunk {x,y,k,sup} a booze table turned a shopper of kind k into a Day Drinker (eightyproof)
+ *   bought {i,k,v,x,y,by} a shopper of kind `by` bought something for v dollars (before it is split)
+ *     at the stand of kind k on anchor tile i, centred at (x, y) (warranty)
+ *   pet {x,y,n,k} n shoppers (the first of kind k) stopped to pet the emotional support dog of the
+ *     man at (x, y) (supportdog)
  * (Commands add: placed {k,x,y,d,by,rebuilt?,short?,free?} (free: the track a card's free upgrade
  *  went on), removed, upgraded {k,x,y,by,t,lv},
  *  gave {by,to,n}, rebuilt {by,n,short}, endless {by} a won game carries on as an endless one.)

@@ -51,6 +51,8 @@ const VARS = {
   releaseNext: 'pnw', releaseIn: 'pn', rip: 'pn',
   // Version 0.3: the new store designs.
   backPassage: 'pw', stripMall: 'pw',
+  // Version 0.3.01: the cards that change how shoppers behave.
+  litter: 'pn', drunk: 'p', bought: 'pnk', trail: 'p', wrongway: 'p', pet: 'pn',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -75,6 +77,8 @@ const AT_LEAST = {
   releaseNext: 10, releaseIn: 6, rip: 8,
   // Version 0.3: the new store designs.
   backPassage: 8, stripMall: 8,
+  // Version 0.3.01: the cards that change how shoppers behave.
+  litter: 8, drunk: 8, bought: 8, trail: 8, wrongway: 7, pet: 8,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
@@ -168,7 +172,7 @@ test('no line is repeated, every placeholder gets filled, and nothing is too lon
 test('banks whose number or name can be missing still have lines that need neither', () => {
   const optional = {
     smashOther: 'k', dented: 'kn', upgraded: 'kn', maxed: 'kn', pee: 'k', flash: 'n', pitchStop: 'k', pitchRush: 'k', superArrive: 'k',
-    bossOut: 'n', bossEscape: 'nm', pep: 'kn', early: 'm', rip: 'n',
+    bossOut: 'n', bossEscape: 'nm', pep: 'kn', early: 'm', rip: 'n', litter: 'n', pet: 'n',
   };
   for (const [key, ks] of Object.entries(optional)) {
     const without = LINES[key].filter((l) => !placeholders(textOf(l)).some((k) => ks.includes(k)));

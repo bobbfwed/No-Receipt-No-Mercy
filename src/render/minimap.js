@@ -138,7 +138,8 @@ export function createMinimap(canvas, session, renderer) {
     const rb = Math.max(0.8, r * 0.6);
     ctx.beginPath();
     for (const sh of s.shoppers) {
-      if (sh.k === 'baby') ctx.rect(mx + sh.x * k - rb, my + sh.y * k - rb, rb * 2, rb * 2);
+      // (A pregnant dog's puppies, the spayed card, are babies here too.)
+      if (sh.k === 'baby' || sh.k === 'pup') ctx.rect(mx + sh.x * k - rb, my + sh.y * k - rb, rb * 2, rb * 2);
     }
     ctx.fillStyle = BABY;
     ctx.fill();
@@ -146,7 +147,7 @@ export function createMinimap(canvas, session, renderer) {
       ctx.beginPath();
       for (const sh of s.shoppers) {
         const sup = !!sh.sup, dad = sh.k === 'dad';
-        if (sh.k === 'baby' || (pass === 2) !== sup || (pass === 1) !== (dad && !sup)) continue;
+        if (sh.k === 'baby' || sh.k === 'pup' || (pass === 2) !== sup || (pass === 1) !== (dad && !sup)) continue;
         const rr = sup ? r * 1.7 : r;
         ctx.rect(mx + sh.x * k - rr, my + sh.y * k - rr, rr * 2, rr * 2);
       }
