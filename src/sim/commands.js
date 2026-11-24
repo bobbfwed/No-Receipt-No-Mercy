@@ -6,6 +6,7 @@ import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './pa
 import { beginWave, skipBuild } from './step.js';
 import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
+import { buildPrice, freeTrack } from './cards.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
 const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'autoRebuild', 'endless']);
@@ -51,7 +52,8 @@ function clearRubble(state, tiles) {
  * @param {number} [pid] the player who would pay for it
  * @param {number} [d] facing 0-3 (it decides the footprint of a building bigger than one tile)
  * @returns {string|null} null if allowed, otherwise the reason:
- *   'over' game finished, 'lobby' the game has not started, 'kind' unknown building, 'bounds' not a floor tile, 'occupied',
+ *   'over' game finished, 'lobby' the game has not started, 'cards' the cards are being dealt,
+ *   'kind' unknown building, 'bounds' not a floor tile, 'occupied',
  *   'fit' part of a bigger building's footprint is off the floor or occupied,
  *   'zone' that machine only goes on its own marked floor,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
@@ -61,6 +63,7 @@ function clearRubble(state, tiles) {
 export function canPlace(state, k, x, y, pid = 0, d = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
   if (state.phase === 'lobby') return 'lobby';
+  if (state.phase === 'cards') return 'cards';
   const def = BUILD[k];
   if (!def) return 'kind';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
@@ -77,7 +80,8 @@ export function canPlace(state, k, x, y, pid = 0, d = 0) {
   if (k === 'belt' && state.grid[at.i] && state.grid[at.i].k === 'belt') return null;
   for (const t of at.tiles) if (state.grid[t]) return t === own ? 'occupied' : 'fit';
   const player = state.players[pid];
-  const price = at.rubble ? Math.floor(def.cost * TUNE.rebuildShare) : def.cost;
+  // (The game's cards may change what a new building costs: buildPrice.)
+  const price = at.rubble ? Math.floor(def.cost * TUNE.rebuildShare) : buildPrice(state, k);
   if (!player || player.cash < price) return 'cash';
   if (def.blocks) {
     for (const s of state.shoppers) if (s.st !== ST.LEAVE && at.tiles.includes(tileOf(state, s))) return 'shopper';
@@ -111,6 +115,7 @@ export function canPlace(state, k, x, y, pid = 0, d = 0) {
  */
 export function canUpgrade(state, x, y, pid = 0, track = undefined) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
+  if (state.phase === 'cards') return 'cards';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
   const b = state.grid[anchorOf(state, idxOf(state, x, y))];
   if (!b) return 'empty';
@@ -122,11 +127,23 @@ export function canUpgrade(state, x, y, pid = 0, track = undefined) {
   return null;
 }
 
-function newBuilding(k, owner, d, u) {
+/**
+ * A building as it is put down. `card` carries what a card gave it (see the Building fields in
+ * state.js): `c` the price paid where it differs from the kind's, `f` and `fn` its free levels.
+ */
+function newBuilding(k, owner, d, u, card = null) {
   const b = { k, o: owner };
   const def = BUILD[k];
   if (def.rot) b.d = d & 3;
   if (u && Object.keys(u).length) b.u = { ...u };
+  if (card) {
+    if (card.c !== undefined) b.c = card.c;
+    // (Free levels only while they are still there: a short rebuild may have lost them.)
+    if (card.f && levelIn(b, card.f) > 0) {
+      b.f = card.f;
+      if ((card.fn ?? 1) !== 1) b.fn = Math.min(card.fn, levelIn(b, card.f));
+    }
+  }
   if (k === 'belt') b.it = [];
   if (k === 'unpacker') b.t = Math.round((def.period / (def.up.spd.mul ** levelIn(b, 'spd'))) * TICK_HZ);
   if (k === 'press' || k === 'packer') { b.n = 0; b.t = 0; b.out = 0; }
@@ -184,7 +201,7 @@ function rebuildRubble(state, pid, { all = false, only = null, waitForCash = fal
       if (why === 'cash' && waitForCash) break;
       continue;
     }
-    put(state, tiles, newBuilding(r.k, pid, r.d | 0, deal.u));
+    put(state, tiles, newBuilding(r.k, pid, r.d | 0, deal.u, r));
     clearRubble(state, tiles);
     player.cash -= deal.pay;
     bump(state, pid, 'spent', deal.pay);
@@ -259,6 +276,9 @@ export function autoRebuild(state, ev) {
  *                               settings (see SETTINGS); anything left out keeps its value
  *   { c: 'ready', on }          lobby only: say you are ready (or not). The game starts when
  *                               every connected player is
+ *   { c: 'skipCards', on }      the deal only (phase 'cards'): ask to see the rest of the cards at
+ *                               once (or not; without on: yes). When every connected store player
+ *                               has asked, the rest are revealed and the build phase begins
  *   { c: 'side', side }         take the Head Office job ('office': run the shoppers) or go back
  *                               to the store ('store'). Only between waves, only one at a time,
  *                               and only if somebody is left to run the store
@@ -298,7 +318,18 @@ export function applyCommand(state, pid, cmd, ev = []) {
     // (Auto-rebuild may be switched on before the game starts: it does nothing until something breaks.)
     if (cmd.c !== 'role' && cmd.c !== 'autoRebuild') return { ok: false, why: 'lobby' };
   }
+  if (state.phase === 'cards') {
+    // The deal: nothing can be built until the cards are on the table. Everyone may ask to skip
+    // the rest; the game speed may be set (it does not shorten the deal).
+    if (cmd.c === 'skipCards') {
+      player.skip = cmd.on !== false;
+      return { ok: true };
+    }
+    if (cmd.c !== 'role' && cmd.c !== 'autoRebuild' && cmd.c !== 'speed') return { ok: false, why: 'cards' };
+  }
   switch (cmd.c) {
+    case 'skipCards':
+      return { ok: false, why: 'phase' };
     case 'place': {
       const why = canPlace(state, cmd.k, cmd.x, cmd.y, pid, cmd.d | 0);
       if (why) return { ok: false, why };
@@ -312,8 +343,17 @@ export function applyCommand(state, pid, cmd, ev = []) {
       }
       // On its own rubble it comes back as it was, with what upgrades the player can afford.
       const deal = at.rubble ? rebuildDeal(at.rubble, player.cash) : null;
-      const paid = deal ? deal.pay : def.cost;
-      put(state, at.tiles, newBuilding(cmd.k, pid, at.d, deal && deal.u));
+      const paid = deal ? deal.pay : buildPrice(state, cmd.k);
+      // What the game's cards gave it: another price (kept, for what it sells back for), and, when
+      // bought new, free upgrade levels (offatruck, mallcop). A rebuild keeps what it had.
+      let card = deal ? at.rubble : null, u = deal && deal.u;
+      if (!deal) {
+        const free = freeTrack(state, cmd.k);
+        if (paid !== def.cost || free) card = {};
+        if (paid !== def.cost) card.c = paid;
+        if (free) { u = { [free.t]: free.n }; card.f = free.t; card.fn = free.n; }
+      }
+      put(state, at.tiles, newBuilding(cmd.k, pid, at.d, u, card));
       clearRubble(state, at.tiles);
       player.cash -= paid;
       bump(state, pid, 'spent', paid);
@@ -321,6 +361,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       if (state.phase === 'build' && state.phaseT === -1 && !state.training) state.phaseT = FIRST_BUILD_SECS * TICK_HZ;
       const e = { e: 'placed', k: cmd.k, x: at.i % state.w, y: (at.i / state.w) | 0, d: at.d, by: pid };
       if (deal) { e.rebuilt = 1; e.short = deal.lost > 0 ? 1 : 0; }
+      if (!deal && card && card.f) e.free = card.f;
       ev.push(e);
       return { ok: true };
     }

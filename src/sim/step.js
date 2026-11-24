@@ -7,6 +7,7 @@ import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { autoRebuild } from './commands.js';
+import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftReach, cardFee } from './cards.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
 
@@ -121,11 +122,13 @@ export function crowdShiftAt(n) {
  * current wave: its base patience, grown by wave, times the difficulty's multiplier and the
  * wave's patience multiplier (patienceScaleAt). A training game uses neither multiplier, so the
  * lessons play as written.
+ * `k`, the shopper's kind ('baby' for a Pregnant Lady's babies), lets the game's cards change it
+ * too (cardPatience in cards.js); left out, no card does.
  */
-export function patienceFor(state, def) {
+export function patienceFor(state, def, k = null) {
   // (A lesson's shopper: see TUNE.trainingPatienceDivisor.)
   if (state.training) return (def.hp / TUNE.trainingPatienceDivisor) * patienceGrowth(state.wave);
-  return def.hp * patienceGrowth(state.wave) * (difficultyOf(state).hp * patienceScaleAt(state.wave));
+  return def.hp * patienceGrowth(state.wave) * (difficultyOf(state).hp * patienceScaleAt(state.wave)) * (k ? cardPatience(state, k) : 1);
 }
 
 /**
@@ -275,6 +278,20 @@ export function beginWave(state, ev) {
   const bought = state.training ? null : takeOfficeWave(state);
   state.storeReady = false;
   const groups = state.training ? state.nextWave || [] : bought || waveSpec(state.wave, shareCount(state));
+  // The game's cards may bring more or fewer of the ordinary crowd (cardCrowd): every group but the
+  // boss and a Midnight Release mob, arriving over the same length of time, with the same share of
+  // supers. Not a Head Office plan: he paid for each shopper in it.
+  if (!state.training && !bought) {
+    for (const g of groups) {
+      if (g.k === 'boss' || g.mob) continue;
+      const m = cardCrowd(state, g.k);
+      if (m === 1) continue;
+      const many = Math.max(1, Math.round(g.n * m));
+      if (g.sup) g.sup = Math.min(many, Math.max(1, Math.round((g.sup * many) / g.n)));
+      g.gap = (g.gap * g.n) / many;
+      g.n = many;
+    }
+  }
   // Head Office cannot buy the boss, and cannot keep him out either: he comes whatever was planned.
   const tier = state.training ? 0 : bossTier(state.wave);
   if (bought && tier) groups.push(bossGroup(tier));
@@ -319,8 +336,8 @@ function endWave(state, ev) {
     ev.push({ e: 'waveEnd', wave: state.wave, bonus: 0, training: true });
     return;
   }
-  // Every player gets the whole bonus.
-  const bonus = Math.round((TUNE.waveBonus + TUNE.waveBonusStep * state.wave) * difficultyOf(state).pay);
+  // Every player gets the whole bonus. (The overtime card makes it bigger: cardBonus.)
+  const bonus = Math.round((TUNE.waveBonus + TUNE.waveBonusStep * state.wave) * difficultyOf(state).pay * cardBonus(state));
   earn(state, bonus * shareCount(state));
   ev.push({ e: 'waveEnd', wave: state.wave, bonus });
   if (!isEndless(state) && state.wave >= state.waves) {
@@ -347,8 +364,9 @@ function spawn(state, ev) {
     // Dads walk in a strict single file. In training everyone does, so a lesson plays out the
     // same way every time.
     const single = k === 'dad' || state.training;
-    // (The boss is not one of the flood: the patience multiplier, patienceScaleAt, is not for him.)
-    const hp = def.boss ? bossPatience(state.wave, state.training ? 1 / TUNE.trainingPatienceDivisor : difficultyOf(state).hp) : patienceFor(state, def);
+    // (The boss is not one of the flood: the patience multiplier, patienceScaleAt, is not for him.
+    // The game's cards may change either: cardBoss, cardPatience.)
+    const hp = def.boss ? bossPatience(state.wave, state.training ? 1 / TUNE.trainingPatienceDivisor : difficultyOf(state).hp) * cardBoss(state) : patienceFor(state, def, k);
     const s = {
       id: state.nextId++, k,
       x: (door % W) + 0.5, y: ((door / W) | 0) + 0.5, vx: 0, vy: 0,
@@ -415,8 +433,8 @@ function offer(state, ti, kind, d, ev) {
     return true;
   }
   if (b.k === 'chute') {
-    // Whole dollars, and never nothing, whatever the difficulty does to the price.
-    const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay));
+    // Whole dollars, and never nothing, whatever the difficulty (or a card: cardSell) does to the price.
+    const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay * cardSell(state, kind)));
     earn(state, v);
     state.ws.earned += v;
     bump(state, b.o, 'shipped');
@@ -437,7 +455,15 @@ function giveUp(state, s, by, why, ev) {
     state.ws.stopped++;
     if (by >= 0) bump(state, by, 'stopped');
   }
-  ev.push({ e: 'left', k: s.k, sup: s.sup | 0, x: s.x, y: s.y, by, why });
+  const e = { e: 'left', k: s.k, sup: s.sup | 0, x: s.x, y: s.y, by, why };
+  // The restocking card: he pays the store on his way out (`fee`, before it is split).
+  const fee = cardFee(state, s);
+  if (fee > 0) {
+    earn(state, fee);
+    state.ws.earned += fee;
+    e.fee = fee;
+  }
+  ev.push(e);
   // Driving the boss out pays a bounty, shared like any other income.
   if (s.k === 'boss') {
     const tier = s.tr || 1;
@@ -514,7 +540,9 @@ function popOut(state, s, def, by, laser, ev) {
   // No storming off: she is taken away the next time the shoppers move (later this tick if a
   // building did it, as it always is today).
   s.t = 1;
-  const n = def.pops, hp = patienceFor(state, BABY), r = TUNE.popSpread;
+  // (The game's cards may change how many: cardPops.)
+  const many = cardPops(state);
+  const n = many === 1 ? def.pops : Math.max(1, Math.round(def.pops * many)), hp = patienceFor(state, BABY, 'baby'), r = TUNE.popSpread;
   // Spread round her, but kept on her own tile: it is floor, and the next one may be a belt or a wall.
   const tx = Math.floor(s.x), ty = Math.floor(s.y);
   const near = (v, t) => Math.min(t + 0.95, Math.max(t + 0.05, v + (rand(state) * 2 - 1) * r));
@@ -591,7 +619,7 @@ function takerOf(state, s, cosplayers) {
   let best = null, bd = Infinity;
   for (const c of cosplayers) {
     if (c.st === ST.LEAVE) continue;
-    const r = tv(defOf(c), 'shield'), d2 = (c.x - s.x) ** 2 + (c.y - s.y) ** 2;
+    const cdef = defOf(c), r = tv(cdef, 'shield') + cardShield(state, cdef), d2 = (c.x - s.x) ** 2 + (c.y - s.y) ** 2;
     if (d2 <= r * r && d2 < bd) { bd = d2; best = c; }
   }
   return best ? [best, tv(defOf(best), 'soak')] : [s, 1];
@@ -631,7 +659,7 @@ function stepBuildings(state, fields, ev, only = null) {
     if (d.shields) cosplayers.push(s);
   }
   const beltAdv = TUNE.beltSpeed * DT;
-  const way = (s) => fields[routeOf(s)][((s.y | 0) * W) + (s.x | 0)];
+  const way = (s) => fields[routeOf(s, state)][((s.y | 0) * W) + (s.x | 0)];
 
   const count = only ? only.length : grid.length;
   for (let q = 0; q < count; q++) {
@@ -657,7 +685,7 @@ function stepBuildings(state, fields, ev, only = null) {
       }
       case 'unpacker':
         if (b.t > 0) b.t--;
-        if (b.t <= 0 && offer(state, neighbour(state, i, b.d), def.makes, b.d, ev)) b.t = secs(statsOf(b).period);
+        if (b.t <= 0 && offer(state, neighbour(state, i, b.d), def.makes, b.d, ev)) b.t = secs(statsOf(b, state).period);
         break;
       case 'press':
       case 'packer':
@@ -669,7 +697,7 @@ function stepBuildings(state, fields, ev, only = null) {
         if (b.out && offer(state, neighbour(state, i, b.d), b.out, b.d, ev)) b.out = 0;
         if (!b.out && b.t <= 0 && b.n > 0) {
           b.n--;
-          b.t = secs(statsOf(b).time);
+          b.t = secs(statsOf(b, state).time);
         }
         break;
       case 'samples': {
@@ -699,7 +727,7 @@ function stepBuildings(state, fields, ev, only = null) {
         }
         b.cd -= rate;
         if (b.cd > 0) break;
-        const st = statsOf(b);
+        const st = statsOf(b, state);
         if (def.beam) {
           // Straight out of the front end, through everything, as far as its range.
           const [dx, dy] = DIRS[b.d | 0];
@@ -729,9 +757,10 @@ function stepBuildings(state, fields, ev, only = null) {
             if (s.st === ST.LEAVE || (s.x - cx) ** 2 + (s.y - cy) ** 2 > r2) continue;
             near.push(s);
           }
-          if (near.length > def.targets) {
+          const most = cardTargets(state, b.k, def.targets);
+          if (near.length > most) {
             near.sort((p, q) => way(p) - way(q) || p.id - q.id);
-            near.length = def.targets;
+            near.length = most;
           }
           for (const s of near) {
             const who = strike(state, s, st.dmg, b.o, cosplayers, ev, b.k);
@@ -774,7 +803,9 @@ function escape(state, s, ev) {
   const def = defOf(s), boss = def.boss ? 1 : 0;
   const n = def.baby ? 0 : boss ? TUNE.bossRefunds : 1;
   const cash = boss ? def.refund * (s.tr || 1) : def.baby || state.training ? def.refund : def.refund * perHead();
-  const paid = lose(state, cash);
+  // The game's cards may change it (cardRefund), to whole dollars.
+  const m = cardRefund(state, s, def);
+  const paid = lose(state, m === 1 ? cash : Math.round(cash * m));
   state.refunds += n;
   if (n) state.ws.escaped++;
   state.ws.refunded += paid;
@@ -842,7 +873,7 @@ function walkToStand(state, s, def, i, ev) {
     }
   }
   // Nowhere nearer to go: he finishes the step to the middle of this tile, then watches.
-  if (moveTo(s.x, s.y, (to % W) + 0.5 + (s.ox || 0), ((to / W) | 0) + 0.5 + (s.oy || 0), def.speed * walkPace(state, s))) {
+  if (moveTo(s.x, s.y, (to % W) + 0.5 + (s.ox || 0), ((to / W) | 0) + 0.5 + (s.oy || 0), def.speed * walkPace(state, s) * cardSpeed(state, s, def))) {
     s.vx = MV.vx; s.vy = MV.vy;
     s.x += MV.vx; s.y += MV.vy;
     if (to !== i || s.sl > 0) return true;
@@ -951,7 +982,9 @@ let FRONT = [], NEXT = [];
 function liftLook(state, s, i, def = defOf(s)) {
   if (goodsBeside(state, i, def)) return; // right beside some already: he grabs as he passes, or not
   // (A Card Trader will go further, and is likelier to, for a Mystery Box: TUNE.ripMax, ripChance.)
-  const reach = def.rips ? TUNE.ripMax : TUNE.liftMax, chance = def.rips ? TUNE.ripChance : TUNE.liftChance;
+  // (The klepto card: ordinary shoplifters go for it more often, and further: cardLiftChance, cardLiftReach.)
+  const reach = def.rips ? TUNE.ripMax : TUNE.liftMax + cardLiftReach(state, def);
+  const chance = def.rips ? TUNE.ripChance : TUNE.liftChance * cardLiftChance(state, def);
   const seen = new Set([i]);
   FRONT.length = 0;
   FRONT.push(i);
@@ -1146,7 +1179,11 @@ function wreck(state, ti, s, ev, flatten = false) {
   if (left > 0) return true;
   for (const t of tilesOf(state, ai)) state.grid[t] = 0;
   state.gridVer++;
-  state.rubble.push({ i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b), at: state.tick });
+  const r = { i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b), at: state.tick };
+  // What a card gave it comes back with it: the price it was bought at, its free levels.
+  if (b.c !== undefined) r.c = b.c;
+  if (b.f) { r.f = b.f; if (b.fn !== undefined) r.fn = b.fn; }
+  state.rubble.push(r);
   if (state.rubble.length > RUBBLE_MAX) state.rubble.shift();
   return true;
 }
@@ -1217,7 +1254,7 @@ function pepTalk(state, s, def, ev) {
   for (const o of state.shoppers) {
     if (o === s || o.st === ST.LEAVE || o.cr === 1 || o.hp >= o.mhp) continue;
     if ((o.x - s.x) ** 2 + (o.y - s.y) ** 2 > r2) continue;
-    o.hp = Math.min(o.mhp, o.hp + o.mhp * def.pepHeal);
+    o.hp = Math.min(o.mhp, o.hp + o.mhp * def.pepHeal * cardPep(state));
     n++;
   }
   ev.push({ e: 'pep', x: s.x, y: s.y, n });
@@ -1288,7 +1325,8 @@ function stepShoppers(state, fields, sec, ev) {
 
     // Each at his own pace (babies at theirs), so everything worked out from it below (a mom's
     // chase, a rush past a salesman, a bolting guide dog) keeps the same spread.
-    let speed = def.speed * (def.baby ? babyPace(s.id) : walkPace(state, s));
+    // The game's cards may speed a kind up or slow it down on top (cardSpeed).
+    let speed = def.speed * (def.baby ? babyPace(s.id) : walkPace(state, s)) * cardSpeed(state, s, def);
     let here = grid[i];
 
     if (def.smashes) {
@@ -1299,12 +1337,12 @@ function stepShoppers(state, fields, sec, ev) {
       // A gym bro who can still hit things does not go around a crate stack. He goes through it:
       // if one is in his way, he stands there and hits it. Each hit he lands makes him rest, and
       // resting (or spent) he walks round crates like anyone else (routeOf, below).
-      if (smashReady(s, def)) {
+      if (smashReady(s, def, state)) {
         const ahead = nextTile(state, fields[SMASH], i, s.id);
         if (ahead !== i && grid[ahead] && grid[ahead].k === 'crate') {
           if (s.sm <= 0) { s.sm = secs(tv(def, 'smashEvery')); landHit(state, ahead, s, def, ev); }
           // Still standing, and he can still swing (his last attempt missed): he waits for his next.
-          if (grid[ahead] && smashReady(s, def)) continue;
+          if (grid[ahead] && smashReady(s, def, state)) continue;
         } else if (s.sm <= 0) {
           smashAround(state, s, def, i, ev);
           here = grid[i];
@@ -1321,7 +1359,7 @@ function stepShoppers(state, fields, sec, ev) {
         const dir = dirTo(state, s.lt, i);
         const turned = dir >= 0 && s.dr !== undefined && dir !== s.dr;
         if (dir >= 0) s.dr = dir;
-        if (turned && rand(state) < tv(def, 'fallChance')) {
+        if (turned && rand(state) < tv(def, 'fallChance') * cardFall(state)) {
           s.lt = i;
           s.st = ST.STUN;
           s.t = secs(tv(def, 'fallSecs'));
@@ -1377,7 +1415,7 @@ function stepShoppers(state, fields, sec, ev) {
         // A sign takes no patience from someone who does not slip, so being weak to it (the day
         // drinker) means taking that much longer to get across it. (Never faster than walking.)
         speed *= sign ? Math.min(1, sign.slow / edgeMul(def, 'wetfloor')) : TUNE.wetSlow;
-      } else if (s.lt !== i && rand(state) < (sign ? sign.slip : TUNE.slipChance)) {
+      } else if (s.lt !== i && rand(state) < (sign ? sign.slip : TUNE.slipChance) * cardSlip(state)) {
         s.lt = i;
         s.st = ST.STUN;
         s.t = secs(TUNE.slipSecs);
@@ -1393,7 +1431,7 @@ function stepShoppers(state, fields, sec, ev) {
       const ai = postNear(state, posts, s, tv(def, 'peeRange'));
       if (ai >= 0) {
         const b = grid[ai];
-        b.off = secs(tv(def, 'peeSecs'));
+        b.off = secs(tv(def, 'peeSecs') * cardPee(state));
         s.st = ST.WATCH;
         s.t = secs(TUNE.peeStop);
         s.cd = secs(TUNE.peeStop + tv(def, 'peeCool'));
@@ -1469,7 +1507,7 @@ function stepShoppers(state, fields, sec, ev) {
       going = ki === i ? moveTo(s.x, s.y, s.kx, s.ky, speed)
         : moveAlong(state, getFieldTo(state, ki), s.x, s.y, s.ox, s.oy, speed, s.id);
     } else {
-      going = moveAlong(state, fields[routeOf(s)], s.x, s.y, s.ox, s.oy, speed, s.id);
+      going = moveAlong(state, fields[routeOf(s, state)], s.x, s.y, s.ox, s.oy, speed, s.id);
     }
     if (going) {
       s.vx = MV.vx;
@@ -1483,7 +1521,11 @@ function stepShoppers(state, fields, sec, ev) {
 /**
  * Advances the game by one tick.
  * @returns {Array<Object>} events that happened this tick, each with an `e` type:
- *   begun the lobby is over, everyone was ready · map {design,size} the host changed the store
+ *   begun the lobby is over, everyone was ready (in a game with cards: the deal is over)
+ *   map {design,size} the host changed the store
+ *   deal {n} the deal of the game's n cards has begun (the first step of the 'cards' phase)
+ *   card {i,id} card i of the hand (state.cards[i], id) has been revealed
+ *   left also has fee when the restocking card made him pay the store on his way out
  *   waveStart {wave,total,dads,kinds,supers,office,boss,release} (boss: the boss's tier if he comes
  *     this wave, else 0; release: how many Card Traders a Midnight Release brings, else 0)
  *   waveEnd {wave,bonus} · won (never in an endless game) · lost
@@ -1521,7 +1563,8 @@ function stepShoppers(state, fields, sec, ev) {
  *   fall {x,y} a day drinker fell over going round a corner
  *   early {secs,cash,sold} the doors were opened that many seconds early; the factory sold `sold`
  *     items for `cash` (the whole store's takings, before it is split) in the time skipped
- * (Commands add: placed {k,x,y,d,by,rebuilt?,short?}, removed, upgraded {k,x,y,by,t,lv},
+ * (Commands add: placed {k,x,y,d,by,rebuilt?,short?,free?} (free: the track a card's free upgrade
+ *  went on), removed, upgraded {k,x,y,by,t,lv},
  *  gave {by,to,n}, rebuilt {by,n,short}, endless {by} a won game carries on as an endless one.)
  */
 export function step(state) {
@@ -1531,6 +1574,12 @@ export function step(state) {
     // Nothing runs in the lobby. The game starts when every connected player is ready.
     const here = state.players.filter((p) => p.on);
     if (here.length && here.every((p) => p.ready)) {
+      // A game with cards still to deal goes to the deal first (its next step sends 'deal'); the
+      // deal ends the way this does (see stepDeal).
+      if (state.dealT !== undefined && state.cards && state.cards.length) {
+        state.phase = 'cards';
+        return ev;
+      }
       state.phase = 'build';
       state.phaseT = -1;
       ev.push({ e: 'begun' });
@@ -1539,6 +1588,11 @@ export function step(state) {
   }
   state.tick++;
   expireAway(state);
+  // The deal: the cards are revealed one by one, and nothing else runs (cards.js).
+  if (state.phase === 'cards') {
+    stepDeal(state, ev);
+    return ev;
+  }
   // Nothing runs before the first build. (In training the factory always runs.)
   const waiting = !state.training && state.phase === 'build' && state.phaseT === -1;
   if (state.phase === 'build') {

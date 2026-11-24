@@ -2,6 +2,8 @@
 // the host can send it to the other players as-is.
 import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ, BUILD, HOLIDAYS } from './constants.js';
 import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
+// (cards.js imports rand from this file. That is safe: neither uses the other while loading.)
+import { dealCards, cleanHand } from './cards.js';
 
 /**
  * A building. One bigger than a tile (BUILD[k].size) is held by the top-left tile of its
@@ -23,6 +25,11 @@ import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
  * @property {string|0} [out] press/packer: finished item waiting to leave
  * @property {number} [cd]  towers: ticks until it can fire again
  * @property {number} [a]   forklift: aim angle in radians (for drawing)
+ * @property {number} [c]   what it cost to put down, only where a card made that differ from its
+ *   kind's price (see buildPrice in cards.js); spentOn counts this instead of the price
+ * @property {string} [f]   the track of its free upgrade levels (the offatruck and mallcop cards):
+ *   they are in `u` like any, but spentOn leaves them out
+ * @property {number} [fn]  ...how many of them, if not 1
  */
 
 /** A kind's footprint in tiles, [w, h], for a facing: turned on its side facing north or south. */
@@ -136,6 +143,8 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {string} role   job title (cosmetic)
  * @property {boolean} on    connected right now
  * @property {boolean} ready  lobby only: he has pressed Ready
+ * @property {boolean} [skip] the deal only (the 'cards' phase): he wants the rest of the cards shown
+ *   at once (the skipCards command); absent means no, and it is removed when the deal ends
  * @property {string} side   'store' (builds and defends) or 'office' (runs the shoppers; see office.js)
  * @property {number} cash   this player's own money. Everything the store earns or loses is
  *                           split evenly between the connected players.
@@ -171,8 +180,13 @@ function blankStats() {
  * @param {string|null} [o.holiday] the holiday this game is played in (a key of HOLIDAYS; the
  *   host works it out from his computer's date, see src/content/holidays.js). Anything else is
  *   no holiday. Kept as `state.holiday`, absent for none.
+ * @param {boolean|string[]} [o.cards] the game's cards (see cards.js): true deals a hand now, with
+ *   rand(), to be revealed in the deal (the 'cards' phase) when the game begins: at once, or when
+ *   everyone in the lobby is ready. A list of card ids is a forced hand (tests, the balance tool,
+ *   the URL option), tidied by cleanHand, with no deal phase. Left out (or anything else): no cards.
+ *   A training game never has any.
  */
-export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false, settings = null, holiday = null } = {}) {
+export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false, settings = null, holiday = null, cards = null } = {}) {
   const design = (map && map.design) || 'warehouse', size = (map && map.size) || 'xs';
   const plan = makeMap(design, size, map ? map.slots ?? MAX_PLAYERS : 1);
   const set = cleanSettings(settings);
@@ -236,7 +250,7 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     difficulty: set.difficulty,
     /** The tick the doors last opened. */
     waveAt: 0,
-    /** 'lobby' | 'build' | 'wave' | 'won' | 'lost' */
+    /** 'lobby' | 'cards' (the deal: see cards.js) | 'build' | 'wave' | 'won' | 'lost' */
     phase: lobby ? 'lobby' : 'build',
     /** Ticks left in the build phase; -1 means wait until a player starts the wave. */
     phaseT: -1,
@@ -255,6 +269,19 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
   // The holiday (0.3): the bosses' outfits and DEB's holiday jokes. Decoration only: no rule reads
   // it. Left out altogether when there is none, as in saves from before it existed.
   if (HOLIDAYS.includes(holiday)) state.holiday = holiday;
+  // The cards (0.3.01). Both fields are left out altogether in a game without them, as in every
+  // save from before they existed.
+  //   cards  the hand: card ids in the order they are revealed (see cards.js)
+  //   dealT  only while the deal is still to come (in the lobby) or under way (the 'cards' phase):
+  //          how far into it the game is, in sixtieths of a tick at normal speed (see stepDeal)
+  if (!training && cards === true) {
+    state.cards = dealCards(state);
+    state.dealT = 0;
+    if (!lobby) state.phase = 'cards';
+  } else if (!training && Array.isArray(cards)) {
+    const hand = cleanHand(cards);
+    if (hand.length) state.cards = hand;
+  }
   openDoors(state);
   return state;
 }

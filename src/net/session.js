@@ -111,6 +111,8 @@ export function checksum(s) {
   mix(s.phase.charCodeAt(0)); mix(s.phase.length);
   mix(s.spawnQ.length); mix(s.messes.length); mix(s.rubble.length); mix(s.carts ? s.carts.length : 0); mix(s.waves);
   mix(s.office ? s.office.pid + 1 : 0);
+  // (The deal's clock, only in a game with cards while it runs.)
+  if (s.dealT !== undefined) mix(s.dealT);
   for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);
@@ -204,11 +206,13 @@ export class HostSession extends Session {
    *   place and money back by name whenever he rejoins. This player (found by `name`) is the host.
    * @param {string|null} [o.holiday] a new game's holiday (see createGame; main.js works it out
    *   from the date). Ignored with `state`, which keeps its own.
+   * @param {boolean|string[]} [o.cards] a new game's cards (see createGame): true deals a hand
+   *   (games from the menu), a list forces one (test options). Ignored with `state`.
    */
-  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false, resume = false, settings = null, holiday = null }) {
+  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false, resume = false, settings = null, holiday = null, cards = null }) {
     super();
     this.isHost = true;
-    this.state = state || createGame({ seed, map, lobby, settings, holiday });
+    this.state = state || createGame({ seed, map, lobby, settings, holiday, cards });
     const s = this.state;
     if (resume) {
       // A save from an older version of the rules is brought up to date first (once).
@@ -259,12 +263,14 @@ export class HostSession extends Session {
    * @param {Object} [o.director] a fresh joke director: the old one remembers what it said this game
    * @param {string|null} [o.holiday] the new game's holiday (main.js gives today's, which may differ
    *   from the old game's); left out, the old game's
+   * @param {boolean|string[]} [o.cards] the new game's cards (see createGame); left out, a fresh
+   *   deal if the old game had cards, none if it had not (main.js always asks for a deal)
    * @returns {boolean} false if the game is not over yet
    */
-  backToLobby({ seed = (Date.now() & 0x7fffffff) || 1, director = null, holiday = this.state.holiday } = {}) {
+  backToLobby({ seed = (Date.now() & 0x7fffffff) || 1, director = null, holiday = this.state.holiday, cards = !!(this.state.cards && this.state.cards.length) } = {}) {
     const old = this.state;
     if (old.phase !== 'won' && old.phase !== 'lost') return false;
-    const s = createGame({ seed, map: old.map, zones: !!old.zones, lobby: true, settings: old, holiday });
+    const s = createGame({ seed, map: old.map, zones: !!old.zones, lobby: true, settings: old, holiday, cards });
     // Drawing code keeps pictures of the floor keyed on this number; never let it repeat one.
     s.gridVer = (old.gridVer | 0) + 1;
     const connected = new Set([this.me, ...this.conns.values()]);

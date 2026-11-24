@@ -7,6 +7,7 @@
 //           things; resting after a hit, or spent, they walk by NORMAL (see routeOf)
 //   GHOST   runaway children: only the store's own walls stop them
 import { DIRS, BUILD, SHOPPERS, TUNE, defOf } from './constants.js';
+import { cardSmash } from './cards.js';
 
 export const UNREACHABLE = 65535;
 export const NORMAL = 0, HOP = 1, SMASH = 2, GHOST = 3;
@@ -27,19 +28,22 @@ export function modeOf(kind) {
  * has neither field, which reads as no hits made and no rest.
  * @param {Object} s a shopper from the game state
  * @param {Object} [def] his definition, if the caller already has it
+ * @param {Object} [state] the game, so its cards count (the preworkout card: cardSmash); the
+ *   simulation always passes it
  */
-export function smashReady(s, def = defOf(s)) {
-  return !(s.hw > 0) && (s.hn | 0) < (def.smashMax ?? TUNE.smashMax);
+export function smashReady(s, def = defOf(s), state = null) {
+  return !(s.hw > 0) && (s.hn | 0) < (def.smashMax ?? TUNE.smashMax) * (state ? cardSmash(state, s) : 1);
 }
 
 /**
  * The map one shopper in the game walks by right now. A gym bro who is resting after a hit, or
  * has used up his hits, walks round crates like anyone else.
  * @param {Object} s a shopper from the game state
+ * @param {Object} [state] the game (see smashReady)
  */
-export function routeOf(s) {
+export function routeOf(s, state = null) {
   const mode = modeOf(s.k);
-  return mode === SMASH && !smashReady(s) ? NORMAL : mode;
+  return mode === SMASH && !smashReady(s, defOf(s), state) ? NORMAL : mode;
 }
 
 /**

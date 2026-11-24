@@ -17,6 +17,12 @@
 //   &autostart=1                  test only: open the doors whenever a build phase starts
 //   &holiday=xmas                 test only: play as if it were that holiday (a key of HOLIDAYS),
 //                                 or &holiday=none for no holiday, whatever today's date
+//   &cards=1                      deal the game's cards (through the deal) where it would have none:
+//                                 ?solo=1, ?demo=1 (there the hand is dealt with no deal phase,
+//                                 since the layout is built at once). &cards=0: no cards, even
+//                                 where the menu would deal them (&lobby=1)
+//   &cards=litter,hardy:karen     test only: exactly that hand (ids of CARDS, a per-kind card with
+//                                 its kind), with no deal phase
 import { showError } from './ui/errors.js';
 import { holidayFor } from './content/holidays.js';
 import { HostSession, ClientSession } from './net/session.js';
@@ -68,7 +74,22 @@ function urlMap() {
  *   the original small warehouse with one entrance (which the ready-made demo layout is for).
  */
 function newHost(name, map = urlMap() || DEFAULT_MAP, lobby = flag('lobby'), settings = urlSettings()) {
-  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: lobby && !!map, settings, holiday: holidayNow() });
+  const inLobby = lobby && !!map;
+  // Games through the lobby (every game from the menu) are dealt cards; the URL can say otherwise.
+  const cards = urlCards() ?? inLobby;
+  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: inLobby, settings, holiday: holidayNow(), cards });
+}
+
+/**
+ * The cards the address asks for: true (&cards=1, a deal), false (&cards=0, none), a list of card
+ * ids (a forced hand), or undefined if it does not say.
+ */
+function urlCards() {
+  if (!q.has('cards')) return undefined;
+  const v = (q.get('cards') || '').trim();
+  if (v === '1' || v === 'true' || v === 'deal') return true;
+  if (v === '' || v === '0' || v === 'false' || v === 'none') return false;
+  return v.split(',').map((id) => id.trim()).filter(Boolean);
 }
 
 /**
@@ -106,7 +127,7 @@ function show(session, options) {
   // The host of a multiplayer game can take the group back to the lobby when it ends, keeping
   // the room open. The new game gets a fresh joke director, which remembers only one game.
   const onLobby = session.isHost && options.roomKind
-    ? () => session.backToLobby({ seed: opts.seed, director: createDirector(), holiday: holidayNow() })
+    ? () => session.backToLobby({ seed: opts.seed, director: createDirector(), holiday: holidayNow(), cards: urlCards() ?? true })
     : null;
   game = startGame(session, { mount: app, sound, onLobby, ...options });
   // Whoever hosts keeps the game saved in his browser, so it can be carried on another day.
@@ -267,7 +288,12 @@ function menu(error = '') {
 async function boot() {
   const name = defaultName();
   if (flag('demo')) {
-    show(newHost(name, null), {
+    // The demo builds its layout and opens the doors at once, which the deal would refuse: asked
+    // for a deal, it gets the hand the deal would have given, without the deal.
+    const host = newHost(name, null);
+    const s = host.state;
+    if (s.phase === 'cards') { s.phase = 'build'; delete s.dealT; }
+    show(host, {
       ff: opts.ff, autostart: opts.autostart,
       prepare(session) {
         const problems = applyDemoLayout(session.state, session.me);

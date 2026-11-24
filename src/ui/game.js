@@ -14,6 +14,7 @@ import { createReview } from './review.js';
 import { endScreen, closedScreen, handoverScreen, helpScreen } from './overlays.js';
 import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
+import { createDealNotice } from './deal.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
 import { createBossBar } from './bossbar.js';
@@ -149,6 +150,10 @@ export function startGame(session, {
   // Before the game starts: pick the store and press Ready. It sits where the players list goes.
   const lobby = createLobby(session, { renderer, playSound });
   stage.append(lobby.el);
+
+  // The deal of the game's cards, between the lobby and the first build phase.
+  const deal = createDealNotice(session, { playSound });
+  stage.append(deal.el);
 
   // In training the lesson panel sits where the players list normally is.
   stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet);
@@ -308,6 +313,7 @@ export function startGame(session, {
     toasts.tick(now);
     if (training) training.tick();
     updateZoneHint(s);
+    deal.update(s);
     // In the lobby the floor is drawn to the right of the panel, whole, so the store can be seen.
     const inLobby = lobby.update(s);
     if (inLobby !== wasLobby) {

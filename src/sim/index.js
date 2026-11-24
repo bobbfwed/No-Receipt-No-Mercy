@@ -10,3 +10,9 @@ export { priceOf, waveValue, officePlayer, canBuy, planCost, checkPlan } from '.
 export { applyDemoLayout, DEMO_LAYOUT } from './demo.js';
 // The Midnight Release (0.3.01): which events have one, how big its mob is, and its entrance.
 export { releaseNo, releaseSize, releaseDoor } from './step.js';
+// The cards (0.3.01): the hand, the deal, and what each card does to the numbers.
+export {
+  dealCards, cleanHand, hasCard, cardKind, cardParts, cardKinds, cardsShown, revealTick, dealLength, dealTicks, DEAL_ORDER,
+  idShare, cardPicks, buildPrice, cardPatience, cardSpeed, cardCrowd, cardSell, cardRefund,
+} from './cards.js';
+export { freeWorth } from './upgrades.js';

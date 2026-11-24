@@ -137,6 +137,9 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     } else if (s.phase === 'lobby') {
       setText(evTitle, 'NOT OPEN YET');
       setText(evSub, 'waiting for everyone to be ready');
+    } else if (s.phase === 'cards') {
+      setText(evTitle, 'DEALING THE CARDS');
+      setText(evSub, 'nothing can be built yet');
     } else if (s.phase === 'wave') {
       setText(evTitle, `SALES EVENT ${eventOf(s.wave, s.waves)}`);
       setText(evSub, endless ? 'endless' : '');
@@ -150,7 +153,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
       setText(evSub, `sales event ${eventOf(s.wave, s.waves)}`);
     }
     if (event.title !== evTip) event.title = evTip;
-    setClass(event, 'is-build', s.phase === 'build' || s.phase === 'lobby');
+    setClass(event, 'is-build', s.phase === 'build' || s.phase === 'lobby' || s.phase === 'cards');
     setClass(event, 'is-boss', !!bossNext);
     setClass(event, 'is-over', s.phase === 'won' || s.phase === 'lost');
 

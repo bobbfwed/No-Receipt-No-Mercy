@@ -650,7 +650,111 @@ export const TUNE = {
   ripLook: 1.5,
   ripWatch: 1.5,
   ripCool: 6,
+  // The deal (0.3.01, see CARDS): between the lobby and the first build phase, the game's cards are
+  // revealed one by one: the first cardLead seconds in, then one every cardSecs (slow enough to
+  // read each on a phone before the next), and cardPause after the last card has had its cardSecs,
+  // the build phase starts. Seconds at normal speed: game speed does not shorten it.
+  cardLead: 1.5,
+  cardSecs: 4.5,
+  cardPause: 1.5,
 };
+
+/**
+ * The cards (0.3.01, the owner's request): every game from the menu is dealt five of these when
+ * everyone is ready, two bad for the players, two good, one odd, revealed in the order bad, good,
+ * bad, good, odd (see src/sim/cards.js; the design is in .claude/briefs/deck.md). Each card's
+ * numbers are here, so the rules and the words shown to players (src/content/cards.js) read the
+ * same ones. "Kinds" in a card means the base kind and its super version. Multipliers are of the
+ * normal value; where two cards touch the same number they multiply.
+ * side: 'bad', 'good' or 'odd'. per: 'kind' for a card that picks a kind of shopper when dealt
+ *   (its id in a hand is then 'hardy:karen'). share: the share of shoppers (or tables, or runaways)
+ *   it touches, picked by id (see idShare in cards.js), never by a random draw.
+ * The cards marked "behaviour" in the design (freerange, offleash, spayed, eyesup, wrongway,
+ * slushie, eightyproof, warranty, supportdog, and the larger drawing of bde) have their numbers
+ * here but no rule yet; DEALABLE lists the cards whose rules exist.
+ */
+export const CARDS = {
+  // ---- Bad for the players
+  litter: { side: 'bad', pops: 2 }, // Pregnant Ladies' babies, times
+  doubledip: { side: 'bad', share: 1 / 3, cash: 2 }, // that share of shoppers takes that times the refund cash
+  freerange: { side: 'bad', ahead: 1.5 }, // a runaway kid's spot is that many times as far along the route
+  offleash: { side: 'bad', share: 0.4, runs: 2 }, // that share of moms' kids run off that many times as often
+  preworkout: { side: 'bad', share: 0.4, hits: 2 }, // that share of gym bros land that many times the hits
+  spayed: { side: 'bad', share: 0.3, pups: 5, supPups: 8 }, // that share of dogs are pregnant: puppies a Stray Dog, a Great Dane
+  bde: { side: 'bad', hp: 1.2, size: 1.5 }, // bosses' patience, and how much larger they are drawn
+  hardy: { side: 'bad', per: 'kind', hp: 1.3 },
+  hurry: { side: 'bad', per: 'kind', speed: 1.2 },
+  clearance: { side: 'bad', sell: 0.85 }, // everything shipped sells for that
+  klepto: { side: 'bad', chance: 2, reach: 3 }, // shoplifters' chance to go for it, times; tiles further
+  shrinkflation: { side: 'bad', cost: 1.1 }, // every building's price (not upgrades)
+  pissing: { side: 'bad', pee: 1.5 }, // how long a dog's pee switches security off, times
+  doorbuster: { side: 'bad', crowd: 1.1 }, // the ordinary crowd (not the boss, not a Midnight Release mob)
+  sensibleshoes: { side: 'bad', slip: 0.7 }, // the chance to slip on a wet floor or a mess, times
+  dryjanuary: { side: 'bad', fall: 0.5 }, // a Day Drinker's chance to fall at a corner, times
+  retreat: { side: 'bad', pep: 1.5 }, // what a boss's pep talk gives back, times
+  // ---- Good for the players
+  lootbox: { side: 'good', item: 'box', sell: 3 },
+  asseenontv: { side: 'good', item: 'gadget', sell: 1.7 },
+  regifting: { side: 'good', item: 'giftset', sell: 1.5 },
+  offatruck: { side: 'good', group: 'factory', free: 1 }, // free upgrade levels on one random track of every new building of that group
+  mallcop: { side: 'good', group: 'security', free: 1 },
+  pulledout: { side: 'good', pops: 0.5 },
+  eyesup: { side: 'good', share: 0.5, range: 4, gap: 1.5 }, // dads within range of an Exhibitionist ahead fall in that far behind her
+  wrongway: { side: 'good', share: 0.35 }, // that share of runaway kids run back toward the entrance
+  slushie: { side: 'good' }, // a Teenager's mess covers the tile and the four beside it
+  eightyproof: { side: 'good', share: 0.5, chance: 0.25, step: 0.25 }, // that share of Free Sample tables hand out booze
+  frail: { side: 'good', per: 'kind', hp: 0.75 },
+  slow: { side: 'good', per: 'kind', speed: 0.85 },
+  warranty: { side: 'good', chance: 0.06, sample: 50, salesMin: 100, salesMax: 400 },
+  supportdog: { side: 'good', share: 0.4, range: 1.5, secs: 1.5 },
+  staffdiscount: { side: 'good', cost: 0.9 },
+  overtime: { side: 'good', bonus: 1.5 }, // the end-of-event bonus, times
+  mopmike: { side: 'good', slip: 1.4 },
+  restocking: { side: 'good', fee: 2 }, // dollars every shopper who storms out pays (not babies)
+  firecode: { side: 'good', targets: 5 }, // shoppers a Pepper Sprinkler reaches at once
+  happyhour: { side: 'good', fall: 2 },
+  // ---- Neither
+  convention: { side: 'odd', shield: 1.5, speed: 0.8, hp: 0.75 }, // a Cosplayer's shield reach (tiles), walking speed (tiles a second), patience
+  bulkbuy: { side: 'odd', crowd: 0.75, hp: 1.25 },
+  flashmob: { side: 'odd', crowd: 1.25, hp: 0.8 },
+  artisanal: { side: 'odd', sell: 1.3, work: 1.25 }, // everything sells for, and every machine's time for an item, times
+  premature: { side: 'odd', rate: 1.25, range: 0.85 }, // security's rate of fire and range, times
+  fathersday: { side: 'odd', who: 'dad', crowd: 2, hp: 0.65 }, // that kind's groups, times; and patience
+  payday: { side: 'odd', sell: 1.2, refund: 1.4 },
+  mallwalkers: { side: 'odd', speed: 1.15, hp: 0.85 }, // every shopper but the boss
+  openbar: { side: 'odd', who: 'drinker', crowd: 2, hp: 0.7 },
+  rentacop: { side: 'odd', cost: { security: 0.8, factory: 1.2 } },
+  sweatshop: { side: 'odd', cost: { factory: 0.8, security: 1.2 } },
+};
+
+/**
+ * The cards that can be dealt today: those whose rules exist (the "simple" ones). A card whose rule
+ * is still to be written joins this list when it is. A forced hand (createGame({ cards: [...] }))
+ * may hold any card in CARDS.
+ */
+export const DEALABLE = [
+  'litter', 'doubledip', 'preworkout', 'bde', 'hardy', 'hurry', 'clearance', 'klepto', 'shrinkflation',
+  'pissing', 'doorbuster', 'sensibleshoes', 'dryjanuary', 'retreat',
+  'lootbox', 'asseenontv', 'regifting', 'offatruck', 'mallcop', 'pulledout', 'frail', 'slow',
+  'staffdiscount', 'overtime', 'mopmike', 'restocking', 'firecode', 'happyhour',
+  'convention', 'bulkbuy', 'flashmob', 'artisanal', 'premature', 'fathersday', 'payday', 'mallwalkers',
+  'openbar', 'rentacop', 'sweatshop',
+];
+
+/**
+ * Cards never dealt together. For two per-kind cards it is only for the same kind (hardy:karen
+ * with frail:karen), since a kind made tougher and weaker at once would cancel out.
+ */
+export const CARDS_APART = [
+  ['litter', 'pulledout'], ['freerange', 'wrongway'], ['shrinkflation', 'staffdiscount'],
+  ['sensibleshoes', 'mopmike'], ['dryjanuary', 'happyhour'], ['hardy', 'frail'], ['hurry', 'slow'],
+];
+
+/**
+ * Kinds a per-kind card never picks: the Exhibitionist helps the players (so the card's side
+ * would flip), and the Card Trader only comes to a Midnight Release.
+ */
+export const CARD_SKIP_KINDS = ['flasher', 'trader'];
 
 /**
  * How many shoppers of the crowd before TUNE.crowdScale each shopper now stands for (2 while the

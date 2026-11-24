@@ -17,6 +17,7 @@ import { h, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { shopperPortrait } from './portrait.js';
 import { HOLIDAY_INFO, outfitText } from '../content/holidays.js';
+import { cardsNote } from '../content/cards.js';
 
 const TABS = [['shoppers', 'Known offenders'], ['factory', 'Factory'], ['security', 'Security']];
 const pct = (m) => `${Math.round(m * 100)}%`;
@@ -211,6 +212,9 @@ export function handbook({ state = null, onClose }) {
   const body = h('div', { class: 'hb-body' });
   const tabs = TABS.map(([id, label]) => h('button', { type: 'button', class: 'hb-tab', role: 'tab', 'data-tab': id, onclick: () => show(id) }, label));
   const note = h('p', { class: 'hb-note' });
+  // A game with cards (0.3.01): the handbook keeps the standard numbers and says so.
+  const cards = cardsNote(state);
+  const cardLine = cards ? h('p', { class: 'hb-note hb-cards' }, cards) : null;
 
   function show(id) {
     for (const t of tabs) { const on = t.dataset.tab === id; t.classList.toggle('on', on); t.setAttribute('aria-selected', String(on)); }
@@ -238,7 +242,7 @@ export function handbook({ state = null, onClose }) {
       h('div', { class: 'help-head' },
         h('h2', null, 'EMPLOYEE HANDBOOK', h('small', { class: 'hb-ver' }, ` v${versionText()}`)), close),
       h('div', { class: 'hb-tabs', role: 'tablist' }, tabs),
-      note, body));
+      note, cardLine, body));
   const card = el.firstChild;
   el.addEventListener('click', (e) => { if (e.target === el) onClose(); });
   show('shoppers');

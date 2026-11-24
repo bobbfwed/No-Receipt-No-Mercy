@@ -1466,6 +1466,13 @@ export const NOPE = {
     "Doors aren't open, {p}. Press Ready, like a big boy.",
     u("We haven't started, {p}. Find the Ready button. It's the one that isn't your nose."),
   ],
+  // The cards are being dealt: nothing can be built until they are all on the table.
+  cards: [
+    "Hands off, {p}. I'm still dealing. Wait for all five, like a gentleman. Just this once.",
+    "The cards aren't all out yet, {p}. Read them. They're short. Even you can manage it.",
+    'Not yet, {p}. Cards first, then you can play with your blocks. Mummy will tell you when.',
+    u("Patience, {p}. Five cards. You can count to five. You've done it on one hand plenty of times."),
+  ],
   host: [
     'Only the host picks the store, {p}. You just get to complain about it.',
     "That's the host's call, {p}. You're a guest. Wipe your feet.",

@@ -4,6 +4,8 @@
 // (constants.js). Each level of a track costs more than the last, so a full floor still leaves
 // something to spend money on.
 import { BUILD, TUNE } from './constants.js';
+// (cards.js imports from this file too. That is safe: neither uses the other while loading.)
+import { cardStats } from './cards.js';
 
 /** Every track, in the order they are listed everywhere. */
 export const TRACKS = ['dmg', 'spd', 'rng', 'dur'];
@@ -67,11 +69,22 @@ export function spentOnTrack(b, track) {
   return sum;
 }
 
-/** Everything spent on a building so far: its price and every upgrade level. */
-export function spentOn(b) {
-  let sum = BUILD[b.k].cost;
-  for (const t of tracksOf(b.k)) sum += spentOnTrack(b, t);
+/** What a building's free upgrade levels (the offatruck and mallcop cards, `f`) would have cost. */
+export function freeWorth(b) {
+  if (!b.f) return 0;
+  let sum = 0;
+  for (let lv = 0; lv < Math.min(b.fn ?? 1, levelIn(b, b.f)); lv++) sum += levelCost(b.k, b.f, lv);
   return sum;
+}
+
+/**
+ * Everything spent on a building so far: its price (what was paid for it, `c`, where a card made
+ * that differ) and every upgrade level, but not free ones.
+ */
+export function spentOn(b) {
+  let sum = b.c ?? BUILD[b.k].cost;
+  for (const t of tracksOf(b.k)) sum += spentOnTrack(b, t);
+  return b.f ? sum - freeWorth(b) : sum;
 }
 
 /**
@@ -88,14 +101,16 @@ export function spentOn(b) {
  *   period               unpacker: seconds between boxes
  *   time                 press and packer: seconds per item
  *   hits                 every building: gym bro hits it survives in one wave
+ * With `state`, the game's cards are applied too (cardStats in cards.js: the premature and
+ * artisanal cards); the simulation always passes it. Without, the plain numbers (the handbook).
  */
-export function statsOf(b) {
+export function statsOf(b, state = null) {
   const def = BUILD[b.k], up = def.up || {};
   const lv = (t) => levelIn(b, t);
   const mul = (t) => (up[t] && up[t].mul ? up[t].mul ** lv(t) : 1);
   const add = (t) => (up[t] && up[t].add ? up[t].add * lv(t) : 0);
   const d = up.dmg || {};
-  return {
+  const st = {
     dmg: (def.dmg || 0) * mul('dmg'),
     range: (def.range || 0) + add('rng'),
     cd: (def.cd || 0) / mul('spd'),
@@ -110,6 +125,7 @@ export function statsOf(b) {
     time: (def.time || 0) / mul('spd'),
     hits: (def.hits || 1) + add('dur'),
   };
+  return state ? cardStats(state, b, st) : st;
 }
 
 /**
@@ -134,6 +150,9 @@ export function rebuildDeal(r, cash) {
   if (cash < pay) return null;
   const u = {};
   let got = 0;
+  // Free levels (a card's: see freeWorth) come back free.
+  const free = r.f ? Math.min(r.fn ?? 1, had[r.f] | 0) : 0;
+  if (free) { u[r.f] = free; got += free; }
   for (;;) {
     let best = null, price = Infinity;
     for (const t of Object.keys(had)) {
