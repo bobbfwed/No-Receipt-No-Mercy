@@ -1168,7 +1168,7 @@ kbd {
   background: var(--green-2); color: var(--ink); font: 900 0.55rem var(--font-heavy); line-height: 1.5;
 }
 
-/* ---------------------------------------------------------------- auto-rebuild switch (0.2.14) */
+/* ---------------------------------------------------------------- auto-rebuild switch (0.2.15) */
 
 .btn-auto {
   display: inline-flex; align-items: center; gap: 0.4rem; flex: none;

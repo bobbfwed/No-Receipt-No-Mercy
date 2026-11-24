@@ -455,7 +455,7 @@ export const TUNE = {
   maxLevel: 8,
   // Rebuilding what a gym bro destroyed costs this share of what had been spent on it.
   rebuildShare: 0.5,
-  // Auto-rebuild (0.2.14, a switch per player): something wrecked is put back automatically, but
+  // Auto-rebuild (0.2.15, a switch per player): something wrecked is put back automatically, but
   // never sooner than this many seconds of game time after it broke. The delay is the point (the
   // owner's reason): when a gym bro breaks through, the wave following him must still get
   // through the gap; without the delay the gap would close at once and only cost money. Game

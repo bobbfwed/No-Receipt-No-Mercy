@@ -141,7 +141,7 @@ export function startGame(session, {
   const bossBar = createBossBar(session);
   stage.append(bossBar.el);
 
-  // The big REBUILD button over the floor while anything of this player's is wrecked (0.2.14): on a
+  // The big REBUILD button over the floor while anything of this player's is wrecked (0.2.15): on a
   // phone the build bar's Rebuild button is usually scrolled out of sight.
   const rebuildPop = createRebuildPop(session, { rebuild: () => input.rebuild(), playSound });
   stage.append(rebuildPop.el);

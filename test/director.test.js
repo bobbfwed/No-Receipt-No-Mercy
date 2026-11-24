@@ -66,7 +66,7 @@ const AT_LEAST = {
   carPark: 12,
   // Version 0.2.09: the Pregnant Lady.
   pop: 12, nopop: 9,
-  // Version 0.2.14: auto-rebuild switched on.
+  // Version 0.2.15: auto-rebuild switched on.
   autoRebuildOn: 5,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };

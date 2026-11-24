@@ -545,7 +545,7 @@ test('what a gym bro wrecks can be rebuilt in one go by its owner, at half price
   play(s, 120);
   const mine = s.rubble.filter((r) => r.o === 0).length, his = s.rubble.filter((r) => r.o === 1).length;
   assert.ok(mine >= 2 && his >= 2, `rubble: ${mine} of Dave's, ${his} of Steve's`);
-  for (const r of s.rubble) assert.deepEqual(Object.keys(r).sort(), ['at', 'd', 'i', 'k', 'o', 'spent', 'u']); // at: since 0.2.14
+  for (const r of s.rubble) assert.deepEqual(Object.keys(r).sort(), ['at', 'd', 'i', 'k', 'o', 'spent', 'u']); // at: since 0.2.15
   assert.equal(s.rubble[0].spent, BUILD.crate.cost);
 
   // Building something else on a wrecked tile by hand clears that bit of rubble.

@@ -1,4 +1,4 @@
-// Rebuilding from the screen (0.2.14): the switch that has the game put a player's wrecked
+// Rebuilding from the screen (0.2.15): the switch that has the game put a player's wrecked
 // buildings back for him (Shift+B does the same; the rules are autoRebuild in
 // src/sim/commands.js), and the big REBUILD button that floats over the floor while anything of
 // his is wrecked, so nobody has to scroll the build bar on a phone to find out.

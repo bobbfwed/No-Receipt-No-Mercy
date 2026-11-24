@@ -200,7 +200,7 @@ export const autoRebuildWait = () => Math.round(TUNE.autoRebuildSecs * TICK_HZ);
 
 /**
  * Whether auto-rebuild may touch this wreck yet: it broke at least autoRebuildWait() ticks ago.
- * Rubble from a save made before 0.2.14 does not know when it broke, and counts as long ago.
+ * Rubble from a save made before 0.2.15 does not know when it broke, and counts as long ago.
  */
 export function autoReady(state, r) {
   return r.at === undefined || state.tick - r.at >= autoRebuildWait();

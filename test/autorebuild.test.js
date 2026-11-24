@@ -1,4 +1,4 @@
-// Tests for auto-rebuild (0.2.14, the owner's request): a switch per player that puts his wrecked
+// Tests for auto-rebuild (0.2.15, the owner's request): a switch per player that puts his wrecked
 // buildings back for him, exactly as the B key would, but never sooner than TUNE.autoRebuildSecs
 // of game time after each broke, so the shoppers behind a gym bro still get through the gap.
 // Run with: node --test
@@ -114,7 +114,7 @@ test('switching it on tries at once anything broken for longer than the delay, i
   const s = stage();
   s.rubble.push(crateRubble(s, 5, 5, 0, WAIT + 30));
   const old = crateRubble(s, 7, 5);
-  delete old.at; // a save from before 0.2.14 does not know when it broke
+  delete old.at; // a save from before 0.2.15 does not know when it broke
   s.rubble.push(old);
   s.rubble.push(crateRubble(s, 9, 5, 0, WAIT - 10));
   const ev = [];
@@ -245,7 +245,7 @@ test('real gym bros: every wreck waits out its 2 seconds, then comes back; and t
   assert.equal(JSON.stringify(a.s), JSON.stringify(b.s));
 });
 
-// ---------------------------------------------------------------- the big REBUILD button (0.2.14)
+// ---------------------------------------------------------------- the big REBUILD button (0.2.15)
 
 test('the big REBUILD button: hidden with nothing wrecked; count and price; dimmed with the reason when B would be refused', () => {
   const s = stage();

@@ -136,7 +136,7 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [gone] how long he has been away, while his grace period runs, in ticks at
  *                          normal speed (so it measures real time at any game speed; see
  *                           setPlayerOnline). Absent when he is here, or away with nothing pending.
- * @property {boolean} [autoRebuild] his auto-rebuild switch (0.2.14; absent, as in older saves,
+ * @property {boolean} [autoRebuild] his auto-rebuild switch (0.2.15; absent, as in older saves,
  *                          means off): step() puts back his wrecks for him (see autoRebuild in
  *                          commands.js)
  * @property {Object} w      statistics for this wave
@@ -208,7 +208,7 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     /** What gym bros have destroyed and nobody has rebuilt yet, oldest first, as
      *  { i, k, d, o, u, spent, at }: anchor tile, kind, facing, owner, upgrade levels (as on a
      *  building, possibly {}), what had been spent on it (spentOn), and the tick it broke (since
-     *  0.2.14, for auto-rebuild's delay; rubble in an older save lacks it and counts as long
+     *  0.2.15, for auto-rebuild's delay; rubble in an older save lacks it and counts as long
      *  broken). The 'rebuild' command, or placing the same kind there, puts them back at
      *  TUNE.rebuildShare of that. */
     rubble: [],
