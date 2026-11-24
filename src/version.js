@@ -1,9 +1,10 @@
 // The game's version, shown on the menu so players can tell which build they are looking at
 // (and whether the published site has caught up with the latest push).
 //   VERSION  changes when the game changes in a big way. The owner decides when.
-//   RELEASE  goes up by one with every commit that changes the game. Shown after the version
-//            with two digits: version 0.1, release 7 reads "0.1.07". It starts again at 1
-//            when VERSION changes.
+//   RELEASE  goes up by one at most once per push to main, and only when the game's code has
+//            changed since the last push; commits in between leave it alone. Shown after the
+//            version with two digits: version 0.1, release 7 reads "0.1.07". It starts again
+//            at 1 when VERSION changes.
 export const VERSION = '0.2';
 export const RELEASE = 13;
 
