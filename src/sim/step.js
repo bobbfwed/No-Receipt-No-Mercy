@@ -739,6 +739,17 @@ function walkToStand(state, s, def, i, ev) {
   return true;
 }
 
+/**
+ * The chance a salesman stops a shopper: `stop0` is the shopper's base chance, `stopLeft` what
+ * the salesman's upgrades leave of the chance to resist, `seen` how many times this same salesman
+ * has pitched to him before (each repeat works TUNE.pitchRepeat times as well as the last).
+ * Upgrades work on anyone who could be tempted at all (a blind man never sees the screen).
+ */
+export function pitchStop(stop0, stopLeft, seen) {
+  if (!(stop0 > 0)) return 0;
+  return (1 - (1 - stop0) * stopLeft) * TUNE.pitchRepeat ** seen;
+}
+
 /** True if a salesman (from stepBuildings) reaches the point (x, y) and is still switched on. */
 function salesmanAt(state, salesmen, x, y) {
   for (const m of salesmen) {
@@ -1118,8 +1129,12 @@ function stepShoppers(state, fields, sec, ev) {
       const m = salesmanAt(state, salesmen, s.x, s.y);
       if (m) {
         const st = m[3], [stop0, rush0] = def.pitch || [0, 0];
-        // Upgrades work on anyone who could be tempted at all (a blind man never sees the screen).
-        const stop = stop0 > 0 ? 1 - (1 - stop0) * st.stopLeft : 0;
+        // A shopper he has already pitched to is harder to stop each time (counted per stand, so
+        // a second salesman further on still gets his full first go).
+        const pn = s.pn || (s.pn = {});
+        const seen = pn[m[4]] | 0;
+        pn[m[4]] = seen + 1;
+        const stop = pitchStop(stop0, st.stopLeft, seen);
         const rush = rush0 * st.rushMul;
         const roll = rand(state);
         s.pc = secs(TUNE.pitchCool);

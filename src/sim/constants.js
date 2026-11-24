@@ -473,6 +473,9 @@ export const TUNE = {
 
   // TV Salesman.
   pitchCool: 9, // seconds before any salesman can pitch to the same shopper again
+  // Each further pitch by the same salesman to the same shopper has this times the stop chance of
+  // the one before, so a slow shopper with a high chance cannot be held at one stand forever.
+  pitchRepeat: 0.5,
   stopSecs: 2.5, // how long a shopper who stops watches the demonstration, once he has walked over to the stand
   pitchWalkSecs: 4, // the longest he will spend walking over; then he watches from where he is
   rushSecs: 4, // how long a shopper who hurries past stays hurried...

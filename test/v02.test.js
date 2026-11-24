@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, canPlace, canUpgrade, step, queueTrainingWave, waveSpec, crowdShiftAt, getDist,
   footprint, anchorOf, tracksOf, defaultTrack, levelIn, levelOf, upgradeCost, spentOn, statsOf, rebuildDeal,
-  priceOf, SHOPPERS, SUPERS, BUILD, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
+  priceOf, pitchStop, SHOPPERS, SUPERS, BUILD, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
 } from '../src/sim/index.js';
 import { HostSession, ClientSession, checksum } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
@@ -571,6 +571,37 @@ test('a pitched shopper sets off for the stand to watch for the stop time, or hu
   g.grid[at(14, 4)].off = 1e6;
   send(g, [{ k: 'scooter', n: 10, gap: 1, at: 0 }]);
   assert.equal(play(g, 200).filter((e) => e.e === 'pitch').length, 0);
+});
+
+test('each repeat pitch by the same salesman works half as well; another salesman gets his full first go', () => {
+  assert.equal(TUNE.pitchRepeat, 0.5);
+  const first = pitchStop(0.8, 0.88 ** 3, 0);
+  assert.ok(Math.abs(first - (1 - 0.2 * 0.88 ** 3)) < 1e-12, 'the first pitch is the chance as written');
+  for (let n = 1; n < 6; n++) assert.ok(Math.abs(pitchStop(0.8, 0.88 ** 3, n) - first * 0.5 ** n) < 1e-12, `pitch ${n + 1}`);
+  assert.equal(pitchStop(0, 0.5, 0), 0, 'a blind man still never sees the screen');
+  // In play: the count is kept per stand, by the stand's tile.
+  const s = stage(3);
+  place(s, 'salesman', 14, 4);
+  // (Far enough along that the two reaches do not overlap on the route.)
+  assert.ok(place(s, 'salesman', 24, 9).ok);
+  for (let i = 0; i < 12; i++) applyCommand(s, 0, { c: 'upgrade', x: 14, y: 4, t: 'dmg' });
+  send(s, [{ k: 'scooter', n: 12, gap: 1.5, at: 0 }]);
+  let most = 0, both = false;
+  play(s, 900, () => {
+    for (const m of s.shoppers) {
+      if (!m.pn) continue;
+      for (const [key, n] of Object.entries(m.pn)) {
+        assert.ok(key === String(at(14, 4)) || key === String(at(24, 9)), `keyed by a stand's tile: ${key}`);
+        most = Math.max(most, n);
+      }
+      if (Object.keys(m.pn).length === 2) both = true;
+    }
+  });
+  assert.ok(most >= 2, 'some scooters were pitched to more than once');
+  assert.ok(both, 'and some by both salesmen');
+  // Even slow scooters and a fully sold salesman let everyone go in the end.
+  assert.equal(s.shoppers.length, 0, `${s.shoppers.length} scooters still held at the stand`);
+  JSON.parse(JSON.stringify(s));
 });
 
 /** Plays a wave past a stand on (14,4)-(15,5) and returns where each stopped shopper was pitched and where he watched from. */
