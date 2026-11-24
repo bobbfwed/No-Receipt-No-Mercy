@@ -51,7 +51,7 @@ The sale has spilled outside. Rows of parked cars with the odd empty bay to sque
 
 ## The shoppers
 <!-- gen:shoppers -->
-Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund. The boss, last in the list, walks in with the crowd every 5th sales event.
+Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund. The boss, last in the list, walks in with the crowd every 5th sales event. Speed is the kind's: each shopper walks anywhere from 10% slower to 10% faster than that, so a crowd strings out instead of arriving in one lump (the boss and the babies keep their own).
 
 | | Shopper |
 |---|---|

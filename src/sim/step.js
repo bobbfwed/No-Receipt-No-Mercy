@@ -411,6 +411,20 @@ export function babyPace(id) {
 }
 
 /**
+ * A shopper's own share of his kind's walking speed: between 1 - TUNE.paceSpread and
+ * 1 + TUNE.paceSpread, from his id alone (like babyPace: nothing stored, nothing drawn at random,
+ * so the host, every client and an old save agree). Stepping through by the silver ratio rather
+ * than the golden one spreads a run of ids evenly as well, but keeps a mom's pace from lining up
+ * with her kid's first wait (kidFirst), which steps by the golden ratio. 1 for the boss, for
+ * babies (babyPace is theirs) and in a training game, whose lessons expect exact speeds.
+ */
+export function walkPace(state, s) {
+  if (state.training || s.k === 'boss' || s.k === 'baby') return 1;
+  const f = (s.id * 0.4142135623730951) % 1;
+  return 1 + TUNE.paceSpread * (2 * f - 1);
+}
+
+/**
  * How many seconds a child stays in the cart before he can first escape: between kidFirstMin and
  * kidFirstMax, from his mom's id alone (like babyPace: nothing stored, nothing drawn at random, and
  * the golden ratio spreads moms who walk in together evenly over the range). Without it every kid
@@ -754,7 +768,7 @@ function walkToStand(state, s, def, i, ev) {
     }
   }
   // Nowhere nearer to go: he finishes the step to the middle of this tile, then watches.
-  if (moveTo(s.x, s.y, (to % W) + 0.5 + (s.ox || 0), ((to / W) | 0) + 0.5 + (s.oy || 0), def.speed)) {
+  if (moveTo(s.x, s.y, (to % W) + 0.5 + (s.ox || 0), ((to / W) | 0) + 0.5 + (s.oy || 0), def.speed * walkPace(state, s))) {
     s.vx = MV.vx; s.vy = MV.vy;
     s.x += MV.vx; s.y += MV.vy;
     if (to !== i || s.sl > 0) return true;
@@ -1038,8 +1052,9 @@ function stepShoppers(state, fields, sec, ev) {
       else if (walkToStand(state, s, def, i, ev)) continue;
     }
 
-    let speed = def.speed;
-    if (def.baby) speed *= babyPace(s.id);
+    // Each at his own pace (babies at theirs), so everything worked out from it below (a mom's
+    // chase, a rush past a salesman, a bolting guide dog) keeps the same spread.
+    let speed = def.speed * (def.baby ? babyPace(s.id) : walkPace(state, s));
     let here = grid[i];
 
     if (def.smashes) {

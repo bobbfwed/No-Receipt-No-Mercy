@@ -571,6 +571,13 @@ export const TUNE = {
   trainingPatienceDivisor: 0.9,
   // Pregnant Lady.
   popSpread: 0.35, // her babies appear up to this far (in tiles) from where she stood, so they are not one dot
+  // Every shopper walks at his own pace (0.3, the owner's request): anywhere between this share
+  // slower and this share faster than his kind's speed, spread evenly, so a group of one kind
+  // strings out instead of walking the maze as one clump. Worked out from his id (walkPace in
+  // step.js), like the babies' own spread: no field in the state, no random draw. Not the boss
+  // (one man, written for his exact speed), not babies (they have BABY.paceMin and paceMax), and
+  // not in a training game (the lessons were written for exact speeds).
+  paceSpread: 0.1,
 };
 
 /**

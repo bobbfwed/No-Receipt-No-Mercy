@@ -122,6 +122,15 @@ export function bossFacts({ hpMul = 1, pay = 1, waves = SETTINGS.defaults.waves 
   };
 }
 
+/**
+ * The one sentence about every shopper walking at his own pace (TUNE.paceSpread), for wherever a
+ * shopper's speed is shown: the speed shown is his kind's, and each one is a little off it.
+ */
+export function paceText() {
+  const p = Math.round(TUNE.paceSpread * 100);
+  return `Speed is the kind's: each shopper walks anywhere from ${p}% slower to ${p}% faster than that, so a crowd strings out instead of arriving in one lump (the boss and the babies keep their own).`;
+}
+
 /** A number for a table: whole if it is big or whole, otherwise one decimal. */
 export const fmt = (v) => (Math.abs(v) >= 100 || Number.isInteger(v) ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1));
 const pct = (m) => `${Math.round(m * 100)}%`;

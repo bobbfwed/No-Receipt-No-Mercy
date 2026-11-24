@@ -15,7 +15,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, TUNE } from '../src/sim/index.js';
 import { SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../src/content/help.js';
-import { SHOPPER_ORDER, shopperFacts, bossFacts, fmt } from '../src/content/facts.js';
+import { SHOPPER_ORDER, shopperFacts, bossFacts, fmt, paceText } from '../src/content/facts.js';
 import { versionText } from '../src/version.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -36,7 +36,7 @@ export function generated() {
   ].join('\n');
 
   const shoppers = [
-    `Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund. The boss, last in the list, walks in with the crowd every ${TUNE.bossEvery}th sales event.`,
+    `Patience is what security wears down; when it runs out the shopper storms off and gets no refund. The numbers are for the first sales event at Normal difficulty; patience grows every event. Each picture shows the ordinary shopper and its super version, which turns up later and takes a double refund. The boss, last in the list, walks in with the crowd every ${TUNE.bossEvery}th sales event. ${paceText()}`,
     '',
     '| | Shopper |',
     '|---|---|',

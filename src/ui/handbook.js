@@ -7,7 +7,7 @@ import { BUILD, MACHINE_SPD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, diffic
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST,
+  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText,
 } from '../content/facts.js';
 import { trackName } from './upgradetext.js';
 import { worded } from '../content/touch.js';
@@ -204,7 +204,7 @@ export function handbook({ state = null, onClose }) {
         + `Half as many shoppers come as used to, and they get tougher faster as the sales events go on: up to double the patience by event ${TUNE.patienceFull}. `
         + `After event ${TUNE.surgeFrom} it stops being polite: every event brings ${fmt((TUNE.surgeHp - 1) * 100)}% more patience and ${fmt((TUNE.surgeCrowd - 1) * 100)}% more shoppers than the last, compounding, until your lazy-ass maze folds. `
         + `Every shopper's patience grows each sales event: ×${fmt(toughnessAt(2))} in the second, ×${fmt(toughnessAt(10))} by the tenth, ×${fmt(toughnessAt(20))} by the twentieth, ×${fmt(toughnessAt(LONGEST))} by event ${LONGEST}${ctx.waves > 0 ? '' : `, ×${fmt(toughnessAt(LONGEST + 10))} by event ${LONGEST + 10}`}. `
-        + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds never change. A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
+        + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds never change. ${paceText()} A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
       note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price: up to ${MACHINE_SPD.max} levels, each ${fmt((MACHINE_SPD.mul - 1) * 100)}% faster than the last, costing ×${fmt(MACHINE_SPD.grow)} the level before up to level ${MACHINE_SPD.gentleFrom} and ×${fmt(MACHINE_SPD.gentleGrow)} after. Everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
