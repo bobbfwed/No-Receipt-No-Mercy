@@ -20,13 +20,14 @@ import { SHAPES, LEFT_ABOUT, bark, thud, knock, leftVoice, escapeVoice, walkout 
 import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, trackIntro, deflate, carryUp } from './newfx.js';
 import { bossWave, bossIn, pep, bossOut, bossEscape, endless } from './boss.js';
 import { popSound, noPop, waah, babyTill, nursery } from './preggo.js';
+import { releaseSound, ripSound } from './trader.js';
 
 /**
- * The fourteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
+ * The fifteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
  * in SHOPPERS), for the test page's rows. Only the boss has no super version. (The Pregnant Lady's
  * babies are not here: their sounds are their own, waah and babyTill.)
  */
-export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker', 'preggo', 'boss'];
+export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'mom', 'blind', 'gymbro', 'dog', 'cosplay', 'flasher', 'drinker', 'preggo', 'trader', 'boss'];
 
 /** What a gym bro can wreck, grouped by what it sounds like. */
 const WRECK = {
@@ -230,6 +231,8 @@ export const SOUNDS = {
       { label: 'drinker super', opts: { k: 'drinker', sup: 1 }, max: 1.1, about: 'Bottomless Bruncher: more coins, a hiccup, a cork and the drawer.' },
       { label: 'preggo', opts: { k: 'preggo' }, about: 'Pregnant Lady: coins, then a contented "mmm" and two pats on the bump.' },
       { label: 'preggo super', opts: { k: 'preggo', sup: 1 }, max: 1.1, about: 'Octomom: more coins, the "mmm", the pats, a muffled giggle from inside and the drawer.' },
+      { label: 'trader', opts: { k: 'trader' }, about: 'Card Trader: coins, then a breathy, nasal "yesss".' },
+      { label: 'trader super', opts: { k: 'trader', sup: 1 }, max: 1.1, about: 'Scalper: more coins, a lower, smugger "yesss" and the drawer.' },
     ],
     play(ctx, dest, t, o = {}) {
       const v = voice(ctx, dest, o.level);
@@ -879,6 +882,30 @@ export const SOUNDS = {
     max: 1.0,
     shapes: 1,
     play: nursery,
+  },
+
+  // The Card Trader and the Midnight Release (trader.js). His own voice is in `left` and `escape` above.
+  release: {
+    about: 'A Midnight Release: the mob piles in through one door. A cheap eight-bit fanfare, a stampede of trainers squeaking on the tiles, and four nasal men babbling over each other.',
+    max: 1.6,
+    shapes: 3,
+    variants: [
+      { label: '12 traders', opts: { n: 12 } },
+      { label: '36 traders', opts: { n: 36 }, about: 'A bigger mob: more feet, a little louder.' },
+    ],
+    play: releaseSound,
+  },
+
+  rip: {
+    about: 'A Card Trader rips open a Mystery Box he stole: a long crinkly foil tear, then an awed "ooooh", a gasp and "whoa", or a breathy "yesss". With onlookers, one of them answers.',
+    max: 0.95,
+    shapes: 3,
+    variants: [
+      { label: 'alone', opts: { n: 0 } },
+      { label: 'with onlookers', opts: { n: 3 } },
+      { label: 'Scalper', opts: { n: 0, sup: 1 }, about: 'The Scalper checking stock: the same tear, a lower voice.' },
+    ],
+    play: ripSound,
   },
 
   endless: {

@@ -197,7 +197,9 @@ test('machines and belts still stop a gym bro, and building stays possible while
 
 test('later waves contain every kind, and stay deterministic through a snapshot', () => {
   const kinds = new Set(waveSpec(9).map((g) => g.k));
-  for (const k of Object.keys(SHOPPERS)) assert.ok(kinds.has(k), `wave 9 includes ${k}`);
+  // (Not the Card Trader: he comes only to a Midnight Release.)
+  for (const k of Object.keys(SHOPPERS)) if (k !== 'trader') assert.ok(kinds.has(k), `wave 9 includes ${k}`);
+  assert.ok(!kinds.has('trader'));
   assert.ok(!waveSpec(2).some((g) => ['teen', 'mom', 'blind', 'gymbro'].includes(g.k)), 'the new kinds do not appear in the first waves');
 
   const make = () => {

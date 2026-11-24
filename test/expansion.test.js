@@ -377,7 +377,9 @@ test('supers arrive from the middle of the game and grow in number', () => {
   assert.ok(supers(6) >= 1);
   assert.ok(supers(20) > supers(12) && supers(12) > supers(6));
   const kinds = new Set(waveSpec(20).filter((g) => g.sup > 0).map((g) => g.k));
-  for (const k of Object.keys(SHOPPERS)) assert.ok(kinds.has(k), `wave 20 has a super ${k}`);
+  // (The Card Trader comes only to a Midnight Release, never a boss event: his supers are at event 22.)
+  for (const k of Object.keys(SHOPPERS)) if (k !== 'trader') assert.ok(kinds.has(k), `wave 20 has a super ${k}`);
+  assert.ok(waveSpec(22).some((g) => g.k === 'trader' && g.sup > 0), 'event 22 has Scalpers');
 
   // The game makes exactly as many as the wave asks for.
   const s = stage();

@@ -4,12 +4,12 @@
 import {
   SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, priceOf,
   tracksOf, defaultTrack, maxIn, levelCost, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
-  patienceScaleAt, patienceGrowth,
+  patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize,
 } from '../sim/index.js';
 import { EDGE_HELP } from './help.js';
 
 /** The order shoppers are listed in: the order they first turn up. */
-export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'flasher', 'preggo', 'cosplay'];
+export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'trader', 'flasher', 'preggo', 'cosplay'];
 export const FACTORY_ORDER = ['belt', 'unpacker', 'press', 'packer', 'chute', 'crate'];
 export const SECURITY_ORDER = ['sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman'];
 
@@ -158,6 +158,37 @@ export function edgeText(k) {
   return edgeFacts(k).map((e) => `${e.side === 'weak' ? 'Weak to' : 'Tough against'} the ${e.name}: ${e.effect}. ${e.why}`).join(' ');
 }
 
+/**
+ * The Midnight Release events worth showing in a table: every one up to the longest game on offer
+ * (LONGEST), for a game of any length; for an endless game (waves 0), two more.
+ */
+export function releaseWaves(waves = SETTINGS.defaults.waves) {
+  const out = [];
+  const last = waves > 0 ? LONGEST : LONGEST + 10;
+  for (let n = 1; n <= last; n++) if (releaseNo(n)) out.push(n);
+  return out;
+}
+
+/**
+ * Everything the interface says about the Midnight Release, from the rules. `players` is the
+ * number sharing the store; `waves` the game's length (0: endless), which picks the sample events.
+ *   waves: [{ n, no, size }] each sample release: its sales event, which release it is, the mob
+ */
+export function releaseFacts({ players = 1, waves = SETTINGS.defaults.waves } = {}) {
+  return {
+    from: TUNE.releaseFrom, every: TUNE.releaseEvery, at: TUNE.releaseAt, secs: TUNE.releaseSecs,
+    first: TUNE.releaseFirst, step: TUNE.releaseStep, crowd: TUNE.releaseCrowd,
+    waves: releaseWaves(waves).map((n) => ({ n, no: releaseNo(n), size: releaseSize(n, players) })),
+  };
+}
+
+/** The Midnight Release's schedule and mob in one sentence, for the handbook, the help and the README. */
+export function releaseText() {
+  const r = releaseFacts();
+  const [a, b, c] = r.waves;
+  return `Midnight Release events only: sales events ${a.n}, ${b.n}, ${c.n} and every ${r.every}th after (never a boss event). ${a.size}, then ${b.size}, then ${c.size} of them (${r.step} more each time; more with more players) all come through one entrance within ${fmt(r.secs)} seconds, about ${fmt(r.at)} seconds after the doors open, and the rest of that event's crowd is ${Math.round(r.crowd * 100)}% of its usual size`;
+}
+
 /** A number for a table: whole if it is big or whole, otherwise one decimal. */
 export const fmt = (v) => (Math.abs(v) >= 100 || Number.isInteger(v) ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1));
 const pct = (m) => `${Math.round(m * 100)}%`;
@@ -170,7 +201,11 @@ export function shopperTraits(k, sup = 0) {
   const d = sup ? SUPERS[k] : SHOPPERS[k];
   const v = (key) => d[key] ?? TUNE[key];
   const out = [];
-  if (d.browses) out.push(['Free samples and goods on belts', `stops for them; now and then walks ${TUNE.liftMin} to ${TUNE.liftMax} tiles out of the way to steal off a belt (never a Mystery Box), then gets back in line`]);
+  if (d.rips) {
+    out.push(['Free samples and goods on belts', `ignores free samples and every kind of goods but one: steals Mystery Boxes off belts (nobody else does), and walks up to ${TUNE.ripMax} tiles out of his way for one`]);
+    out.push(['Ripping a pack', `stands and opens the box for ${fmt(TUNE.ripSecs)} s; every other Card Trader within ${fmt(TUNE.ripLook)} tiles stops ${fmt(TUNE.ripWatch)} s to see what he pulled (and not again for ${fmt(TUNE.ripCool)} s)`]);
+    out.push(['When', releaseText()]);
+  } else if (d.browses) out.push(['Free samples and goods on belts', `stops for them; now and then walks ${TUNE.liftMin} to ${TUNE.liftMax} tiles out of the way to steal off a belt (never a Mystery Box), then gets back in line`]);
   else out.push(['Free samples and goods on belts', 'ignores them']);
   if (d.steady) out.push(['Wet floors and messes', 'not affected']);
   else if (d.ignoresSigns) out.push(['Wet floors and messes', `not slowed; ${pct(TUNE.slipChance)} chance to slip (stunned ${fmt(TUNE.slipSecs)} s)`]);
@@ -229,7 +264,10 @@ export function shopperFacts(k) {
     k, name: d.name, superName: s.name, first: firstWave(k), superFrom: d.sup.from,
     hp: d.hp * hp, speed: d.speed, refund: d.refund * cash,
     superHp: s.hp * hp, superSpeed: s.speed, superRefund: s.refund * cash,
-    price: priceOf(k, 0), superPrice: priceOf(k, 1),
+    // (0 for a kind Head Office cannot buy: the Card Trader.)
+    price: OFFICE.kinds[k] ? priceOf(k, 0) : 0, superPrice: OFFICE.kinds[k] ? priceOf(k, 1) : 0,
+    // Only at a Midnight Release, never in an ordinary group: the Card Trader.
+    releaseOnly: !!d.rips,
   };
 }
 

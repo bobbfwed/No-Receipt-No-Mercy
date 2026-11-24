@@ -10,6 +10,8 @@
 // Lady pops into: tiny, in nappies, sprinting on all fours (no patience bar).
 // A mom's runaway child is a separate little figure (drawKid); so is a cart a mom left behind
 // (drawCart, for each entry in state.carts).
+// The Card Trader (0.3.01) comes with a backpack, binder, lanyard and deck box, and rips a foil
+// pack open when he steals a Mystery Box; his super, the Scalper, pushes a hand truck of boxes.
 //
 // A big wave has well over a hundred shoppers, so each figure is drawn once per pose into a small
 // offscreen canvas (a sprite) and then stamped with one drawImage. A pose is: kind, colour
@@ -97,6 +99,9 @@ const KIND = {
   preggo: { n: 17, sc: 1.06, top: 38, supTop: 45, step: 7, vars: MAT_TOPS.length, still: true, box: [-30, -58, 64, 70], crown: [0.5, -40.5] },
   // Her babies: tiny, on all fours, a fast scrabbling cadence.
   baby: { n: 18, sc: 1.1, top: 17, step: 34, vars: BABY_HAIR.length, still: true, box: [-20, -22, 38, 26], crown: [8, -17] },
+  // The Card Trader (0.3.01): wide for his backpack behind and, for the Scalper, the hand truck in
+  // front. Ripping a pack he stands still (stillAlt).
+  trader: { n: 19, sc: 1.02, top: 38, step: 10, vars: 4, box: [-34, -58, 70, 70], crown: [1.5, -37], stillAlt: 1 << 1 },
 };
 /**
  * Super shoppers are drawn this much bigger, with a gold outline and glow and a crown, so they
@@ -2275,9 +2280,179 @@ function baby(ctx, P) {
   ctx.beginPath(); ctx.arc(15.2, -8.8, 1.3, -1.3, 1.3); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
 }
 
+// --- the Card Trader and the Scalper (0.3.01) ------------------------------------------------
+
+const NERD_TEES = ['#3a3f4a', '#2c3e75', '#7a2534', '#2f5d3e'];
+const NERD_HAIR = ['#3b2a1a', '#5a3a1e', '#2b2118', '#8a5a2b'];
+const FOIL = '#7e22ce', FOIL_DARK = '#4c1d95', SIGIL = '#fbbf24';
+/** Card Trader pose: standing, ripping open a pack (ST.BROWSE). */
+const TRADER_RIP = 1;
+
+/** One Mythic Bastards card at (x, y), turned by a: the purple back with its gold sigil, or a face. */
+function tcgCard(ctx, x, y, a, front, holo = false) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(a);
+  rr(ctx, -2.6, -3.6, 5.2, 7.2, 0.8);
+  paint(ctx, front ? '#fff7d6' : FOIL, 1);
+  if (front) {
+    ctx.fillStyle = holo ? '#67e8f9' : '#c084fc';
+    ctx.fillRect(-1.7, -2.7, 3.4, 3);
+    ctx.fillStyle = '#9ca3af';
+    ctx.fillRect(-1.7, 1, 3.4, 0.7);
+  } else {
+    ctx.fillStyle = SIGIL;
+    ctx.beginPath(); ctx.moveTo(0, -1.8); ctx.lineTo(1.3, 0); ctx.lineTo(0, 1.8); ctx.lineTo(-1.3, 0); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** A four-pointed glint (a foil catching the light). */
+function glint(ctx, x, y, r) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.25, y - r * 0.25); ctx.lineTo(x + r, y); ctx.lineTo(x + r * 0.25, y + r * 0.25);
+  ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.25, y + r * 0.25); ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.25, y - r * 0.25);
+  ctx.closePath();
+  paint(ctx, '#fde047', 0.9);
+}
+
+/** Round glasses, as on the Coupon Clipper. */
+function specs(ctx, x, y) {
+  ctx.beginPath();
+  ctx.arc(x + 1.2, y, 2.4, 0, TAU);
+  ctx.moveTo(x + 7.4, y);
+  ctx.arc(x + 5, y, 2.4, 0, TAU);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.1; ctx.stroke();
+}
+
+/**
+ * The Card Trader: a big lad in a black tee with the Mythic Bastards sigil on it, cargo shorts and
+ * white tube socks, a backpack stuffed with binders, a lanyard with his tournament badge, a deck
+ * box on his belt, glasses and a neckbeard. Walking, he hugs his binder; alt TRADER_RIP, he holds a
+ * torn foil pack up to his face with the cards fanning out of it, mouth open. The super version,
+ * the Scalper, is drawn by scalper().
+ */
+function trader(ctx, P) {
+  if (P.sup) { scalper(ctx, P); return; }
+  const sw = P.sw, rip = P.alt === TRADER_RIP;
+  const tee = NERD_TEES[P.v], hair = NERD_HAIR[P.v];
+  // The backpack behind him, binders sticking out of the top.
+  box(ctx, -14.5, -32, 3.4, 6, 0.6, '#e0457b', 1.1);
+  box(ctx, -11.8, -31, 3.2, 5, 0.6, '#38bdf8', 1.1);
+  box(ctx, -16, -28, 10, 17, 3.2, '#3f6b8a', OUT);
+  box(ctx, -15, -19, 6.5, 5.5, 1.5, '#2f5670', 1.2);
+  // Legs: white tube socks pulled right up, chunky trainers.
+  const l1 = -2.6 - sw * 2.8, l2 = 2.6 + sw * 2.8;
+  limb(ctx, -2.6, -8, l1, -1.5, C.skin, 3.4);
+  limb(ctx, 2.6, -8, l2, -1.5, C.skin, 3.4);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(l1 - 1.7, -5.6, 3.4, 4.2);
+  ctx.fillRect(l2 - 1.7, -5.6, 3.4, 4.2);
+  shoe(ctx, l1, -0.8, '#d1d5db');
+  shoe(ctx, l2, -0.8, '#d1d5db');
+  // Cargo shorts, pockets full.
+  box(ctx, -7.2, -13.5, 14.4, 7.5, 2, '#6b7a5a', OUT);
+  ctx.fillStyle = '#56644a';
+  ctx.fillRect(-6.2, -11.5, 3, 3.4);
+  ctx.fillRect(3.4, -11.5, 3, 3.4);
+  // The belly, in the tee, with the sigil on it.
+  ctx.beginPath(); ctx.ellipse(0.5, -18, 9, 8, 0, 0, TAU); paint(ctx, tee, OUT);
+  ctx.fillStyle = SIGIL;
+  ctx.beginPath(); ctx.moveTo(4, -21.5); ctx.lineTo(6, -18.5); ctx.lineTo(4, -15.5); ctx.lineTo(2, -18.5); ctx.closePath(); ctx.fill();
+  // The deck box on his belt.
+  box(ctx, 5.5, -14.5, 3.8, 4.6, 0.7, FOIL, 1.1);
+  // Backpack strap, and the lanyard with his badge.
+  ctx.beginPath(); ctx.moveTo(-5.5, -25); ctx.quadraticCurveTo(-2, -19, -4.5, -12);
+  ctx.strokeStyle = '#2f5670'; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-1.5, -24.5); ctx.lineTo(1, -18); ctx.lineTo(4.5, -24.5);
+  ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 1.1; ctx.stroke();
+  box(ctx, -0.8, -18.5, 3.8, 4.6, 0.5, '#ffffff', 1);
+  // Head: greasy hair, a neckbeard, glasses.
+  head(ctx, 1.5, -30, 6.8);
+  hairCap(ctx, 1.5, -30, 6.8, hair);
+  // (The neckbeard: a scraggly strap along the jaw, not a full beard.)
+  ctx.beginPath(); ctx.arc(1.5, -30, 6.6, Math.PI * 0.12, Math.PI * 0.8);
+  ctx.strokeStyle = hair; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.stroke();
+  face(ctx, 1.5, -29, rip ? 2 : 0);
+  specs(ctx, 1.5, -29.4);
+  if (rip) {
+    // Both hands up, a torn foil pack in front of his face, the cards fanning out of it.
+    limb(ctx, -1, -21, 10, -22, tee, 3.2);
+    limb(ctx, 3, -20, 15, -21, tee, 3.2);
+    box(ctx, 10.5, -27, 6.5, 8, 0.8, FOIL, 1.2);
+    ctx.fillStyle = FOIL_DARK; ctx.fillRect(11.5, -22.5, 4.5, 1.2);
+    tcgCard(ctx, 12, -29.5, -0.45, false);
+    tcgCard(ctx, 14, -31, 0.05, true);
+    tcgCard(ctx, 16.5, -29.5, 0.5, true, true);
+    glint(ctx, 19.5, -34, 2.6);
+    circle(ctx, 11, -22, 2, C.skin, 1.1);
+    circle(ctx, 15.5, -21, 2, C.skin, 1.1);
+    return;
+  }
+  // Hugging his binder.
+  box(ctx, 6.5, -25.5, 6.5, 9.5, 1, '#1d4ed8', OUT);
+  ctx.fillStyle = '#93c5fd';
+  for (const y of [-23.5, -20.8, -18.1]) ctx.fillRect(6.9, y, 1.4, 1);
+  limb(ctx, 0.5, -22, 7.5, -19, tee, 3.2);
+  circle(ctx, 8.5, -18.8, 2, C.skin, 1.1);
+}
+
+/**
+ * The Scalper: no backpack, no binder, no love for the game. A puffer vest, a cap on backwards and
+ * wraparound sunglasses, leaning into a hand truck stacked with sealed booster boxes he cleared off
+ * the shelf this morning. Ripping (alt TRADER_RIP), he slits the shrink-wrap on the top one with a
+ * box cutter, because he is checking stock, not having fun.
+ */
+function scalper(ctx, P) {
+  const sw = P.sw, rip = P.alt === TRADER_RIP;
+  // The hand truck: frame, toe plate, wheel, and three sealed boxes.
+  ctx.beginPath(); ctx.moveTo(13, -31); ctx.lineTo(14.5, -2); ctx.lineTo(28, -2);
+  ctx.strokeStyle = INK; ctx.lineWidth = 3.4; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.8; ctx.stroke();
+  for (const [y, c] of [[-10.5, FOIL], [-19, FOIL_DARK], [-27.5, FOIL]]) {
+    box(ctx, 15.5, y, 11.5, 8.2, 1, c, 1.3);
+    ctx.fillStyle = SIGIL; ctx.fillRect(15.9, y + 3.4, 10.7, 1.3);
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fillRect(17, y + 1, 2.5, 1.2); // the shrink-wrap shine
+  }
+  circle(ctx, 15, -2.6, 2.6, '#333', 1.2);
+  // Legs: jeans, white trainers, leaning into it.
+  const l1 = -3 - sw * 3, l2 = 2 + sw * 3;
+  limb(ctx, -2.5, -9, l1, -1.5, '#2f4a7a', 3.4);
+  limb(ctx, 2, -9, l2, -1.5, '#3b5b94', 3.4);
+  shoe(ctx, l1, -0.8, '#f8fafc');
+  shoe(ctx, l2, -0.8, '#f8fafc');
+  // Hoodie and a puffer vest over it.
+  ctx.beginPath(); ctx.ellipse(0.5, -17, 7.4, 8.2, 0.08, 0, TAU); paint(ctx, '#6b7280', OUT);
+  rr(ctx, -6.2, -24, 9.5, 14.5, 3); paint(ctx, '#f97316', OUT);
+  ctx.strokeStyle = '#c2410c'; ctx.lineWidth = 1;
+  ctx.beginPath(); for (const y of [-20, -16, -12.5]) { ctx.moveTo(-5.5, y); ctx.lineTo(2.6, y); } ctx.stroke();
+  // Head: cap on backwards, wraparound shades, a smirk.
+  head(ctx, 2, -30, 6.6);
+  hairCap(ctx, 2, -30, 6.6, '#111827');
+  box(ctx, -7.5, -33.5, 5, 2.4, 1, '#111827', 1.2); // the peak, at the back
+  face(ctx, 2, -29, 3);
+  box(ctx, 2, -31.6, 8.4, 2.8, 1.2, '#0f172a', 1); // the shades
+  ctx.fillStyle = '#38bdf8'; ctx.fillRect(4.5, -31, 2.5, 0.9);
+  if (rip) {
+    // A box cutter at the top box's wrap.
+    limb(ctx, 1, -22, 14, -28, '#6b7280', 3.2);
+    circle(ctx, 14.5, -28.2, 2, C.skin, 1.1);
+    box(ctx, 15, -31.5, 5.5, 1.8, 0.4, '#fbbf24', 0.9);
+    glint(ctx, 22, -32, 2.2);
+    limb(ctx, -1, -21, 13, -20, '#6b7280', 3.2);
+    circle(ctx, 13.6, -20, 2, C.skin, 1.1);
+    return;
+  }
+  // Both hands on the handles.
+  limb(ctx, 1, -22, 12.8, -29, '#6b7280', 3.2);
+  circle(ctx, 13.2, -29.4, 2, C.skin, 1.1);
+  limb(ctx, -1.5, -21, 12, -25, '#6b7280', 3.2);
+  circle(ctx, 12.6, -25.2, 2, C.skin, 1.1);
+}
+
 const DRAW = [
   hunter, clipper, dad, karen, scooter, teen, mom, blind, gymbro, kid, dogSit, strayDog, cosplay, flasher, drinker, cartDown,
-  boss, preggo, baby,
+  boss, preggo, baby, trader,
 ];
 
 /** A super shopper's little gold crown, worn at a jaunty angle on top of the head. */
@@ -2440,7 +2615,7 @@ function puff(ctx, x, y, k) {
 }
 
 /** Half-width of each kind's ground shadow (9 if not listed). */
-const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9, boss: 11, preggo: 11, baby: 8 };
+const SHADOW_RX = { scooter: 18, gymbro: 11, dog: 11, cosplay: 13, drinker: 9, boss: 11, preggo: 11, baby: 8, trader: 11 };
 
 /** Adds this shopper's ground shadow to the current path (all shadows are filled at once). */
 export function shadowPath(ctx, s, sx, sy, face = 1) {
@@ -2458,6 +2633,7 @@ export function shadowPath(ctx, s, sx, sy, face = 1) {
   else if (s.k === 'dog' && s.sup) rx = 18;
   else if (s.k === 'cosplay' && s.sup) rx = 16;
   else if (s.k === 'preggo' && s.sup) rx = 14; // and the bump, out in front
+  else if (s.k === 'trader' && s.sup) { rx = 17; cx += face * 7; } // and the hand truck
   if (s.k === 'preggo') cx += face * 3;
   if (s.k === 'blind' && s.st !== ST.STUN) {
     // One long shadow under the man and his dog.
@@ -2527,14 +2703,14 @@ export function drawDownTile(ctx, tx, ty, t) {
   ctx.fillRect(x + TILE * 0.42, y + TILE * 0.56, 6, 1.6);
 }
 const NO_DASH = [];
-const NO_HOW = { pee: null, gawk: false, tv: false };
+const NO_HOW = { pee: null, gawk: false, tv: false, pack: false };
 
 /**
  * Over someone standing still to watch something: a bubble with two big eyes. Staring at an
  * exhibitionist, the eyes are hearts and there is a "!!"; watching the salesman's television, a
- * little TV glows beside them.
+ * little TV glows beside them; a Card Trader watching another rip a pack (pack), a shiny card.
  */
-function eyes(ctx, x, y, gawk, tv) {
+function eyes(ctx, x, y, gawk, tv, pack = false) {
   circle(ctx, x - 6, y + 8, 1.5, '#ffffff', 1);
   ctx.beginPath();
   ctx.ellipse(x + 2, y - 1, 10, 7, 0, 0, TAU);
@@ -2554,7 +2730,11 @@ function eyes(ctx, x, y, gawk, tv) {
     }
   }
   if (gawk) label(ctx, '!!', x + 15, y - 6, 11, '#ff3d7f', INK, 3);
-  else if (tv) {
+  else if (pack) {
+    // A Card Trader craning to see what another one pulled: a card and a glint.
+    tcgCard(ctx, x + 16, y - 7, 0.25, true, true);
+    glint(ctx, x + 20, y - 12, 2.4);
+  } else if (tv) {
     box(ctx, x + 12, y - 8, 9, 7, 1.5, '#9fe8ff', 1.2);
     ctx.beginPath(); ctx.moveTo(x + 14, y - 8); ctx.lineTo(x + 12.5, y - 11); ctx.moveTo(x + 19, y - 8); ctx.lineTo(x + 20.5, y - 11);
     ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
@@ -2600,6 +2780,8 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     // full pepEvery), arm in the air, shouting.
     const every = (defOf(s).pepEvery || 7) * TICK_HZ;
     alt = leaving ? BOSS_STORM : s.pp > every - 30 ? BOSS_PEP : 0;
+  } else if (s.k === 'trader') {
+    if (s.st === ST.BROWSE) alt = TRADER_RIP; // ripping open a pack he took off a belt
   } else if (s.k === 'preggo') {
     // Nearly out of patience: she is about to pop, and shows it (the warning the players need).
     if (!leaving && s.mhp > 0 && s.hp / s.mhp < PREG_WARN) alt = PREG_STRAIN;
@@ -2707,8 +2889,9 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     ctx.restore();
     return; // no patience bar: she has none left, and it does not matter now
   }
-  if (s.st === ST.BROWSE) thought(ctx, sx + 10, top - 10, s.k === 'clipper' ? '%' : '$');
-  else if (watching && !how.pee && !(s.k === 'flasher')) eyes(ctx, sx + 9, top - 12, how.gawk, how.tv);
+  // (A Card Trader ripping a pack shows it in his pose: no bubble.)
+  if (s.st === ST.BROWSE) { if (s.k !== 'trader') thought(ctx, sx + 10, top - 10, s.k === 'clipper' ? '%' : '$'); }
+  else if (watching && !how.pee && !(s.k === 'flasher')) eyes(ctx, sx + 9, top - 12, how.gawk, how.tv, how.pack);
   // On his way over to a salesman's stand (s.sa): eyes on the television all the way there, so it
   // is plain why he has left the route.
   else if (s.sa !== undefined && !stunned) eyes(ctx, sx + 9, top - 12, false, true);

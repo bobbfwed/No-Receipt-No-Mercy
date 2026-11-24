@@ -9,6 +9,7 @@ import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
   trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText, edgeFacts,
 } from '../content/facts.js';
+import { releaseWaves } from '../content/facts.js';
 import { trackName } from './upgradetext.js';
 import { worded } from '../content/touch.js';
 import { versionText } from '../version.js';
@@ -61,7 +62,8 @@ function upgradeTables(k) {
 /** One shopper: what it is, its numbers through the game, and its super version. */
 function shopperCard(k, ctx) {
   const f = shopperFacts(k), help = SHOPPER_HELP[k];
-  const waves = sampleWaves(ctx.waves);
+  // (A Card Trader only comes to a Midnight Release: his table shows those events.)
+  const waves = f.releaseOnly ? releaseWaves(ctx.waves) : sampleWaves(ctx.waves);
   const dash = '–';
   const rows = [
     ['Patience', ...waves.map((n) => (n >= f.first ? fmt(patienceAt(k, 0, n, ctx.hp)) : dash))],
@@ -81,12 +83,13 @@ function shopperCard(k, ctx) {
   const changed = shopperTraits(k, 1).filter(([label, v]) => base.get(label) !== v);
   return h('article', { class: 'hb-card' },
     h('header', { class: 'hb-head' }, shopperPortrait(k),
-      h('div', null, h('h3', null, f.name), h('p', { class: 'hb-when' }, `First seen in sales event ${f.first}`)),
+      h('div', null, h('h3', null, f.name), h('p', { class: 'hb-when' }, f.releaseOnly ? `Midnight Release events only, from sales event ${f.first}` : `First seen in sales event ${f.first}`)),
       h('div', { class: 'hb-stats' }, stat('Patience', fmt(f.hp * ctx.hp)), stat('Speed', `${fmt(f.speed)} tiles/s`), stat('Refund', money(f.refund)))),
     h('p', null, help.trick),
     h('p', { class: 'hb-beat' }, h('b', null, 'Beat it with: '), help.beat),
     facts(shopperTraits(k, 0)),
-    h('h4', null, ctx.waves > 0 ? `Sales event by sales event, up to ${LONGEST} (the longest game)` : 'Sales event by sales event, in an endless game'),
+    h('h4', null, f.releaseOnly ? (ctx.waves > 0 ? `Every Midnight Release up to ${LONGEST} (the longest game)` : 'Midnight Releases in an endless game')
+      : ctx.waves > 0 ? `Sales event by sales event, up to ${LONGEST} (the longest game)` : 'Sales event by sales event, in an endless game'),
     table('hb-waves', ['Sales event', ...waves.map(String)], rows),
     h('section', { class: 'hb-super' },
       h('header', { class: 'hb-head' }, shopperPortrait(k, { sup: true }),
@@ -97,7 +100,7 @@ function shopperCard(k, ctx) {
           stat('Refund', money(f.superRefund)))),
       h('p', null, SUPER_HELP[k]),
       changed.length ? facts(changed) : null),
-    h('p', { class: 'hb-small' }, `Head Office price: $${f.price} each (super: $${f.superPrice}).`));
+    h('p', { class: 'hb-small' }, f.releaseOnly ? 'Head Office cannot buy him, and cannot stop a Midnight Release.' : `Head Office price: $${f.price} each (super: $${f.superPrice}).`));
 }
 
 /** The boss: not one of the shoppers, but he walks in with them every few sales events. */

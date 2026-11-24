@@ -114,6 +114,8 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  *                          steal from (see liftLook in step.js); absent when he is not doing it
  * @property {number} [lw]  ...and the ticks he will still give it, getting there and waiting
  *                          (absent with lf)
+ * @property {number} [ro]  Card Trader: ticks before he will stop to watch another one rip a pack
+ *                          (TUNE.ripCool); absent reads as 0
  * @property {number} [gz]  dads and teenagers: ticks before an exhibitionist can catch his eye again
  * @property {number} [fl]  exhibitionist: ticks left with her bathrobe open (for drawing)
  *                          (her `m` is the ticks until she next opens it)

@@ -2,7 +2,8 @@
 // forklift shots, barcode laser beams, sprinkler bursts, wreckage when a gym bro smashes something,
 // shield flashes round cosplayers, sparkles when something is upgraded, the boss's entrance,
 // pep talks, exit and (worst of all) arrival at a till, and a Pregnant Lady popping (or a Barcode
-// Laser stopping her: "NOT TODAY") and her babies' small refunds. A fixed pool of effect
+// Laser stopping her: "NOT TODAY") and her babies' small refunds, a Midnight Release's mob
+// walking in (the boss's banner in purple) and a Card Trader ripping a pack. A fixed pool of effect
 // objects is reused so a big wave does not allocate, and every kind has a cap so the screen stays
 // readable.
 import { BUILD, DIRS, BOSS, statsOf, sizeOf, bossTitle } from '../sim/index.js';
@@ -19,6 +20,8 @@ const BOSS_IN = 12, PEP = 13, BOSS_OUT = 14, BOSS_ESC = 15;
 // The Pregnant Lady: popping (BURST), a Barcode Laser stopping it (NO_POP), and her babies'
 // refunds at the tills, added up per till (BABY_CASH).
 const BURST = 16, NO_POP = 17, BABY_CASH = 18;
+/** The boss's banner in its other look: a Midnight Release's mob coming in (its st). */
+const MOB_LOOK = 1;
 /** At most this many of each kind on screen at once; extra events are skipped. */
 const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8, 3, 6, 3, 3, 6, 4, 8];
 /** Lifetime of each kind in ms. */
@@ -179,6 +182,20 @@ export function createEffects() {
           if (e.k === 'baby') { babyCash(e, now, tillNear(s, e.x, e.y)); break; }
           f = add(TEXT, now, e.x * T - 22, e.y * T - 6);
           if (f) { f.text = '-$' + e.refund; f.color = '#ff5a4e'; }
+          break;
+        case 'release':
+          // A Midnight Release's mob is walking in: the boss's banner, in foil purple, over the door.
+          f = add(BOSS_IN, now, e.x * T, e.y * T);
+          if (f) { f.text = 'Midnight Release'; f.t2 = (e.n | 0) + ' CARD TRADERS'; f.st = MOB_LOOK; f.sz = 0; }
+          break;
+        case 'rip':
+          // A Card Trader ripping open a stolen Mystery Box, and the ones who stopped to look.
+          f = add(POP, now, e.x * T, e.y * T - 44);
+          if (f) { f.text = 'RIIIP!'; f.color = '#c084fc'; f.r = -0.1; f.st = JAGGED; f.sz = 13; }
+          if (e.n > 0) {
+            f = add(MARK, now, e.x * T + 24, e.y * T - 28);
+            if (f) { f.text = e.n > 1 ? 'OOOH x' + e.n : 'OOOH'; f.color = '#f0abfc'; f.st = 1; }
+          }
           break;
         case 'bossIn':
           f = add(BOSS_IN, now, e.x * T, e.y * T);
@@ -490,15 +507,15 @@ function bossIn(ctx, e, k, worldW, worldH) {
     ctx.lineTo(s * (bw / 2 + 16 * z), bh / 2 + 6 * z);
     ctx.lineTo(s * (bw / 2 - 8 * z), bh / 2 + 6 * z);
     ctx.closePath();
-    paint(ctx, '#8f1414', 2 * z);
+    paint(ctx, e.st === MOB_LOOK ? '#4c1d95' : '#8f1414', 2 * z);
   }
   rr(ctx, -bw / 2, -bh / 2, bw, bh, 5 * z);
-  paint(ctx, '#d42020', 2.4 * z);
+  paint(ctx, e.st === MOB_LOOK ? '#7e22ce' : '#d42020', 2.4 * z);
   ctx.strokeStyle = '#ffd23f';
   ctx.lineWidth = 1.6 * z;
   rr(ctx, -bw / 2 + 4 * z, -bh / 2 + 4 * z, bw - 8 * z, bh - 8 * z, 3 * z);
   ctx.stroke();
-  label(ctx, 'NOW ENTERING', 0, -bh / 2 + 12 * z, 9 * z, '#ffd23f', null);
+  label(ctx, e.st === MOB_LOOK ? e.t2 : 'NOW ENTERING', 0, -bh / 2 + 12 * z, 9 * z, '#ffd23f', null);
   label(ctx, title, 0, 6 * z, size, '#ffffff', INK, 4 * z);
   // Gold stars circling it.
   for (let j = 0; j < 6; j++) {

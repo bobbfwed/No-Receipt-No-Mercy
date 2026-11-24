@@ -1755,6 +1755,14 @@ kbd {
 .boss-bar.is-out { border-color: var(--green-2, #22c55e); }
 .boss-bar.is-out .boss-note { color: #86efac; }
 .boss-bar.is-through .boss-note { color: #fca5a5; }
+/* A Midnight Release (bossbar.js): the same strip in foil-card purple. */
+.boss-bar[class*="is-release"] { background: #1c0b2b; border-color: #c084fc; box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.55), 0 0 1.2rem rgba(168, 85, 247, 0.5); }
+.boss-bar[class*="is-release"] .boss-tag { background: #7e22ce; }
+.boss-bar[class*="is-release"] .boss-title { color: #f0abfc; }
+.boss-bar[class*="is-release"] .boss-num { color: #e9d5ff; }
+.boss-bar[class*="is-release"] .boss-meter { background: #2e1065; }
+.boss-bar[class*="is-release"] .boss-meter i { background: linear-gradient(90deg, #f0abfc, #a78bfa, #67e8f9, #fde68a); }
+.boss-bar.is-release-next .boss-meter i, .boss-bar.is-release-coming .boss-meter i { background: repeating-linear-gradient(-45deg, #a855f7 0 0.5rem, #6b21a8 0.5rem 1rem); }
 /* Whatever else sits at the top of the floor moves down out of its way. */
 .game.boss-up .notices { top: 4.1rem; }
 .game.boss-up .zone-hint { top: 4.1rem; }

@@ -173,6 +173,8 @@ export function createSound() {
           break;
         case 'pop': fire('pop', { n: e.n | 0, sup: e.sup | 0 }); break;
         case 'nopop': fire('nopop', { sup: e.sup | 0 }); break;
+        case 'release': fire('release', { n: e.n | 0 }); break;
+        case 'rip': fire('rip', { n: e.n | 0, sup: e.sup | 0 }); break;
         case 'bossIn': fire('bossIn', { tier: e.tier | 0 }); break;
         case 'pep': fire('pep', { n: e.n | 0 }); break;
         case 'bossOut': fire('bossOut', { tier: e.tier | 0, bounty: e.bounty | 0 }); break;

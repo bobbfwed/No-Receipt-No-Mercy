@@ -94,6 +94,10 @@ export const SHOPPER_HELP = {
   dog: { trick: 'Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.', beat: 'Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.' },
   flasher: { trick: 'A woman in a bathrobe who opens it every few seconds. Dads and teenagers within 2.5 tiles stop and stare for 2 seconds.', beat: 'She helps you: let her walk with the dad line, in range of something that hurts.' },
   preggo: { trick: 'Very pregnant: slow, with a lot of patience, and she stops for every free sample (she is eating for thirteen). When her patience runs out she does not leave. She pops, and a dozen babies run for the tills from where she stood: very fast, with very little patience, and nothing distracts them. A baby at a till takes $5 but is not a refund toward the limit. If she reaches a till herself she takes one refund and nothing pops.', beat: 'Finish her with a Barcode Laser: if its beam takes her last patience, no babies come out. Otherwise wear her down early, so the babies have the whole maze to run, with sprinklers and wet floor signs along it to catch them.' },
+  trader: {
+    trick: 'Grown men who collect Mythic Bastards cards. He never comes on his own: at a Midnight Release a mob of a dozen or more pile in through one entrance at once. Each one is weak, but they all reach the tills together. He steals nothing but Mystery Boxes, and he is the only shopper who does: he walks well out of his way to take one off a belt, then stands there ripping it open while every Card Trader near him stops to see what he pulled. Every box he rips is one your Press never gets.',
+    beat: 'Sprinklers, where the mob bunches up. A ripped pack stops a whole knot of them, so a belt of boxes with sprinklers round it is bait: security loves it, the factory does not. Keep your real production lines away from the entrance the mob is coming through.',
+  },
   cosplay: { trick: 'A big costume and a lot of patience. Shots from sprinklers, forklifts and barcode lasers that would hit a shopper standing next to him hit him instead.', beat: 'Wear him down while he is alone, or separate him from the crowd: free samples and salesmen stop the others while he walks on.' },
 };
 
@@ -125,6 +129,7 @@ export const EDGE_HELP = {
     weak: 'Hates baths. Spray him once and he acts like you tried to drown him.',
     tough: 'Too small to hit properly: the forks keep going right over his head.',
   },
+  trader: { weak: 'Wet cards are not mint. He will cry, actually cry, and the queue will hold a moment of silence.' },
   cosplay: {
     weak: 'He cannot see out of the helmet, so he never sees the pallet coming.',
     tough: 'The foam armour is "rated for lasers". He made it himself, and he will explain the build for an hour.',
@@ -158,6 +163,7 @@ export const SUPER_HELP = {
   dog: 'Two and a half times the patience and faster. Switches security off for 12 seconds, from further away, and more often.',
   flasher: 'Two and a half times the patience. No robe at all: stops dads and teenagers within 4 tiles for 3 seconds, every few seconds.',
   preggo: 'Two and a half times the patience, and two dozen babies when she pops. A Barcode Laser still stops all of them.',
+  trader: 'Two and a half times the patience, and a double refund. He pushes a hand truck stacked with sealed boxes he bought this morning and will sell online tonight for four times the price.',
   cosplay: 'Two and a half times the patience. Shields shoppers within 1.6 tiles and takes only half of what he soaks up.',
 };
 

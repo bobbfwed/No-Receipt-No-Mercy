@@ -384,6 +384,8 @@ test('an ordinary event has half the shoppers (a half rounded down, never below 
       assert.deepEqual(g.map((x) => x.k), full.map((x) => x.k), `wave ${n}, ${p} players: the same kinds`);
       for (let i = 0; i < g.length; i++) {
         if (g[i].k === 'boss') { assert.deepEqual(g[i], full[i], 'the boss is one man either way'); continue; }
+        // (A Midnight Release's mob is the size it says, whatever crowdScale is.)
+        if (g[i].mob) { assert.deepEqual(g[i], full[i], 'the mob is not halved'); continue; }
         assert.equal(g[i].n, Math.max(1, Math.floor(full[i].n / 2)), `wave ${n}, ${p} players: ${g[i].k}`);
         assert.ok(Math.abs(g[i].n * g[i].gap - full[i].n * full[i].gap) < 1e-6, 'over the same length of time');
         assert.ok(g[i].sup <= g[i].n && (full[i].sup > 0) === (g[i].sup > 0), 'supers whenever there were');
@@ -442,7 +444,8 @@ test("Head Office's shoppers walk in with the same patience as the automatic wav
 test('what is paid per shopper doubles: refunds and Head Office prices', () => {
   assert.equal(perHead(), 2);
   for (const k of Object.keys(SHOPPERS)) {
-    for (const sup of [0, 1]) {
+    // (Head Office cannot buy a Card Trader: he has no price.)
+    for (const sup of OFFICE.kinds[k] ? [0, 1] : []) {
       const d = sup ? SUPERS[k] : SHOPPERS[k];
       assert.equal(priceOf(k, sup), 2 * Math.max(1, Math.round((d.hp * d.speed * OFFICE.kinds[k].weight) / OFFICE.patiencePerDollar)), `${k} ${sup}`);
     }

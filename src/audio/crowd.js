@@ -112,6 +112,11 @@ export const RULES = {
   waah: { gap: 0.09, soft: 2, per: 2, common: true, merge: { at: 5, sound: 'nursery', every: 1.4 } },
   babyTill: { gap: 0.08, soft: 2, per: 2, merge: { at: 5, sound: 'nursery', every: 1.4 } },
   nursery: { gap: 1.2, delay: 0, always: true },
+  // The Card Trader (0.3.01). A Midnight Release is one moment a few times a game: always heard. A
+  // mob can rip several packs a second; the tear is thinned like a grab, but it costs the factory
+  // its boxes, so it is not background.
+  release: { gap: 2, delay: 0, always: true },
+  rip: { gap: 0.12, soft: 2, per: 2 },
   // The merged crowd sounds stand in for many single ones, so they skip the caps (`always`).
   kerching: { gap: 1.0, delay: 0, always: true },
   walkout: { gap: 1.2, delay: 0, always: true },

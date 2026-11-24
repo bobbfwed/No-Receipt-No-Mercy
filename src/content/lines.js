@@ -951,6 +951,48 @@ export const LINES = {
     r("The laser kept the babies in. Corporate wants to sell it: 'Barcode Laser. Because nobody wants twelve more customers.'"),
     r('No pop. She left the way she came in: angry, enormous and completely your fault, {p}. Well. Partly.'),
   ],
+  // The Midnight Release (0.3.01): a mob of Card Traders, the Mythic Bastards crowd (a card game
+  // made up for this store: never name a real one). Said during the build pause before one.
+  // {n} how many traders are coming, {w} that sales event, {p} anyone.
+  releaseNext: [
+    'Next event: a Midnight Release of Mythic Bastards. {n} grown men who have never seen a woman naked outside a booster pack.',
+    'Heads up: event {w} is a Midnight Release. {n} card traders, one entrance, one shared stick of deodorant. Unopened.',
+    "Midnight Release next. {n} virgins in cargo shorts, all coming at once. It's the only way any of them ever will.",
+    "Event {w}: the new Mythic Bastards set drops. {n} men who live in their mothers' basements are getting in the car. Her car.",
+    "Card traders next event, {n} of them. They've been queueing since Tuesday. You'll smell them before you see them, {p}.",
+    'Midnight Release in event {w}. {n} grown men, one door, zero showers. Put a sprinkler on it. It is the closest any of them will get to a bath.',
+    "{n} card nerds coming through one entrance next event. Keep your Mystery Boxes away from them. They rip them open like it's the only thing they'll ever get to rip open.",
+    'Next up: the Midnight Release. {n} men who say "mint condition" about cards and never about themselves.',
+    'Event {w} brings the Mythic Bastards crowd. {n} of them. Every one has a binder, a backpack and a medical-grade case of swamp ass.',
+    "Midnight Release next. The queue outside smells like hot pennies and cheese dust, {p}. {n} of them, and they'll all hit the same door.",
+    u("Midnight Release next. {n} card traders, {p}. Don't look them in the eye. They'll try to trade you a holographic dragon for your car."),
+    u("Next event's a Midnight Release. {n} men whose idea of foreplay is double-sleeving. Build accordingly."),
+    r("Event {w}: Midnight Release. {n} card traders. Statistically one of them has touched a breast. It was his own. He's been chasing that high ever since."),
+  ],
+  // The mob has just come through the door. {n} how many, {p} anyone.
+  releaseIn: [
+    '{n} card traders just came through the door at once. The air in here is now legally a gas.',
+    "Here's the Midnight Release crowd: {n} of them, one entrance, one big damp cloud of body odour. Spray them. All of them.",
+    'The Mythic Bastards mob is in. {n} grown men sprinting for the tills like there is a girl at the end of them. There is not.',
+    '{n} card nerds, all at once. They move as one. They sweat as one. They have never kissed anyone, as one.',
+    "Mob's in, {p}. {n} of them. Hide the Mystery Boxes. Hide your shame. They've seen worse on the forums.",
+    u("{n} card traders through one door. That's more men in one place than at {p}'s last birthday party, and they smell better."),
+    r("The Midnight Release has arrived: {n} virgins and one guy who swears he isn't. He is."),
+  ],
+  // A Card Trader took a Mystery Box off a belt and is ripping it open. {n} how many others stopped
+  // to watch (missing when none did), {p} anyone.
+  rip: [
+    'A card trader just ripped open one of your Mystery Boxes in the aisle. Pull rate: one Gadget that will now never exist.',
+    "He's ripping packs on the shop floor. That box was going to a Press, {p}. Now it's going in a binder.",
+    '{n} card traders stopped to watch one open a box. That is the closest any of them will come to watching a live birth.',
+    "Pack ripped. He's checking the corners for mint condition. Nobody has ever checked {p} that carefully.",
+    'One of the nerds nicked a Mystery Box and is opening it like a birthday present from the dad who left. {n} of his mates are breathing on him.',
+    'Box ripped in the aisle. He pulled a foil. He moaned. Out loud. In public.',
+    'There goes another Mystery Box, {p}. Your factory runs on boxes. His love life runs on cardboard too.',
+    "A card trader's tearing open your stock. The others crowd round him like he's showing them a real tit.",
+    u("Ripped pack, {n} onlookers. That's the biggest audience a man in that crowd will ever have for something he did with his hands."),
+    r("He ripped one of your boxes, pulled nothing, and smelled the cardboard. Deeply. {p}, look away. I couldn't."),
+  ],
 };
 
 /**
@@ -976,6 +1018,8 @@ export const INTRO = {
   ],
   // Said once, straight after the first boss is announced (when he walks in, not at the doors).
   boss: 'About management: nothing slows him. His pep talks give shoppers near him their patience back. At the tills he counts as two refunds. Wear him out and the store gets a bounty. Every fifth event.',
+  // (0.3.01) Said when the doors open on the first Midnight Release.
+  trader: "New today: card traders. A Midnight Release brings a dozen or more through one door at once. They steal only Mystery Boxes and stop to watch each other rip them open. Sprinklers: wet cards aren't mint, and it's the only shower they'll get all week.",
 };
 
 /** What DEB says the first time the super version of a kind turns up. {p} is anyone. */
@@ -995,6 +1039,7 @@ export const SUPER_INTRO = {
   flasher: "New: the exhibitionist's bolder sister. Tougher, and a double refund if she gets through. Still on your side while she's in here. Don't make it weird, {p}.",
   preggo: 'New and worse: Octomom. Two and a half times the patience, and two dozen babies when she pops. The barcode laser still keeps them all in. Nothing else will. Certainly not {p}.',
   drinker: "New and worse: a day drinker who started on Thursday. Tougher, harder to put off, and he still goes down at corners. He's been going down at corners since 1998.",
+  trader: "New and worse: the Scalper. Two and a half times the patience and a hand truck stacked with every box he cleared off the shelf at six this morning. He isn't a fan. He's a parasite with a resale account. The nerds hate him. You will too, {p}.",
 };
 
 /** Customer reviews when a shopper reaches the tills and gets a refund. [stars, text, weight?] */
@@ -1159,6 +1204,20 @@ export const ESCAPE_REVIEWS = {
     [5, 'Walked in, walked out, took the money. Like every merger I have ever done.', U],
     [1, 'A staff member wished me a nice day. Unacceptable. I decide what kind of day I have.', R],
   ],
+  // The Card Trader (0.3.01; the Scalper writes here too).
+  trader: [
+    [1, 'Waited eleven hours in line. Got my refund. The cards were not mint. Neither was the staff. One star.'],
+    [5, 'Five stars. Pulled a holo, got a refund AND a girl looked at me. It was {p}. Close enough.'],
+    [1, 'Corner of the box was dinged. I returned it. I would return my own birth certificate for a dinged corner.'],
+    [1, "Staff kept saying 'sir, please step away from the belt'. I was not on the belt. I was spiritually on the belt."],
+    [5, 'Ripped three of your packs before I got to the tills. Smelled every one. Refund. Best night of my life, and I have had one other.'],
+    [1, 'No sleeves at the till. Had to hold my refund naked. Like an animal.'],
+    [1, 'They called security on my body odour. It is not body odour. It is the scent of a forty-hour tournament. Respect it.'],
+    [5, 'Cleared the whole shelf, refunded the last box, listed the rest at four times the price. Your store is my supplier now. Five stars.'],
+    [5, 'Store was packed with my people. Hot, damp, nobody talking to a woman. Like church. Five stars.', U],
+    [1, 'A man called {p} asked if I had ever been on a date. I have reported him to the moderators. Of the store.', U],
+    [5, 'Traded my refund for a Japanese promo before I reached the car park. Lost money. Gained everything.', R],
+  ],
 };
 
 /** Reviews from shoppers who gave up and left without a refund. [stars, text, weight?] */
@@ -1272,6 +1331,16 @@ export const LEFT_REVIEWS = {
     [1, "Stormed out. Walked into the door. Nobody saw. If anyone saw, they're fired. {p} saw."],
     [1, 'Wore me down. Took a while. I am having my assistant cry about it for me.', U],
     [1, 'I did not give up. I delegated giving up. To my legs.', R],
+  ],
+  trader: [
+    [1, 'Got sprayed. Binder got wet. Six hundred dollars of mint, now "lightly played". Leaving. Crying.'],
+    [1, 'Mom is waiting in the car. She said if I was not out in five minutes she would leave. That was in 2009.'],
+    [1, 'The pepper got in my sleeves. My DOUBLE sleeves. Nothing gets in my double sleeves.'],
+    [1, 'Left. Too many people near me who were not card traders. Some of them were women.'],
+    [1, 'The forklift scuffed my deck box. I will never recover. I have a therapist for this. It is my mom.'],
+    [1, 'Had to leave the hand truck. Forty sealed boxes. If any of you resell them I will find you on every forum.'],
+    [1, "Gave up. Somebody else pulled the dragon. It should have been me. It's always the other guy.", U],
+    [1, 'Wet, sad and unrefunded. Normal Friday, honestly.', R],
   ],
 };
 
@@ -1649,6 +1718,7 @@ export const SHOPPER_NOUNS = {
   hunter: 'bargain hunter', clipper: 'coupon clipper', dad: 'dad', karen: 'Karen', scooter: 'scooter driver',
   teen: 'teenager', mom: 'mom', blind: 'blind man', gymbro: 'gym bro', dog: 'stray dog', cosplay: 'cosplayer',
   flasher: 'flasher', drinker: 'day drinker', preggo: 'pregnant lady', boss: 'boss', baby: 'baby',
+  trader: 'card trader',
 };
 
 /** The text of a line from any bank: a string, { t, w } or a review [stars, text, w]. */

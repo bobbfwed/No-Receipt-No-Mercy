@@ -30,6 +30,7 @@
 import {
   TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle, maxIn,
 } from '../sim/index.js';
+import { releaseNo, releaseSize, shareCount } from '../sim/index.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, FRIENDS,
   BUILDING_NAMES, SHOPPER_NOUNS, fill, choose, textOf, friendOf,
@@ -169,6 +170,13 @@ export const TOPICS = {
   // A Pregnant Lady popping is the thing to learn from, so it is said more than most.
   pop: { note: true, important: true, gap: 20 },
   nopop: { note: true, gap: 25 },
+  // The Midnight Release (0.3.01): announced in the build pause before one (it comes on a fixed
+  // schedule, so it is news the first time and then fades like any note; the boss bar says so
+  // every time), and remarked on when the mob walks in. A ripped pack is news too, but a mob rips
+  // a lot of them.
+  releaseNext: { note: true, important: true, loud: true },
+  releaseIn: { note: true, important: true, loud: true },
+  rip: { note: true, gap: 15 },
 };
 
 /** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
@@ -202,6 +210,7 @@ export function createDirector(random = Math.random) {
   let escapes = []; // ticks of recent refunds
   let warned = -1; // wave whose "ten seconds" warning has been given
   let jabbed = -1; // wave after which DEB last considered an unprompted go at a friend
+  let heralded = -1; // wave after which DEB last announced a coming Midnight Release
   const nearSaid = new Set(); // shares of the refund limit already warned about
   const lastPlaced = new Map(); // "x,y" -> { tick, by }
   const met = new Set(); // kinds of shopper DEB has already introduced
@@ -602,6 +611,14 @@ export function createDirector(random = Math.random) {
       case 'lost':
         say(out, state, 'lost', LINES.lost, {}, { mood: 'angry' });
         break;
+      case 'release':
+        // A Midnight Release's mob has walked in.
+        say(out, state, 'releaseIn', LINES.releaseIn, { n: e.n > 0 ? Math.round(e.n) : undefined }, { mood: 'angry' });
+        break;
+      case 'rip':
+        // A head count reads badly for one, so it is only given for two or more.
+        say(out, state, 'rip', LINES.rip, { n: e.n >= 2 ? e.n : undefined }, { mood: 'smug' });
+        break;
       case 'joined': {
         say(out, state, 'joined', LINES.joined, {}, { pid: e.by });
         // More players than the map was sized for: say so once per arrival.
@@ -639,6 +656,12 @@ export function createDirector(random = Math.random) {
     idle(state) {
       const out = [];
       if (state.phase !== 'build' || !(state.phaseT > 0)) return out;
+      // The next sales event is a Midnight Release: said once, early in the build pause.
+      if (!state.training && heralded !== state.wave && releaseNo(state.wave + 1)) {
+        heralded = state.wave;
+        const n = releaseSize(state.wave + 1, shareCount(state));
+        if (say(out, state, 'releaseNext', LINES.releaseNext, { n, w: state.wave + 1 }, { mood: 'angry' })) return out;
+      }
       if (state.phaseT <= 10 * TICK_HZ && warned !== state.wave) {
         warned = state.wave;
         say(out, state, 'buildEnding', LINES.buildEnding);

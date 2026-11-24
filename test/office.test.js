@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, step, waveSpec, priceOf, waveValue, officePlayer,
-  canBuy, planCost, shareCount, SHOPPERS, OFFICE, TUNE, TICK_HZ,
+  canBuy, planCost, shareCount, SHOPPERS, OFFICE, TUNE, TICK_HZ, releaseSize,
 } from '../src/sim/index.js';
 
 /** Dave runs the store, Steve has taken the Head Office job. */
@@ -38,6 +38,8 @@ test('prices follow how tough, fast and tricky a shopper is', () => {
   assert.ok(priceOf('hunter') < priceOf('dad'));
   assert.ok(priceOf('dad') < priceOf('karen'));
   for (const k of Object.keys(SHOPPERS)) {
+    // (The Card Trader only comes to a Midnight Release: Head Office cannot buy him.)
+    if (k === 'trader') { assert.equal(OFFICE.kinds[k], undefined); continue; }
     assert.ok(OFFICE.kinds[k], `${k} has a price`);
     assert.ok(priceOf(k, 1) >= priceOf(k, 0) * 2, `a super ${k} costs at least twice as much`);
   }
@@ -153,7 +155,8 @@ test('his plan replaces the automatic wave: right shoppers, right entrances, rig
   applyCommand(s, 0, { c: 'start' }, startEv);
   applyCommand(s, 1, { c: 'start' }, startEv);
   assert.equal(startEv.find((e) => e.e === 'waveStart').office, 1);
-  assert.equal(s.spawnQ.length, 8);
+  // (Event 7 is a Midnight Release: the mob comes on top of his plan, whatever he bought.)
+  assert.equal(s.spawnQ.length, 8 + releaseSize(7, 1));
   const seen = new Map();
   let firstSuperTick = 0;
   const start = s.tick;
@@ -165,8 +168,9 @@ test('his plan replaces the automatic wave: right shoppers, right entrances, rig
       if (sh.sup && !firstSuperTick) firstSuperTick = s.tick;
     }
   });
-  const made = [...seen.values()];
+  const made = [...seen.values()].filter((m) => m.k !== 'trader');
   assert.equal(made.length, 8);
+  assert.equal(seen.size, 8 + releaseSize(7, 1), 'and the mob');
   assert.equal(made.filter((m) => m.k === 'dad' && !m.sup && m.door === 1).length, 6, 'six dads through the second entrance');
   assert.equal(made.filter((m) => m.k === 'hunter' && m.sup && m.door === 0).length, 2, 'two Doorbusters through the first');
   assert.ok(Math.abs((firstSuperTick - start) / TICK_HZ - 5) < 0.2, 'the second group started five seconds in');

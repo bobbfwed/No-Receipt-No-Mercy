@@ -14,7 +14,8 @@
 // If he has bought nothing when the doors open, the usual automatic wave comes instead.
 // The boss (every fifth wave) cannot be bought: he is not in SHOPPERS, so a plan naming him is
 // refused as 'bad', and he walks in on top of whatever was bought. Nor can a Pregnant Lady's babies
-// ('baby', also not in SHOPPERS): he gets them by buying her.
+// ('baby', also not in SHOPPERS): he gets them by buying her. Card Traders are in SHOPPERS but not
+// in OFFICE.kinds, so he cannot buy them either; a Midnight Release's mob comes on top of his plan.
 import { SHOPPERS, SUPERS, OFFICE, perHead } from './constants.js';
 import { shareCount } from './state.js';
 import { waveSpec } from './step.js';
@@ -39,7 +40,8 @@ export function priceOf(k, sup = 0) {
 export function waveValue(n, players = 1) {
   let sum = 0;
   for (const g of waveSpec(n, players)) {
-    if (g.k === 'boss') continue;
+    // (Nor the Midnight Release's mob: he cannot buy Card Traders, and they come regardless.)
+    if (g.k === 'boss' || g.mob) continue;
     sum += (g.n - g.sup) * priceOf(g.k, 0) + g.sup * priceOf(g.k, 1);
   }
   return sum;

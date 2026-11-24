@@ -42,7 +42,9 @@ test('the handbook covers every shopper and building', () => {
   assert.deepEqual(SHOPPER_ORDER.map(firstWave), [...SHOPPER_ORDER.map(firstWave)].sort((a, b) => a - b), 'listed in the order they first appear');
   for (const k of SHOPPER_ORDER) {
     const f = shopperFacts(k);
-    assert.ok(f.first >= 1 && f.superFrom >= f.first && f.superHp >= f.hp * 2 && f.superPrice > f.price);
+    assert.ok(f.first >= 1 && f.superFrom >= f.first && f.superHp >= f.hp * 2);
+    // (Head Office cannot buy a Card Trader: he has no price at all.)
+    assert.ok(f.releaseOnly ? f.price === 0 && f.superPrice === 0 : f.superPrice > f.price, k);
     assert.ok(shopperTraits(k, 0).length >= 2);
     assert.ok(shopperTraits(k, 0).some(([label]) => label === 'TV Salesman'), `${k}: what the salesman does to him`);
   }

@@ -544,6 +544,43 @@ LEFT.boss = function boss(v, t, x) {
   briefcase(v, t + 0.46 * x.j(0.06));
 };
 
+/**
+ * The Card Trader (0.3.01): a nasal, wounded "uuuh", an indignant "whaaat" or a snort gone sour,
+ * then a wet sniff and his backpack zipped shut. The Scalper: a smug "heh-heh", his phone's sale
+ * notification, and the hand truck rattling off across the tiles.
+ */
+LEFT.trader = function trader(v, t, x, big) {
+  const p = x.j(0.07);
+  if (big) {
+    babble(v, { scale: 1.05, sylls: [
+      { t, len: 0.06, f: 150 * p, vowel: 'eh', peak: 0.4 },
+      { t: t + 0.1, len: 0.07, f: 138 * p, vowel: 'eh', peak: 0.36 },
+    ] });
+    tone(v, { t: t + 0.24, f: 1568 * x.j(0.02), type: 'triangle', peak: 0.1, a: 0.003, d: 0.06 }); // "cha-
+    tone(v, { t: t + 0.31, f: 2093 * x.j(0.02), type: 'triangle', peak: 0.11, a: 0.003, d: 0.14 }); // -ching"
+    const n = [5, 7, 4][x.shape];
+    for (let i = 0; i < n; i++) noise(v, { t: t + 0.4 + i * 0.04 * x.j(0.1), type: 'bandpass', f: 900 * x.j(0.15), q: 2, peak: 0.12, a: 0.002, d: 0.025 }); // wheels on the tiles
+    return;
+  }
+  if (x.shape === 0) {
+    say(v, { t, vowel: 'uh', scale: 1.12, f: 195 * p, f1: 150 * p, glide: 0.25, peak: 0.45, a: 0.02, h: 0.12, d: 0.1, vib: { rate: 7, depth: 15 } });
+  } else if (x.shape === 1) {
+    babble(v, { scale: 1.12, sylls: [
+      { t, len: 0.07, f: 185 * p, vowel: 'oo', peak: 0.38 },
+      { t: t + 0.08, len: 0.17, f: 230 * p, f1: 170 * p, vowel: 'ah', peak: 0.45 },
+    ] });
+  } else {
+    [0, 0.07].forEach((dt) => noise(v, { t: t + dt, type: 'bandpass', f: 650 * x.j(0.1), q: 2.5, peak: 0.2, a: 0.004, d: 0.04 })); // snort
+    say(v, { t: t + 0.16, vowel: 'mm', scale: 1.12, f: 160 * p, f1: 130 * p, glide: 0.15, peak: 0.4, a: 0.02, h: 0.06, d: 0.08 });
+  }
+  noise(v, { t: t + 0.3, type: 'highpass', f: 2500, f1: 4000, glide: 0.12, q: 0.8, peak: 0.08, a: 0.03, d: 0.05 }); // the sniff
+  for (let i = 0; i < 8; i++) noise(v, { t: t + 0.4 + i * 0.022, type: 'bandpass', f: 3600 * x.j(0.1), q: 4, peak: 0.07, a: 0.001, d: 0.01 }); // the zip
+};
+LEFT_ABOUT.trader = [
+  'Card Trader: a nasal, wounded "uuuh", an indignant "whaaat" or a sour snort, then a wet sniff and his backpack zipped shut.',
+  'Scalper: a smug "heh-heh", his phone\'s "cha-ching" sale notification, and the hand truck rattling off.',
+];
+
 /** A shopper storms out with no refund: o.k is the kind, o.sup the super version. */
 export function leftVoice(v, t, o, x) {
   (LEFT[o.k] || LEFT.hunter)(v, t, x, !!o.sup);
@@ -613,6 +650,11 @@ export function escapeVoice(v, t, o, x) {
     tone(v, { t: b, f: 150 * x.j(0.07), f1: 260, glide: 0.05, type: 'triangle', peak: 0.26, a: 0.004, h: 0.015, d: 0.04 });
     glass(v, b + 0.12, 3200 * x.j(0.1));
     if (big) { tone(v, { t: b + 0.3, f: 330, f1: 1400, glide: 0.05, peak: 0.22, a: 0.002, d: 0.06 }); noise(v, { t: b + 0.3, type: 'bandpass', f: 1600, q: 1, peak: 0.25, a: 0.002, d: 0.05 }); }
+  }
+  if (o.k === 'trader') {
+    // A Card Trader: a breathy, nasal "yesss" (the Scalper's is lower and smugger).
+    babble(v, { scale: 1.12, sylls: [{ t: b, len: 0.12, f: (big ? 150 : 190) * x.j(0.05), f1: big ? 140 : 215, vowel: 'eh', peak: 0.38 }] });
+    noise(v, { t: b + 0.11, type: 'highpass', f: 5000, q: 0.7, peak: 0.09, a: 0.01, h: 0.1, d: 0.07 });
   }
   if (o.k === 'preggo') {
     // A contented "mmm" and two pats on the bump (Octomom's has a muffled giggle in it).

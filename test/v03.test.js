@@ -147,6 +147,8 @@ const TABLE = {
   gymbro: ['sprinkler', 'forklift'], drinker: ['wetfloor', 'sprinkler'], dog: ['sprinkler', 'forklift'],
   cosplay: ['forklift', 'railgun'], hunter: [undefined, undefined], mom: [undefined, undefined],
   flasher: [undefined, undefined], preggo: [undefined, undefined],
+  // (0.3.01: the Card Trader. Wet cards are not mint.)
+  trader: ['sprinkler', undefined],
 };
 
 test('the weak-and-tough table is the owner\'s; supers have their base kind\'s, the boss and babies none', () => {

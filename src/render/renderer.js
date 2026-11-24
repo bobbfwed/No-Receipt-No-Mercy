@@ -118,7 +118,7 @@ export function createRenderer(canvas, session) {
   /** Visible tiles this frame, with a margin (exclusive end). */
   const vis = { x0: 0, y0: 0, x1: 0, y1: 0 };
   /** Context for one shopper's drawing (see drawShopper): reused. */
-  const how = { pee: null, gawk: false, tv: false };
+  const how = { pee: null, gawk: false, tv: false, pack: false };
   const peeAt = [0, 0];
   /** Exhibitionists with the bathrobe open this frame, for who is staring at whom. */
   const flashing = [];
@@ -551,7 +551,7 @@ export function createRenderer(canvas, session) {
       }
       const px = (sh.x + sh.vx * alpha) * T, py = (sh.y + sh.vy * alpha) * T;
       let face = faceOf(sh.id, sh.vx);
-      how.pee = null; how.gawk = false; how.tv = false;
+      how.pee = null; how.gawk = false; how.tv = false; how.pack = false;
       if (sh.st === ST.WATCH) face = watching(s, sh, face);
       drawShopper(ctx, sh, px, py, face, F, shopperSprites, how);
       if (sh.k === 'boss') bosses++;
@@ -582,6 +582,16 @@ export function createRenderer(canvas, session) {
   function watching(s, sh, face) {
     const def = defOf(sh);
     if (def.flashes) return face;
+    // A Card Trader stopped to see what another one is pulling out of a pack (TUNE.ripLook).
+    if (def.rips) {
+      const r = TUNE.ripLook + 0.5;
+      for (const o of s.shoppers) {
+        if (o === sh || o.st !== ST.BROWSE || !defOf(o).rips) continue;
+        if ((o.x - sh.x) ** 2 + (o.y - sh.y) ** 2 > r * r) continue;
+        how.pack = true;
+        return Math.abs(o.x - sh.x) < 0.05 ? face : o.x > sh.x ? 1 : -1;
+      }
+    }
     const W = s.w, H = s.h, grid = s.grid;
     const tx = sh.x | 0, ty = sh.y | 0;
     if (def.pees) {

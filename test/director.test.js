@@ -48,6 +48,7 @@ const VARS = {
   kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
   pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw', early: 'pnm',
   pop: 'pn', nopop: 'p', autoRebuildOn: 'p',
+  releaseNext: 'pnw', releaseIn: 'pn', rip: 'pn',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -68,10 +69,12 @@ const AT_LEAST = {
   pop: 12, nopop: 9,
   // Version 0.2.15: auto-rebuild switched on.
   autoRebuildOn: 5,
+  // Version 0.3.01: the Card Trader and the Midnight Release.
+  releaseNext: 10, releaseIn: 6, rip: 8,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
-const NEW_KINDS = ['dog', 'cosplay', 'flasher', 'drinker', 'preggo'];
+const NEW_KINDS = ['dog', 'cosplay', 'flasher', 'drinker', 'preggo', 'trader'];
 
 /** Each bank of LINES as [name, list], with nested banks (placed, upgradedBy) flattened out. */
 function lineBanks() {
@@ -161,7 +164,7 @@ test('no line is repeated, every placeholder gets filled, and nothing is too lon
 test('banks whose number or name can be missing still have lines that need neither', () => {
   const optional = {
     smashOther: 'k', dented: 'kn', upgraded: 'kn', maxed: 'kn', pee: 'k', flash: 'n', pitchStop: 'k', pitchRush: 'k', superArrive: 'k',
-    bossOut: 'n', bossEscape: 'nm', pep: 'kn', early: 'm',
+    bossOut: 'n', bossEscape: 'nm', pep: 'kn', early: 'm', rip: 'n',
   };
   for (const [key, ks] of Object.entries(optional)) {
     const without = LINES[key].filter((l) => !placeholders(textOf(l)).some((k) => ks.includes(k)));

@@ -26,6 +26,50 @@ export const bossTitle = (tier) => BOSS.titles[Math.max(0, Math.min(BOSS.titles.
 const bossGroup = (tier) => ({ k: 'boss', n: 1, gap: 1, at: TUNE.bossAt, sup: 0, tr: tier });
 
 /**
+ * Which Midnight Release wave n is (1 for the first, 2 for the second ...), or 0 if it is not one:
+ * sales events TUNE.releaseFrom, releaseFrom + releaseEvery and so on, never a boss event, in a
+ * game of any length (an endless one too). A fixed schedule, so players can plan for it.
+ */
+export function releaseNo(n) {
+  const from = TUNE.releaseFrom, every = TUNE.releaseEvery;
+  if (!(n >= from) || (n - from) % every !== 0 || bossTier(n)) return 0;
+  return (n - from) / every + 1;
+}
+
+/**
+ * How many Card Traders the Midnight Release in wave n brings (0 if wave n is not one):
+ * TUNE.releaseFirst at the first, TUNE.releaseStep more at each one after, for one player; each
+ * player after the first adds TUNE.crowdPerPlayer of that, like any crowd. Not scaled by
+ * crowdScale or crowdCurves: these are the numbers that arrive.
+ */
+export function releaseSize(n, players = 1) {
+  const k = releaseNo(n);
+  if (!k) return 0;
+  const crowd = 1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1);
+  return Math.max(1, Math.round((TUNE.releaseFirst + TUNE.releaseStep * (k - 1)) * crowd));
+}
+
+/**
+ * The entrance the mob of wave n comes through (an index into state.doors): a different one each
+ * release, going round the open ones.
+ */
+export function releaseDoor(n, open = 1) {
+  return (Math.max(1, releaseNo(n)) - 1) % Math.max(1, open);
+}
+
+/**
+ * The mob's group in a wave's list: all of them TUNE.releaseAt seconds after the doors open,
+ * within TUNE.releaseSecs. From the Scalper's first event (the second release) a growing share
+ * are Scalpers, as in any group. `mob` marks it (spawn sends the 'release' event for its first).
+ */
+function releaseGroup(n, players) {
+  const many = releaseSize(n, players);
+  const from = SHOPPERS.trader.sup.from;
+  const sup = n < from ? 0 : Math.min(many, Math.max(1, Math.floor(many * (TUNE.superShare + TUNE.superShareStep * (n - from)))));
+  return { k: 'trader', n: many, gap: TUNE.releaseSecs / many, at: TUNE.releaseAt, sup, mob: 1 };
+}
+
+/**
  * The boss's patience when he walks in during wave n (at his tier for that wave; tier 1 if the
  * wave has none). `hpMul` is the difficulty's multiplier.
  */
@@ -90,6 +134,8 @@ export function patienceFor(state, def) {
  * Dads arrive as a "dad line": a tight single file of men who want to be done.
  * Every fifth wave ends the list with the boss: { k: 'boss', n: 1, gap: 1, at, sup: 0, tr: tier },
  * and every other group is TUNE.bossCrowd of its usual size, so he stands out.
+ * A Midnight Release (releaseNo) ends it with the mob of Card Traders: { k: 'trader', n, gap, at,
+ * sup, mob: 1 } (releaseGroup), and every other group is TUNE.releaseCrowd of its usual size.
  * Every group is TUNE.crowdScale of the size it would be (to the nearest whole number, a half
  * rounded down, never below one, so every kind is still there), arriving over the same length of
  * time: half as many, twice as far apart.
@@ -127,6 +173,9 @@ export function waveSpec(n, players = 1) {
   // (The late surge, past TUNE.surgeFrom, multiplies both the crowd and its cap below.)
   const surge = surgeCrowdAt(n);
   let grow = (1 + TUNE.lateGrowth * Math.max(0, n - TUNE.lateFrom + 1)) * crowd * (tier ? TUNE.bossCrowd : 1) * crowdShiftAt(n) * surge;
+  // A Midnight Release: the usual crowd is a little smaller, to make room for the mob.
+  const release = releaseNo(n);
+  if (release) grow *= TUNE.releaseCrowd;
   // Fewer, tougher shoppers: each group is TUNE.crowdScale of what it would be, to the nearest
   // whole number, never below one, so a kind that is in the event is still in it. A half is
   // rounded DOWN: always rounding up left the crowd at 53 to 62% of its old size in the early
@@ -165,6 +214,8 @@ export function waveSpec(n, players = 1) {
     total--;
   }
   if (tier) g.push(bossGroup(tier));
+  // (The mob comes after the cap and the rounding above: its size is exactly releaseSize.)
+  if (release) g.push(releaseGroup(n, players));
   return g;
 }
 
@@ -227,16 +278,24 @@ export function beginWave(state, ev) {
   // Head Office cannot buy the boss, and cannot keep him out either: he comes whatever was planned.
   const tier = state.training ? 0 : bossTier(state.wave);
   if (bought && tier) groups.push(bossGroup(tier));
+  // Nor the Midnight Release: the mob comes on top of whatever he bought.
+  const release = state.training ? 0 : releaseSize(state.wave, shareCount(state));
+  if (bought && release) groups.push(releaseGroup(state.wave, shareCount(state)));
   state.nextWave = null;
   const supers = new Set();
   for (const g of groups) {
     if (g.k === 'dad') dads += g.n;
+    // The mob all comes through one entrance, a different one each release.
+    if (g.mob && !state.training) g.door = releaseDoor(state.wave, state.open);
     const sup = Math.min(g.n, g.sup || 0);
     if (sup) supers.add(g.k);
     for (let j = 0; j < g.n; j++) {
       // Spread the supers evenly through the group.
       const isSup = sup > 0 && ((j + 1) * sup) % g.n < sup ? 1 : 0;
-      q.push([state.tick + secs(g.at + j * g.gap), g.k, isSup, g.door ?? -1]);
+      const at = [state.tick + secs(g.at + j * g.gap), g.k, isSup, g.door ?? -1];
+      // (The first of a mob carries its size, so spawn() can announce it: see the 'release' event.)
+      if (g.mob && j === 0) at.push(g.n);
+      q.push(at);
     }
   }
   q.sort((a, b) => a[0] - b[0]);
@@ -245,6 +304,7 @@ export function beginWave(state, ev) {
     e: 'waveStart', wave: state.wave, total: q.length, dads,
     kinds: [...new Set(groups.map((g) => g.k))], supers: [...supers], office: bought ? 1 : 0,
     boss: groups.some((g) => g.k === 'boss') ? tier || 1 : 0,
+    release: groups.reduce((n, g) => n + (g.mob ? g.n : 0), 0),
   });
 }
 
@@ -279,7 +339,7 @@ function spawn(state, ev) {
   const W = state.w;
   const anyDoor = state.doors.slice(0, state.open).flat();
   while (q.length && q[0][0] <= state.tick) {
-    const [, k, sup, at] = q.shift();
+    const [, k, sup, at, mob] = q.shift();
     const def = shopperDef(k, sup);
     // Head Office picks the entrance for his groups; otherwise any open one.
     const doors = at >= 0 && at < state.open ? state.doors[at] : anyDoor;
@@ -314,6 +374,8 @@ function spawn(state, ev) {
     }
     state.shoppers.push(s);
     if (def.boss) ev.push({ e: 'bossIn', tier: s.tr, x: s.x, y: s.y });
+    // The first of a Midnight Release's mob: the rest are right behind him.
+    if (mob) ev.push({ e: 'release', n: mob, door: at, x: s.x, y: s.y, wave: state.wave });
   }
 }
 
@@ -794,14 +856,20 @@ function walkToStand(state, s, def, i, ev) {
 
 const clearLift = (s) => { delete s.lf; delete s.lw; };
 
-/** True if building b is a belt carrying something a shopper may steal (anything but a Mystery Box). */
-const stealable = (b) => b && b.k === 'belt' && b.it.some((item) => item[0] !== 'box');
+/**
+ * True if a shopper with definition `def` would steal this item (a kind of ITEMS): a Card Trader
+ * (`rips`) only a Mystery Box, anyone else anything but one.
+ */
+const wants = (def, item) => (def && def.rips ? item === 'box' : item !== 'box');
 
-/** True if a belt next to tile t carries something worth stealing. */
-function goodsBeside(state, t) {
+/** True if building b is a belt carrying something a shopper with definition `def` may steal. */
+const stealable = (b, def) => b && b.k === 'belt' && b.it.some((item) => wants(def, item[0]));
+
+/** True if a belt next to tile t carries something worth stealing (to a shopper with definition `def`). */
+function goodsBeside(state, t, def) {
   for (let d = 0; d < 4; d++) {
     const ni = neighbour(state, t, d);
-    if (ni >= 0 && stealable(state.grid[ni])) return true;
+    if (ni >= 0 && stealable(state.grid[ni], def)) return true;
   }
   return false;
 }
@@ -823,15 +891,16 @@ function beltBeside(state, t) {
  * again for TUNE.grabCooldown.
  * @returns {boolean} true if he took something
  */
-function grabBeside(state, s, i, sure, ev) {
+function grabBeside(state, s, i, sure, ev, def = defOf(s)) {
   for (let d = 0; d < 4; d++) {
     const ni = neighbour(state, i, d);
     const b = ni < 0 ? 0 : state.grid[ni];
     if (!b || b.k !== 'belt') continue;
-    const j = b.it.findIndex((item) => item[0] !== 'box');
+    const j = b.it.findIndex((item) => wants(def, item[0]));
     if (j < 0 || (!sure && rand(state) >= TUNE.grabChance * DT)) continue;
     const kind = b.it.splice(j, 1)[0][0];
     state.ws.stolen++;
+    if (def.rips) { ripPack(state, s, sure, ev); return true; }
     s.st = ST.BROWSE;
     s.t = secs(TUNE.grabSecs);
     s.cd = secs(TUNE.grabCooldown);
@@ -841,6 +910,32 @@ function grabBeside(state, s, i, sure, ev) {
     return true;
   }
   return false;
+}
+
+/**
+ * A Card Trader has taken a Mystery Box off a belt and rips it open where he stands (ST.BROWSE for
+ * TUNE.ripSecs; not tempted again for ripSecs + TUNE.grabCooldown). Every other Card Trader within
+ * TUNE.ripLook tiles who is walking, and has not stopped to watch one lately, stops for
+ * TUNE.ripWatch seconds to see what he pulled (ST.WATCH; `ro` is the ticks before he will stop for
+ * another, TUNE.ripCool). The 'rip' event says how many stopped.
+ */
+function ripPack(state, s, far, ev) {
+  s.st = ST.BROWSE;
+  s.t = secs(TUNE.ripSecs);
+  s.cd = secs(TUNE.ripSecs + TUNE.grabCooldown);
+  const r2 = TUNE.ripLook * TUNE.ripLook;
+  let n = 0;
+  for (const o of state.shoppers) {
+    if (o === s || o.st !== ST.WALK || o.ro > 0 || o.cr === 1 || !defOf(o).rips) continue;
+    if ((o.x - s.x) ** 2 + (o.y - s.y) ** 2 > r2) continue;
+    o.st = ST.WATCH;
+    o.t = secs(TUNE.ripWatch);
+    o.ro = secs(TUNE.ripCool);
+    n++;
+  }
+  const e = { e: 'rip', x: s.x, y: s.y, sup: s.sup | 0, n };
+  if (far) e.far = 1;
+  ev.push(e);
 }
 
 /** Scratch lists for liftLook's search (it runs for one shopper at a time). */
@@ -853,12 +948,14 @@ let FRONT = [], NEXT = [];
  * it means the long way round). The nearest is the one he considers; with chance TUNE.liftChance
  * he goes for it (`lf` is that tile, `lw` the ticks he will give it).
  */
-function liftLook(state, s, i) {
-  if (goodsBeside(state, i)) return; // right beside some already: he grabs as he passes, or not
+function liftLook(state, s, i, def = defOf(s)) {
+  if (goodsBeside(state, i, def)) return; // right beside some already: he grabs as he passes, or not
+  // (A Card Trader will go further, and is likelier to, for a Mystery Box: TUNE.ripMax, ripChance.)
+  const reach = def.rips ? TUNE.ripMax : TUNE.liftMax, chance = def.rips ? TUNE.ripChance : TUNE.liftChance;
   const seen = new Set([i]);
   FRONT.length = 0;
   FRONT.push(i);
-  for (let d = 1; d <= TUNE.liftMax && FRONT.length; d++) {
+  for (let d = 1; d <= reach && FRONT.length; d++) {
     NEXT.length = 0;
     for (const t of FRONT) {
       for (let k = 0; k < 4; k++) {
@@ -871,8 +968,8 @@ function liftLook(state, s, i) {
     }
     if (d >= TUNE.liftMin) {
       for (const n of NEXT) {
-        if (!goodsBeside(state, n)) continue;
-        if (rand(state) < TUNE.liftChance) {
+        if (!goodsBeside(state, n, def)) continue;
+        if (rand(state) < chance) {
           s.lf = n;
           s.lw = secs(TUNE.liftSecs);
         }
@@ -900,7 +997,7 @@ function liftWalk(state, s, i, speed, ev) {
     s.cd = secs(TUNE.grabCooldown);
     return false;
   }
-  if (i === t && grabBeside(state, s, i, true, ev)) { clearLift(s); return true; }
+  if (i === t && grabBeside(state, s, i, true, ev, defOf(s))) { clearLift(s); return true; }
   // On his way; or there, and waiting for something worth taking to come along.
   const going = i === t ? moveTo(s.x, s.y, (t % W) + 0.5 + s.ox, ((t / W) | 0) + 0.5 + s.oy, speed)
     : moveAlong(state, field, s.x, s.y, s.ox, s.oy, speed, s.id);
@@ -1126,6 +1223,9 @@ function pepTalk(state, s, def, ev) {
   ev.push({ e: 'pep', x: s.x, y: s.y, n });
 }
 
+/** No free-sample stands: what a Card Trader looks at (see stepShoppers). */
+const NO_STANDS = [];
+
 function stepShoppers(state, fields, sec, ev) {
   const { stands, salesmen, posts } = sec;
   const S = state.shoppers, grid = state.grid, W = state.w;
@@ -1162,6 +1262,7 @@ function stepShoppers(state, fields, sec, ev) {
     if (s.ru > 0) s.ru--;
     if (s.gz > 0) s.gz--;
     if (s.fl > 0) s.fl--;
+    if (s.ro > 0) s.ro--; // a Card Trader: before he will stop to watch another pack ripped
     // A gym bro's rest after a hit runs on whatever he is doing (watching a television included).
     if (s.hw > 0) s.hw--;
     if (s.st !== ST.WALK) {
@@ -1334,9 +1435,10 @@ function stepShoppers(state, fields, sec, ev) {
       }
     }
 
-    if (def.browses && s.cd === 0 && !chasing) {
+    // (A Card Trader steals too, only Mystery Boxes, and has no time for free samples.)
+    if ((def.browses || def.rips) && s.cd === 0 && !chasing) {
       let stopped = false;
-      for (const st of stands) {
+      for (const st of def.browses ? stands : NO_STANDS) {
         if ((s.x - st[0]) ** 2 + (s.y - st[1]) ** 2 <= st[2]) {
           s.st = ST.BROWSE;
           s.t = st[3];
@@ -1347,14 +1449,14 @@ function stepShoppers(state, fields, sec, ev) {
         }
       }
       // (On his way to goods he has his eye on, he does not stop for others on the way.)
-      if (!stopped && s.lf === undefined) stopped = grabBeside(state, s, i, false, ev);
+      if (!stopped && s.lf === undefined) stopped = grabBeside(state, s, i, false, ev, def);
       if (stopped) { clearLift(s); continue; }
       // Out of his way to steal: already on his way to the goods, or (now and then, never in a
       // training game) looking round for some within a few tiles' walk.
       if (s.lf !== undefined) {
         if (liftWalk(state, s, i, speed, ev)) continue;
       } else if (!state.training && s.cr !== 1 && (state.tick + s.id) % secs(TUNE.liftLook) === 0) {
-        liftLook(state, s, i);
+        liftLook(state, s, i, def);
         if (s.lf !== undefined && liftWalk(state, s, i, speed, ev)) continue;
       }
     }
@@ -1382,8 +1484,13 @@ function stepShoppers(state, fields, sec, ev) {
  * Advances the game by one tick.
  * @returns {Array<Object>} events that happened this tick, each with an `e` type:
  *   begun the lobby is over, everyone was ready · map {design,size} the host changed the store
- *   waveStart {wave,total,dads,kinds,supers,office,boss} (boss: the boss's tier if he comes this
- *     wave, else 0) · waveEnd {wave,bonus} · won (never in an endless game) · lost
+ *   waveStart {wave,total,dads,kinds,supers,office,boss,release} (boss: the boss's tier if he comes
+ *     this wave, else 0; release: how many Card Traders a Midnight Release brings, else 0)
+ *   waveEnd {wave,bonus} · won (never in an endless game) · lost
+ *   release {n,door,x,y,wave} the first of a Midnight Release's mob of n Card Traders walked in
+ *     through entrance `door` at (x, y); the rest follow within TUNE.releaseSecs
+ *   rip {x,y,sup,n,far?} a Card Trader took a Mystery Box off a belt and is ripping it open; n
+ *     other Card Traders stopped to watch (far 1: he went out of his way for it). No 'grab' with it
  *   escape {k,sup,x,y,refund,n,tier?} a shopper reached the tills; n is how many refunds it
  *     counted as (TUNE.bossRefunds for the boss, who also has tier; 0 for a baby, k 'baby')
  *   left {k,sup,x,y,by,why} one gave up; why is 'annoyed' (security wore him out), 'bored' (a dad

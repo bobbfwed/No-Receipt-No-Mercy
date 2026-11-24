@@ -1,9 +1,13 @@
 // The boss bar: a strip across the top of the floor that nobody can miss. Before a boss event it
 // says who is coming; once the doors are open it counts down to his arrival; while he is in the
 // store it shows his title and his patience; and for a moment afterwards, how it ended.
+// It does the same for a Midnight Release (0.3.01, never in a boss event): before one, how many
+// Card Traders are coming; once the doors are open, how long until they pile in; and while they
+// are in the store, how many of the mob are left.
 // It floats over the floor (position: absolute), so it never moves the floor or changes the
 // height of either bar.
 import { ST, TICK_HZ, bossTier, bossTitle, bossPatience, difficultyOf } from '../sim/index.js';
+import { TUNE, releaseNo, releaseSize, shareCount } from '../sim/index.js';
 import { bossBounty } from '../content/facts.js';
 import { h, setText, setClass, setStyle, money } from './dom.js';
 
@@ -82,6 +86,8 @@ export function createBossBar(session) {
       return true;
     }
     result = null;
+    // A Midnight Release instead (never in the same event as the boss).
+    if (release(s, now)) return true;
     // He is on his way: the doors are open and he has not walked in yet.
     if (s.phase === 'wave') {
       const q = s.spawnQ.find((x) => x[1] === 'boss');
@@ -114,6 +120,41 @@ export function createBossBar(session) {
     setMode('');
     return false;
   }
+
+  /**
+   * The Midnight Release on the bar: the build pause before one (shown when the pause starts and
+   * again as the clock runs out, like the boss's warning), the countdown once the doors are open,
+   * and how many of the mob are still in the store. Returns true if it is showing.
+   */
+  function release(s, now) {
+    const at = (m, label, head, n, text, share) => {
+      setMode(m);
+      setText(tag, label);
+      setText(title, head);
+      setStyle(fill, 'width', `${(Math.max(0, Math.min(1, share)) * 100).toFixed(1)}%`);
+      setText(num, n);
+      setText(note, text);
+      return true;
+    };
+    if (s.phase === 'wave' && releaseNo(s.wave)) {
+      const size = releaseSize(s.wave, shareCount(s));
+      // (The first of the mob in the queue carries its size: see beginWave.)
+      const q = s.spawnQ.find((x) => x[4] > 0);
+      if (q) return at('release-coming', 'MIDNIGHT', 'MIDNIGHT RELEASE', `${q[4]} card traders`, `in ${Math.max(0, Math.ceil((q[0] - s.tick) / TICK_HZ))} s`, 1);
+      let left = 0;
+      for (const m of s.shoppers) if (m.k === 'trader' && m.st !== ST.LEAVE) left++;
+      for (const x of s.spawnQ) if (x[1] === 'trader') left++;
+      if (!left) return false;
+      return at('release-in', 'MOB', 'MIDNIGHT RELEASE', `${left} / ${size} left`, 'card traders in the store', left / Math.max(1, size));
+    }
+    const next = s.phase === 'build' ? releaseNo(s.wave + 1) : 0;
+    if (!next) return false;
+    if (relKey !== s.wave) { relKey = s.wave; relSeen = now; }
+    const ending = s.phaseT >= 0 && s.phaseT <= NEXT_END_SECS * TICK_HZ;
+    if (now - relSeen >= NEXT_MS && !ending) return false;
+    return at('release-next', 'NEXT', 'MIDNIGHT RELEASE', `${releaseSize(s.wave + 1, shareCount(s))} card traders`, `one door · ${TUNE.releaseAt} s in`, 1);
+  }
+  let relKey = -1, relSeen = 0; // which build phase the release warning is for, and since when
 
   return { el, update };
 }

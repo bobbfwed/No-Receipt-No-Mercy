@@ -15,7 +15,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, TUNE } from '../src/sim/index.js';
 import { SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../src/content/help.js';
-import { SHOPPER_ORDER, shopperFacts, bossFacts, fmt, paceText, edgeText } from '../src/content/facts.js';
+import { SHOPPER_ORDER, shopperFacts, bossFacts, fmt, paceText, edgeText, releaseText } from '../src/content/facts.js';
 import { versionText } from '../src/version.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -43,7 +43,7 @@ export function generated() {
     ...SHOPPER_ORDER.map((k) => {
       const f = shopperFacts(k), help = SHOPPER_HELP[k];
       // (An img tag, not Markdown, so the picture keeps a fixed width inside the table.)
-      return `| <img src="docs/img/shopper-${k}.png" alt="${f.name} and ${f.superName}" width="200"> | **${f.name}** · from sales event ${f.first} · patience ${fmt(f.hp)}, speed ${fmt(f.speed)}, refund $${f.refund}<br>${help.trick}${edgeText(k) ? `<br>${edgeText(k)}` : ''}<br>**Beat it with:** ${help.beat}<br>**Super: ${f.superName}** (from sales event ${f.superFrom}). ${SUPER_HELP[k]} |`;
+      return `| <img src="docs/img/shopper-${k}.png" alt="${f.name} and ${f.superName}" width="200"> | **${f.name}** · ${f.releaseOnly ? `Midnight Release events only (from sales event ${f.first})` : `from sales event ${f.first}`} · patience ${fmt(f.hp)}, speed ${fmt(f.speed)}, refund $${f.refund}<br>${help.trick}${f.releaseOnly ? `<br>${releaseText()}.` : ''}${edgeText(k) ? `<br>${edgeText(k)}` : ''}<br>**Beat it with:** ${help.beat}<br>**Super: ${f.superName}** (from sales event ${f.superFrom}). ${SUPER_HELP[k]} |`;
     }),
     // The boss is not one of SHOPPERS: he has a row of his own, last.
     (() => {

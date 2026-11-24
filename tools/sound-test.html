@@ -459,6 +459,15 @@ CROWDS.push(
   { label: 'babyTill (24 babies reach the tills) x24 in 0.8 s', list: crowdTimes(24, 0.8, 101).map((t) => ({ name: 'babyTill', opts: {}, t })) },
   { label: 'babyTill x24 in one tick', list: Array.from({ length: 24 }, () => ({ name: 'babyTill', opts: {}, t: 0 })) },
 );
+// The Card Trader (0.3.01): a Midnight Release's mob comes in at once, rips packs in a clump, and
+// storms out or reaches the tills together. (He is not in KINDS above, so the older crowds stay
+// exactly as they were.)
+CROWDS.push(
+  { label: 'release x3 in 2 s', list: crowdTimes(3, 2, 107).map((t, i) => ({ name: 'release', opts: { n: 12 + i * 4 }, t })) },
+  { label: 'rip (a mob ripping packs) x12 in 2 s', list: crowdTimes(12, 2, 109).map((t, i) => ({ name: 'rip', opts: { n: i % 3, sup: i % 5 === 4 ? 1 : 0 }, t })) },
+  { label: 'left (a mob of Card Traders) x16 in 1.5 s', list: crowdTimes(16, 1.5, 113).map((t, i) => ({ name: 'left', opts: { k: 'trader', sup: i % 6 === 5 ? 1 : 0 }, t })) },
+  { label: 'escape (a mob of Card Traders) x16 in 1.5 s', list: crowdTimes(16, 1.5, 127).map((t, i) => ({ name: 'escape', opts: { k: 'trader', sup: i % 6 === 5 ? 1 : 0 }, t })) },
+);
 {
   // In a late-wave storm: an Octomom pops at 0.3 s (her 'left' is dropped by sound.js), and her
   // two dozen babies reach the tills between 1.5 and 2.3 s, a few giving up on the way.

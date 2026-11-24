@@ -197,7 +197,7 @@ export const BUILD = {
  * gawks: stops to stare when an exhibitionist opens her bathrobe nearby.
  * pitch: [stop, rush] the TV Salesman's chances with this shopper: with chance `stop` he stops to
  *   watch the demonstration; otherwise, with chance `rush`, he hurries past faster for a while.
- * pees, shields, flashes, sways, pops: see the comments on the shoppers that have them.
+ * pees, shields, flashes, sways, pops, rips: see the comments on the shoppers that have them.
  * weak, tough: a kind of security (a key of BUILD) this shopper loses TUNE.weakMul times the usual
  *   patience to, or TUNE.toughMul times (0.3.01, the owner's request: small edges, so each kind
  *   has a little more to learn about it). A Wet Floor Sign takes no patience from anyone who does
@@ -302,6 +302,22 @@ export const SHOPPERS = {
   preggo: {
     name: 'Pregnant Lady', hp: 117, speed: 0.85, refund: 30, browses: true, pops: 12, pitch: [0.45, 0],
     sup: { name: 'Octomom', from: 14, hp: 2.5, pops: 24 },
+  },
+  // Card Trader (0.3.01, the owner's request): grown men who collect "Mythic Bastards", a trading
+  // card game made up for this store. He never comes in an ordinary group, only as the mob at a
+  // Midnight Release (TUNE.releaseFrom and on; see releaseNo in step.js), so weak one by one and
+  // dangerous all together. rips: he steals nothing but Mystery Boxes (he is the only one who
+  // does), going out of his way for them further than a shoplifter (TUNE.ripMax), and stands and
+  // opens one for TUNE.ripSecs while the other Card Traders near him stop to see what he pulled
+  // (TUNE.ripLook, ripWatch, ripCool). He ignores free samples: nothing free is worth having.
+  // Weak to the sprinkler: the cards are no longer mint. Not in OFFICE.kinds: Head Office cannot
+  // buy him. The Scalper comes from the second release, pushing a hand truck of boxes he is going
+  // to sell on. hp 30 (22 was the starting guess): with TUNE.releaseCrowd at 0.85 the scripted
+  // players in tools/balance.mjs last as long as before at either, and the mob should be felt
+  // (their maze stopped every trader even at 50; see PLAN.md, version 0.3.01).
+  trader: {
+    name: 'Card Trader', hp: 30, speed: 1.5, refund: 8, rips: true, pitch: [0.3, 0.2], weak: 'sprinkler',
+    sup: { name: 'Scalper', from: 12, hp: 2.5 },
   },
 };
 
@@ -606,6 +622,34 @@ export const TUNE = {
   // cross it is multiplied instead: see edgeMul in step.js.)
   weakMul: 1.1,
   toughMul: 0.9,
+  // The Midnight Release (0.3.01, the owner's request: a mob of Card Traders all at once). Sales
+  // events releaseFrom, releaseFrom + releaseEvery and so on, never a boss event (7, 12, 17 ...:
+  // two after each boss), on a fixed schedule so players can plan for it. The mob is releaseFirst
+  // traders at the first release and releaseStep more at each one after, for one player (each
+  // player after the first adds crowdPerPlayer of that, like any crowd); these are the numbers
+  // that arrive, not halved by crowdScale or shaped by crowdCurves. They all come through one
+  // entrance (a different one each release, among the open ones), releaseAt seconds after the
+  // doors open, within releaseSecs. Head Office cannot stop it. The rest of that event's crowd
+  // is releaseCrowd of its usual size.
+  releaseFrom: 7,
+  releaseEvery: 5,
+  releaseFirst: 12,
+  releaseStep: 4,
+  releaseAt: 20,
+  releaseSecs: 2,
+  releaseCrowd: 0.85,
+  // Ripping packs (see SHOPPERS.trader): he goes out of his way for a Mystery Box up to ripMax
+  // tiles of walking (a shoplifter only TUNE.liftMax), with chance ripChance at each look; one he
+  // has taken he stands and opens for ripSecs, and every other Card Trader within ripLook tiles
+  // who is walking stops for ripWatch seconds to see what he pulled, then will not stop to watch
+  // again for ripCool seconds (so a mob slows down but never freezes). The ripper himself is not
+  // tempted again for ripSecs + grabCooldown.
+  ripMax: 8,
+  ripChance: 0.12,
+  ripSecs: 3,
+  ripLook: 1.5,
+  ripWatch: 1.5,
+  ripCool: 6,
 };
 
 /**
@@ -617,7 +661,8 @@ export const perHead = () => 1 / TUNE.crowdScale;
 
 /**
  * Head Office: a player who runs the shoppers instead of the store (see office.js).
- * kinds: for each kind of shopper, the first wave it can be bought for (the same wave the
+ * kinds: for each kind of shopper (but the Card Trader, who only comes to a Midnight Release and
+ *   cannot be bought), the first wave it can be bought for (the same wave the
  *   automatic waves first include it), a price weight for its trick, and the seconds between
  *   arrivals in a group.
  * perRefund and every gap are per shopper, so they are multiplied by perHead() below (once, when

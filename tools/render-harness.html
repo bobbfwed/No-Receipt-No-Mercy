@@ -518,6 +518,11 @@ if (q.get('lineup') === '1') {
       [R, { st: ST.WATCH, f: 1, vx: 0, fl: 30 }, L]],
     ['drinker', [{ ...R, sv: 1.7 }, { ...L, sv: 0.6 }, TV, { ...STUN, t: 100 }, LEAVE], [{ ...STUN, f: -1, t: 30 }],
       [{ ...R, sv: 1.6 }, { ...STUN, t: 150 }, { ...L, sv: 0.6 }]],
+    // The Card Trader (0.3.01): walking right and left, ripping a pack (BROWSE), stunned, leaving;
+    // extras: craning to see someone else's pack, watching the TV, two more colour variants. The
+    // Scalper: walking, checking stock with a box cutter (BROWSE), walking left, leaving.
+    ['trader', base, [{ st: ST.WATCH, f: 1, vx: 0, how: { pack: true } }, TV, { ...R, v: 1 }, { ...R, v: 2 }, { ...R, v: 3 }],
+      [R, BROWSE, L, LEAVE]],
     // The Pregnant Lady: extras are watching the TV, then about to pop (hp under 30%) walking and
     // stopped at the samples. Octomom: walking, at the samples, about to pop.
     ['preggo', base, [TV, { ...R, hp: 5 }, { ...BROWSE, hp: 5 }], [R, BROWSE, { ...L, hp: 5 }]],
@@ -532,15 +537,15 @@ if (q.get('lineup') === '1') {
   const colX = (c) => 36 + c * 64;
   const extraX = (n) => 362 + n * 66;
   const supX = (n) => 712 + n * 82;
-  const rowH = (k) => (k === 'cosplay' ? 96 : k === 'dog' ? 76 : k === 'preggo' ? 84 : k === 'baby' ? 44 : 66);
+  const rowH = (k) => (k === 'cosplay' ? 96 : k === 'dog' ? 76 : k === 'preggo' ? 84 : k === 'baby' ? 44 : k === 'trader' ? 84 : 66);
   const rowYs = [];
   // (Extra room above the boss's row for the Pregnant Lady's effects, beside the babies.)
   { let y = 54; for (const [k] of ROWS) { if (k === 'cosplay') y += 26; if (k === 'boss') y += 140; if (k === 'preggo') y += 24; rowYs.push(y); y += rowH(k); } }
   // The boss's effects sit beside his row, which moved down when the Pregnant Lady's rows came in.
   const bossDy = (rowYs[ROWS.findIndex(([k]) => k === 'boss')] - 1048) / 40;
   canvas.width = innerWidth; canvas.height = innerHeight;
-  // Logical size of the line-up is about 1460 x 1460; fit it unless &zoom is given.
-  const z = num('zoom', Math.min(canvas.width / 1460, canvas.height / 1460));
+  // Logical size of the line-up is about 1460 x 1550; fit it unless &zoom is given.
+  const z = num('zoom', Math.min(canvas.width / 1460, canvas.height / 1550));
   sprites.setScale(z);
   messSprites.setScale(z);
   // One of each effect, frozen at &fxage ms old (default 350).
@@ -586,7 +591,7 @@ if (q.get('lineup') === '1') {
         const { st, f, vx, how, kid, cart, post, x: cx, v, ...rest } = c;
         const x = k === 'boss' ? 60 + n * 105 : cx; // he is much wider than anyone else
         const sh = {
-          id: k === 'cosplay' ? 200 + (v | 0) : r * 16 + n, k, sup: 0, x: 0, y: 0, vx, vy: 0,
+          id: k === 'cosplay' ? 200 + (v | 0) : k === 'trader' ? 400 + n * 4 + (v | 0) : r * 16 + n, k, sup: 0, x: 0, y: 0, vx, vy: 0,
           hp: n === 0 ? 30 : 15, mhp: 30, st, t: 20, cd: 0, kd: 0, kx: 0, ky: 0, kvx: 0, kvy: 0, bt: 0, ...rest,
         };
         if (sh.kd === 1) sh.kvx = 0.14;
@@ -648,6 +653,12 @@ if (q.get('lineup') === '1') {
       { e: 'bossIn', tier: 3, x: 29, y: 26.6 + bossDy }, { e: 'pep', x: 27.5, y: 29.5 + bossDy, n: 3 },
       { e: 'bossOut', tier: 2, x: 31.5, y: 29.8 + bossDy, bounty: 300 },
       { e: 'escape', k: 'boss', sup: 0, x: 35.5, y: 29.8 + bossDy, refund: 600, n: 2, tier: 4 },
+    ]);
+    // The Card Trader's, beside his row: a Midnight Release's banner and a pack ripped with onlookers.
+    const ty = (rowYs[ROWS.findIndex(([k]) => k === 'trader')]) / 40;
+    run([
+      { e: 'release', n: 16, door: 0, x: 31, y: ty + 3.1, wave: 7 },
+      { e: 'rip', x: 34.3, y: ty + 0.7, sup: 0, n: 3 },
     ]);
     // The Pregnant Lady's, beside the babies' row: a pop, an Octomom's pop, a Barcode Laser stopping
     // one ('nopop'), a baby giving up, and five babies reaching the same till (their refunds add
