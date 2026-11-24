@@ -18,7 +18,7 @@
 // - The boss is announced when he walks in (bossIn, 12 seconds after the doors open), not when the
 //   doors open, with a bank for each of his titles; the first time, his trick is explained too.
 // - On the Food Court map a share of the wave openings (TALK.foodShare) come from its own bank,
-//   and the same on the Car Park map (TALK.carParkShare).
+//   and the same on the Car Park map (TALK.carParkShare) and the designs in PLACE_BANKS.
 // - Anything not "must" is optional. Each comment on a topic makes the topic's own quiet time
 //   longer, and DEB keeps a gap after any optional remark, which grows over the game. So late in
 //   a game she talks mainly about things that matter.
@@ -41,6 +41,12 @@ import {
 } from './lines.js';
 
 const DEB = 'DEB (HR)';
+
+/**
+ * Store designs (added in 0.3) whose doors opening have a bank of DEB's lines of their own, used a
+ * share of the time there (TALK.placeShare): design key -> key of LINES.
+ */
+export const PLACE_BANKS = { corridors: 'backPassage' };
 
 /** How often DEB talks. Change these to make her chattier or quieter. */
 export const TALK = {
@@ -79,6 +85,8 @@ export const TALK = {
   foodShare: 0.35,
   /** The same on the Car Park map. */
   carParkShare: 0.35,
+  /** The same on the designs added in 0.3 (the Back Passage), each from its own bank (PLACE_BANKS). */
+  placeShare: 0.35,
   /** In an endless game, every this-many-th sales event from endlessFrom on gets a remark. */
   endlessEvery: 10,
   endlessFrom: 20,
@@ -417,7 +425,10 @@ export function createDirector(random = Math.random) {
     // The Car Park has a bank of its own as well. (Its two smallest sizes have no burger van.)
     const lot = !food && state.map?.design === 'carpark' && random() < TALK.carParkShare;
     const lotBank = () => (String(state.decor || '').includes('v') ? LINES.carPark : LINES.carPark.filter((l) => !/burger van/i.test(textOf(l))));
-    say(out, state, 'waveStart', food ? foodBank() : lot ? lotBank() : LINES.waveStart, { w }, { friend: standing(state) });
+    // So do the designs added in 0.3. (No dice are thrown on the other designs, so their openings
+    // come out as they always have.)
+    const place = !food && !lot && PLACE_BANKS[state.map?.design] && random() < TALK.placeShare ? LINES[PLACE_BANKS[state.map.design]] : null;
+    say(out, state, 'waveStart', food ? foodBank() : lot ? lotBank() : place || LINES.waveStart, { w }, { friend: standing(state) });
   }
 
   /** This game's holiday lines (see HOLIDAY_LINES), or null when it has no holiday. */

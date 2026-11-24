@@ -197,7 +197,7 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     decor: plan.decor,
     /** Marked floor for the factory machines: one character per tile, a key of ZONES or a
      *  space. An empty string means the map has no marked floor and machines go anywhere. */
-    zones: zones ? makeZones(plan.w, plan.h, plan.tiles, plan.doors) : '',
+    zones: zones ? makeZones(plan.w, plan.h, plan.tiles, plan.doors, design) : '',
     /** Entrances in the order they open, each a list of tile indexes; `open` of them are open. */
     doors: plan.doors,
     open: 0,
@@ -359,7 +359,7 @@ export function setMap(state, design, size) {
   state.decor = plan.decor;
   state.doors = plan.doors;
   state.open = 0;
-  if (state.zones) state.zones = makeZones(plan.w, plan.h, plan.tiles, plan.doors);
+  if (state.zones) state.zones = makeZones(plan.w, plan.h, plan.tiles, plan.doors, design);
   state.grid = new Array(plan.w * plan.h).fill(0);
   state.gridVer++;
   for (const p of state.players) p.ready = false;

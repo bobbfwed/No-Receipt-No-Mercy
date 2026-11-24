@@ -13,6 +13,8 @@
 //              two bays, trolley shelters, kerbed islands with lamp posts and pay machines,
 //              abandoned trolleys, coned-off potholes and a burger van. It has a second bank of
 //              tills in the bottom wall, with signs of its own.
+//   corridors  the Back Passage: long breeze-block corridor walls with a pipe along the top,
+//              hazard tape on the ends and stencilled signs (passageWalls)
 // Most games also have marked floor for the factory machines (state.zones): tinted patches with a
 // painted border and their name stencilled on, one colour per kind (ZONES in the rules).
 // Almost all of it never changes, so it is painted into cached chunks (createFloorCache); only the
@@ -173,10 +175,11 @@ export function analyzeMap(s) {
   const patches = zones ? findPatches(w, h, zones, doorway) : [];
   const blocks = decor ? findBlocks(w, h, decor) : [];
   const bays = decor && design === 'carpark' ? findBays(w, h, tiles, decor) : [];
+  const runs = design === 'corridors' ? findRuns(w, h, wall) : [];
 
   return {
     w, h, tiles, design, wall, doorway, tint, shelves, tills, tillTop, tillBot, tillLeft, tillRight,
-    doors, zones, patches, decor, blocks, bays,
+    doors, zones, patches, decor, blocks, bays, runs,
   };
 }
 
@@ -510,7 +513,7 @@ export function drawChunk(g, info, x0, y0, x1, y1, zoom = 40) {
   };
   drawConcrete(g, info, r, x0, y0, x1, y1, zoom);
   drawWalls(g, info, r);
-  drawInnerWalls(g, info, r);
+  drawInnerWalls(g, info, r, zoom);
   if (info.decor) drawFurniture(g, info, r, zoom);
   const { tiles, w } = info;
   for (let y = r.y0; y < r.y1; y++) {
@@ -798,7 +801,7 @@ function drawWalls(g, info, r) {
 }
 
 /** Pillars, showroom partitions with their doorways, and supermarket shelving. */
-function drawInnerWalls(g, info, r) {
+function drawInnerWalls(g, info, r, zoom) {
   const { w, h, wall, doorway } = info;
   const kindAt = (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? OUTER : wall[y * w + x]);
   const solid = (x, y) => { const k = kindAt(x, y); return k === OUTER || k === PARTITION; };
@@ -807,6 +810,11 @@ function drawInnerWalls(g, info, r) {
     for (let x = r.x0; x < r.x1; x++) {
       if (wall[y * w + x] === PILLAR) drawPillar(g, x * T, y * T);
     }
+  }
+  // The Back Passage's corridor walls are breeze block, not plasterboard.
+  if (info.design === 'corridors') {
+    passageWalls(g, info, r, zoom);
+    return;
   }
 
   // Partitions: shadows on the floor first, then the wall tops over them.
@@ -925,6 +933,106 @@ function drawShelf(g, sh) {
   if (sh.y1 > sh.y0) {
     box(g, px + 3, bot - 13, T - 6, 10, 2, C.yellow, 1.8);
     text(g, '50%', px + T / 2, bot - 7.5, 8, INK, 900);
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The Back Passage: breeze-block corridor walls painted the grey-green of every service corridor
+// ever built, a pipe along the top of each, hazard tape on every end the crowd squeezes round,
+// and stencilled signs on the long runs.
+
+const PASSAGE = {
+  top: '#a9b2ac', mortar: 'rgba(58,68,64,0.30)', face: '#77837d', kick: '#d6ad2a',
+  pipes: ['#b8463a', '#3f78b8', '#d9d4c4'],
+};
+/** What is stencilled on the long runs of corridor wall (picked by a hash of where the run is). */
+const PASSAGE_SIGNS = [
+  'STAFF ONLY', 'REAR ENTRY ONLY', 'TRADESMEN\'S ENTRANCE', 'GOODS IN (ROUND THE BACK)', 'MIND YOUR BACK',
+  'TIGHT SQUEEZE', 'PUSH HARD', 'DELIVERIES AT THE REAR', 'NO LOITERING', 'KEEP IT MOVING', 'BACK PASSAGE',
+  'NO ENTRY (MOSTLY)',
+];
+
+/** The runs of corridor wall along each row, as { y, x0, x1 } (x1 exclusive), for the signs. */
+function findRuns(w, h, wall) {
+  const runs = [];
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      if (wall[y * w + x] !== PARTITION) continue;
+      let e = x;
+      while (e + 1 < w - 1 && wall[y * w + e + 1] === PARTITION) e++;
+      runs.push({ y, x0: x, x1: e + 1 });
+      x = e;
+    }
+  }
+  return runs;
+}
+
+function passageWalls(g, info, r, zoom) {
+  const { w, h, wall } = info;
+  const isPart = (x, y) => x >= 0 && y >= 0 && x < w && y < h && wall[y * w + x] === PARTITION;
+  const solid = (x, y) => x < 0 || y < 0 || x >= w || y >= h || wall[y * w + x] === OUTER || wall[y * w + x] === PARTITION;
+  // Shadows on the floor first.
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  for (let y = r.y0; y < r.y1; y++) {
+    for (let x = r.x0; x < r.x1; x++) {
+      if (!isPart(x, y)) continue;
+      if (!solid(x, y + 1)) g.fillRect(x * T + 3, (y + 1) * T, T, 7);
+      if (!solid(x + 1, y)) g.fillRect((x + 1) * T, y * T + 5, 5, T);
+    }
+  }
+  for (let y = r.y0; y < r.y1; y++) {
+    for (let x = r.x0; x < r.x1; x++) {
+      if (!isPart(x, y)) continue;
+      const px = x * T, py = y * T;
+      const face = !solid(x, y + 1);
+      g.fillStyle = PASSAGE.top;
+      g.fillRect(px, py, T, T);
+      // Courses of blocks along the cap, every other course offset by half a block.
+      const capH = face ? T - 11 : T;
+      g.fillStyle = PASSAGE.mortar;
+      for (let c = 1; c * 10 < capH; c++) g.fillRect(px, py + c * 10 - 0.75, T, 1.5);
+      for (let c = 0; c * 10 < capH; c++) {
+        for (let k = (c % 2) * 10; k < T; k += 20) g.fillRect(px + k - 0.75, py + c * 10, 1.5, Math.min(10, capH - c * 10));
+      }
+      // The face where the wall drops to the floor below it: painted block with a yellow kick strip.
+      if (face) {
+        g.fillStyle = PASSAGE.face;
+        g.fillRect(px, py + T - 11, T, 11);
+        g.fillStyle = PASSAGE.kick;
+        g.fillRect(px, py + T - 4, T, 4);
+      }
+      // Hazard tape round an end the crowd walks past.
+      if (!solid(x - 1, y)) hazard(g, px, py, 7, T, 5);
+      if (!solid(x + 1, y)) hazard(g, px + T - 7, py, 7, T, 5);
+    }
+  }
+  // A pipe along the top of each wall, on brackets, in the colour of whatever it carries.
+  for (const run of info.runs) {
+    if (run.y < r.y0 - 1 || run.y > r.y1 || run.x1 <= r.x0 - 1 || run.x0 > r.x1) continue;
+    if (isPart(run.x0, run.y - 1)) continue; // the lower row of a thick wall
+    const col = PASSAGE.pipes[(hash2(run.x0, run.y + 70) * PASSAGE.pipes.length) | 0];
+    const X0 = run.x0 * T + 8, X1 = run.x1 * T - 8, Y = run.y * T + 5;
+    if (X1 <= X0) continue;
+    g.fillStyle = 'rgba(0,0,0,0.25)';
+    g.fillRect(X0 + 2, Y + 3, X1 - X0, 6);
+    box(g, X0, Y, X1 - X0, 6, 3, col, 1.5);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(X0 + 3, Y + 1.5, X1 - X0 - 6, 1.5);
+    g.fillStyle = '#4a4f55';
+    for (let x = run.x0 + 1; x < run.x1; x += 2) g.fillRect(x * T - 2, Y - 1, 4, 8);
+  }
+  // A stencilled sign on every long run, on the face side.
+  for (const run of info.runs) {
+    const len = run.x1 - run.x0;
+    if (len < 7 || run.y < r.y0 - 1 || run.y > r.y1 || run.x1 <= r.x0 - 4 || run.x0 > r.x1 + 4) continue;
+    if (isPart(run.x0, run.y + 1)) continue; // the upper row of a thick wall
+    const words = PASSAGE_SIGNS[(hash2(run.x0 * 3 + 1, run.y * 7 + 2) * PASSAGE_SIGNS.length) | 0];
+    const sw = Math.min(len * T - 70, 190), cx = ((run.x0 + run.x1) / 2) * T, cy = run.y * T + 18;
+    const red = hash2(run.y, run.x0 + 5) < 0.4;
+    box(g, cx - sw / 2, cy - 8, sw, 16, 2, red ? C.red : C.yellow, 1.6);
+    g.font = `900 10px ${FONT_FAMILY}`;
+    const size = Math.min(10, (10 * (sw - 10)) / Math.max(1, g.measureText(words).width));
+    if ((size * zoom) / T >= 5) text(g, words, cx, cy + 0.5, size, red ? '#ffffff' : INK, 900);
   }
 }
 

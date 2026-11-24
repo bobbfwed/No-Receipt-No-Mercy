@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
-  waveSpec, getField, getDist, makeMap, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt, crowdShiftAt, bossPatience,
+  waveSpec, getField, getDist, makeMap, mapSize, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt, crowdShiftAt, bossPatience,
   MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, ITEMS, TUNE, TICK_HZ, kidFirst, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
@@ -71,7 +71,8 @@ test('every design in every size has seven entrances that all reach the tills', 
   for (const design of Object.keys(MAP_DESIGNS)) {
     for (const size of Object.keys(MAP_SIZES)) {
       const s = createGame({ map: { design, size } });
-      const { w, h } = MAP_SIZES[size];
+      // (A design may need a bigger plot than the size's rectangle: see mapSize.)
+      const { w, h } = mapSize(design, size);
       assert.equal(s.w, w);
       assert.equal(s.h, h);
       assert.equal(s.tiles.length, w * h);

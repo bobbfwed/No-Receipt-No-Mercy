@@ -99,5 +99,4 @@ You are the owner and long-term maintainer of this codebase, and its design is u
       - Cosplayers have a wider area of effect, but are slower (0.8 tiles/s) and have less patience.
   - Play test the different cards to make sure none wildy change the difficulty. I believe the last time you mentioned play tests, your tests ended generally around round 16. Failure around round 12-19. If things fall outside of that range, we need to evaluate the modifier. I understand that play testing every combination would take a long time (correct me if I'm wrong), so test each card once, along with other cards. Test all cards at least once, while testing 5 cards at a time. This will likely cause some unknown interraction between the modifiers, but that's part of the game.
   - Come up with names of the cards that are appropriate for the humor in this game (inappropriate and dumb jokes preferable)
-- Add a new map. One with lots of long corridors that will make factory paths difficult.
 - Add a new map that is a completely different shape. I'm thinking horseshoe shapped. It needs to be larger to compensate for the missing/unusable area.

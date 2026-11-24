@@ -47,7 +47,21 @@ export const MAP_DESIGNS = {
     name: 'Car Park',
     desc: 'The sale has spilled outside. Rows of parked cars with the odd empty bay to squeeze through, and tills on two walls: make one way in a slog and the whole crowd takes the other.',
   },
+  corridors: {
+    name: 'The Back Passage',
+    desc: 'Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd.',
+  },
 };
+
+/**
+ * The width and height of a store of this design and size: the rectangle in MAP_SIZES, unless a
+ * design needs a bigger plot. Everything outside this file must read the made map's `w` and `h`.
+ * @returns {{w: number, h: number}}
+ */
+export function mapSize(design, size) {
+  const z = MAP_SIZES[size] || MAP_SIZES.xs;
+  return { w: z.w, h: z.h };
+}
 
 /** The size that suits a number of players. */
 export function recommendedSize(players) {
@@ -66,7 +80,7 @@ export function recommendedSize(players) {
  *   furniture.
  */
 export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
-  const { w, h } = MAP_SIZES[size] || MAP_SIZES.xs;
+  const { w, h } = mapSize(design, size);
   const g = [];
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) g.push(x === 0 || y === 0 || x === w - 1 || y === h - 1 ? '#' : '.');
@@ -77,6 +91,7 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
 
   if (design === 'showroom') rooms(w, h, wall, set);
   else if (design === 'aisles') shelves(w, h, mid, wall);
+  else if (design === 'corridors') passages(w, h, wall);
   else if (design !== 'food' && design !== 'carpark') pillars(w, h, wall);
 
   // Tills: a bank in the middle of the right-hand wall. The car park has two shorter banks: that
@@ -559,9 +574,13 @@ function shelves(w, h, mid, wall) {
  * No patch touches the outer wall: the Loading Bay is a tile in from it, or two in front of an
  * entrance or a till in that wall, so there is always a walkway round the edge, in through the
  * doors and up to the tills.
+ * The designs with a layout of their own (the Back Passage) lay their marked floor their own way;
+ * say which design it is to get it.
+ * @param {string} [design] a key of MAP_DESIGNS; left out, the ordinary layout
  * @returns {string} one character per tile: a key of ZONES, or a space
  */
-export function makeZones(w, h, tiles, doors) {
+export function makeZones(w, h, tiles, doors, design) {
+  if (design === 'corridors') return passageZones(w, h, tiles, doors);
   const z = new Array(w * h).fill(' ');
   const tall = h >= 30 ? 3 : 2, wide = 4;
   for (let n = 0, x0 = 9; x0 + wide - 1 <= w - 4; n++, x0 += 10) {
@@ -594,6 +613,151 @@ export function makeZones(w, h, tiles, doors) {
     for (const t of door) {
       const tx = t % w, ty = (t / w) | 0;
       for (let y = ty - 1; y <= ty + 1; y++) {
+        for (let x = tx - 1; x <= tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) z[y * w + x] = ' ';
+      }
+    }
+  }
+  return z.join('');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The Back Passage (version 0.3): the store's service corridors.
+
+/**
+ * The Back Passage's layout, worked out from the size alone, so the walls (passages) and the
+ * marked floor (passageZones) always agree. Long walls run across the store, leaving a hall
+ * three tiles wide along the left wall (in front of the entrances) and the right (in front of the
+ * tills), and cut it into corridors, as many as fit (three on the smallest stores, thirteen on the
+ * biggest); the layout is the same upside down. Each production line has its four kinds of
+ * marked floor in four corridors one below the other (on the three-corridor stores the Press Shop
+ * and Gift Wrap share the middle one), so every line has to get through the walls between them.
+ * The walls have few openings: in the gap between two sections of marked floor, but only every
+ * other gap, taking turns from one wall to the next, so a belt usually runs along its corridor to
+ * find one. A whole production line reaches from one of the outer corridors to the other, so the
+ * crowd can only get past it round its end, through those same openings or the halls.
+ * @returns {{tall: number, bands: number[][], walls: number[][], gaps: number[][][]}} `tall` is
+ *   how many rows a patch of marked floor has; `bands` each corridor's first and last row, top to
+ *   bottom; `walls` the rows of each wall, top to bottom (the middle one is two rows thick when it
+ *   falls between two rows); `gaps` for each wall its openings as [first column, last column]
+ */
+function passagePlan(w, h) {
+  const rows = h - 2;
+  const tall = h < 18 ? 1 : 2;
+  // The least each corridor needs: a patch and a row either side of it (two patches and three
+  // rows on the three-corridor layout's middle one).
+  const need = (K) => Array.from({ length: K }, (_, j) => (K === 3 && j === 1 ? 2 * tall + 3 : tall + 2));
+  const thick = (K) => (K % 2 === 0 && h % 2 === 0 ? 1 : 0);
+  const fits = (K) => need(K).reduce((a, b) => a + b, 0) + K - 1 + thick(K) <= rows;
+  let K = 3;
+  while (fits(K + 1)) K++;
+  // Rows left over go to the narrowest corridors, a pair (one above the middle and its mirror
+  // below) at a time; a single row left over goes to the middle corridor.
+  const hts = need(K);
+  let spare = rows - hts.reduce((a, b) => a + b, 0) - (K - 1) - thick(K);
+  const half = K >> 1, odd = K % 2;
+  while (spare > 0) {
+    let pick = -1;
+    for (let j = 0; j < half; j++) if (spare >= 2 && (pick < 0 || hts[j] < hts[pick])) pick = j;
+    if (odd && (pick < 0 || hts[half] < hts[pick])) pick = half;
+    if (pick < 0) break;
+    hts[pick]++;
+    if (pick === half && odd) spare--;
+    else { hts[K - 1 - pick]++; spare -= 2; }
+  }
+  const bands = [], walls = [];
+  for (let j = 0, y = 1; j < K; j++) {
+    bands.push([y, y + hts[j] - 1]);
+    y += hts[j];
+    if (j === K - 1) break;
+    const t = j === half - 1 && !odd ? 1 + thick(K) : 1;
+    walls.push(Array.from({ length: t }, (_, k) => y + k));
+    y += t;
+  }
+  // The openings, in the gaps between sections of marked floor (each six columns wide, the one
+  // before the section starting at column 9 + 10m), every other gap, taking turns. (Each line
+  // goes through the three walls between its four corridors: the top three walls for a section
+  // the right way up, the bottom three for one upside down.)
+  const ow = w >= 36 ? 4 : 3;
+  const gaps = walls.map((_, j) => {
+    const all = [];
+    for (let m = 1; ; m++) {
+      const x0 = 3 + 10 * m + ((6 - ow) >> 1), x1 = x0 + ow - 1;
+      if (x1 > w - 5) break;
+      all.push([x0, x1]);
+    }
+    // The walls no production line has to cross (between the middle corridors of a big store)
+    // get an opening in only every third gap.
+    const busy = j <= 2 || j >= walls.length - 3;
+    const out = all.filter((_, k) => (busy ? (k + 1 + j) % 2 === 0 : (k + j) % 3 === 0));
+    // (A store too small for its turn still gets one.)
+    return out.length || !all.length ? out : [all[all.length >> 1]];
+  });
+  return { tall, bands, walls, gaps };
+}
+
+/**
+ * How many columns of open floor the Back Passage's walls leave along the left and right walls:
+ * a hall in front of the entrances and one in front of the tills, joining the ends of every
+ * corridor. Without them a production line, which reaches from the top corridor to the bottom one,
+ * would be a wall right across the store that the crowd could never get round.
+ */
+const HALL = 3;
+
+/** The Back Passage: the corridor walls, with their openings (see passagePlan). */
+function passages(w, h, wall) {
+  const { walls, gaps } = passagePlan(w, h);
+  walls.forEach((ys, j) => {
+    for (const y of ys) {
+      for (let x = HALL + 1; x < w - 1 - HALL; x++) if (!gaps[j].some(([a, b]) => x >= a && x <= b)) wall(x, y);
+    }
+  });
+}
+
+/**
+ * The Back Passage's marked floor: sections ten columns apart, as on every design, but each patch
+ * is in a corridor of its own (the Press Shop and Gift Wrap share one on the three-corridor
+ * layout), from the Loading Bay in the top corridor down; every other section is upside down,
+ * from the bottom corridor up. A patch is in the middle of its corridor, or in the top and bottom
+ * corridors as far from the outer wall as it can be with a row to spare: that keeps a Loading Bay
+ * clear of the two rows in front of an entrance in that wall where the corridor is wide enough.
+ * Where it is not (the two smallest stores), the tiles in front of the entrance are left off it.
+ * @returns {string} one character per tile: a key of ZONES, or a space
+ */
+function passageZones(w, h, tiles, doors) {
+  const z = new Array(w * h).fill(' ');
+  const { tall, bands } = passagePlan(w, h);
+  const K = bands.length;
+  // Where a patch starts in each corridor; on the three-corridor layout the middle one has a slot
+  // near its top and one near its bottom.
+  const mid = (j) => bands[j][0] + ((bands[j][1] - bands[j][0] + 1 - tall) >> 1);
+  const at = bands.map((b, j) => (j === 0 ? b[1] - tall : j === K - 1 ? b[0] + 1 : mid(j)));
+  let upper = 0, lower = 0;
+  if (K === 3) {
+    const [a, b] = bands[1];
+    const m = ((b - a + 1 - (2 * tall + 3)) / 3) | 0;
+    upper = a + 1 + m;
+    lower = b - m - tall;
+  }
+  // Which row each kind starts on, for a section the right way up and one upside down.
+  const tops = [
+    K === 3 ? { u: at[0], p: upper, k: lower, c: at[2] } : { u: at[0], p: at[1], k: at[2], c: at[3] },
+    K === 3 ? { u: at[2], p: lower, k: upper, c: at[0] } : { u: at[K - 1], p: at[K - 2], k: at[K - 3], c: at[K - 4] },
+  ];
+  for (let n = 0, x0 = 9; x0 + 3 <= w - 4; n++, x0 += 10) {
+    for (const [ch, top] of Object.entries(tops[n % 2])) {
+      for (let dy = 0; dy < tall; dy++) {
+        const y = top + dy;
+        for (let dx = 0; dx < 4; dx++) if (tiles[y * w + x0 + dx] === '.') z[y * w + x0 + dx] = ch;
+      }
+    }
+  }
+  // Keep the floor in front of every entrance unmarked: right inside it (as on every design), and
+  // two rows deep in front of one in the top or bottom wall.
+  for (const door of doors) {
+    for (const t of door) {
+      const tx = t % w, ty = (t / w) | 0;
+      const deep = ty === 0 || ty === h - 1 ? 2 : 1;
+      for (let y = ty - deep; y <= ty + deep; y++) {
         for (let x = tx - 1; x <= tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) z[y * w + x] = ' ';
       }
     }

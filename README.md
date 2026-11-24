@@ -37,6 +37,11 @@ The sale has spilled outside. Rows of parked cars with the odd empty bay to sque
 
 ![Car Park](docs/img/map-carpark.png)
 
+### The Back Passage
+Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd.
+
+![The Back Passage](docs/img/map-corridors.png)
+
 | Size | Tiles | Suits |
 |---|---|---|
 | Corner Shop | 30 x 16 | the original; cramped |

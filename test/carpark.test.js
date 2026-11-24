@@ -18,7 +18,7 @@ function distTo(s, bank) {
 }
 
 test('the Car Park is the fifth design, and its pieces are on the list', () => {
-  assert.deepEqual(Object.keys(MAP_DESIGNS), ['warehouse', 'showroom', 'aisles', 'food', 'carpark']);
+  assert.deepEqual(Object.keys(MAP_DESIGNS).slice(0, 5), ['warehouse', 'showroom', 'aisles', 'food', 'carpark']);
   assert.equal(MAP_DESIGNS.carpark.name, 'Car Park');
   assert.ok(MAP_DESIGNS.carpark.desc.length > 20);
   for (const ch of CAR_PARK) assert.ok(DECOR[ch], `DECOR has no '${ch}'`);

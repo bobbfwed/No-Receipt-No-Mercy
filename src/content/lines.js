@@ -902,6 +902,20 @@ export const LINES = {
     r('Car Park, event {w}. The cameras caught {p} in the back row after hours, alone, in a steamed-up hatchback. HR has questions. I have the tape.'),
     r("Event {w}. The burger van man says the meat is 'local'. Nobody has seen the stray dog since Tuesday."),
   ],
+  // Doors opening in the Back Passage store (version 0.3), used in place of waveStart a share of
+  // the time on that map only. {w} wave, {p} anyone
+  backPassage: [
+    'Sales event {w}, round the Back Passage. Tight, dark and full of strangers. {p} says it reminds him of college.',
+    'Doors open on the Back Passage. Staff only, rear entry only, and no lube in the budget.',
+    'Event {w}. The Back Passage is narrow, badly lit and backed up. Like {p} after the work Christmas buffet.',
+    'Back Passage, event {w}. Everything squeezes through the same little gaps. Go slow, {p}. Nobody likes it rushed.',
+    'Sales event {w}. Customers are coming in the back way. That has never happened to {p} on purpose.',
+    "Doors open. The Back Passage hasn't been cleaned since 2009. Neither has {p}'s search history.",
+    u('Event {w}. Somebody wrote "{p} WAS HERE" on the Back Passage wall. Underneath, in different handwriting: "TWICE".'),
+    u('Back Passage, event {w}. Health and Safety says the corridors are too tight. {p} has never heard that complaint in his life.'),
+    u("Sales event {w}. The pipes in the Back Passage are groaning. That's the plumbing, {p}. Not everything is about you."),
+    r("Back Passage, event {w}. Corporate asked for a 'tradesmen's entrance'. {p} giggled for an hour. That is why he is not in management."),
+  ],
   // The doors were opened early and the factory was paid for the time skipped. {n} the cash,
   // {m} the seconds skipped (may be missing), {p} anyone
   early: [
