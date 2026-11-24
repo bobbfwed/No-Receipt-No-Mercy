@@ -266,7 +266,7 @@ const TEXT = {
   fathersday: {
     name: "Father's Day",
     rule: (c) => `${cap(times(c.crowd))} as many Dads, each with ${off(c.hp, 'more', 'less')} patience.`,
-    joke: 'Twice the dads, half the patience. They want a tie and a nap. Same as you, except they got kids out of it.',
+    joke: 'Twice the dads, and none of them has the patience for it. They want a tie and a nap. Same as you, except they got kids out of it.',
   },
   payday: {
     name: 'Payday Friday',

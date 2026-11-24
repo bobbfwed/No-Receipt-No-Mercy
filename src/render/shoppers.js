@@ -3475,11 +3475,11 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     alt = s.bt > 0 ? BLIND_BOLT : 0; // the dog is bolting
     if (alt) pace = 2.2;
     // An emotional support dog instead (the supportdog card: F.esa, and his id).
-    if (F.esa && idShare(s.id, 'supportdog') < CARDS.supportdog.share) alt |= BLIND_ESA;
+    if (F.esa && idShare(s.id, 'supportdog', F.seed) < CARDS.supportdog.share) alt |= BLIND_ESA;
   } else if (s.k === 'dog') {
     if (watching) alt = how.pee ? DOG_PEE : DOG_SIT;
     // A pregnant one (the spayed card: F.spayed, and her id): a low belly.
-    if (F.spayed && idShare(s.id, 'spayed') < CARDS.spayed.share) alt |= DOG_BUMP;
+    if (F.spayed && idShare(s.id, 'spayed', F.seed) < CARDS.spayed.share) alt |= DOG_BUMP;
   } else if (s.k === 'flasher') {
     if (s.fl > 0 && !leaving) alt = 1; // bathrobe open
   } else if (s.k === 'boss') {

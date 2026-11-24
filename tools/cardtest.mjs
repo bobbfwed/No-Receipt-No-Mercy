@@ -49,7 +49,7 @@ import { CARDS, CARDS_APART, DEALABLE, cardParts } from '../src/sim/index.js';
  * pair from CARDS_APART. Between them every card that can be dealt (DEALABLE) is in at least one (a
  * per-kind card with one kind), so a run of these is the "every card in a hand of five" test the
  * owner asked for. (The two cards the playtest took out of the deal, eightyproof and klepto, were
- * in hands 5 and 6 when it ran; restocking and pissing took their places.)
+ * in hands 5 and 6 at first; restocking and pissing took their places before the final run.)
  */
 export const HANDS = [
   ['litter', 'lootbox', 'doubledip', 'asseenontv', 'convention'],

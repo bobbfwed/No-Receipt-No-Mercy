@@ -59,9 +59,9 @@ function tune(t, changes, obj = TUNE) {
   for (const k of Object.keys(changes)) { old[k] = obj[k]; obj[k] = changes[k]; }
   t.after(() => Object.assign(obj, old));
 }
-/** The first id from `from` that a card's share by id picks (or, with in false, leaves out). */
-function idFor(card, inShare = true, from = 100, key = (id) => id) {
-  for (let id = from; ; id++) if ((idShare(key(id), card) < CARDS[card].share) === inShare) return id;
+/** The first id from `from` that a card's share by id picks (or, with in false, leaves out), in a game with this seed (game()'s own by default: the pick turns with the seed). */
+function idFor(card, inShare = true, from = 100, key = (id) => id, seed = 5) {
+  for (let id = from; ; id++) if ((idShare(key(id), card, seed) < CARDS[card].share) === inShare) return id;
 }
 const tileOf = (s, sh) => (sh.y | 0) * s.w + (sh.x | 0);
 

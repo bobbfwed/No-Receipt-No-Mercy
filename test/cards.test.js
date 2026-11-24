@@ -13,7 +13,7 @@ import {
   revealTick, dealLength, idShare, smashReady, patienceFor, bossPatience, CARDS, DEALABLE, CARDS_APART,
   CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
-import { cardSlip, cardFall, cardLiftChance, cardLiftReach, cardShield } from '../src/sim/cards.js';
+import { cardSlip, cardFall, cardLiftChance, cardLiftReach, cardShield, cardPicks } from '../src/sim/cards.js';
 import { HostSession } from '../src/net/session.js';
 import { cardText, cardName, CARD_WORDS, PLURALS, cardsNote } from '../src/content/cards.js';
 import { NOPE } from '../src/content/lines.js';
@@ -326,6 +326,25 @@ test('a share by id picks about that share, differently for each card, and needs
   assert.ok(same < 900, 'not the same shoppers for every card');
 });
 
+test('a share by id picks different shoppers in games with different seeds, and still about that share', () => {
+  // Ids come out in the same order every game, so the pick has to turn with the seed or a card
+  // would land on the same shoppers every time it was dealt.
+  const picks = (seed) => [...Array(300).keys()].map((i) => idShare(i + 1, 'doubledip', seed) < 1 / 3);
+  const seen = new Set();
+  for (const seed of [1, 2, 3, 77, 1234, 987654321, 0x7fffffff]) {
+    const p = picks(seed);
+    const n = p.filter(Boolean).length;
+    assert.ok(Math.abs(n / 300 - 1 / 3) < 0.03, `seed ${seed}: ${n / 300}`);
+    seen.add(p.join());
+    assert.deepEqual(picks(seed), p, 'the same seed picks the same shoppers');
+  }
+  assert.equal(seen.size, 7, 'each seed its own pick');
+  // The rules ask with the game's seed: two games, same shopper id, different answers somewhere.
+  const a = game(['doubledip'], 11), b = game(['doubledip'], 12);
+  const differs = [...Array(60).keys()].some((i) => cardPicks(a, 'doubledip', { id: i + 1 }) !== cardPicks(b, 'doubledip', { id: i + 1 }));
+  assert.ok(differs);
+});
+
 // ---- The simple cards ----------------------------------------------------------------------------
 
 /** How many babies a Pregnant Lady (an Octomom if sup) pops, worn out by a sprinkler. */
@@ -360,8 +379,8 @@ function refundOf(cards, k, id, more = {}) {
 
 test('doubledip: the shoppers it picks by id take twice the cash, still as one refund; not the boss or babies', () => {
   const ids = [...Array(60).keys()].map((i) => i + 100);
-  const picked = ids.find((id) => idShare(id, 'doubledip') < CARDS.doubledip.share);
-  const spared = ids.find((id) => idShare(id, 'doubledip') >= CARDS.doubledip.share);
+  const picked = ids.find((id) => idShare(id, 'doubledip', 5) < CARDS.doubledip.share);
+  const spared = ids.find((id) => idShare(id, 'doubledip', 5) >= CARDS.doubledip.share);
   assert.equal(refundOf(['doubledip'], 'hunter', picked), refundOf(null, 'hunter', picked) * CARDS.doubledip.cash);
   assert.equal(refundOf(['doubledip'], 'hunter', spared), refundOf(null, 'hunter', spared));
   assert.equal(refundOf(['doubledip'], 'baby', picked), BABY.refund);
@@ -441,8 +460,8 @@ test('artisanal and premature: machines take longer; security fires faster and r
 test('preworkout: the gym bros it picks by id land twice as many hits, the Roid Rager too', () => {
   const s = game(['preworkout']);
   const ids = [...Array(80).keys()].map((i) => i + 1);
-  const picked = ids.find((id) => idShare(id, 'preworkout') < CARDS.preworkout.share);
-  const spared = ids.find((id) => idShare(id, 'preworkout') >= CARDS.preworkout.share);
+  const picked = ids.find((id) => idShare(id, 'preworkout', s.seed) < CARDS.preworkout.share);
+  const spared = ids.find((id) => idShare(id, 'preworkout', s.seed) >= CARDS.preworkout.share);
   const bro = (id, hn, sup = 0) => ({ id, k: 'gymbro', hn, hw: 0, ...(sup ? { sup: 1 } : {}) });
   const max = TUNE.smashMax, rage = SUPERS.gymbro.smashMax;
   assert.equal(smashReady(bro(picked, max), SHOPPERS.gymbro, s), true);
@@ -818,7 +837,7 @@ test('every card has a name, a rule built from its numbers and a joke; a per-kin
   assert.match(cardText('slow:dad').rule, /Dads and Dads on a Mission walk 15% slower/);
   assert.match(cardText('litter').rule, /twice as many babies/);
   assert.match(cardText('pulledout').rule, /half as many babies/);
-  assert.match(cardText('doubledip').rule, /^One in 3 shoppers takes twice the cash/);
+  assert.match(cardText('doubledip').rule, /^One in 5 shoppers takes twice the cash/);
   assert.match(cardText('lootbox').rule, /3 times as much/);
   assert.match(cardText('clearance').rule, /15% less/);
   assert.match(cardText('rentacop').rule, /Security buildings cost 20% less and factory buildings 20% more/);

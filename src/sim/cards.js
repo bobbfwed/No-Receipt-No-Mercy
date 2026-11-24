@@ -195,18 +195,27 @@ function saltOf(id) {
 }
 
 /**
- * Where a shopper (by id) falls for one card, in [0, 1): his id stepped through by the plastic
- * number's reciprocal (neither the golden ratio of babyPace and kidFirst nor the silver of
- * walkPace, so it lines up with neither) plus a salt for the card. A share of the shoppers is
- * those below it: no field in the state, no random draw, the same on every computer.
+ * A game's own turn of the wheel, in [0, 1), from its seed. Shoppers' ids come out in the same
+ * order in every game, so without this a card would pick the very same shoppers every time it was
+ * dealt (the playtest found Double Dipping always doubling the same dad in event 2). No seed
+ * gives no turn.
  */
-export function idShare(id, card) {
-  const f = (id * 0.7548776662466927 + saltOf(card)) % 1;
+const seedTurn = (seed) => (((seed >>> 0) % 1000003) * 0.6180339887498949) % 1;
+
+/**
+ * Where a shopper (by id) falls for one card in one game, in [0, 1): his id stepped through by the
+ * plastic number's reciprocal (neither the golden ratio of babyPace and kidFirst nor the silver of
+ * walkPace, so it lines up with neither), plus a salt for the card, plus the game's own turn (its
+ * seed, so each game picks different shoppers). A share of the shoppers is those below it: no
+ * field in the state, no random draw, the same on every computer.
+ */
+export function idShare(id, card, seed = 0) {
+  const f = (id * 0.7548776662466927 + saltOf(card) + seedTurn(seed)) % 1;
   return f < 0 ? f + 1 : f;
 }
 
 /** True if the game has a card with a `share`, and this shopper (by id) is in it. */
-export const cardPicks = (state, id, s) => hasCard(state, id) && idShare(s.id, id) < CARDS[id].share;
+export const cardPicks = (state, id, s) => hasCard(state, id) && idShare(s.id, id, state.seed) < CARDS[id].share;
 
 /**
  * The cards' multiplier on the patience a shopper of kind k walks in with (k is 'baby' for a
@@ -390,7 +399,7 @@ export const cardKidRuns = (state, s) => (cardPicks(state, 'offleash', s) ? CARD
  * not of the kids). Worked out from her id and how many times he has run (`kn`, already counted
  * for this run), so every run is its own chance, and nothing new is stored or drawn.
  */
-export const kidBack = (state, s) => hasCard(state, 'wrongway') && idShare(s.id * 31 + (s.kn | 0), 'wrongway') < CARDS.wrongway.share;
+export const kidBack = (state, s) => hasCard(state, 'wrongway') && idShare(s.id * 31 + (s.kn | 0), 'wrongway', state.seed) < CARDS.wrongway.share;
 
 /** True if a runaway child runs on along the shoppers' own route, further than usual (freerange). */
 export const kidAlong = (state) => hasCard(state, 'freerange');

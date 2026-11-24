@@ -698,7 +698,7 @@ export const TUNE = {
 export const CARDS = {
   // ---- Bad for the players
   litter: { side: 'bad', pops: 2 }, // Pregnant Ladies' babies, times
-  doubledip: { side: 'bad', share: 1 / 3, cash: 2 }, // that share of shoppers takes that times the refund cash
+  doubledip: { side: 'bad', share: 0.2, cash: 2 }, // that share of shoppers takes that times the refund cash (one in three before the playtest: once the pick turned with the seed it cost the scripted players four events)
   freerange: { side: 'bad', ahead: 1.5 }, // a runaway kid's spot is that many times as far along the route
   offleash: { side: 'bad', share: 0.4, runs: 2 }, // that share of moms' kids run off that many times as often
   preworkout: { side: 'bad', share: 0.4, hits: 2 }, // that share of gym bros land that many times the hits

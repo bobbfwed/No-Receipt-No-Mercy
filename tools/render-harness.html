@@ -912,7 +912,7 @@ function showcaseCrowd(s) {
 
 /** The first id from `from` that a card picks (or, with inShare false, leaves out). */
 function idFor(card, inShare = true, from = 100) {
-  for (let id = from; ; id++) if ((idShare(id, card) < CARDS[card].share) === inShare) return id;
+  for (let id = from; ; id++) if ((idShare(id, card, state.seed) < CARDS[card].share) === inShare) return id;
 }
 
 /** The buildings of a &cardshow= scene. */

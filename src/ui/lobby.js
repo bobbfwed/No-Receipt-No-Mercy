@@ -40,7 +40,7 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
     },
   });
   const legend = h('ul', { class: 'lobby-legend' }, Object.values(ZONES).map((z) => h('li', null,
-    h('i', { style: { background: z.color } }), `${z.name}: ${z.kind === 'chute' ? 'Shipping Chutes' : `${z.kind[0].toUpperCase()}${z.kind.slice(1)}s`}`)));
+    h('i', { style: { background: z.color } }), `${z.name}: ${z.kind === 'chute' ? 'Shipping Chutes' : z.kind === 'press' ? 'Presses' : `${z.kind[0].toUpperCase()}${z.kind.slice(1)}s`}`)));
 
   const el = h('section', { class: 'panel lobby hidden', 'aria-label': 'Before the game starts' },
     h('h3', null, 'BEFORE WE OPEN'),

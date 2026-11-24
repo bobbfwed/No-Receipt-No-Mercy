@@ -290,6 +290,7 @@ export function createRenderer(canvas, session) {
     // so the game's cards count), and the cards that change how things are drawn (0.3.01): pregnant
     // dogs (spayed), support dogs (supportdog), bigger bosses (bde).
     F.game = s;
+    F.seed = s.seed; // who a card picks by id turns with the game's seed (idShare)
     F.spayed = hasCard(s, 'spayed');
     F.esa = hasCard(s, 'supportdog');
     F.bde = hasCard(s, 'bde');
