@@ -1,7 +1,7 @@
 // Full-screen overlays: the end of the game, losing the host, and the in-game "how to play".
 import { TUNE, SHOPPERS, SUPERS, BUILD, SETTINGS, isEndless } from '../sim/index.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
-import { bossFacts, fmt } from '../content/facts.js';
+import { bossFacts, edgeText, fmt } from '../content/facts.js';
 import { recordWhere } from './record.js';
 import { h, money, safeColor } from './dom.js';
 import { debFace } from './icons.js';
@@ -55,7 +55,7 @@ function shopperGuide() {
     h('h3', null, 'Who comes through the door'),
     h('dl', { class: 'guide' }, Object.entries(SHOPPER_HELP).map(([k, v]) => [
       h('dt', null, SHOPPERS[k] ? SHOPPERS[k].name : k),
-      h('dd', null, v.trick, ' ', h('em', null, `Beat it with: ${v.beat}`),
+      h('dd', null, v.trick, ' ', SHOPPERS[k] && edgeText(k) ? `${edgeText(k)} ` : '', h('em', null, `Beat it with: ${v.beat}`),
         SUPER_HELP[k] && SUPERS[k] ? h('span', { class: 'guide-super' }, h('b', null, `Super (${SUPERS[k].name}, from event ${SHOPPERS[k].sup.from}): `), SUPER_HELP[k]) : null),
     ]),
     h('dt', { class: 'guide-boss' }, `The boss (every ${ordinal(b.every)} sales event)`),

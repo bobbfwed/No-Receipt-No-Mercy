@@ -7,7 +7,7 @@ import { BUILD, MACHINE_SPD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, diffic
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText,
+  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText, edgeFacts,
 } from '../content/facts.js';
 import { trackName } from './upgradetext.js';
 import { worded } from '../content/touch.js';
@@ -170,6 +170,14 @@ function securityCard(k) {
     extra.push(['Same shopper again', `not for ${fmt(TUNE.pitchCool)} s, and each repeat pitch from the same stand works ${pct(TUNE.pitchRepeat)} as well as the last. Nobody falls for the same knife set forever, dipshit; build a second salesman`]);
   }
   extra.push(['Gym bro hits it survives', `${st.hits} a sales event`]);
+  // Who it works better or worse on (the shoppers' `weak` and `tough`), with the reasons under
+  // Known offenders.
+  for (const side of ['weak', 'tough']) {
+    const who = SHOPPER_ORDER.filter((c) => SHOPPERS[c][side] === k);
+    if (!who.length) continue;
+    const e = edgeFacts(who[0]).find((f) => f.side === side);
+    extra.push([side === 'weak' ? 'Extra hard on' : 'Less use against', `${who.map((c) => SHOPPERS[c].name).join(', ')} (${e.effect.replace(/ to it$/, '').replace(/ one$/, '')})`]);
+  }
   return h('article', { class: 'hb-card hb-wide' }, buildingHead(k),
     h('p', null, worded(HOW[k].does)),
     h('p', null, h('b', null, 'How: '), worded(HOW[k].use)),

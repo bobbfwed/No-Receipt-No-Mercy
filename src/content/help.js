@@ -98,6 +98,40 @@ export const SHOPPER_HELP = {
 };
 
 /**
+ * Why a shopper is weak to one kind of security, or tough against one (`weak` and `tough` on
+ * SHOPPERS in constants.js). Only the reason is here: which building and by how much come from the
+ * rules, in src/content/facts.js (edgeFacts), so the numbers cannot drift. A kind with neither has
+ * no entry; a new `weak` or `tough` needs its reason added here (a test checks).
+ */
+export const EDGE_HELP = {
+  clipper: { weak: 'The laser scans her coupons, and every last one of them expired in 2019. She takes it personally.' },
+  dad: { tough: 'It\'s only water. He has been pissed on by a newborn at three in the morning; your sprinkler is a light breeze.' },
+  karen: {
+    weak: 'The hair. Four hundred dollars of highlights, and you just hosed them.',
+    tough: 'She has argued with scanners before. The scanners apologised.',
+  },
+  scooter: { weak: 'The bigger vehicle always wins, and grandma knows it.' },
+  teen: { weak: 'His phone gets wet. It is the worst thing that has ever happened to him, and he will be posting about it.' },
+  blind: { tough: 'He cannot see the red light, so it cannot ruin his day.' },
+  gymbro: {
+    weak: 'The spray tan runs, and now everyone can see he is actually beige.',
+    tough: 'He benches more than a pallet, and he will tell you so while it hits him.',
+  },
+  drinker: {
+    weak: 'He can barely stay upright on a dry floor. On a wet one he takes the scenic route, on all fours.',
+    tough: 'He thinks it is raining, and he is delighted about it.',
+  },
+  dog: {
+    weak: 'Hates baths. Spray him once and he acts like you tried to drown him.',
+    tough: 'Too small to hit properly: the forks keep going right over his head.',
+  },
+  cosplay: {
+    weak: 'He cannot see out of the helmet, so he never sees the pallet coming.',
+    tough: 'The foam armour is "rated for lasers". He made it himself, and he will explain the build for an hour.',
+  },
+};
+
+/**
  * The boss (BOSS in constants.js; not one of SHOPPERS). His numbers are added where he is shown,
  * from src/content/facts.js, so this text has none.
  */

@@ -522,7 +522,8 @@ test('the barcode laser fires down the line it faces, through everything, and hi
   const a = arrival(g, 'karen'), b = arrival(g, 'karen');
   pin(a, 14.9, 10.5); pin(b, 15.3, 8.5); // a in line (0.4 off centre), b not (0.8 off)
   step(g);
-  assert.ok(Math.abs(a.mhp - a.hp - BUILD.railgun.dmg) < 1e-9);
+  // (A Karen is tough against the Barcode Laser since 0.3.01: she loses TUNE.toughMul of it.)
+  assert.ok(Math.abs(a.mhp - a.hp - BUILD.railgun.dmg * TUNE.toughMul) < 1e-9);
   assert.equal(b.hp, b.mhp);
 });
 
@@ -940,7 +941,8 @@ test('a cosplayer soaks up the shots meant for anyone close to him', () => {
   const a = run(0);
   assert.ok(a.shots >= 2);
   assert.equal(a.h.hp, a.h.mhp, 'the hunter is untouched');
-  assert.ok(Math.abs(a.c.mhp - a.c.hp - a.shots * BUILD.forklift.dmg) < 1e-9, 'the cosplayer took every shot');
+  // (A cosplayer is weak to forklifts since 0.3.01: he loses TUNE.weakMul of every shot he takes.)
+  assert.ok(Math.abs(a.c.mhp - a.c.hp - a.shots * BUILD.forklift.dmg * TUNE.weakMul) < 1e-9, 'the cosplayer took every shot');
   const shields = a.ev.filter((e) => e.e === 'shield');
   assert.ok(shields.length >= 1 && shields.length <= 2, 'no more than once a second');
   // Further away than his costume reaches, the hunter takes it himself.
@@ -949,7 +951,7 @@ test('a cosplayer soaks up the shots meant for anyone close to him', () => {
   assert.ok(a.h.hp < a.h.mhp);
   // The super one takes only half of what he soaks up.
   const b = run(1);
-  assert.ok(Math.abs(b.c.mhp - b.c.hp - b.shots * BUILD.forklift.dmg * 0.5) < 1e-9);
+  assert.ok(Math.abs(b.c.mhp - b.c.hp - b.shots * BUILD.forklift.dmg * 0.5 * TUNE.weakMul) < 1e-9);
 });
 
 test('an exhibitionist stops dads and teenagers nearby, but nobody else, and not again straight away', (t) => {

@@ -6,6 +6,7 @@ import {
   tracksOf, defaultTrack, maxIn, levelCost, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
   patienceScaleAt, patienceGrowth,
 } from '../sim/index.js';
+import { EDGE_HELP } from './help.js';
 
 /** The order shoppers are listed in: the order they first turn up. */
 export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'flasher', 'preggo', 'cosplay'];
@@ -131,6 +132,32 @@ export function paceText() {
   return `Speed is the kind's: each shopper walks anywhere from ${p}% slower to ${p}% faster than that, so a crowd strings out instead of arriving in one lump (the boss and the babies keep their own).`;
 }
 
+/**
+ * What a kind of shopper (its super version too) is weak to and tough against, from the rules:
+ * [{ side: 'weak' | 'tough', kind (a key of BUILD), name (the building's), mul (TUNE.weakMul or
+ * toughMul), effect (what it does, in words), why (EDGE_HELP's reason) }], weak first. Empty for a
+ * kind with neither.
+ */
+export function edgeFacts(k) {
+  const d = SHOPPERS[k], out = [];
+  for (const side of ['weak', 'tough']) {
+    const kind = d[side];
+    if (!kind) continue;
+    const mul = side === 'weak' ? TUNE.weakMul : TUNE.toughMul;
+    const p = `${Math.round(Math.abs(mul - 1) * 100)}%`;
+    // (A Wet Floor Sign takes no patience from anyone who does not slip: it is the time to cross it.)
+    const effect = kind === 'wetfloor' ? `takes ${p} ${mul > 1 ? 'longer' : 'less time'} to get across one`
+      : `loses ${p} ${mul > 1 ? 'more' : 'less'} patience to it`;
+    out.push({ side, kind, name: BUILD[kind].name, mul, effect, why: EDGE_HELP[k]?.[side] || '' });
+  }
+  return out;
+}
+
+/** edgeFacts as one or two sentences for the help and the README ('' for a kind with neither). */
+export function edgeText(k) {
+  return edgeFacts(k).map((e) => `${e.side === 'weak' ? 'Weak to' : 'Tough against'} the ${e.name}: ${e.effect}. ${e.why}`).join(' ');
+}
+
 /** A number for a table: whole if it is big or whole, otherwise one decimal. */
 export const fmt = (v) => (Math.abs(v) >= 100 || Number.isInteger(v) ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1));
 const pct = (m) => `${Math.round(m * 100)}%`;
@@ -181,6 +208,7 @@ export function shopperTraits(k, sup = 0) {
     const b = babyFacts();
     out.push(['Her babies', `${fmt(b.hp)} patience each (growing like everyone's), ${fmt(b.speed)} tiles a second, and nothing distracts them; one at a till takes $${b.refund} but is not a refund toward the limit`]);
   }
+  for (const e of edgeFacts(k)) out.push([e.side === 'weak' ? 'Weak to' : 'Tough against', `${e.name}: ${e.effect}. ${e.why}`]);
   if (d.gawks) out.push(['Exhibitionists', 'stops and stares']);
   if (d.pitch) {
     const [stop, rush] = d.pitch;

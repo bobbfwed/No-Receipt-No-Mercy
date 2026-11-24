@@ -5,6 +5,6 @@ export { MAP_SIZES, MAP_DESIGNS, DECOR, makeMap, makeZones, recommendedSize } fr
 export { TRACKS, tracksOf, defaultTrack, levelIn, maxIn, levelOf, levelCost, upgradeCost, spentOnTrack, spentOn, statsOf, rebuildDeal } from './upgrades.js';
 export { getDist, getHopDist, getField, getFieldTo, modeOf, routeOf, smashReady, computeDist, tillBanks, banksOpen, walkable, UNREACHABLE, NORMAL, HOP, SMASH, GHOST } from './path.js';
 export { applyCommand, canPlace, canUpgrade, autoReady, autoRebuildWait } from './commands.js';
-export { step, waveSpec, beginWave, queueTrainingWave, setTrainingCash, patienceGrowth, patienceFor, patienceScaleAt, crowdShiftAt, babyPace, walkPace, kidFirst, bossTier, bossTitle, bossPatience, pitchStop, surgeHpAt, surgeCrowdAt } from './step.js';
+export { step, waveSpec, beginWave, queueTrainingWave, setTrainingCash, patienceGrowth, patienceFor, patienceScaleAt, crowdShiftAt, babyPace, walkPace, edgeMul, kidFirst, bossTier, bossTitle, bossPatience, pitchStop, surgeHpAt, surgeCrowdAt } from './step.js';
 export { priceOf, waveValue, officePlayer, canBuy, planCost, checkPlan } from './office.js';
 export { applyDemoLayout, DEMO_LAYOUT } from './demo.js';

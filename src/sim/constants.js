@@ -198,6 +198,11 @@ export const BUILD = {
  * pitch: [stop, rush] the TV Salesman's chances with this shopper: with chance `stop` he stops to
  *   watch the demonstration; otherwise, with chance `rush`, he hurries past faster for a while.
  * pees, shields, flashes, sways, pops: see the comments on the shoppers that have them.
+ * weak, tough: a kind of security (a key of BUILD) this shopper loses TUNE.weakMul times the usual
+ *   patience to, or TUNE.toughMul times (0.3.01, the owner's request: small edges, so each kind
+ *   has a little more to learn about it). A Wet Floor Sign takes no patience from anyone who does
+ *   not slip on it, so for `wetfloor` it is the time he takes to cross the sign that is
+ *   multiplied. Supers have their base kind's; the boss and babies have none.
  * hp, refund and drain here are the base numbers: a shopper walks in with hp times the sales
  *   event's patience multiplier (patienceScaleAt in step.js; and grown by wave and difficulty),
  *   takes refund times perHead() at a till, and drains drain times that same multiplier a second
@@ -214,28 +219,28 @@ export const SHOPPERS = {
     sup: { name: 'Doorbuster', from: 6, hp: 3, speed: 1.3 },
   },
   clipper: {
-    name: 'Coupon Clipper', hp: 14.4, speed: 1.9, refund: 5, browses: true, pitch: [0.3, 0.1],
+    name: 'Coupon Clipper', hp: 14.4, speed: 1.9, refund: 5, browses: true, pitch: [0.3, 0.1], weak: 'railgun',
     sup: { name: 'Extreme Couponer', from: 8, hp: 2.5, speed: 1.6 },
   },
   // The super dad does not slip and his patience runs out half as fast.
   dad: {
-    name: 'Dad', hp: 30.6, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, hopsBelts: true, gawks: true, pitch: [0.2, 0.3],
+    name: 'Dad', hp: 30.6, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, hopsBelts: true, gawks: true, pitch: [0.2, 0.3], tough: 'sprinkler',
     sup: { name: 'Dad on a Mission', from: 7, hp: 2.5, speed: 1.25, drain: 0.5, steady: true, pitch: [0.1, 0.45] },
   },
   // The super Karen slows towers twice as far away, and to a quarter speed instead of half.
   // (She stops at the salesman to argue with him, never to hurry.)
   karen: {
-    name: 'Karen', hp: 153, speed: 0.9, refund: 40, nag: true, pitch: [0.4, 0],
+    name: 'Karen', hp: 153, speed: 0.9, refund: 40, nag: true, pitch: [0.4, 0], weak: 'sprinkler', tough: 'railgun',
     sup: { name: 'Karen Supreme', from: 10, hp: 4, nagRange: 5, nagRate: 0.25 },
   },
   scooter: {
-    name: 'Mobility Scooter', hp: 85.5, speed: 1.2, refund: 20, steady: true, pitch: [0.8, 0],
+    name: 'Mobility Scooter', hp: 85.5, speed: 1.2, refund: 20, steady: true, pitch: [0.8, 0], weak: 'forklift',
     sup: { name: 'Turbo Scooter', from: 13, hp: 2.5, speed: 1.8 },
   },
   // messy: drops a mess every few seconds that slows everyone else (and can make a dad slip).
   // The super one drops three times as many and they last twice as long.
   teen: {
-    name: 'Teenager', hp: 40.5, speed: 1.15, refund: 12, messy: true, gawks: true, pitch: [0.05, 0.25],
+    name: 'Teenager', hp: 40.5, speed: 1.15, refund: 12, messy: true, gawks: true, pitch: [0.05, 0.25], weak: 'sprinkler',
     sup: { name: 'Teen Influencer', from: 11, hp: 2, messEvery: 1.6, messSecs: 24 },
   },
   // kid: once, the child escapes and runs ahead, straight through everything; she sprints round
@@ -251,7 +256,7 @@ export const SHOPPERS = {
   // salesman's television.
   // The super one's dogs bolt from forklift and barcode laser hits too, for longer and faster.
   blind: {
-    name: 'Man with Guide Dog', hp: 63, speed: 1.1, refund: 20, steady: true, bolts: true, pitch: [0, 0],
+    name: 'Man with Guide Dog', hp: 63, speed: 1.1, refund: 20, steady: true, bolts: true, pitch: [0, 0], tough: 'railgun',
     sup: { name: 'Man with Two Guide Dogs', from: 14, hp: 2.5, boltSecs: 3.2, boltSpeed: 3.2, boltsOnAny: true },
   },
   // smashes: walks straight through crate stacks (stopping to hit one that is still standing),
@@ -260,20 +265,20 @@ export const SHOPPERS = {
   // once they are used up, he walks round crates like anyone else. The super one hits more
   // things, more often, with shorter rests. (smashMax and smashWait are the owner's numbers, 0.2.12.)
   gymbro: {
-    name: 'Gym Bro', hp: 76.5, speed: 1.5, refund: 30, smashes: true, pitch: [0.3, 0.1],
+    name: 'Gym Bro', hp: 76.5, speed: 1.5, refund: 30, smashes: true, pitch: [0.3, 0.1], weak: 'sprinkler', tough: 'forklift',
     sup: { name: 'Roid Rager', from: 12, hp: 2.5, speed: 1.2, smashEvery: 0.9, smashOther: 0.4, smashMax: 3, smashWait: 5 },
   },
   // sways: his speed changes every couple of seconds, and going round a corner he may fall over and
   // lie there, which slows everyone else crossing that tile. The super one falls more often and
   // stays down longer.
   drinker: {
-    name: 'Day Drinker', hp: 45, speed: 1.3, refund: 15, sways: true, pitch: [0.35, 0.15],
+    name: 'Day Drinker', hp: 45, speed: 1.3, refund: 15, sways: true, pitch: [0.35, 0.15], weak: 'wetfloor', tough: 'sprinkler',
     sup: { name: 'Bottomless Bruncher', from: 12, hp: 2.5, speed: 1.1, fallChance: 0.5, fallSecs: 6, swayMax: 2.2 },
   },
   // pees: stops to pee on security it passes (not wet floor signs), which switches it off for a
   // while. The super one switches it off for twice as long, from further away, more often.
   dog: {
-    name: 'Stray Dog', hp: 19.8, speed: 2.6, refund: 5, pees: true, pitch: [0.1, 0.5],
+    name: 'Stray Dog', hp: 19.8, speed: 2.6, refund: 5, pees: true, pitch: [0.1, 0.5], weak: 'sprinkler', tough: 'forklift',
     sup: { name: 'Great Dane', from: 13, hp: 2.5, speed: 1.15, peeSecs: 12, peeRange: 2.2, peeCool: 5 },
   },
   // flashes: every few seconds she opens her bathrobe; dads and teenagers nearby stop and stare.
@@ -285,7 +290,7 @@ export const SHOPPERS = {
   // shields: his costume is so big that shots meant for anyone close to him hit him instead.
   // The super one shields from further away, and takes only half the damage of what he soaks up.
   cosplay: {
-    name: 'Cosplayer', hp: 135, speed: 1.25, refund: 30, shields: true, pitch: [0.3, 0.1],
+    name: 'Cosplayer', hp: 135, speed: 1.25, refund: 30, shields: true, pitch: [0.3, 0.1], weak: 'forklift', tough: 'railgun',
     sup: { name: 'Full Mech Suit', from: 15, hp: 2.5, shield: 1.6, soak: 0.5 },
   },
   // pops: when her patience runs out she does not storm off, she pops, and this many babies (BABY
@@ -578,6 +583,13 @@ export const TUNE = {
   // (one man, written for his exact speed), not babies (they have BABY.paceMin and paceMax), and
   // not in a training game (the lessons were written for exact speeds).
   paceSpread: 0.1,
+  // Weak and tough (0.3.01, see `weak` and `tough` on SHOPPERS): a shopper loses this many times
+  // the usual patience to the kind of security he is weak to, and this many to the kind he is
+  // tough against. Small on purpose (the owner's "around 10%"): something to learn about each
+  // kind, not a reason to build only one tower. (For a Wet Floor Sign, the time he takes to
+  // cross it is multiplied instead: see edgeMul in step.js.)
+  weakMul: 1.1,
+  toughMul: 0.9,
 };
 
 /**

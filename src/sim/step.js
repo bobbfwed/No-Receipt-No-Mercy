@@ -467,20 +467,32 @@ function popOut(state, s, def, by, laser, ev) {
 }
 
 /**
+ * How much more (or less) a kind of security does to a shopper with definition `def`:
+ * TUNE.weakMul if it is what he is weak to, TUNE.toughMul if it is what he is tough against,
+ * otherwise 1. `from` is a building kind, or '' for anything that is not a building's (a dad's
+ * drain, a slip on a mess, a pep talk), which is never changed.
+ */
+export function edgeMul(def, from) {
+  if (!from) return 1;
+  return def.weak === from ? TUNE.weakMul : def.tough === from ? TUNE.toughMul : 1;
+}
+
+/**
  * Takes patience off a shopper. `from` is the kind of building that did it ('' for anything else,
- * such as slipping on a mess): it matters only to a Pregnant Lady, who does not pop if the hit that
- * finishes her is a Barcode Laser's.
+ * such as slipping on a mess). A shopper weak to that kind loses more, one tough against it less
+ * (edgeMul). A Pregnant Lady does not pop if the hit that finishes her is a Barcode Laser's.
  */
 function hurt(state, s, dmg, by, ev, from = '') {
   if (s.st === ST.LEAVE) return;
   // A mom crawling to her child soaks up everything thrown at her.
   if (s.cr === 1) return;
+  const def = defOf(s);
+  dmg *= edgeMul(def, from);
   s.hp -= dmg;
   if (by >= 0) bump(state, by, 'annoy', dmg);
   if (s.hp > 0) return;
   // Out of patience with her child loose: she is not going anywhere without him (once; a Soccer
   // Mom twice). The last time she may, she leaves the cart behind and will carry him after.
-  const def = defOf(s);
   if (kidLoose(s) && (s.crn | 0) < tv(def, 'crawlTimes')) {
     s.cr = 1;
     s.hp = 0;
@@ -1140,7 +1152,9 @@ function stepShoppers(state, fields, sec, ev) {
     if ((wet || messy) && !def.steady && s.cr !== 1) {
       const sign = wet ? statsOf(here) : null;
       if (!def.ignoresSigns) {
-        speed *= sign ? sign.slow : TUNE.wetSlow;
+        // A sign takes no patience from someone who does not slip, so being weak to it (the day
+        // drinker) means taking that much longer to get across it. (Never faster than walking.)
+        speed *= sign ? Math.min(1, sign.slow / edgeMul(def, 'wetfloor')) : TUNE.wetSlow;
       } else if (s.lt !== i && rand(state) < (sign ? sign.slip : TUNE.slipChance)) {
         s.lt = i;
         s.st = ST.STUN;
