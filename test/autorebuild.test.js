@@ -5,10 +5,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, rebuildDeal, migrateSave,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, rebuildDeal, migrateSave, spentOn,
   BUILD, TUNE, TICK_HZ, ST,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
+import { rebuildStatus } from '../src/ui/rebuild.js';
 
 // The original small map, 30 tiles by 16: entrance on the left at rows 7-8, tills on the right.
 const W = 30;
@@ -242,4 +243,57 @@ test('real gym bros: every wreck waits out its 2 seconds, then comes back; and t
   assert.equal(a.early, 0, 'nothing came back sooner than 2 seconds after it broke');
   assert.equal(checksum(a.s), checksum(b.s), 'two runs end the same');
   assert.equal(JSON.stringify(a.s), JSON.stringify(b.s));
+});
+
+// ---------------------------------------------------------------- the big REBUILD button (0.2.14)
+
+test('the big REBUILD button: hidden with nothing wrecked; count and price; dimmed with the reason when B would be refused', () => {
+  const s = stage();
+  addPlayer(s, 'Steve');
+  assert.equal(rebuildStatus(s, 0), null, 'nothing wrecked: no button');
+  const fork = { i: at(5, 5), k: 'forklift', d: 0, o: 0, u: { dmg: 1 }, spent: spentOn({ k: 'forklift', u: { dmg: 1 } }), at: s.tick };
+  s.rubble.push(fork, crateRubble(s, 9, 5), crateRubble(s, 11, 5, 1));
+  const full = rebuildDeal(fork, Infinity).pay + CRATE_HALF;
+  assert.deepEqual(rebuildStatus(s, 0), { n: 2, cost: full, can: true, why: '', auto: false }, 'his two, not Steve\'s');
+  assert.equal(rebuildStatus(s, 1).n, 1);
+
+  // Too little cash for anything: dimmed, and what the oldest needs.
+  s.players[0].cash = CRATE_HALF - 1;
+  const forkHalf = Math.floor(BUILD.forklift.cost * TUNE.rebuildShare);
+  assert.deepEqual(rebuildStatus(s, 0), { n: 2, cost: full, can: false, why: `Too broke. Need $${forkHalf}`, auto: false });
+  // Enough for the crate: B would put that back, so the button is lit.
+  s.players[0].cash = CRATE_HALF;
+  assert.equal(rebuildStatus(s, 0).can, true);
+  assert.equal(applyCommand(s, 0, { c: 'rebuild' }).n, 1, 'and B agrees');
+
+  // Someone lying in the last hole.
+  s.players[0].cash = 1e6;
+  s.rubble.length = 0;
+  s.rubble.push(crateRubble(s, 5, 5, 0, WAIT)); // broke 2 seconds ago
+  s.shoppers.push({ id: 900, k: 'drinker', x: 5.5, y: 5.5, vx: 0, vy: 0, hp: 50, mhp: 50, st: ST.STUN, t: 1e6, cd: 0, ox: 0, oy: 0, lt: -1, sv: 1 });
+  const st = rebuildStatus(s, 0);
+  assert.equal(st.can, false);
+  assert.match(st.why, /standing in the hole/);
+  assert.equal(applyCommand(s, 0, { c: 'rebuild' }).why, 'shopper', 'B is refused for the same reason');
+  s.shoppers.length = 0;
+
+  // The switch shows in it, and something built over the hole does not count.
+  applyCommand(s, 0, { c: 'autoRebuild', on: true });
+  s.rubble.push(crateRubble(s, 7, 7));
+  assert.equal(rebuildStatus(s, 0).auto, true);
+  assert.equal(rebuildStatus(s, 0).n, 1, 'the crate at 5,5 went back when the switch went on');
+  assert.ok(place(s, 'sprinkler', 7, 7).ok);
+  assert.equal(rebuildStatus(s, 0), null, 'built over: nothing left to rebuild');
+});
+
+test('the big REBUILD button: never for Head Office, or when the game is over', () => {
+  const s = createGame({ seed: 2 });
+  addPlayer(s, 'Dave');
+  addPlayer(s, 'Steve');
+  s.rubble.push(crateRubble(s, 5, 5, 1));
+  assert.equal(rebuildStatus(s, 1).n, 1);
+  assert.ok(applyCommand(s, 1, { c: 'side', side: 'office' }).ok);
+  assert.equal(rebuildStatus(s, 1), null);
+  s.phase = 'lost';
+  assert.equal(rebuildStatus(s, 0), null);
 });

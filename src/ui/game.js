@@ -17,6 +17,7 @@ import { createLobby } from './lobby.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
 import { createBossBar } from './bossbar.js';
+import { createRebuildPop } from './rebuild.js';
 import { noteRecord } from './record.js';
 import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
@@ -139,6 +140,11 @@ export function startGame(session, {
 
   const bossBar = createBossBar(session);
   stage.append(bossBar.el);
+
+  // The big REBUILD button over the floor while anything of this player's is wrecked (0.2.14): on a
+  // phone the build bar's Rebuild button is usually scrolled out of sight.
+  const rebuildPop = createRebuildPop(session, { rebuild: () => input.rebuild(), playSound });
+  stage.append(rebuildPop.el);
 
   // Before the game starts: pick the store and press Ready. It sits where the players list goes.
   const lobby = createLobby(session, { renderer, playSound });
@@ -285,6 +291,13 @@ export function startGame(session, {
     bar.update(s);
     planner.update(s);
     touchUi.update(s);
+    rebuildPop.update(s);
+    // It stands on the held tool's card, which floats over the bottom of the floor too.
+    if (!rebuildPop.el.classList.contains('hidden')) {
+      const card = !office && !bar.info.classList.contains('hidden') ? bar.info.offsetHeight : 0;
+      const lift = card ? `${card + 16}px` : '';
+      if (rebuildPop.el.style.bottom !== lift) rebuildPop.el.style.bottom = lift;
+    }
     // A sheet over the bottom of the floor (the held tool's card, or a tapped building's actions):
     // on a phone DEB's bubble makes room for it.
     const up = touchUi.sheetOpen || (!!input.tool && !office);
