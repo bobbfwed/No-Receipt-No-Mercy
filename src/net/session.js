@@ -30,6 +30,8 @@
 //
 // Message types passed to on():
 //   'ready'   {}                       client only: joined, state is available
+//   'lobby'   {}                       the finished game was replaced by a fresh one in the lobby
+//                                      (host: backToLobby() was called; client: the host did it)
 //   'say'     {who, text, mood}        a character speaks (DEB the HR chatbot)
 //   'review'  {stars, text, kind}      a customer review toast
 //   'report'  {wave, bonus, rows, employee, deb, totals}  end-of-wave performance review
@@ -48,6 +50,9 @@
 //   client -> host  hello {name} · cmd {c} · chat {text} · cursor {x, y} · sync {} (send me a copy)
 //   host -> client  welcome {me, n, s} · adv {n, h, c: [[n, pid, cmd], ...]} · snap {n, s}
 //                   at {n, m} (a message to show at step n) · nope · cursor · chat · players · closed
+//                   lobby {me, n, s} (the game is over and a fresh one starts in the lobby: s is
+//                   its state, me the client's id in it, n the step it starts at; anything the
+//                   host sent about an earlier step is from the old game and is dropped)
 import { createGame, addPlayer, setPlayerOnline, applyCommand, step, migrateSave, TICK_HZ } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
@@ -226,6 +231,53 @@ export class HostSession extends Session {
     this._asked = new Set();
     /** @type {Map<number, number[]>} player id -> when his recent chat lines were sent */
     this._chatTimes = new Map();
+  }
+
+  /**
+   * Once a game is over (won or lost), takes everyone back to the lobby for another round, over
+   * the connections already open: same room code, nobody reconnects. A fresh game is made in the
+   * lobby on the same store and settings, holding the players still here in the order they were
+   * in (so the host can change the store, the settings, and everyone presses Ready again). Each
+   * client gets the new game in a 'lobby' message with his new player id. Only the host can do
+   * this; a client has no way to ask for it.
+   * @param {Object} [o]
+   * @param {number} [o.seed]     the new game's random seed; left out, a new one
+   * @param {Object} [o.director] a fresh joke director: the old one remembers what it said this game
+   * @returns {boolean} false if the game is not over yet
+   */
+  backToLobby({ seed = (Date.now() & 0x7fffffff) || 1, director = null } = {}) {
+    const old = this.state;
+    if (old.phase !== 'won' && old.phase !== 'lost') return false;
+    const s = createGame({ seed, map: old.map, zones: !!old.zones, lobby: true, settings: old });
+    // Drawing code keeps pictures of the floor keyed on this number; never let it repeat one.
+    s.gridVer = (old.gridVer | 0) + 1;
+    const connected = new Set([this.me, ...this.conns.values()]);
+    const newId = new Map();
+    for (const p of old.players) {
+      if (p.on && connected.has(p.id)) newId.set(p.id, addPlayer(s, p.name));
+    }
+    this.me = newId.get(this.me);
+    s.host = this.me;
+    for (const [conn, pid] of this.conns) this.conns.set(conn, newId.get(pid));
+    this.state = s;
+    if (director) this.director = director;
+    // Nothing from the old game is owed to anyone. The step count moves on by one, so every
+    // message of the old game has a smaller count than anything of the new one; a client drops
+    // any old-game message that turns up late (see ClientSession._floor).
+    this._n++;
+    this._log = [];
+    this._sinceAdv = 0;
+    this._acc = 0;
+    this._advN = this._fullN = this._n;
+    this._asked.clear();
+    this._chatTimes.clear();
+    this.fx = [];
+    for (const [conn, pid] of this.conns) {
+      conn.send({ t: 'lobby', me: pid, n: this._n, s });
+      this._copyN.set(conn, this._n);
+    }
+    this.emit('lobby', {});
+    return true;
   }
 
   /** Takes over a new connection from a transport. The client must send 'hello' next. */
@@ -461,6 +513,9 @@ export class ClientSession extends Session {
     this._lag = 0;
     /** The step at which a fresh copy was asked for, or -1. */
     this._askedAt = -1;
+    /** The step the current game began at (after a return to the lobby). Anything the host sent
+     *  about an earlier step belongs to the game before and is ignored. */
+    this._floor = 0;
     /** Counters, for tests and for anyone curious. */
     this.stats = { checks: 0, mismatches: 0, copies: 0, jumps: 0 };
     conn.onmessage = (m) => this._onMessage(m);
@@ -608,14 +663,29 @@ export class ClientSession extends Session {
         this._acc = 0;
         this.emit('ready', {});
         break;
+      case 'lobby':
+        // The host took everyone back to the lobby. The new game replaces the old one outright:
+        // whatever of the old game is still waiting to be played or shown is thrown away.
+        if (!this.state || !m.s) break;
+        this.me = m.me;
+        this.state = m.s;
+        this._n = this._top = this._floor = m.n | 0;
+        this._q = [];
+        this._later = [];
+        this._lag = 0;
+        this._acc = 0;
+        this._askedAt = -1;
+        this.fx = [];
+        this.emit('lobby', {});
+        break;
       case 'adv':
-        if (!this.state) break;
+        if (!this.state || m.n < this._floor) break;
         m.i = 0;
         this._q.push(m);
         this._top = Math.max(this._top, m.n);
         break;
       case 'snap':
-        if (!this.state) break;
+        if (!this.state || m.n < this._floor) break;
         // Far behind (a tab that was hidden, a slow device): skip straight to this copy rather
         // than replay everything before it.
         if (m.n - this._n > JUMP_SECS * TICK_HZ * (this.state.speed || 1)) this._q = [];
@@ -623,6 +693,7 @@ export class ClientSession extends Session {
         this._top = Math.max(this._top, m.n);
         break;
       case 'at':
+        if (m.n < this._floor) break;
         this._later.push([m.n, m.m]);
         this._release(); // at once, if the replay is already there
         break;

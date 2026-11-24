@@ -60,6 +60,3 @@ You are the owner and long-term maintainer of this codebase, and its design is u
 - Anything a player can do goes through `applyCommand` in `src/sim/commands.js`, validated on the host.
 - New rules need a test in `test/`. After changing numbers in `constants.js`, run `node tools/balance.mjs` and compare with the results noted in `PLAN.md`.
 - Comments explain why, in plain words. Commit messages say what changed for a reader who has not seen the work.
-
-## Things to take care of next round of changes (by request of owner -- remove each task as they are accomplished, remove this section once it's empty):
-- When a multiplayer game ends, the menu for "new game" should return all players to the lobby (change the text on the button). All players already in the game should be taken to the lobby, where the host can choose the map and size, length, difficulty, etc. Using the same 5-digit code and join link (URL).

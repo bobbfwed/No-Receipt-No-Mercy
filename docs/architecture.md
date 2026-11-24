@@ -113,8 +113,11 @@ The host's browser owns the real state. Clients send commands. The host sends th
 | `session.alpha()` | 0..1 progress between ticks; draw shoppers at `x + vx * alpha` |
 | `session.start()` / `stop()` | run on a timer |
 | `session.fastForward(n)` | host only: run n ticks at once (screenshots, tests) |
+| `session.backToLobby({seed, director})` | host only, once the game is won or lost: replace it with a fresh game in the lobby (same store and settings, the players still connected, in their old order) and send it to every client over the open connections. Returns false while the game is still on |
 
-Messages delivered through `session.on`: `ready`, `say`, `review`, `report`, `players`, `nope`, `cursor`, `closed`. Their fields are listed at the top of `src/net/session.js`.
+Messages delivered through `session.on`: `ready`, `lobby`, `say`, `review`, `report`, `players`, `nope`, `cursor`, `closed`. Their fields are listed at the top of `src/net/session.js`.
+
+Going round again: in a multiplayer game the end screen's button reads "Back to the lobby" for the host (clients see that the host decides, and a "Quit to the menu" button). The host's `backToLobby()` sends each client a `lobby {me, n, s}` message: the new state, his id in it, and the step it starts at. The host moves its step count on by one first, so everything about the old game carries a smaller count; a client drops any `adv`, `snap` or `at` older than that step, and throws away whatever of the old game was still queued. Both sides then emit `lobby`, and the game screen takes down the end screen and shows the lobby as it does when the phase is `lobby`. The room code and link stay the same because no connection is closed. Clients cannot ask for it; there is no such command.
 
 Creating sessions:
 ```js

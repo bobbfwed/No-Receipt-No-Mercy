@@ -89,7 +89,8 @@ export function saveStep(state) {
 /**
  * Keeps a host's game saved while it runs: every few seconds, when a wave ends, and when the
  * page is closed. Throws the save away once the game is won (and saves it again if it is carried
- * on as an endless game), and stops for good once it is lost.
+ * on as an endless game), and stops once it is lost, until the host takes everyone back to the
+ * lobby for another game.
  * @param {Object} session a HostSession
  * @param {Object} [o]
  * @param {'solo'|'online'|'local'} [o.kind]
@@ -108,9 +109,12 @@ export function keepSaved(session, { kind = 'solo' } = {}) {
   const timer = setInterval(save, EVERY_MS);
   const offFx = session.on('fx', (events) => { if (events.some((e) => e.e === 'waveEnd' || e.e === 'won' || e.e === 'lost' || e.e === 'endless')) save(); });
   addEventListener('pagehide', save);
+  // Back in the lobby after a finished game: a new game, worth saving even if the last one was lost.
+  const offLobby = session.on('lobby', () => { done = false; cleared = false; });
   return () => {
     clearInterval(timer);
     offFx();
+    offLobby();
     removeEventListener('pagehide', save);
   };
 }

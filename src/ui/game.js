@@ -42,10 +42,12 @@ const narrow = () => innerWidth < 1100 || innerHeight < 560;
  * @param {(session) => Promise} [o.onHostLost] a joined player's game lost its host: carry the
  *   game on some other way (see main.js). It resolves once a new game screen has replaced
  *   this one, or rejects if that could not be done, and then the usual "host has left" shows.
+ * @param {() => void} [o.onLobby] host of a multiplayer game only: the end screen's button takes
+ *   everyone back to the lobby with this (see HostSession.backToLobby) instead of reloading
  */
 export function startGame(session, {
   roomCode = null, roomKind = null, prepare = null, ff = 0, autostart = false, mount,
-  tutorial = false, tutorialStep = 0, onExit = () => {}, sound = null, onHostLost = null,
+  tutorial = false, tutorialStep = 0, onExit = () => {}, sound = null, onHostLost = null, onLobby = null,
 }) {
   const canvas = h('canvas', { class: 'world', 'aria-label': 'The warehouse floor. Use the mouse to build.' });
   const stage = h('main', { class: 'stage' }, canvas);
@@ -170,6 +172,13 @@ export function startGame(session, {
   });
   session.on('review', (m) => toasts.review(m));
   session.on('players', (m) => toasts.notice(m.text));
+  // The host took everyone back to the lobby: the finished game's leftovers go. (The end screen
+  // itself comes down in the drawing loop, which sees the phase change.)
+  session.on('lobby', () => {
+    review.close();
+    pendingReport = null;
+    lastDeb = null;
+  });
   // Doors opened early: say that the factory's takings for the skipped time were paid, so nobody
   // wonders where the money came from (or thinks opening early costs him).
   session.on('fx', (events) => {
@@ -313,11 +322,17 @@ export function startGame(session, {
       setTimeout(() => {
         const now = session.state;
         if (dead || !ended || !now || now.phase !== shownFor) return;
-        endEl = endScreen(now, lastDeb, session.me, { onEndless: () => session.send({ c: 'endless' }), record });
+        endEl = endScreen(now, lastDeb, session.me, {
+          onEndless: () => session.send({ c: 'endless' }), record,
+          // In a multiplayer game the group goes round again from the lobby, and only the host
+          // can send them there. A solo game keeps its plain "New game".
+          onLobby: session.isHost ? onLobby : null, waitForHost: !session.isHost && !!roomKind,
+        });
         root.append(endEl);
       }, session.isHost ? 600 : 1200);
-    } else if (ended && (s.phase === 'build' || s.phase === 'wave')) {
-      // Somebody pressed "Keep going (endless)": the game is on again, for everyone.
+    } else if (ended && (s.phase === 'build' || s.phase === 'wave' || s.phase === 'lobby')) {
+      // Somebody pressed "Keep going (endless)", or the host took everyone back to the lobby:
+      // the game is on again, for everyone.
       ended = false;
       root.classList.remove('ended');
       endEl?.remove();

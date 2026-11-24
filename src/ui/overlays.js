@@ -85,8 +85,13 @@ function overlay(cls, ...children) {
  * @param {string|null} debLine DEB's last words
  * @param {number} [me] this player's id. For the Head Office player the result is the other way
  *   round: he wins when the store closes.
+ * @param {Object} [o]
+ * @param {() => boolean} [o.onLobby] host of a multiplayer game: the main button takes everyone
+ *   back to the lobby with this, over the same connections, instead of reloading the page
+ * @param {boolean} [o.waitForHost] a joined player: only the host can start another round, so
+ *   say so; the main button just leaves for the menu
  */
-export function endScreen(s, debLine, me = -1, { onEndless = null, record = null } = {}) {
+export function endScreen(s, debLine, me = -1, { onEndless = null, record = null, onLobby = null, waitForHost = false } = {}) {
   const stored = s.phase === 'won';
   const endless = isEndless(s);
   const boss = s.office ? s.players[s.office.pid] : null;
@@ -107,7 +112,23 @@ export function endScreen(s, debLine, me = -1, { onEndless = null, record = null
     h('td', null, money(p.all.earned)),
     h('td', null, money(p.all.spent)),
     h('td', null, String(p.all.built))));
-  const btn = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: () => location.reload() }, 'New game');
+  let btn;
+  if (onLobby) {
+    btn = h('button', {
+      type: 'button', class: 'btn-big btn-yellow',
+      title: 'Everyone goes back to the lobby, still connected: same code, same link. Change the store or the settings and go again.',
+      onclick: () => {
+        btn.disabled = true;
+        btn.textContent = 'Rounding them up...';
+        if (onLobby() === false) { btn.disabled = false; btn.textContent = 'Back to the lobby'; }
+      },
+    }, 'Back to the lobby');
+  } else {
+    // A joined player leaves the way he always could; reloading drops him out of the room.
+    btn = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: () => location.reload() }, waitForHost ? 'Quit to the menu' : 'New game');
+  }
+  const wait = waitForHost ? h('p', { class: 'end-sub end-wait' },
+    'Another round is up to the host. Sit tight: when he drags everyone back to the lobby, you go too. Or quit, like you quit everything else.') : null;
   // A store player may carry a won game on as an endless one; the screen goes away for everyone
   // when the rules put the game back into a build phase (src/ui/game.js).
   const mine = s.players[me];
@@ -154,6 +175,7 @@ export function endScreen(s, debLine, me = -1, { onEndless = null, record = null
       h('thead', null, h('tr', null, ['Employee', 'Role', 'Shipped', 'Stopped', 'Earned', 'Wasted', 'Built'].map((t) => h('th', null, t)))),
       h('tbody', null, players)),
     debLine ? h('div', { class: 'end-deb' }, h('span', { class: 'end-deb-face', html: debFace(stored ? 'smug' : 'angry') }), h('p', null, debLine)) : null,
+    wait,
     more ? h('div', { class: 'end-btns' }, btn, more) : btn);
   setTimeout(() => btn.focus(), 50);
   return el;
