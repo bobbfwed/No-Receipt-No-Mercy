@@ -42,7 +42,7 @@ Building the first playable version. `PLAN.md` has the plan, the decisions made 
 - This folder must stay under git control. The GitHub repository is https://github.com/bobbfwed/No-Receipt-No-Mercy (branch `main`; the game is meant to be served from it with GitHub Pages).
 - Commits are authored as `bobbfwed <bnimon@gmail.com>` (set in this repository's git config). The owner's work email must not appear in the history.
 - Commit after every round of code changes, with a clear message.
-- The version (`RELEASE` in `src/version.js`) goes up by one at most once per push to `main`, and only when the game's code changed since the last push (anything under `src/`, `index.html` or `vendor/`). The menu shows it ("0.1" large, ".07" small) so the owner can tell when the published site has updated. Only the owner changes `VERSION`.
+- The version (`RELEASE` in `src/version.js`) goes up by one at most once per push to `main`, and only when the game's code changed since the last push (anything under `src/`, `index.html` or `vendor/`). The menu shows it ("0.1" large, ".07" small) so the players can tell when the published site has updated.
   - Before a commit that changes the game, compare with the pushed copy: `git show origin/main:src/version.js`. If `RELEASE` here is still the same as the pushed one, add one in that commit. If it is already one higher, leave it alone, however many commits follow. Never bump it more than once between two pushes.
   - Commits that change no game code (docs, tests, tools, `CLAUDE.md`) never bump it.
   - Everything done between two pushes belongs to that one release: comments, `PLAN.md` and commit messages name that release number, not a number per commit.
@@ -64,5 +64,45 @@ You are the owner and long-term maintainer of this codebase, and its design is u
 - New rules need a test in `test/`. After changing numbers in `constants.js`, run `node tools/balance.mjs` and compare with the results noted in `PLAN.md`.
 - Comments explain why, in plain words. Commit messages say what changed for a reader who has not seen the work.
 
-## TO-DO (by request of owner -- one commit per feature; remove each item in the commit that finishes it, and remove this section once it is empty):
-- (Do not do now! Save for later when we have more tokens.) The week leading up to (and the day including and the day after) major USA national holdidays like Christmas, Thanksgiving, Valentines Day, Fourth of July, Haloween (maybe a couple more that people dress up for). The bosses need to have a festive outfit that matches the holiday. And add several jokes about the bosses for each of the different holidays. Jokes about promiscuity, pandering to workers and customers, things along those lines. Jokes need to taper off, just like other jokes.
+## TO-DO for v0.3 (remove each item as they are finished and remove this section once it is empty):
+- The week leading up to (and the day including and the day after) major USA national holdidays like Christmas, Thanksgiving, Valentines Day, Fourth of July, Haloween (maybe a couple more that people dress up for). The bosses need to have a festive outfit that matches the holiday. And add several jokes about the bosses for each of the different holidays. Jokes about promiscuity, pandering to workers and customers, things along those lines. Jokes need to taper off, just like other jokes.
+- Add to some shoppers weaknesses and strengths for certain security buildings. Small-ish changes of around 10% resistance to ____ and 10% weakness to ____. Where it \[kind of\] make sense for a shopper within this game's lore. Not all shoppers should have weaknesses or strengths. And some can only have one or the other.
+- Some shoppers will go a bit (2-5 tiles) out of their way to shop lift. Shop lifting is pretty rare in general, the chances of it happening should be increased.
+- All shoppers have random variation in their walking speed, between 5-10% faster or slower. That way there's wider groups of varied shoppers, rather than them bunching into like-groups.
+- Add 5 randomly chosen modifications to each game. 2 negative cards (add difficulty for the players), 2 possitive cards (makes things easier for the player), and 1 \[generally\] neutral variation. I'm picturing something that looks like trading cards fly in and drop one-by-one into slots.
+  - The cards are prominantly chosen as soon as all players have readied up, and before players are allowed to build buildings. Add sound effect and visual effects for each modification. They need to come in slow enough so that on mobile each one is readable before the next one comes in. On mobile it should take up most of the screen for the new card. Then slide up to 5 empty slots at the top of the screen.
+  - Once they all have been chosen, there needs to be a place for the player to click on to read the cards in detail about what each does.
+  - Some card ideas, but I need you to come up several more so there is plenty of variation (especially neutral cards):
+    - Add difficulty (where applicable, they apply to the shopper and the super version of the shopper):
+      - Pregnant women (and octomoms) spawn twice as many babies
+      - Random refunds are twice the amount they usually are
+      - Mom and kids: the kid will run to a place further forward in the maze (on the path the shoppers normally take), rather than a random place on the map
+      - A percentage of moms and kids will be allowed to run away twice as many times
+      - A percentage of gym bros can break through twice as many things
+      - A percentage of stray dogs are pregnant and will burst with smaller dogs (like the pregnant lady)
+      - Bosses have 20% more patience (also make them 50% larger on screen)
+      - Random variations of increased patience
+      - Random variations of increased speed
+    - Makes things easier (where applicable, they apply to the shopper and the super version of the shopper):
+      - Mystery boxes sell for more money (maybe 3x)
+      - Gadgets sell for more money (maybe 1.7x)
+      - Gift sets sell for more money (maybe 1.5x)
+      - All factory buildings are built with one random upgrade
+      - All security buildings are built with one random upgrade
+      - Pregnant women spawn half as many babies
+      - 50% of dads follow around exhibitionists at a distance (behind) so the exhibitionist must make it to the return teller before a dad will make a return. Only applies when within a given range of the exhibitionist. Once the exhibitionist leaves the store, the dad continues on.
+      - Mom and kids: kids occassionally run backwards (towards the entrance) in the store
+      - Teenager messes cover a wider area on the floor.
+      - Random free sample buildings become free samples of alcoholic drinks (have a different look to the table). Meaning if an adult stops at a sample table they have a chance to become day drinkers. The likelihood of it happening increases with each alcohol free sample table they stop at.
+      - Random variations of reduced patience
+      - Random variations of reduced speed
+      - Random shoppers make purchases at sample and salesmen buildings (uncommon, but they give the store/players a lot: $50 at free samples, $100-400 at salesmen)
+      - Add a variation of the man with guide dog that are support animals (not for blind people). Other shoppers stop and try to pet the dog.
+    - Neutral variation:
+      - Factory buildings are 4x as big (2x2) but make 4x as much money.
+      - Cosplayers have a wider area of effect, but are slower (0.8 tiles/s) and have less patience.
+  - Play test the different cards to make sure none wildy change the difficulty. I believe the last time you mentioned play tests, your tests ended generally around round 16. Failure around round 12-19. If things fall outside of that range, we need to evaluate the modifier. I understand that play testing every combination would take a long time (correct me if I'm wrong), so test each card once, along with other cards. Test all cards at least once, while testing 5 cards at a time. This will likely cause some unknown interraction between the modifiers, but that's part of the game.
+  - Come up with names of the cards that are appropriate for the humor in this game (inappropriate and dumb jokes preferable)
+- Add card trader shopper. These should only appear on certain events (not boss events) and they come in groups of 10-20+, all at once. Obviously don't use Pokemon anywhere, but that's the idea, is a huge group of Pokemon nerds all come into the store at once at a midnight event, or something along those lines.
+- Add a new map. One with lots of long corridors that will make factory paths difficult.
+- Add a new map that is a completely different shape. I'm thinking horseshoe shapped. It needs to be larger to compensate for the missing/unusable area.
