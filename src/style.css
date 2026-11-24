@@ -1339,6 +1339,62 @@ kbd {
   .hud-refunds .meter, .btn-book { display: none; }
 }
 @media (min-width: 1100px) and (max-width: 1200px) { .btn-speed { min-width: 2.05rem; } }
+/* Those widths were not enough (0.3.01): a hosted game's room code and "Copy link" still pushed the
+   refunds count under the auto-rebuild switch at 1280 pixels ("Refunds 0 / 2"), and at 1600 to
+   1920 pixels, where every label comes back, the bar ran off the screen, worse with a second
+   player's team total or a boss's long title. The text grows with the window's height as well as
+   its width, so no width can say when the bar is full: the bar measures itself (fit() in hud.js)
+   and takes as many of these steps as it needs, least important first. A bar that fits takes none
+   and looks exactly as before. The cash, the phase, OPEN THE DOORS and the refunds count stay. */
+@media (min-width: 1100px) and (min-height: 560px) {
+  /* 1. The room code's label, and its plain "Copy" button where "Copy link" is there too. */
+  .topbar.fit-1 .hud-room small, .topbar.fit-1 .hud-room .btn-copy:not(:last-child) { display: none; }
+  /* 2. The words on the auto-rebuild switch and over the cash (their tooltips say it). Head
+     Office keeps his (a budget is not cash) and drops the store's total instead. */
+  .topbar.fit-2 .hud-auto .ab-label, .topbar.fit-2 .hud-cash:not(.is-budget) .lbl { display: none; }
+  .topbar.fit-2 .hud-cash.is-budget .lbl { font-size: 0.68rem; }
+  .topbar.fit-2 .hud-cash.is-budget .team-cash { display: none; }
+  /* 3. The refunds meter (the numbers say it) and the handbook button (the ? screen opens it). */
+  .topbar.fit-3 .hud-refunds .meter, .topbar.fit-3 .btn-book { display: none; }
+  /* 4. Tighter spacing, as below 1360 pixels. */
+  .topbar.fit-4 { gap: 0.4rem; padding-inline: 0.6rem; }
+  .topbar.fit-4 .hud-event { min-width: 11.5rem; }
+  .topbar.fit-4 .btn-speed { min-width: 2.05rem; }
+  .topbar.fit-4 .hud-room .room-code { font-size: 1.1rem; letter-spacing: 0.08em; }
+  .topbar.fit-4 .hud-refunds { padding-inline: 0.5rem; }
+  /* 5. The team's total beside the cash (the players list shows everyone's). */
+  .topbar.fit-5 .team-cash { display: none; }
+  /* 6. "Copy link" becomes a link icon. In a test room (no link) the "Copy" button goes: the code
+     copies itself when clicked. */
+  .topbar.fit-6 .hud-room .btn-copy:not(.btn-link) { display: none; }
+  .topbar.fit-6 .hud-room .cl-word { display: none; }
+  .topbar.fit-6 .hud-room .cl-icon { display: inline; }
+  .topbar.fit-6 .hud-room .btn-link { padding-inline: 0.4rem; }
+  .topbar.fit-6 .hud-room:not(:has(.btn-link)) { padding-inline: 0.5rem; }
+  /* 7. The full-screen button (F11 does the same), and the sales event box's spare width. */
+  .topbar.fit-7 .btn-full { display: none; }
+  .topbar.fit-7 .hud-event { min-width: 0; }
+  .topbar.fit-7 .btn-doors { padding-inline: 0.7rem; }
+  /* 8. Last: the switch is only its knob (green when on), a boss's long title is cut short (its
+     tooltip has it all), and the gaps close up a little more. */
+  .topbar.fit-8 { gap: 0.3rem; }
+  .topbar.fit-8 .hud-auto .ab-state { display: none; }
+  .topbar.fit-8 .hud-event .ev-sub { max-width: 9.5rem; overflow: hidden; text-overflow: ellipsis; }
+  .topbar.fit-8 .countdown { min-width: 0; }
+  /* 9. The link icon too: the code is left, and copies the link when clicked. */
+  .topbar.fit-9 .hud-room .btn-link { display: none; }
+  .topbar.fit-9 .hud-room { padding-inline: 0.5rem; }
+  /* 10. For the longest contents in the smallest window (a boss coming, six-figure cash, 1100
+     pixels): the big words a little smaller and the boxes' insides tighter. */
+  .topbar.fit-10 .hud-box { padding-inline: 0.5rem; }
+  .topbar.fit-10 .hud-event .ev-title, .topbar.fit-10 .hud-stat b { font-size: 1.05rem; }
+  .topbar.fit-10 .hud-event .ev-sub { max-width: 8rem; }
+  .topbar.fit-10 .hud-cash .val { font-size: 1.15rem; min-width: 0; }
+  .topbar.fit-10 .btn-doors { padding-inline: 0.55rem; font-size: 0.95rem; }
+}
+.hud-room .cl-icon { display: none; }
+.hud-room .room-code { cursor: copy; }
+.hud-room .room-code.copied { color: #4ade80; }
 .btn-doors.asked::after { background: repeating-linear-gradient(-45deg, #9aa4b2 0 0.4rem, var(--ink) 0.4rem 0.8rem); }
 .hud-cash.is-budget { border-color: var(--orange); }
 .hud-cash.is-budget .coin { background: var(--orange); }

@@ -1,10 +1,12 @@
 // The top bar (cash, sales event, doors, refunds, speed, room code) and the players panel.
 import { TUNE, ROLES, SPEEDS, officePlayer, isEndless, bossTier, bossTitle } from '../sim/index.js';
 import { eventOf } from '../content/facts.js';
-import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } from './dom.js';
+import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton, copyText } from './dom.js';
 import { createAutoSwitch } from './rebuild.js';
 
 const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
+/** How many steps the top bar can take to fit a short window (the .fit-N rules in style.css). */
+const FIT_STEPS = 10;
 const BUDGET_TITLE = 'What you have left to spend on shoppers for the coming sales event. Half of what you leave unspent carries over to the next one.';
 
 /** The store players' money added up (Head Office's frozen cash is not the store's). */
@@ -63,12 +65,33 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   // Auto-rebuild lives up here so it can be switched on before anything breaks, on any screen.
   const auto = createAutoSwitch(session, { playSound, cls: 'hud-auto' });
 
-  const room = roomCode ? h('div', { class: 'hud-room' },
-    h('small', null, roomKind === 'local' ? 'TEST ROOM' : 'ROOM CODE'),
-    h('b', { class: 'room-code' }, roomCode),
-    copyButton(() => roomCode),
-    // An invite link opens the menu with the room code already filled in.
-    roomKind === 'online' ? copyButton(() => `${location.origin}${location.pathname}?join=${roomCode}`, 'Copy link') : null) : null;
+  // An invite link opens the menu with the room code already filled in. When the bar is short of
+  // room (see fit() below), "Copy link" shrinks to a link icon and then goes, and the code itself
+  // copies the link (the code, in a test room) when clicked; it turns green when that worked.
+  const roomText = roomKind === 'online' ? () => `${location.origin}${location.pathname}?join=${roomCode}` : () => roomCode;
+  let codeEl = null, linkWord = null;
+  async function copyRoom() {
+    const ok = await copyText(roomText());
+    setClass(codeEl, 'copied', ok);
+    // The browser refused: at least select the code, ready for Ctrl+C.
+    if (!ok) getSelection()?.selectAllChildren(codeEl);
+    if (linkWord) setText(linkWord, ok ? 'Copied' : 'Select it yourself');
+    setTimeout(() => { setClass(codeEl, 'copied', false); if (linkWord) setText(linkWord, 'Copy link'); }, 1600);
+  }
+  let room = null;
+  if (roomCode) {
+    codeEl = h('b', {
+      class: 'room-code', title: roomKind === 'online' ? 'Click to copy the invite link' : 'Click to copy the room code', onclick: copyRoom,
+    }, roomCode);
+    linkWord = roomKind === 'online' ? h('span', { class: 'cl-word' }, 'Copy link') : null;
+    room = h('div', { class: 'hud-room' },
+      h('small', null, roomKind === 'local' ? 'TEST ROOM' : 'ROOM CODE'),
+      codeEl,
+      copyButton(() => roomCode),
+      linkWord ? h('button', {
+        type: 'button', class: 'btn-copy btn-link', 'aria-label': 'Copy the invite link', title: 'Copy the invite link', onclick: copyRoom,
+      }, linkWord, h('span', { class: 'cl-icon', 'aria-hidden': 'true' }, '🔗')) : null);
+  }
 
   const help = h('button', { type: 'button', class: 'btn-help', 'aria-label': 'How to play', title: 'How to play', onclick: () => { setMore(false); onHelp(); } }, '?');
   const audio = sound ? createSoundMenu(sound) : null;
@@ -104,6 +127,32 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   addEventListener('click', (e) => { if (!more.contains(e.target) && !moreBtn.contains(e.target)) setMore(false); });
 
   const el = h('header', { class: 'topbar' }, cash, event, phase, h('div', { class: 'spacer' }), refunds, moreBtn, more);
+
+  // When the bar is longer than the window (a hosted game's room code, a second player's team
+  // total, a boss's long title, or a tall window, whose text is bigger), its less important parts
+  // give way one step at a time, least important first, until it fits: the .fit-1 to .fit-10 rules
+  // in style.css say what each step drops. The window's width alone cannot tell when that is
+  // needed (the text grows with the window's height, and the contents change with the phase and
+  // the players), so the bar measures itself: only when its words or the window have changed.
+  const narrow = matchMedia('(max-width: 1099px), (max-height: 559px)');
+  let fitSig = '';
+  addEventListener('resize', () => { fitSig = ''; });
+  document.fonts?.ready.then(() => { fitSig = ''; });
+  const setFit = (n) => { for (let i = 1; i <= FIT_STEPS; i++) setClass(el, `fit-${i}`, i <= n); };
+  // Overflowing shows as the bar's contents running past its end, or as a box squeezed narrower
+  // than its words (the refunds box may shrink below them, and so may the sales event box, down to
+  // its minimum width).
+  const boxes = [cash, event, phase, refunds, room].filter(Boolean);
+  const fits = () => el.scrollWidth <= el.clientWidth + 1 && boxes.every((b) => b.scrollWidth <= b.clientWidth + 1);
+  function fit(sig) {
+    if (sig === fitSig) return;
+    setFit(0);
+    // (Not on a phone or tablet, where the bar wraps and folds away instead; and not before the
+    // bar is on the page, when there is nothing to measure.)
+    if (!el.isConnected || narrow.matches) { fitSig = el.isConnected ? sig : ''; return; }
+    fitSig = sig;
+    for (let n = 1; n <= FIT_STEPS && !fits(); n++) setFit(n);
+  }
 
   let wasOffice = null;
   function update(s) {
@@ -206,6 +255,9 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
       setClass(b, 'on', on);
       if (b.getAttribute('aria-pressed') !== String(on)) b.setAttribute('aria-pressed', String(on));
     });
+    // Digits count as one: a clock ticking or cash changing need not measure again, unless the
+    // number grows a digit.
+    fit(`${s.phase}|${isOffice}|${el.textContent.replace(/\d/g, '0')}`);
   }
 
   return { el, update };
