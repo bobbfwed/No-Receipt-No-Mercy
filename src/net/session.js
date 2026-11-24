@@ -53,7 +53,7 @@
 //                   lobby {me, n, s} (the game is over and a fresh one starts in the lobby: s is
 //                   its state, me the client's id in it, n the step it starts at; anything the
 //                   host sent about an earlier step is from the old game and is dropped)
-import { createGame, addPlayer, setPlayerOnline, applyCommand, step, migrateSave, TICK_HZ } from '../sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, applyCommand, step, migrateSave, TICK_HZ, SPEEDS } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
 /** Steps between advance messages at normal speed: one every step, thirty a second. They are
@@ -72,12 +72,24 @@ const SYNC_GAP = TICK_HZ;
  * that, it catches up by running faster for a moment.
  */
 const FAR_BEHIND_SECS = 3, JUMP_SECS = 1;
-/** Client: the most steps it simulates in one update(), so a slow device never locks up. */
-const MAX_STEPS = 120;
+/** The longest gap between two frames that is played in full (a hitch, a tab briefly hidden). */
+const MAX_FRAME_MS = 3000;
+/**
+ * Host: the most steps it runs in one update(). Enough for a whole MAX_FRAME_MS at the fastest
+ * speed (450 at 5x; it was 400 when 3x was the top), so a hitch is caught up rather than lost;
+ * any more would mean a frame stuck for over a second. A heavy late-game step costs well under
+ * a millisecond (0.3 ms on average with seven players and a thousand shoppers, on a desktop), so
+ * even 5x, 150 steps a second, is a small share of a frame's time.
+ */
+const HOST_MAX_STEPS = Math.ceil(MAX_FRAME_MS * Math.max(...SPEEDS) / (1000 / TICK_HZ));
+/** Client: the most steps it simulates in one update(), so a slow device never locks up. It was
+ *  120 with 3x the top speed, and grows with the top speed so a client at 5x has the same
+ *  headroom (a frame up to about 0.4 s long, at double pace while catching up). */
+const MAX_STEPS = Math.ceil(120 * Math.max(...SPEEDS) / 3);
 /** Chat: the longest line, and how many lines one player may send in a short while. */
 const CHAT_MAX = 200, CHAT_BURST = 6, CHAT_WINDOW_MS = 8000;
 
-/** Steps between advance messages right now. At 2x and 3x speed steps pass faster, so the count
+/** Steps between advance messages right now. At 2x, 3x and 5x speed steps pass faster, so the count
  *  scales to keep the same number of messages a second. */
 const advEvery = (state) => ADV_EVERY * (state.speed || 1);
 
@@ -152,7 +164,7 @@ class Session extends Emitter {
   /** Time in ms to simulate since the last call, capped so a sleeping tab does not explode. */
   _elapsed(now) {
     if (this._last === null) this._last = now;
-    const dt = Math.max(0, Math.min(3000, now - this._last));
+    const dt = Math.max(0, Math.min(MAX_FRAME_MS, now - this._last));
     this._last = now;
     return dt;
   }
@@ -320,11 +332,11 @@ export class HostSession extends Session {
   update(now) {
     this._acc += this._elapsed(now) * (this.state.speed || 1);
     let n = 0;
-    while (this._acc >= TICK_MS && n++ < 400) {
+    while (this._acc >= TICK_MS && n++ < HOST_MAX_STEPS) {
       this._acc -= TICK_MS;
       this._tick();
     }
-    if (this._acc > TICK_MS * 400) this._acc = 0;
+    if (this._acc > TICK_MS * HOST_MAX_STEPS) this._acc = 0;
     this._sendDue();
   }
 

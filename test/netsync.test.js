@@ -8,7 +8,7 @@ import { HostSession, ClientSession, checksum } from '../src/net/session.js';
 import { memoryPair, splitMessage, createJoiner, utf8Length, MAX_MESSAGE, OWN_RELAY, ICE_SERVERS, relayProblem } from '../src/net/transports.js';
 import { RELAY } from '../src/net/relay.js';
 import { createDirector } from '../src/content/director.js';
-import { applyDemoLayout, createGame, addPlayer, TICK_HZ, TUNE } from '../src/sim/index.js';
+import { applyDemoLayout, createGame, addPlayer, TICK_HZ, TUNE, SPEEDS } from '../src/sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
 const same = (a, b) => JSON.stringify(a.state) === JSON.stringify(b.state);
@@ -222,6 +222,40 @@ test('when the host changes speed, clients follow at the new pace with about the
   assert.ok(advsAt3 <= advsAt1 + 5 && advsAt1 >= 50 && advsAt1 <= 62, `still about thirty messages a second (${advsAt1} then ${advsAt3} in two seconds)`);
   assert.equal(steve.state.speed, 3);
   assert.ok(most <= 40, `the client keeps up (at most ${most} ticks behind, about a third of a second)`);
+  host.send({ c: 'speed', n: 1 });
+  now = run(host, clients, 1, now);
+  settle(host, clients, now);
+  assert.ok(same(steve, host));
+  assert.equal(steve.stats.mismatches, 0);
+});
+
+test('5x speed (0.2.14): there is a 5x and no 4x, the host runs five times the ticks, and a client keeps up', () => {
+  assert.ok(SPEEDS.includes(5) && !SPEEDS.includes(4), `speeds offered: ${SPEEDS}`);
+  assert.deepEqual(SPEEDS, [1, 2, 3, 5]);
+  const { host, clients } = game({ prepare: demo });
+  const [steve] = clients;
+  // 4x is refused, so the game stays where it was.
+  host.send({ c: 'speed', n: 4 });
+  assert.equal(host.state.speed, 1);
+  host.send({ c: 'start' });
+  let now = run(host, clients, 1);
+  let t0 = host.state.tick;
+  now = run(host, clients, 2, now);
+  const at1 = host.state.tick - t0;
+  host.send({ c: 'speed', n: 5 });
+  assert.equal(host.state.speed, 5);
+  t0 = host.state.tick;
+  let most = 0;
+  now = run(host, clients, 2, now, () => { most = Math.max(most, host.state.tick - steve.state.tick); });
+  const at5 = host.state.tick - t0;
+  assert.ok(Math.abs(at5 - 5 * at1) <= 2, `five times the ticks (${at1} at 1x, ${at5} at 5x in two seconds)`);
+  assert.equal(steve.state.speed, 5);
+  assert.ok(most <= 60, `the client keeps up (at most ${most} ticks behind, under half a second of play)`);
+  // A three-second hitch at 5x (the longest gap played in full) is all caught up in one frame.
+  t0 = host.state.tick;
+  host.update(now + 3000);
+  assert.equal(host.state.tick - t0, 450);
+  now += 3000;
   host.send({ c: 'speed', n: 1 });
   now = run(host, clients, 1, now);
   settle(host, clients, now);

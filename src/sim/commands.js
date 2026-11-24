@@ -1,6 +1,6 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
-import { BUILD, TUNE, TICK_HZ, ST, ROLES } from './constants.js';
+import { BUILD, TUNE, TICK_HZ, ST, ROLES, SPEEDS } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf } from './state.js';
 import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './path.js';
 import { beginWave, skipBuild } from './step.js';
@@ -182,7 +182,7 @@ function lift(state, ai) {
  *                               as an endless game (state.waves becomes 0), starting with the
  *                               usual build pause before the next sales event
  *   { c: 'role', role }         change your job title (cosmetic)
- *   { c: 'speed', n }           game speed 1, 2 or 3
+ *   { c: 'speed', n }           game speed: one of SPEEDS (1, 2, 3 or 5)
  * @param {Array} ev events are appended here
  * @returns {{ok: true} | {ok: false, why: string}}
  */
@@ -377,7 +377,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       return { ok: true };
     }
     case 'speed': {
-      if (![1, 2, 3].includes(cmd.n)) return { ok: false, why: 'bad' };
+      if (!SPEEDS.includes(cmd.n)) return { ok: false, why: 'bad' };
       state.speed = cmd.n;
       return { ok: true };
     }

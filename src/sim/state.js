@@ -409,8 +409,8 @@ export function setPlayerOnline(state, id, on) {
  */
 export function expireAway(state) {
   const limit = Math.max(1, Math.round(TUNE.graceSecs * TICK_HZ));
-  // At 2x and 3x speed the game runs two or three ticks in the time of one, so each tick counts
-  // for a half or a third: the grace period is the same length on the clock at any speed.
+  // At 2x, 3x or 5x speed the game runs that many ticks in the time of one, so each tick counts
+  // for a half, a third or a fifth: the grace period is the same length on the clock at any speed.
   const passed = 1 / (state.speed || 1);
   for (const p of state.players) {
     if (p.gone === undefined || p.on) continue;

@@ -1,5 +1,5 @@
 // The top bar (cash, sales event, doors, refunds, speed, room code) and the players panel.
-import { TUNE, ROLES, officePlayer, isEndless, bossTier, bossTitle } from '../sim/index.js';
+import { TUNE, ROLES, SPEEDS, officePlayer, isEndless, bossTier, bossTitle } from '../sim/index.js';
 import { eventOf } from '../content/facts.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } from './dom.js';
 
@@ -52,9 +52,10 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     h('span', { class: 'ref-text' }, 'Refunds ', refVal, ' / ', refMax),
     h('div', { class: 'meter', role: 'presentation' }, refFill));
 
-  const speedBtns = [1, 2, 3].map((n) => h('button', {
+  const speedBtns = SPEEDS.map((n) => h('button', {
     type: 'button', class: 'btn-speed', 'aria-pressed': 'false',
-    title: n === 1 ? 'Normal speed' : `${n}x speed. For people who think they are good at this.`,
+    title: n === 1 ? 'Normal speed' : n === 5 ? '5x speed. Premature, sloppy, over before anyone enjoyed it. You will love it.'
+      : `${n}x speed. For people who think they are good at this.`,
     onclick: () => session.send({ c: 'speed', n }),
   }, `${n}x`));
   const speed = h('div', { class: 'hud-speed', role: 'group', 'aria-label': 'Game speed' }, speedBtns);
@@ -194,7 +195,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     setClass(refunds, 'danger', share >= 0.75);
 
     speedBtns.forEach((b, i) => {
-      const on = (s.speed || 1) === i + 1;
+      const on = (s.speed || 1) === SPEEDS[i];
       setClass(b, 'on', on);
       if (b.getAttribute('aria-pressed') !== String(on)) b.setAttribute('aria-pressed', String(on));
     });

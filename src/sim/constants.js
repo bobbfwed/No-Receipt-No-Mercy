@@ -4,6 +4,13 @@
 export const TICK_HZ = 30;
 export const DT = 1 / TICK_HZ;
 
+/**
+ * The game speeds a player can pick: that many ticks run in the time of one. 5x came in 0.2.14
+ * because the late game drags; there is deliberately no 4x (the owner's call: one big step up
+ * from 3x, not a small one).
+ */
+export const SPEEDS = [1, 2, 3, 5];
+
 /** Directions: 0 = east, 1 = south, 2 = west, 3 = north. */
 export const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
@@ -369,7 +376,7 @@ export const ST = { WALK: 0, BROWSE: 1, STUN: 2, LEAVE: 3, WATCH: 4 };
 export const TUNE = {
   startCash: 500, // each player's own money at the start
   joinCash: 60, // a player who joins late also gets this much per wave already played
-  graceSecs: 90, // a player whose connection drops keeps his money for this many real seconds (the same at 2x and 3x speed); then it is shared out
+  graceSecs: 90, // a player whose connection drops keeps his money for this many real seconds (the same at any game speed); then it is shared out
   // (Halved with the crowd in 0.2.09, the owner's numbers: it was 40 plus 10.)
   refundLimit: 20, // game over when this many shoppers have reached the tills...
   refundPerPlayer: 5, // ...plus this many for each player after the first
