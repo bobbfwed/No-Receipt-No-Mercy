@@ -245,17 +245,26 @@ test('DEB calls an upgrade maxed at the top of its own track (a machine\'s speed
   assert.ok(said('sprinkler', 'dmg', TUNE.maxLevel).some(isMaxed), 'a tower at the usual top');
 });
 
-test('over a whole game, wave openings rarely repeat', () => {
-  const director = createDirector(seeded(11));
-  const state = game('Dave', 'Steve');
+test('over a whole game, wave openings rarely repeat, and fade like any other notice', () => {
   const said = [];
-  for (let w = 1; w <= 20; w++) {
-    state.tick += 120 * TICK_HZ;
-    state.wave = w;
-    said.push(...says(director.handle([{ e: 'waveStart', wave: w, kinds: [], supers: [], dads: 0 }], state)));
+  const counts = [];
+  for (const seed of [11, 12, 13, 14]) {
+    const director = createDirector(seeded(seed));
+    const state = game('Dave', 'Steve');
+    const mine = [];
+    for (let w = 1; w <= 20; w++) {
+      state.tick += 120 * TICK_HZ;
+      state.wave = w;
+      const out = says(director.handle([{ e: 'waveStart', wave: w, kinds: [], supers: [], dads: 0 }], state));
+      if (w === 1) assert.equal(out.length, 1, 'the first opening is always said');
+      mine.push(...out);
+      counts.push([w, out.length]);
+    }
+    assert.ok(new Set(mine).size >= mine.length - 1, `${new Set(mine).size} different openings in ${mine.length}`);
+    said.push(...mine);
   }
-  assert.equal(said.length, 20, 'a wave starting is always announced');
-  assert.ok(new Set(said).size >= 18, `${new Set(said).size} different openings in 20 waves`);
+  const sum = (from, to) => counts.filter(([w]) => w >= from && w <= to).reduce((a, [, n]) => a + n, 0);
+  assert.ok(sum(1, 5) > 2 * sum(16, 20), `${sum(1, 5)} openings in events 1-5, ${sum(16, 20)} in 16-20`);
 });
 
 test('DEB thins out: routine things get fewer comments as the game goes on, but never none', () => {
@@ -275,7 +284,6 @@ test('DEB thins out: routine things get fewer comments as the game goes on, but 
 
   // The things that matter are still said every time, however late in the game.
   const must = [
-    [{ e: 'waveStart', wave: 15, kinds: [], supers: [] }],
     [{ e: 'waveStart', wave: 16, kinds: ['dog'], supers: [] }],
     [{ e: 'won' }],
     [{ e: 'lost' }],
@@ -293,16 +301,144 @@ test('DEB thins out: routine things get fewer comments as the game goes on, but 
   state.refunds = 32;
   state.tick += 1;
   assert.ok(!says(director.handle([{ e: 'escape', k: 'hunter' }], state)).some((t) => /refund/i.test(t) && /\b8\b/.test(t)), 'only once for each mark');
-  // And the ten-second warning.
+  // And the ten-second warning, the first time (after that it fades like any notice).
   state.phase = 'build';
   state.phaseT = 10 * TICK_HZ;
   assert.equal(says(director.idle(state)).length, 1);
 });
 
 test('the gap between remarks and the chance of one are tunable in one place', () => {
-  for (const k of ['repeatPenalty', 'first', 'decay', 'floor', 'floorImportant', 'quiet', 'quietMax', 'friendShare', 'friendIdle']) {
+  for (const k of ['repeatPenalty', 'first', 'decay', 'floor', 'floorImportant', 'quiet', 'quietMax', 'friendShare', 'friendIdle',
+    'noteDecay', 'notePassed', 'noteFloor', 'noteFloorImportant', 'jokeDecay', 'jokeFloor']) {
     assert.equal(typeof TALK[k], 'number', k);
   }
+  for (const k of ['noteFloor', 'noteFloorImportant', 'jokeFloor']) assert.ok(TALK[k] > 0 && TALK[k] < 1, `${k} is never zero`);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Notices fade one by one, jokes all together (version 0.2.14)
+
+/** A director whose random numbers are whatever `r.v` is at the time. */
+function steered() {
+  const r = { v: 0 };
+  return { r, director: createDirector(() => r.v) };
+}
+
+/** Feeds one event, long after anything else so no quiet time is in the way; how many lines. */
+function once(director, state, e) {
+  state.tick += 1000 * TICK_HZ;
+  return says(director.handle([e], state)).length;
+}
+
+const SLIP = { e: 'slip', x: 1, y: 1 };
+
+test('the first notice of each kind is always said, then each one said makes the next less likely, down to a floor', () => {
+  // A random number that would fail any roll short of a sure thing.
+  for (const e of [SLIP, { e: 'bolt' }, { e: 'mess' }, { e: 'smash', k: 'forklift', owner: 0, left: 0 }, { e: 'pitch', k: 'dad', r: 'stop' }]) {
+    const { r, director } = steered();
+    r.v = 0.9999;
+    assert.equal(once(director, game('Dave'), e), 1, e.e);
+  }
+  // After n said, the chance is noteDecay^n (but never under the floor): just under it is said,
+  // just over it is not.
+  for (let n = 1; n <= 25; n++) {
+    const want = Math.max(TALK.noteFloor, TALK.noteDecay ** n);
+    for (const [shift, heard] of [[-1e-9, 1], [1e-9, 0]]) {
+      const { r, director } = steered();
+      const state = game('Dave');
+      for (let i = 0; i < n; i++) assert.equal(once(director, state, SLIP), 1);
+      r.v = want + shift;
+      assert.equal(once(director, state, SLIP), heard, `after ${n} said, chance ${want}`);
+    }
+  }
+  assert.ok(TALK.noteDecay ** 25 < TALK.noteFloor, 'the floor is reached');
+  // Each one passed over fades it a little too.
+  const { r, director } = steered();
+  const state = game('Dave');
+  once(director, state, SLIP);
+  r.v = 0.999;
+  assert.equal(once(director, state, SLIP), 0);
+  r.v = TALK.noteDecay * TALK.notePassed + 1e-9;
+  assert.equal(once(director, state, SLIP), 0, 'one said and one passed over');
+  r.v = TALK.noteDecay * TALK.notePassed ** 2 - 1e-9;
+  assert.equal(once(director, state, SLIP), 1, 'one said and two passed over');
+});
+
+test('a notice passed over waits out its own gap, so something that happens every second stays rare', () => {
+  const { r, director } = steered();
+  const state = game('Dave');
+  once(director, state, SLIP);
+  r.v = 0.999;
+  once(director, state, SLIP); // passed over
+  r.v = 0;
+  state.tick += 1;
+  assert.equal(says(director.handle([SLIP], state)).length, 0, 'the very next slip is not even tried');
+});
+
+test('the boss, winning, losing and the store about to close are said every time, however many came before', () => {
+  const { r, director } = steered();
+  const state = game('Dave', 'Steve');
+  r.v = 0.9999; // nothing optional would get through
+  for (let i = 0; i < 40; i++) {
+    const tier = (i % 4) + 1;
+    assert.ok(once(director, state, { e: 'bossIn', tier }) >= 1, `boss in, ${i}`);
+    assert.equal(once(director, state, { e: 'bossOut', tier, bounty: 500 }), 1, `boss out, ${i}`);
+    assert.equal(once(director, state, { e: 'escape', k: 'boss', tier, refund: 300, n: 3 }), 1, `boss through, ${i}`);
+    assert.equal(once(director, state, { e: 'won' }), 1);
+    assert.equal(once(director, state, { e: 'lost' }), 1);
+  }
+  state.refundLimit = 100;
+  state.refunds = 80;
+  assert.equal(once(director, state, { e: 'escape', k: 'hunter' }), 1, 'the refund limit getting close');
+});
+
+test('something first seen late in a long game is still announced', () => {
+  const { r, director } = steered();
+  const state = game('Dave', 'Steve');
+  r.v = 0.3;
+  for (let w = 1; w <= 30; w++) {
+    state.wave = w;
+    for (const e of [SLIP, { e: 'mess' }, { e: 'grab' }, { e: 'fall' }, { e: 'flash', n: 3 }, { e: 'waveStart', wave: w, kinds: [], supers: [], dads: 2 }]) {
+      once(director, state, e);
+    }
+  }
+  r.v = 0.9999;
+  assert.equal(once(director, state, { e: 'bolt' }), 1, 'the first bolt at event 30');
+  assert.equal(once(director, state, { e: 'pee', k: 'sprinkler' }), 1, 'the first pee at event 30');
+  assert.equal(once(director, state, SLIP), 0, 'but not the hundredth slip');
+});
+
+test('jokes get rarer with every joke told, but never stop', () => {
+  // The first remark on giving money away, after `told` jokes about upgrades.
+  const giveChance = (told) => TALK.first * Math.max(TALK.jokeFloor, TALK.jokeDecay ** told);
+  const heard = (told, v) => {
+    const { r, director } = steered();
+    const state = game('Dave', 'Steve');
+    for (let i = 0; i < told; i++) assert.equal(once(director, state, { e: 'upgraded', k: 'sprinkler', by: 0, t: 'dmg', lv: 2 }), 1);
+    r.v = v;
+    return once(director, state, { e: 'gave', by: 0, to: 1, n: 50 });
+  };
+  for (const told of [0, 5, 10, 40, 100]) {
+    assert.equal(heard(told, giveChance(told) - 1e-9), 1, `after ${told} jokes`);
+    assert.equal(heard(told, giveChance(told) + 1e-9), 0, `after ${told} jokes`);
+  }
+  assert.ok(giveChance(10) < giveChance(5) && giveChance(5) < giveChance(0), 'rarer each time');
+  assert.equal(giveChance(100), TALK.first * TALK.jokeFloor, 'down to the floor, which is not zero');
+});
+
+test('a new game, or back to the lobby, starts DEB fresh', () => {
+  // main.js makes a new director for every game and every return to the lobby; nothing is kept
+  // in the game state.
+  const { r, director } = steered();
+  const state = game('Dave');
+  for (let i = 0; i < 30; i++) once(director, state, SLIP);
+  for (let i = 0; i < 30; i++) once(director, state, { e: 'upgraded', k: 'sprinkler', by: 0, t: 'dmg', lv: 2 });
+  r.v = 0.9999;
+  assert.equal(once(director, state, SLIP), 0);
+  const fresh = createDirector(() => 0.9999);
+  assert.equal(once(fresh, game('Dave'), SLIP), 1, 'the first slip of the new game');
+  const fresh2 = createDirector(() => 0.9);
+  assert.equal(once(fresh2, game('Dave', 'Steve'), { e: 'gave', by: 0, to: 1, n: 5 }), 1, 'and jokes are back to their first chance');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -362,7 +498,7 @@ test('the friends get their own lines when one of them is in the game, a few tim
 test('nobody else gets the friends\' lines, and a friend who has left gets no more of them', () => {
   for (const names of [['Dave', 'Steve'], ['Bob', 'Bobby'], ['Dave', 'Bobb the Builder']]) {
     const said = playGame(createDirector(seeded(9)), game(...names));
-    assert.ok(said.length > 50);
+    assert.ok(said.length > 30, `${said.length} lines`);
     // Any friend's line, with the name of anyone in this game in it.
     const theirs = new Set();
     for (const key of Object.keys(FRIENDS)) for (const n of names) for (const l of friendLines(key, n)) theirs.add(l);
@@ -544,8 +680,8 @@ test('the boss is announced once each visit, by the right title, and his trick i
       const title = titleIn(wave);
       const naming = said.filter((t) => t.toLowerCase().includes(title.toLowerCase()));
       assert.equal(naming.length, 1, `wave ${wave}: ${JSON.stringify(said)}`);
-      // The opening itself does not name him: it is said before he walks in.
-      assert.ok(!said[0].toLowerCase().includes(title.toLowerCase()), said[0]);
+      // The opening itself (if DEB still bothers with one) does not name him: it is said before he walks in.
+      if (said.length > 1) assert.ok(!said[0].toLowerCase().includes(title.toLowerCase()), said[0]);
       assert.equal(said.includes(fill(INTRO.boss, {})), wave === 5, `wave ${wave}: the explanation`);
     }
   }
@@ -655,13 +791,14 @@ test('the Food Court lines come up on the Food Court and nowhere else', () => {
   const food = new Set();
   for (const name of ['Dave', 'Steve']) for (const l of LINES.foodCourt) for (let w = 1; w <= 30; w++) food.add(fill(textOf(l), { p: name, w }));
   const openings = (design) => {
-    const director = createDirector(seeded(23));
     const state = game('Dave', 'Steve');
     state.map = { ...state.map, design };
     const said = [];
     for (let wave = 1; wave <= 30; wave++) {
       state.wave = wave;
       state.tick += 200 * TICK_HZ;
+      // A fresh director every event, so every opening is said (over one game they fade).
+      const director = createDirector(seeded(2300 + wave));
       said.push(...says(director.handle([{ e: 'waveStart', wave, kinds: [], supers: [], dads: 0 }], state)));
     }
     return said;
@@ -679,7 +816,6 @@ test('the Car Park lines come up on the Car Park and nowhere else, and the van o
   const lot = new Set();
   for (const name of ['Dave', 'Steve']) for (const l of LINES.carPark) for (let w = 1; w <= 30; w++) lot.add(fill(textOf(l), { p: name, w }));
   const openings = (design, size = 'm', seed = 23) => {
-    const director = createDirector(seeded(seed));
     const state = createGame({ map: { design, size } });
     addPlayer(state, 'Dave');
     addPlayer(state, 'Steve');
@@ -687,6 +823,8 @@ test('the Car Park lines come up on the Car Park and nowhere else, and the van o
     for (let wave = 1; wave <= 30; wave++) {
       state.wave = wave;
       state.tick += 200 * TICK_HZ;
+      // A fresh director every event, so every opening is said (over one game they fade).
+      const director = createDirector(seeded(seed * 100 + wave));
       said.push(...says(director.handle([{ e: 'waveStart', wave, kinds: [], supers: [], dads: 0 }], state)));
     }
     return said;

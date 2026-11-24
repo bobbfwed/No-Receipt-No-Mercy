@@ -4,18 +4,24 @@
 // same name in it.
 //
 // How DEB decides whether to speak (all the numbers are in TALK and TOPICS below):
-// - Every kind of remark is a "topic". "Must" topics are always said: a wave starting, the first
-//   appearance of a kind of shopper, the ten-second warning, the refund limit getting close, a
-//   player arriving or leaving, winning and losing, the boss walking in, storming off or getting
+// - Every kind of remark is a "topic". "Must" topics are always said: the first appearance of a
+//   kind of shopper, the refund limit getting close, a player arriving or leaving, Head Office
+//   taking or leaving his side, winning and losing, the boss walking in, storming off or getting
 //   through, and a won game being carried on as an endless one.
+// - "Note" topics tell the players that something is happening (a dad slipping, a building
+//   smashed, the doors about to open). The first one of each topic is always said; every one said
+//   makes the next one on that topic less likely (TALK.noteDecay), down to a small floor. So a
+//   thing seen for the first time at event 25 is still announced, but the twentieth slip is not.
+// - "Joke" topics carry no news (a remark about something a player built or sold, a go at one of
+//   the friends). They thin out as before, and on top of that every joke told this game makes
+//   any further joke less likely (TALK.jokeDecay), down to TALK.jokeFloor.
 // - The boss is announced when he walks in (bossIn, 12 seconds after the doors open), not when the
 //   doors open, with a bank for each of his titles; the first time, his trick is explained too.
 // - On the Food Court map a share of the wave openings (TALK.foodShare) come from its own bank,
 //   and the same on the Car Park map (TALK.carParkShare).
-// - Anything else is optional. The first time DEB comments on a topic she nearly always does;
-//   every comment after that makes the next one on that topic less likely (down to a floor) and
-//   the topic's own quiet time longer. On top of that, DEB keeps a gap after any optional remark,
-//   and that gap grows over the game. So late in a game she talks mainly about things that matter.
+// - Anything not "must" is optional. Each comment on a topic makes the topic's own quiet time
+//   longer, and DEB keeps a gap after any optional remark, which grows over the game. So late in
+//   a game she talks mainly about things that matter.
 // - Within a bank, a line that has been used is much less likely to be used again (its weight is
 //   divided by TALK.repeatPenalty each time), and lines carry weights so some are rare.
 // - The three friends (see FRIENDS in lines.js): when a line would name one of them and he is
@@ -35,7 +41,10 @@ const DEB = 'DEB (HR)';
 export const TALK = {
   /** Each time a line is used, its weight is divided by this, for the rest of the game. */
   repeatPenalty: 8,
-  /** Chance of an optional comment the first time DEB comments on a topic. */
+  /**
+   * Chance of an optional comment the first time DEB comments on a topic. This and the next
+   * three are for jokes and the boss's pep talk; notes have their own (noteDecay below).
+   */
   first: 0.95,
   /** Each comment DEB has made on a topic multiplies the chance of the next one by this... */
   decay: 0.65,
@@ -70,25 +79,47 @@ export const TALK = {
   endlessFrom: 20,
   /** Least the factory must have earned while the doors were opened early to be worth a word. */
   earlyCash: 50,
+  // Version 0.2.14: the owner found DEB far too chatty late in a game. Notifications start at a
+  // sure thing and fade each time one is said, so by event 30 only new or important things get a
+  // word; jokes fade with every joke told, to about a quarter of what she told before.
+  /** A "note" topic is always said the first time; each one said multiplies the next one's chance by this... */
+  noteDecay: 0.8,
+  /**
+   * ...and each time one is passed over, by this. Without it something that happens all game
+   * keeps getting a word every minute or two: fading only when said slows down as it gets rarer.
+   */
+  notePassed: 0.85,
+  /** ...down to this, never zero, so something rare still gets a word now and then... */
+  noteFloor: 0.02,
+  /** ...or this, for notes marked important (dads coming, a building destroyed, a popped Pregnant Lady). */
+  noteFloorImportant: 0.25,
+  /** Every joke told this game multiplies the chance of any further joke by this... */
+  jokeDecay: 0.92,
+  /** ...down to this share of what it would have been. */
+  jokeFloor: 0.15,
 };
 
 /**
- * Per topic: `must` always said; `chance` the base chance of an optional comment (after the first);
- * `gap` seconds before DEB comments on this topic again (it grows; see TALK); `important` uses
- * the higher floor and is always said the first time; `loud` ignores DEB's quiet time after other
- * remarks (for things that happen at the same moment as a must, like the dad line); `steady` is
- * never thinned out; `friend` which of a friend's banks can stand in for the line (see FRIENDS).
+ * Per topic: `must` always said; `note` a notification, `joke` a remark with no news in it (see
+ * the top of this file; a topic that is neither keeps the older rules alone); `chance` the base
+ * chance of an optional comment (after the first); `gap` seconds before DEB comments on this topic
+ * again (it grows; see TALK); `important` uses the higher floor and is always said the first time;
+ * `loud` ignores DEB's quiet time after other remarks (for things that happen at the same moment
+ * as a must, like the dad line); `steady` is never thinned out by the topic's own count; `friend`
+ * which of a friend's banks can stand in for the line (see FRIENDS).
  * A topic written 'placed:belt' uses the settings of 'placed' but is counted on its own.
  */
 export const TOPICS = {
-  waveStart: { must: true, friend: 'any' },
+  // The doors opening and the ten-second warning are news, but they come every event, so they
+  // fade like any other note (the screen shows both anyway).
+  waveStart: { note: true, loud: true, friend: 'any' },
   officeWave: { must: true },
   officeNoPlan: { must: true },
   superArrive: { must: true },
-  dadLine: { important: true, loud: true },
+  dadLine: { note: true, important: true, loud: true },
   nearLimit: { must: true, friend: 'losing' },
-  manyEscapes: { important: true, gap: 9, friend: 'losing' },
-  buildEnding: { must: true, friend: 'any' },
+  manyEscapes: { note: true, important: true, gap: 9, friend: 'losing' },
+  buildEnding: { note: true, loud: true, friend: 'any' },
   begun: { must: true, friend: 'any' },
   side: { must: true },
   joined: { must: true, friend: 'joined' },
@@ -96,45 +127,47 @@ export const TOPICS = {
   cramped: { must: true },
   won: { must: true, friend: 'winning' },
   lost: { must: true, friend: 'losing' },
+  // Head Office and the store waiting on each other: an answer to someone pressing Ready.
   waiting: { steady: true, gap: 8 },
-  idle: { steady: true },
-  sale: { chance: 0.05, gap: 60 },
-  placed: { chance: 0.12, gap: 12, friend: 'built' },
-  upgraded: { chance: 0.2, gap: 15, friend: 'built' },
-  maxed: { important: true, gap: 10, friend: 'built' },
-  removed: { chance: 0.5, gap: 10, friend: 'sold' },
-  removedOther: { gap: 8, friend: 'sold' },
-  gave: { gap: 10, friend: 'any' },
-  rebuilt: { gap: 25, friend: 'built' },
-  crawl: { gap: 12 },
-  kid: { gap: 20 },
-  caught: { chance: 0.5, gap: 25 },
-  smash: { gap: 10 },
-  smashOther: { important: true, gap: 8, friend: 'losing' },
-  dented: { chance: 0.6, gap: 12 },
-  mess: { gap: 45 },
-  bolt: { gap: 20 },
-  grab: { gap: 14 },
-  slip: { gap: 10 },
-  pee: { gap: 20 },
-  flash: { gap: 25 },
-  fall: { gap: 20 },
-  pitch: { chance: 0.04, gap: 45 },
-  kidtv: { chance: 0.6, gap: 30 },
-  rail: { chance: 0.5, gap: 30 },
-  shield: { chance: 0.6, gap: 25 },
+  idle: { joke: true, steady: true },
+  sale: { joke: true, chance: 0.05, gap: 60 },
+  placed: { joke: true, chance: 0.12, gap: 12, friend: 'built' },
+  upgraded: { joke: true, chance: 0.2, gap: 15, friend: 'built' },
+  maxed: { joke: true, important: true, gap: 10, friend: 'built' },
+  removed: { joke: true, chance: 0.5, gap: 10, friend: 'sold' },
+  removedOther: { note: true, gap: 8, friend: 'sold' },
+  gave: { joke: true, gap: 10, friend: 'any' },
+  rebuilt: { joke: true, gap: 25, friend: 'built' },
+  crawl: { note: true, gap: 12 },
+  kid: { note: true, gap: 20 },
+  caught: { note: true, chance: 0.5, gap: 25 },
+  smash: { note: true, gap: 10 },
+  smashOther: { note: true, important: true, gap: 8, friend: 'losing' },
+  dented: { note: true, chance: 0.6, gap: 12 },
+  mess: { note: true, gap: 45 },
+  bolt: { note: true, gap: 20 },
+  grab: { note: true, gap: 14 },
+  slip: { note: true, gap: 10 },
+  pee: { note: true, gap: 20 },
+  flash: { note: true, gap: 25 },
+  fall: { note: true, gap: 20 },
+  pitch: { note: true, chance: 0.04, gap: 45 },
+  kidtv: { note: true, chance: 0.6, gap: 30 },
+  rail: { note: true, chance: 0.5, gap: 30 },
+  shield: { note: true, chance: 0.6, gap: 25 },
   bossIn: { must: true, friend: 'boss' },
   bossOut: { must: true },
   bossEscape: { must: true },
-  // His pep talk comes every 7 seconds, so it is thinned hard: a handful of remarks a game.
+  // His pep talk comes every 7 seconds, so it is thinned hard: a handful of remarks a game. It is
+  // about the boss, so the newer fading leaves it alone.
   pep: { chance: 0.1, gap: 90 },
   endless: { must: true },
   // Said at round-numbered events of an endless game, instead of the usual opening.
-  endlessMark: { important: true, loud: true },
-  early: { chance: 0.5, gap: 120 },
+  endlessMark: { note: true, important: true, loud: true },
+  early: { joke: true, chance: 0.5, gap: 120 },
   // A Pregnant Lady popping is the thing to learn from, so it is said more than most.
-  pop: { important: true, gap: 20 },
-  nopop: { gap: 25 },
+  pop: { note: true, important: true, gap: 20 },
+  nopop: { note: true, gap: 25 },
 };
 
 /** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
@@ -160,8 +193,10 @@ export function createDirector(random = Math.random) {
   const used = new Map(); // line text -> times used this game (see TALK.repeatPenalty)
   const said = new Map(); // topic -> comments made on it this game
   const topicAt = new Map(); // topic -> tick of the last comment on it
+  const passed = new Map(); // note topic -> times DEB could have said it and did not
   let lastSay = -1e9; // tick of DEB's last remark
   let remarks = 0; // optional remarks made this game
+  let jokes = 0; // jokes told this game (see TALK.jokeDecay)
   let lastReview = -1e9;
   let escapes = []; // ticks of recent refunds
   let warned = -1; // wave whose "ten seconds" warning has been given
@@ -194,12 +229,21 @@ export function createDirector(random = Math.random) {
     return friendOf(player.name)?.[situation] || null;
   }
 
-  /** How likely an optional comment is, after `n` comments on the same topic. */
-  function chanceOf(t, n) {
+  /** How likely an optional comment is, after `n` comments on the same topic and `p` passed over. */
+  function chanceOf(t, n, p = 0) {
     const base = t.chance ?? 1;
-    if (t.steady) return base;
-    if (n === 0) return t.important ? 1 : TALK.first;
-    return base * Math.max(t.important ? TALK.floorImportant : TALK.floor, TALK.decay ** n);
+    // A note: certain the first time, then fading with every one said or passed over. A topic
+    // with a low base chance (the salesman's pitch, several a minute) fades from that, not from 1.
+    if (t.note) {
+      if (n === 0) return 1;
+      const floor = t.important ? TALK.noteFloorImportant : TALK.noteFloor;
+      return base * Math.max(floor, TALK.noteDecay ** n * TALK.notePassed ** p);
+    }
+    let c;
+    if (t.steady) c = base;
+    else if (n === 0) c = t.important ? 1 : TALK.first;
+    else c = base * Math.max(t.important ? TALK.floorImportant : TALK.floor, TALK.decay ** n);
+    return t.joke ? c * Math.max(TALK.jokeFloor, TALK.jokeDecay ** jokes) : c;
   }
 
   /**
@@ -219,7 +263,13 @@ export function createDirector(random = Math.random) {
       if (!t.loud && state.tick - lastSay < quiet * TICK_HZ) return false;
       const gap = (t.gap || 0) * (t.steady ? 1 : Math.min(TALK.gapMax, 1 + TALK.gapGrowth * n));
       if (state.tick - (topicAt.get(topic) ?? -1e9) < gap * TICK_HZ) return false;
-      if (random() >= chanceOf(t, n)) return false;
+      if (random() >= chanceOf(t, n, passed.get(topic) || 0)) {
+        // A note passed over still waits out its topic's gap before the next try. Otherwise
+        // something that happens every few seconds (a mess, a flasher) would win a small chance
+        // within moments of each gap ending, and the fading would make no difference.
+        if (t.note) { topicAt.set(topic, state.tick); passed.set(topic, (passed.get(topic) || 0) + 1); }
+        return false;
+      }
     }
     const player = pid !== undefined ? state.players[pid] : anyone(state);
     const name = player?.name || 'Someone';
@@ -230,6 +280,7 @@ export function createDirector(random = Math.random) {
     if (text === null && bank) text = line(bank, { p: name, ...vars });
     if (text === null) return false;
     if (!t.must) remarks++;
+    if (t.joke) jokes++;
     lastSay = state.tick;
     said.set(topic, n + 1);
     topicAt.set(topic, state.tick);
@@ -495,6 +546,7 @@ export function createDirector(random = Math.random) {
         if (!said.get('sale')) {
           said.set('sale', 1);
           topicAt.set('sale', state.tick);
+          jokes++;
           out.push({ t: 'say', who: DEB, mood: 'flat', text: line(LINES.firstSale, { p: anyone(state)?.name || 'Someone' }) });
           lastSay = state.tick;
         } else say(out, state, 'sale', LINES.sale);
