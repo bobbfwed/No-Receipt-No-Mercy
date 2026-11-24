@@ -46,7 +46,7 @@ const DEB = 'DEB (HR)';
  * Store designs (added in 0.3) whose doors opening have a bank of DEB's lines of their own, used a
  * share of the time there (TALK.placeShare): design key -> key of LINES.
  */
-export const PLACE_BANKS = { corridors: 'backPassage' };
+export const PLACE_BANKS = { corridors: 'backPassage', horseshoe: 'stripMall' };
 
 /** How often DEB talks. Change these to make her chattier or quieter. */
 export const TALK = {
@@ -85,7 +85,7 @@ export const TALK = {
   foodShare: 0.35,
   /** The same on the Car Park map. */
   carParkShare: 0.35,
-  /** The same on the designs added in 0.3 (the Back Passage), each from its own bank (PLACE_BANKS). */
+  /** The same on the designs added in 0.3 (the Back Passage and the Strip Mall), each from its own bank (PLACE_BANKS). */
   placeShare: 0.35,
   /** In an endless game, every this-many-th sales event from endlessFrom on gets a remark. */
   endlessEvery: 10,

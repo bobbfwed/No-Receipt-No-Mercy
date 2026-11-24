@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, TUNE } from '../src/sim/index.js';
+import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, TUNE, mapSize } from '../src/sim/index.js';
 import { SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../src/content/help.js';
 import { SHOPPER_ORDER, shopperFacts, bossFacts, fmt, paceText, edgeText, releaseText } from '../src/content/facts.js';
 import { versionText } from '../src/version.js';
@@ -30,9 +30,13 @@ export function generated() {
     'The host picks a design and a size before the game starts. Each player gets his own shopper entrance, and the painted floor shows where each kind of machine may go.',
     '',
     ...Object.entries(MAP_DESIGNS).flatMap(([k, d]) => [`### ${d.name}`, d.desc, '', `![${d.name}](docs/img/map-${k}.png)`, '']),
-    '| Size | Tiles | Suits |',
-    '|---|---|---|',
-    ...Object.values(MAP_SIZES).map((z) => `| ${z.name} | ${z.w} x ${z.h} | ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'the original; cramped'} |`),
+    // (The Strip Mall's plot is bigger than the others', as the middle of it is car park.)
+    `| Size | Tiles | ${MAP_DESIGNS.horseshoe.name} | Suits |`,
+    '|---|---|---|---|',
+    ...Object.entries(MAP_SIZES).map(([k, z]) => {
+      const m = mapSize('horseshoe', k);
+      return `| ${z.name} | ${z.w} x ${z.h} | ${m.w} x ${m.h} | ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'the original; cramped'} |`;
+    }),
   ].join('\n');
 
   const shoppers = [

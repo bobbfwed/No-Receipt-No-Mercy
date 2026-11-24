@@ -20,7 +20,7 @@
 //             one at a time, as far as each will go, cheapest track first (how the owner plays)
 // None of them builds the Barcode Laser or the TV Salesman, or buys durability.
 import {
-  createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, BUILD, TICK_HZ, MAP_SIZES,
+  createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, BUILD, TICK_HZ, MAP_SIZES, mapSize,
 } from '../src/sim/index.js';
 
 /** The upgrade tracks the bots buy for their towers. */
@@ -218,7 +218,7 @@ const sizes = sizeArg === 'all' ? Object.keys(MAP_SIZES) : [sizeArg || 's'];
 const design = designArg || 'warehouse';
 
 for (const size of sizes) {
-  const z = MAP_SIZES[size];
+  const z = { ...MAP_SIZES[size], ...mapSize(design, size) };
   console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player${endless ? ', ENDLESS' : ''}${difficulty ? ', ' + difficulty : ''}`);
   for (const bot of ['nothing', 'honest', 'keen', 'focus']) {
     const r = play(bot, seed, { design, size }, endless, difficulty);

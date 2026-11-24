@@ -15,6 +15,9 @@
 //              tills in the bottom wall, with signs of its own.
 //   corridors  the Back Passage: long breeze-block corridor walls with a pipe along the top,
 //              hazard tape on the ends and stencilled signs (passageWalls)
+//   horseshoe  the Strip Mall: a U of store round an outdoor car park ('O' in state.decor),
+//              drawn as tarmac with bays, parked cars, shop fronts and a sign (drawLot); the
+//              walls round it are drawn as outside walls
 // Most games also have marked floor for the factory machines (state.zones): tinted patches with a
 // painted border and their name stencilled on, one colour per kind (ZONES in the rules).
 // Almost all of it never changes, so it is painted into cached chunks (createFloorCache); only the
@@ -50,7 +53,9 @@ const PRODUCT_COLOURS = ['#e8303a', '#2f8fe0', '#f2c21b', '#3fae49', '#ff8c1a', 
  *   1 gap in a wall running across, 2 gap in a wall running up and down), tint (room tint per
  *   tile, -1 none), shelves [{x, y0, y1}], tills [i], tillTop, tillBot (rows of the bank in the
  *   right-hand wall), tillLeft, tillRight (columns of a bank in the bottom wall; tillLeft >=
- *   tillRight when there is none), doors [door], bays (the car park's rows of bays, see findBays) }
+ *   tillRight when there is none), doors [door], bays (the car park's rows of bays, see findBays),
+ *   runs (the Back Passage's runs of corridor wall, see findRuns), lot (the box round the Strip
+ *   Mall's outdoor car park, or null) }
  *   door: { n, tiles: [a, b], side 'L'|'T'|'B'|'R', x0, y0 (top-left tile), open, frame:
  *   [vx, vy, ux, uy, ox, oy] (local x points into the store, local y along the doorway) }
  */
@@ -67,8 +72,12 @@ export function analyzeMap(s) {
   for (let i = 0; i < n; i++) {
     if (tiles[i] !== '#') continue;
     const x = i % w, y = (i / w) | 0;
+    // The Strip Mall's car park is outdoors even where it reaches the edge of the map, and the
+    // walls round it are the store's outside walls.
+    if (decor && decor[i] === 'O') { wall[i] = FURN; continue; }
     if (border(x, y)) { wall[i] = OUTER; continue; }
     if (decor && decor[i] !== ' ') { wall[i] = FURN; continue; }
+    if (decor && besideLot(decor, w, h, x, y)) { wall[i] = OUTER; continue; }
     let inner = 0;
     if (hashAt(x - 1, y) && !border(x - 1, y)) inner++;
     if (hashAt(x + 1, y) && !border(x + 1, y)) inner++;
@@ -176,10 +185,11 @@ export function analyzeMap(s) {
   const blocks = decor ? findBlocks(w, h, decor) : [];
   const bays = decor && design === 'carpark' ? findBays(w, h, tiles, decor) : [];
   const runs = design === 'corridors' ? findRuns(w, h, wall) : [];
+  const lot = decor && decor.includes('O') ? findLot(w, h, decor) : null;
 
   return {
     w, h, tiles, design, wall, doorway, tint, shelves, tills, tillTop, tillBot, tillLeft, tillRight,
-    doors, zones, patches, decor, blocks, bays, runs,
+    doors, zones, patches, decor, blocks, bays, runs, lot,
   };
 }
 
@@ -515,6 +525,7 @@ export function drawChunk(g, info, x0, y0, x1, y1, zoom = 40) {
   drawWalls(g, info, r);
   drawInnerWalls(g, info, r, zoom);
   if (info.decor) drawFurniture(g, info, r, zoom);
+  if (info.lot) drawLot(g, info, r, zoom);
   const { tiles, w } = info;
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
@@ -1037,6 +1048,162 @@ function passageWalls(g, info, r, zoom) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The Strip Mall: the car park in the middle of its U ('O' in state.decor) is outdoors, not part
+// of the store: dark tarmac with painted bays and parked cars, a pavement along the shops with
+// their awnings and signs, and a sign on a pole. The walls round it are the store's outside walls.
+
+const LOT = {
+  tarmac: '#4f555c', grain: 'rgba(255,255,255,0.07)', line: 'rgba(236,236,226,0.75)',
+  pavement: '#a9a498', slab: 'rgba(60,56,48,0.25)', kerb: '#d2cdbf',
+  awnings: ['#b8463a', '#3f78b8', '#3f8a4a', '#c8862a', '#7d4f9a', '#2f8f88', '#a33f6f'],
+};
+/** The strip mall's tenants, one sign per shop front (picked in turn from a hash of the map). */
+const SHOPS = [
+  'VAPE KING', 'TAN-TASTIC', 'CASH 4 GOLD', 'NAILS', 'PAWN', 'PAYDAY LOANS', 'LIQUOR', 'CBD + MORE',
+  'MASSAGE (LEGIT)', 'TATTOO', 'BAIL BONDS', 'TO LET', 'DOLLAR+', 'PSYCHIC', 'WIGS',
+];
+
+/** True if (x, y) is a wall tile next to (or across a corner from) the Strip Mall's car park. */
+function besideLot(decor, w, h, x, y) {
+  for (let ny = y - 1; ny <= y + 1; ny++) {
+    for (let nx = x - 1; nx <= x + 1; nx++) if (nx >= 0 && ny >= 0 && nx < w && ny < h && decor[ny * w + nx] === 'O') return true;
+  }
+  return false;
+}
+
+/** The car park's tiles as one box: { x0, y0, x1, y1 } (x1 and y1 exclusive). */
+function findLot(w, h, decor) {
+  let x0 = w, y0 = h, x1 = 0, y1 = 0;
+  for (let i = 0; i < decor.length; i++) {
+    if (decor[i] !== 'O') continue;
+    const x = i % w, y = (i / w) | 0;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1);
+  }
+  return { x0, y0, x1, y1 };
+}
+
+function drawLot(g, info, r, zoom) {
+  const { w, h, decor } = info;
+  const { x0, y0, x1, y1 } = info.lot;
+  if (x1 <= r.x0 - 1 || x0 > r.x1 || y1 <= r.y0 - 1 || y0 > r.y1) return;
+  const TAU = Math.PI * 2;
+  const isLot = (x, y) => x >= 0 && y >= 0 && x < w && y < h && decor[y * w + x] === 'O';
+  // The pavement: one tile wide along the shops (the top and both sides of the car park).
+  const pave = (x, y) => isLot(x, y) && (y === y0 || x === x0 || x === x1 - 1);
+  // Tarmac, with a grain of stones, and the pavement slabs.
+  for (let y = Math.max(y0, r.y0); y < Math.min(y1, r.y1); y++) {
+    for (let x = Math.max(x0, r.x0); x < Math.min(x1, r.x1); x++) {
+      if (!isLot(x, y)) continue;
+      const X = x * T, Y = y * T;
+      if (pave(x, y)) {
+        g.fillStyle = LOT.pavement;
+        g.fillRect(X, Y, T, T);
+        g.fillStyle = LOT.slab;
+        g.fillRect(X, Y + T / 2 - 0.5, T, 1); g.fillRect(X + T / 2 - 0.5, Y, 1, T);
+        continue;
+      }
+      g.fillStyle = LOT.tarmac;
+      g.fillRect(X, Y, T, T);
+      g.fillStyle = LOT.grain;
+      for (let k = 0; k < 4; k++) g.fillRect(X + 2 + hash2(x * 4 + k, y + 300) * 35, Y + 2 + hash2(y * 4 + k, x + 700) * 35, 2, 2);
+      const v = hash2(x + 91, y + 37);
+      if (v < 0.06) {
+        g.fillStyle = 'rgba(20,22,26,0.35)';
+        g.beginPath(); g.ellipse(X + 12 + v * 200, Y + 22, 8, 5, v * 20, 0, TAU); g.fill();
+      }
+    }
+  }
+  // The kerb between the pavement and the tarmac.
+  g.strokeStyle = LOT.kerb; g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo((x0 + 1) * T, y1 * T); g.lineTo((x0 + 1) * T, (y0 + 1) * T);
+  g.lineTo((x1 - 1) * T, (y0 + 1) * T); g.lineTo((x1 - 1) * T, y1 * T);
+  g.stroke();
+  // Rows of bays, two cars nose to nose, then a lane: six columns to the pattern, from the
+  // middle out so it is the same on both sides.
+  const in0 = x0 + 1, in1 = x1 - 1; // the tarmac's columns, in0 to in1 - 1
+  const mid = (in0 + in1) >> 1;
+  const bayAt = (x) => { const k = ((((x - mid + 1) % 6) + 6) % 6); return k < 4 ? (k < 2 ? 0 : 1) : -1; };
+  const firstY = y0 + 2; // a lane along the pavement
+  g.strokeStyle = LOT.line; g.lineWidth = 2.5;
+  g.beginPath();
+  for (let x = Math.max(in0, r.x0 - 2); x < Math.min(in1, r.x1 + 2); x++) {
+    const b = bayAt(x);
+    if (b < 0 || x + 1 >= in1 || bayAt(x + 1) !== b || (bayAt(x - 1) === b && x - 1 >= in0)) continue;
+    // A pair of columns making one bay: lines between the bays down it, and down its outer side.
+    for (let y = firstY; y <= y1; y++) { g.moveTo(x * T + 3, y * T); g.lineTo((x + 2) * T - 3, y * T); }
+    const side = b === 0 ? x : x + 2;
+    g.moveTo(side * T, firstY * T); g.lineTo(side * T, y1 * T);
+  }
+  g.stroke();
+  // Parked cars in most bays, the odd abandoned trolley in the lanes.
+  for (let x = Math.max(in0, r.x0 - 2); x < Math.min(in1, r.x1 + 1); x++) {
+    const b = bayAt(x);
+    for (let y = Math.max(firstY, r.y0 - 1); y < Math.min(y1, r.y1 + 1); y++) {
+      if (b >= 0) {
+        if (x + 1 >= in1 || bayAt(x + 1) !== b || (bayAt(x - 1) === b && x - 1 >= in0)) continue;
+        if (hash2(x * 7 + 3, y * 5 + 11) < 0.68) drawCar(g, info, x, y);
+      } else if (hash2(x + 13, y * 3 + 1) < 0.05 && x + 1 < in1) drawLaneTrolley(g, x, y);
+    }
+  }
+  // Shop fronts along the pavement: an awning against the wall for each shop, about three tiles
+  // long, with its sign painted on the ones along the top.
+  const shops = [];
+  const len = 3;
+  for (let x = x0; x < x1; x += len) shops.push({ side: 'T', a: x, b: Math.min(x1, x + len) });
+  for (let y = y0 + 1; y < y1; y += len) {
+    shops.push({ side: 'L', a: y, b: Math.min(y1, y + len) });
+    shops.push({ side: 'R', a: y, b: Math.min(y1, y + len) });
+  }
+  const pick = (hash2(x0 * 3 + w, y0 + h) * SHOPS.length) | 0;
+  shops.forEach((s, k) => {
+    const col = LOT.awnings[(k * 3 + pick) % LOT.awnings.length];
+    if (s.side === 'T') {
+      if (s.b <= r.x0 - 1 || s.a > r.x1 + 1 || y0 < r.y0 - 1 || y0 > r.y1) return;
+      const X = s.a * T + 3, W = (s.b - s.a) * T - 6, Y = y0 * T;
+      box(g, X, Y, W, 13, 2, col, 1.6);
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      for (let sx = X + 4; sx < X + W - 4; sx += 10) g.fillRect(sx, Y + 2, 5, 9);
+      const name = SHOPS[(pick + k) % SHOPS.length];
+      g.font = `900 9px ${FONT_FAMILY}`;
+      const size = Math.min(9, (9 * (W - 8)) / Math.max(1, g.measureText(name).width));
+      box(g, X + 3, Y + 15, W - 6, 13, 2, '#1d2125', 1.2);
+      if ((size * zoom) / T >= 4.5) text(g, name, X + W / 2, Y + 21.5, size, '#ffd84a', 900);
+    } else {
+      const x = s.side === 'L' ? x0 : x1 - 1;
+      if (x < r.x0 - 1 || x > r.x1 || s.b <= r.y0 - 1 || s.a > r.y1 + 1) return;
+      const Y = s.a * T + 3, H = (s.b - s.a) * T - 6, X = s.side === 'L' ? x * T : (x + 1) * T - 13;
+      box(g, X, Y, 13, H, 2, col, 1.6);
+      g.fillStyle = 'rgba(255,255,255,0.85)';
+      for (let sy = Y + 4; sy < Y + H - 4; sy += 10) g.fillRect(X + 2, sy, 9, 5);
+    }
+  });
+  // The strip mall's sign on its pole, in the middle at the bottom, if there is room.
+  const pw = Math.min(5, in1 - in0 - 2);
+  if (pw >= 3 && y1 - y0 >= 6) {
+    const cx = ((in0 + in1) / 2) * T, py = (y1 - 2.6) * T;
+    if (cx + pw * T / 2 >= r.x0 * T && cx - pw * T / 2 <= r.x1 * T && py + 2 * T >= r.y0 * T && py - T <= r.y1 * T) {
+      g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(cx - 3, py + 10, 10, 1.6 * T);
+      box(g, cx - 4, py + 6, 8, 1.6 * T, 1, '#8a9097', 1.5);
+      box(g, cx - (pw * T) / 2, py - 18, pw * T, 34, 5, '#c8302a', 2.5);
+      text(g, 'SUNSET PLAZA', cx, py - 7, Math.min(13, pw * 5), '#ffd84a', 900);
+      text(g, 'NOW LEASING. PLEASE.', cx, py + 8, Math.min(8, pw * 3.2), '#ffffff', 800);
+    }
+  }
+  // The yellow safety line on the store's floor along the inside of the U, as along every wall.
+  g.strokeStyle = 'rgba(242,194,27,0.75)';
+  g.lineWidth = 3;
+  g.setLineDash([14, 8]);
+  g.beginPath();
+  g.moveTo((x0 - 1) * T - 6, (h - 1) * T - 6);
+  g.lineTo((x0 - 1) * T - 6, (y0 - 1) * T - 6);
+  g.lineTo((x1 + 1) * T + 6, (y0 - 1) * T - 6);
+  g.lineTo((x1 + 1) * T + 6, (h - 1) * T - 6);
+  g.stroke();
+  g.setLineDash([]);
+}
+
+// ---------------------------------------------------------------------------------------------
 // The food court: a tiled floor, and the furniture in state.decor (see DECOR in the rules): tables,
 // benches and booths, planters, bins, food stalls and the fountain. Every piece is solid ('#').
 
@@ -1114,7 +1281,7 @@ function drawFurniture(g, info, r, zoom) {
       if (wall[i] !== FURN) continue;
       const ch = decor[i];
       // Blocks are added below; a car or a trolley shelter is drawn whole from its left half.
-      if (BLOCK_CH.has(ch) || ch === 'C' || ch === 'R') continue;
+      if (BLOCK_CH.has(ch) || ch === 'C' || ch === 'R' || ch === 'O') continue;
       items.push(y * 1e4 + x, ch, x, y);
     }
   }

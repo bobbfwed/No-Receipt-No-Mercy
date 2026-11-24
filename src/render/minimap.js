@@ -29,6 +29,8 @@ const FURN = {
   t: [242, 238, 228], b: [140, 50, 45], p: [35, 95, 45], n: [60, 70, 75], k: [215, 45, 60], f: [60, 170, 235],
   c: [200, 202, 206], C: [92, 112, 136], r: [150, 196, 218], R: [150, 196, 218], x: [222, 178, 50],
   i: [92, 128, 66], l: [232, 214, 120], m: [60, 98, 168], a: [196, 202, 210], o: [255, 140, 26], v: [235, 120, 40],
+  // The Strip Mall's car park, outside the store: dark tarmac, well apart from the floor's grey.
+  O: [33, 37, 42],
 };
 const CAR_DARK = { c: FURN.c.map((v) => Math.round(v * 0.82)), C: FURN.C.map((v) => Math.round(v * 0.8)) };
 const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f', BOSS_COL = '#ff2a6d', BABY = '#ffb3d9';

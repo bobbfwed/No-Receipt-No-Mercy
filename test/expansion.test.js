@@ -97,7 +97,9 @@ test('every design in every size has seven entrances that all reach the tills', 
       // The ones in the top and bottom walls are in the left half: about a fifth and two fifths along.
       const along = s.doors.filter((d) => d[0] % w !== 0).map((d) => (d[0] % w) / w).sort();
       assert.equal(along.length, 4);
-      assert.ok(along[0] > 0.15 && along[1] < 0.27 && along[2] > 0.35 && along[3] < 0.47, `${design} ${size}: top and bottom entrances at ${along.map((v) => v.toFixed(2))}`);
+      // (The Strip Mall's are all on the left arm of its U, left of the car park in the middle.)
+      if (design === 'horseshoe') assert.ok(along[0] > 0 && along[3] < 0.3, `${design} ${size}: top and bottom entrances at ${along.map((v) => v.toFixed(2))}`);
+      else assert.ok(along[0] > 0.15 && along[1] < 0.27 && along[2] > 0.35 && along[3] < 0.47, `${design} ${size}: top and bottom entrances at ${along.map((v) => v.toFixed(2))}`);
       // Plenty of floor left to build on.
       const floor = [...s.tiles].filter((c) => c === '.').length;
       assert.ok(floor > w * h * 0.55, `${design} ${size}: only ${floor} floor tiles`);

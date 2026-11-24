@@ -42,16 +42,21 @@ Staff only. Long service corridors with a few gaps in the walls, and every kind 
 
 ![The Back Passage](docs/img/map-corridors.png)
 
-| Size | Tiles | Suits |
-|---|---|---|
-| Corner Shop | 30 x 16 | the original; cramped |
-| Outlet | 36 x 20 | 1 player |
-| Superstore | 44 x 24 | 2 players |
-| Megastore | 54 x 30 | 3 players |
-| Hypermarket | 66 x 37 | 4 players |
-| Distribution Centre | 81 x 45 | 5 players |
-| Regional Hub | 99 x 55 | 6 players |
-| Mega Mall | 121 x 67 | 7 players |
+### The Strip Mall
+A U of dying shops round a car park nobody owns. In on one arm, round the bend, refunds at the bottom of the other: the bend is everyone's problem. The plot is bigger, as the middle is all car park.
+
+![The Strip Mall](docs/img/map-horseshoe.png)
+
+| Size | Tiles | The Strip Mall | Suits |
+|---|---|---|---|
+| Corner Shop | 30 x 16 | 33 x 18 | the original; cramped |
+| Outlet | 36 x 20 | 40 x 22 | 1 player |
+| Superstore | 44 x 24 | 48 x 26 | 2 players |
+| Megastore | 54 x 30 | 60 x 33 | 3 players |
+| Hypermarket | 66 x 37 | 73 x 41 | 4 players |
+| Distribution Centre | 81 x 45 | 89 x 50 | 5 players |
+| Regional Hub | 99 x 55 | 109 x 61 | 6 players |
+| Mega Mall | 121 x 67 | 134 x 74 | 7 players |
 <!-- /gen:maps -->
 
 ## The shoppers

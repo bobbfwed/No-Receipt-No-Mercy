@@ -1,6 +1,6 @@
 // The three game settings a host chooses: how many sales events, how hard, and how much cash each
 // player starts with. Used by the menu (before hosting) and the lobby (before starting).
-import { SETTINGS } from '../sim/index.js';
+import { SETTINGS, MAP_SIZES, mapSize } from '../sim/index.js';
 import { h } from './dom.js';
 
 /** What "Endless" means, under the length picker when it is chosen. */
@@ -41,4 +41,21 @@ export function createSettings({ idPrefix, value, onChange = () => {}, disabled 
   const field = (label, input) => h('label', { for: input.id }, h('span', null, label), input);
   const el = h('div', { class: 'set-pick' }, field('Length', wavesIn), field('Difficulty', diffIn), field('Starting cash', cashIn), lenNote, note);
   return { el, inputs: [wavesIn, diffIn, cashIn], get, set };
+}
+
+/**
+ * Writes into a size picker (its options' values are keys of MAP_SIZES) each size's name, its
+ * width and height in tiles for this design, and who it suits. The tiles depend on the design:
+ * the Strip Mall's plot is bigger than the size's usual rectangle (mapSize).
+ * @param {HTMLSelectElement} select
+ * @param {string} design a key of MAP_DESIGNS
+ */
+export function labelSizes(select, design) {
+  for (const o of select.options) {
+    const z = MAP_SIZES[o.value];
+    if (!z) continue;
+    const { w, h: tall } = mapSize(design, o.value);
+    const text = `${z.name} (${w}x${tall}): ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'original'}`;
+    if (o.textContent !== text) o.textContent = text;
+  }
 }

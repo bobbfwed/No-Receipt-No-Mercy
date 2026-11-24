@@ -51,6 +51,10 @@ export const MAP_DESIGNS = {
     name: 'The Back Passage',
     desc: 'Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd.',
   },
+  horseshoe: {
+    name: 'The Strip Mall',
+    desc: "A U of dying shops round a car park nobody owns. In on one arm, round the bend, refunds at the bottom of the other: the bend is everyone's problem. The plot is bigger, as the middle is all car park.",
+  },
 };
 
 /**
@@ -60,6 +64,7 @@ export const MAP_DESIGNS = {
  */
 export function mapSize(design, size) {
   const z = MAP_SIZES[size] || MAP_SIZES.xs;
+  if (design === 'horseshoe') return stripSize(MAP_SIZES[size] ? size : 'xs');
   return { w: z.w, h: z.h };
 }
 
@@ -92,13 +97,15 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
   if (design === 'showroom') rooms(w, h, wall, set);
   else if (design === 'aisles') shelves(w, h, mid, wall);
   else if (design === 'corridors') passages(w, h, wall);
+  else if (design === 'horseshoe') cutOut(w, h, g);
   else if (design !== 'food' && design !== 'carpark') pillars(w, h, wall);
 
   // Tills: a bank in the middle of the right-hand wall. The car park has two shorter banks: that
   // one, and another in the bottom wall towards the right, about as far from the first entrance.
   const two = design === 'carpark';
   const tillRows = two ? Math.max(4, Math.round(h * 0.25) & ~1) : Math.max(6, Math.round(h * 0.375) & ~1);
-  const t0 = (h - tillRows) >> 1;
+  // (The Strip Mall's are low on the right arm of its U, at the far end from the entrances.)
+  const t0 = design === 'horseshoe' ? stripTills(w, h, tillRows) : (h - tillRows) >> 1;
   for (let y = t0; y < t0 + tillRows; y++) {
     set(w - 1, y, 'T');
     set(w - 2, y, '.');
@@ -130,6 +137,8 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
   // of tills as any other entrance is from a till, so they open last: only a sixth and a seventh
   // player get one.
   if (two) spots = [0, 1, 3, 4, 5, 2, 6].map((k) => spots[k]);
+  // The Strip Mall has entrances of its own, all on the left arm of its U.
+  if (design === 'horseshoe') spots = stripDoors(w, h);
   const doors = [];
   for (const sp of spots.slice(0, Math.max(1, slots))) {
     const door = [];
@@ -146,7 +155,7 @@ export function makeMap(design = 'warehouse', size = 'xs', slots = 7) {
   }
   // The food court's furniture and the car park's cars go in last, around the tills, the entrances
   // (all seven, so the layout is the same however many are in use) and the marked floor.
-  const decor = design === 'food' ? furnish(w, h, g, spots) : design === 'carpark' ? park(w, h, g, spots) : '';
+  const decor = design === 'food' ? furnish(w, h, g, spots) : design === 'carpark' ? park(w, h, g, spots) : design === 'horseshoe' ? outside(w, h) : '';
   return { w, h, tiles: g.join(''), doors, decor };
 }
 
@@ -177,6 +186,8 @@ export const DECOR = {
   a: 'an abandoned trolley in the lane',
   o: 'traffic cones round a pothole in the lane',
   v: 'the burger van (a block four tiles wide and two deep)',
+  // The Strip Mall.
+  O: "outside the store: the strip mall's car park in the middle of its U (a block of tiles; nothing walks or builds there)",
 };
 
 /** A small, fixed scramble of a few numbers, used in place of dice so a map is the same every time. */
@@ -581,6 +592,7 @@ function shelves(w, h, mid, wall) {
  */
 export function makeZones(w, h, tiles, doors, design) {
   if (design === 'corridors') return passageZones(w, h, tiles, doors);
+  if (design === 'horseshoe') return stripZones(w, h, tiles, doors);
   const z = new Array(w * h).fill(' ');
   const tall = h >= 30 ? 3 : 2, wide = 4;
   for (let n = 0, x0 = 9; x0 + wide - 1 <= w - 4; n++, x0 += 10) {
@@ -758,6 +770,150 @@ function passageZones(w, h, tiles, doors) {
       const tx = t % w, ty = (t / w) | 0;
       const deep = ty === 0 || ty === h - 1 ? 2 : 1;
       for (let y = ty - deep; y <= ty + deep; y++) {
+        for (let x = tx - 1; x <= tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) z[y * w + x] = ' ';
+      }
+    }
+  }
+  return z.join('');
+}
+
+// ---------------------------------------------------------------------------------------------
+// The Strip Mall (version 0.3): a U of shops round a car park that is not part of the store.
+
+/**
+ * Where the Strip Mall's car park is: a block cut up from the middle of the bottom wall, so the
+ * store is a U: a left arm, a right arm and the bend along the top joining them. The block's
+ * edge (its left and right columns and its top row) is ordinary store wall, the inside of the U;
+ * everything inside that edge, down to the bottom of the map, is outdoors.
+ * @returns {{L: number, R: number, top: number}} the block's left and right wall columns and its
+ *   top wall row
+ */
+function lotPlan(w, h) {
+  const L = Math.round(w * 0.33);
+  return { L, R: w - 1 - L, top: Math.round(h * 0.45) };
+}
+
+const stripCache = new Map();
+/**
+ * The Strip Mall's plot for a size: the size's rectangle scaled up (keeping its shape) until the
+ * floor inside the U is as near as it gets to the floor of an Open Warehouse of that size. Worked
+ * out once per size.
+ */
+function stripSize(size) {
+  let hit = stripCache.get(size);
+  if (hit) return { ...hit };
+  const { w, h } = MAP_SIZES[size];
+  const target = [...makeMap('warehouse', size, 1).tiles].filter((c) => c === '.').length;
+  let best = null;
+  for (let k = 0; k <= 120; k++) {
+    const W = Math.round((w * (200 + k)) / 200), H = Math.round((h * (200 + k)) / 200);
+    const { L, R, top } = lotPlan(W, H);
+    const floor = (W - 2) * (H - 2) - (R - L + 1) * (H - 1 - top);
+    const off = Math.abs(floor - target);
+    if (!best || off < best.off) best = { off, w: W, h: H };
+  }
+  hit = { w: best.w, h: best.h };
+  stripCache.set(size, hit);
+  return { ...hit };
+}
+
+/** The Strip Mall: walls round the car park's block, and the block itself solid (see outside). */
+function cutOut(w, h, g) {
+  const { L, R, top } = lotPlan(w, h);
+  for (let y = top; y < h; y++) for (let x = L; x <= R; x++) g[y * w + x] = '#';
+}
+
+/** The Strip Mall's decor: 'O' (outdoors) inside the car park's block, a space everywhere else. */
+function outside(w, h) {
+  const { L, R, top } = lotPlan(w, h);
+  const d = new Array(w * h).fill(' ');
+  for (let y = top + 1; y < h; y++) for (let x = L + 1; x < R; x++) d[y * w + x] = 'O';
+  return d.join('');
+}
+
+/** The first row of the Strip Mall's tills: half way down the right arm below the bend. */
+function stripTills(w, h, rows) {
+  const { top } = lotPlan(w, h);
+  return Math.min(h - 2 - rows, Math.round((top + h - 2) / 2 - rows / 2));
+}
+
+/**
+ * The Strip Mall's entrances, in the order they open: all on the left arm, so everyone walks
+ * round the bend. Three in the left wall as on every design, and two each in the top and bottom
+ * walls of the arm, the first pair further from the corner than the second.
+ */
+function stripDoors(w, h) {
+  const { L } = lotPlan(w, h);
+  const mid = h >> 1, ry = Math.round(h * 0.22);
+  const a = Math.round(L * 0.62) - 1, b = Math.max(2, Math.round(L * 0.22) - 1);
+  return [
+    { side: 'L', at: mid - 1 },
+    { side: 'T', at: a },
+    { side: 'B', at: a },
+    { side: 'L', at: ry - 1 },
+    { side: 'L', at: h - 1 - ry },
+    { side: 'T', at: b },
+    { side: 'B', at: b },
+  ];
+}
+
+/**
+ * One section of marked floor in a band of rows, laid exactly as makeZones lays a section over
+ * the whole height of an ordinary store: `y0` and `y1` are the wall rows above and below the
+ * band. Returns false (and lays nothing) if the four patches do not fit in the band.
+ */
+function laySection(z, w, tiles, doors, x0, n, y0, y1, tall) {
+  const hb = y1 - y0 + 1, wide = 4;
+  const wallY = n % 2 ? y1 : y0;
+  let facing = doors.some((door) => door.some((t) => ((t / w) | 0) === wallY && (t % w) >= x0 - 1 && (t % w) <= x0 + wide));
+  for (let x = x0 - 1; x <= x0 + wide; x++) if (tiles[wallY * w + x] === 'T') facing = true;
+  const u = facing ? 3 : 2;
+  const p = Math.max(Math.round(hb * 0.25), u + tall + 1);
+  const k = Math.max(Math.round(hb * 0.5), p + tall + 1);
+  const c = Math.min(Math.max(Math.round(hb * 0.7), k + tall + 1), hb - 2 - tall);
+  if (c < k + tall + 1) return false;
+  for (const [ch, top] of Object.entries({ u, p, k, c })) {
+    for (let dy = 0; dy < tall; dy++) {
+      const y = n % 2 ? y1 - (top + dy) : y0 + top + dy;
+      for (let dx = 0; dx < wide; dx++) if (tiles[y * w + x0 + dx] === '.') z[y * w + x0 + dx] = ch;
+    }
+  }
+  return true;
+}
+
+/**
+ * The Strip Mall's marked floor. Sections run up and down as on every design, but placed to fit
+ * the U: centred in each arm over its whole height (one in an arm up to about two dozen tiles
+ * wide, more in wider ones), and in the bend over the car park, as tall as the bend allows (the
+ * patches are thinner there on the smaller stores, where the bend is low). Every other section,
+ * counting from the left, is upside down. Patches stay a tile clear of every wall, the car park
+ * included, of each other, and of the floor in front of the entrances and the tills.
+ * @returns {string} one character per tile: a key of ZONES, or a space
+ */
+function stripZones(w, h, tiles, doors) {
+  const z = new Array(w * h).fill(' ');
+  const { L, R, top } = lotPlan(w, h);
+  const tall = h >= 30 ? 3 : 2;
+  /** Where n sections go between columns p0 and p1 (a patch may use both), centred. */
+  const spread = (p0, p1, least) => {
+    const span = p1 - p0 + 1;
+    let n = Math.max(least, Math.floor((span + 2) / 10));
+    while (n > 0 && 10 * n - 6 > span) n--;
+    const x = p0 + ((span - (10 * n - 6)) >> 1);
+    return Array.from({ length: n }, (_, j) => x + 10 * j);
+  };
+  const arms = [...spread(2, L - 2, 1), ...spread(R + 2, w - 4, 1)];
+  const bend = spread(L, R, 1);
+  const all = [...arms.map((x) => [x, 'arm']), ...bend.map((x) => [x, 'bend'])].sort((a, b) => a[0] - b[0]);
+  all.forEach(([x0, where], n) => {
+    if (where === 'arm') laySection(z, w, tiles, doors, x0, n, 0, h - 1, tall);
+    else for (let t = tall; t >= 1 && !laySection(z, w, tiles, doors, x0, n, 0, top, t); t--);
+  });
+  // Keep the floor right inside every entrance unmarked, as on every design.
+  for (const door of doors) {
+    for (const t of door) {
+      const tx = t % w, ty = (t / w) | 0;
+      for (let y = ty - 1; y <= ty + 1; y++) {
         for (let x = tx - 1; x <= tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) z[y * w + x] = ' ';
       }
     }

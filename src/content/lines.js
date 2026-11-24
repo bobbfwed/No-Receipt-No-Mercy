@@ -916,6 +916,20 @@ export const LINES = {
     u("Sales event {w}. The pipes in the Back Passage are groaning. That's the plumbing, {p}. Not everything is about you."),
     r("Back Passage, event {w}. Corporate asked for a 'tradesmen's entrance'. {p} giggled for an hour. That is why he is not in management."),
   ],
+  // Doors opening in the Strip Mall store (version 0.3), used in place of waveStart a share of
+  // the time on that map only. {w} wave, {p} anyone
+  stripMall: [
+    'Sales event {w} at the Strip Mall. The vape shop is open. The tanning salon is open. Your future is closed.',
+    'Doors open on the Strip Mall. Half the units are empty and the other half sell vapes. {p} fits right in.',
+    'Event {w}. The tanning salon gave {p} a free session. He came out the colour of a divorced realtor.',
+    'Strip Mall, event {w}. Everyone has to go round the bend to get a refund. {p} went round it years ago.',
+    "Sales event {w}. The massage place next door says it's legit. The queue of dads outside says otherwise.",
+    "Doors open. The vape shop guy asked {p} out. {p} said maybe. It's the most action this mall has seen since 2008.",
+    u("Strip Mall, event {w}. The 'NOW LEASING' sign has been up since 2011. So has {p}'s last erection."),
+    u('Sales event {w}. The payday loan shop sent a man round. He wants to know where {p} lives. I told him.'),
+    u('Event {w}. A sunbed in the tanning salon has been on since Tuesday, with somebody in it. You can smell him from the bend.'),
+    r('Strip Mall, event {w}. The psychic two doors down said this sale would go badly. She charged {p} forty dollars. He paid in coins.'),
+  ],
   // The doors were opened early and the factory was paid for the time skipped. {n} the cash,
   // {m} the seconds skipped (may be missing), {p} anyone
   early: [

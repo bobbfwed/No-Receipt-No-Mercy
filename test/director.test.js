@@ -50,7 +50,7 @@ const VARS = {
   pop: 'pn', nopop: 'p', autoRebuildOn: 'p',
   releaseNext: 'pnw', releaseIn: 'pn', rip: 'pn',
   // Version 0.3: the new store designs.
-  backPassage: 'pw',
+  backPassage: 'pw', stripMall: 'pw',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -74,7 +74,7 @@ const AT_LEAST = {
   // Version 0.3.01: the Card Trader and the Midnight Release.
   releaseNext: 10, releaseIn: 6, rip: 8,
   // Version 0.3: the new store designs.
-  backPassage: 8,
+  backPassage: 8, stripMall: 8,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };

@@ -1,16 +1,17 @@
-// Tests for the store designs added in version 0.3: the Back Passage (long corridors). Run with:
+// Tests for the store designs added in version 0.3: the Back Passage (long corridors) and the Strip
+// Mall (a U round a car park that is not part of the store). Run with:
 // node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, canPlace, step, makeMap, getDist, mapSize,
-  MAP_SIZES, MAP_DESIGNS, ZONES, UNREACHABLE,
+  createGame, addPlayer, applyCommand, canPlace, step, makeMap, getDist, mapSize, setMap, tillBanks,
+  MAP_SIZES, MAP_DESIGNS, ZONES, BUILD, DECOR, UNREACHABLE,
 } from '../src/sim/index.js';
 import { createDirector, PLACE_BANKS } from '../src/content/director.js';
 import { LINES, fill, textOf } from '../src/content/lines.js';
 
 const SIZES = Object.keys(MAP_SIZES);
-const NEW = ['corridors'];
+const NEW = ['corridors', 'horseshoe'];
 
 /** Walking distance from each entrance (in the order they open) to the nearest till. */
 function walks(s) {
@@ -24,6 +25,7 @@ const floorOf = (s) => [...s.tiles].filter((c) => c === '.').length;
 test('the new designs come after the old ones, with names and descriptions', () => {
   assert.deepEqual(Object.keys(MAP_DESIGNS).slice(5, 5 + NEW.length), NEW);
   assert.equal(MAP_DESIGNS.corridors.name, 'The Back Passage');
+  assert.equal(MAP_DESIGNS.horseshoe.name, 'The Strip Mall');
   for (const k of NEW) assert.ok(MAP_DESIGNS[k].desc.length > 40, k);
 });
 
@@ -248,4 +250,105 @@ test('DEB has lines of her own for the doors opening on each new design, about a
     assert.ok(n >= 5 && n <= 18, `${n} of 30 openings on ${design} were its own`);
   }
   assert.deepEqual(Object.keys(PLACE_BANKS).sort(), [...NEW].sort());
+});
+
+// ---------------------------------------------------------------- the Strip Mall
+
+/** The Strip Mall's car park: the box round its 'O' tiles, as { x0, y0, x1, y1 } (x1, y1 exclusive). */
+function lotOf(s) {
+  let x0 = s.w, y0 = s.h, x1 = 0, y1 = 0;
+  for (let i = 0; i < s.decor.length; i++) {
+    if (s.decor[i] !== 'O') continue;
+    const x = i % s.w, y = (i / s.w) | 0;
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1);
+  }
+  return { x0, y0, x1, y1 };
+}
+
+test('the Strip Mall is a U: a car park cut up from the middle of the bottom, walled round, outdoors', () => {
+  assert.ok(DECOR.O);
+  for (const size of SIZES) {
+    const s = createGame({ map: { design: 'horseshoe', size } });
+    const { w, h } = s;
+    const { x0, y0, x1, y1 } = lotOf(s);
+    // One solid rectangle of outdoors, reaching the bottom edge, in the middle.
+    assert.equal(y1, h, `${size}: the car park reaches the bottom of the map`);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) assert.equal(s.decor[y * w + x], 'O', `${size}: a hole in the car park at ${x},${y}`);
+    assert.ok(Math.abs(x0 + x1 - w) <= 1, `${size}: the car park is not in the middle (${x0}..${x1} of ${w})`);
+    assert.equal([...s.decor].filter((c) => c === 'O').length, (x1 - x0) * (y1 - y0), `${size}: outdoors anywhere else`);
+    // Store wall all round it: its left, right and top edges.
+    for (let y = y0 - 1; y < h; y++) {
+      assert.equal(s.tiles[y * w + x0 - 1], '#', `${size}: the wall left of the car park at row ${y}`);
+      assert.equal(s.tiles[y * w + x1], '#', `${size}: the wall right of the car park at row ${y}`);
+    }
+    for (let x = x0 - 1; x <= x1; x++) assert.equal(s.tiles[(y0 - 1) * w + x], '#', `${size}: the wall above the car park at column ${x}`);
+    // Every outdoor tile is solid, and the decor marks nothing else.
+    for (let i = 0; i < s.decor.length; i++) {
+      if (s.decor[i] === 'O') assert.equal(s.tiles[i], '#');
+      else assert.equal(s.decor[i], ' ', `${size}: decor '${s.decor[i]}' at ${i % w},${(i / w) | 0}`);
+    }
+    // The arms and the bend are each wide enough for a production line and a way past it.
+    const armL = x0 - 2, armR = w - 2 - x1, bend = y0 - 2;
+    assert.ok(armL >= 9 && armR >= 9, `${size}: arms ${armL} and ${armR} wide`);
+    assert.ok(bend >= 6, `${size}: the bend is ${bend} rows`);
+    assert.ok(y1 - y0 >= (h - 2) * 0.4, `${size}: the car park is only ${y1 - y0} rows deep`);
+  }
+});
+
+test('the Strip Mall has about as much floor as the Open Warehouse of the same size, on a bigger plot', () => {
+  for (const size of SIZES) {
+    const s = createGame({ map: { design: 'horseshoe', size } });
+    const open = createGame({ map: { design: 'warehouse', size } });
+    const ratio = floorOf(s) / floorOf(open);
+    assert.ok(ratio > 0.95 && ratio < 1.05, `${size}: ${floorOf(s)} floor tiles, ${floorOf(open)} on the Open Warehouse`);
+    assert.ok(s.w > MAP_SIZES[size].w && s.h > MAP_SIZES[size].h, `${size}: ${s.w} x ${s.h}`);
+    // About the same shape as the size's usual rectangle.
+    assert.ok(Math.abs(s.w / s.h - MAP_SIZES[size].w / MAP_SIZES[size].h) < 0.1, `${size}: ${s.w} x ${s.h}`);
+  }
+});
+
+test('on the Strip Mall the entrances are on the left arm and the tills low on the right arm, so everyone goes round the bend', () => {
+  for (const size of SIZES) {
+    const s = createGame({ map: { design: 'horseshoe', size } });
+    const { x0, x1, y0 } = lotOf(s);
+    for (const door of s.doors) for (const t of door) assert.ok(t % s.w < x0 - 1, `${size}: an entrance at ${t % s.w},${(t / s.w) | 0} is not on the left arm`);
+    const banks = tillBanks(s);
+    assert.equal(banks.length, 1);
+    for (const t of banks[0]) {
+      assert.equal(t % s.w, s.w - 1, `${size}: a till not in the right-hand wall`);
+      assert.ok(((t / s.w) | 0) >= y0, `${size}: a till beside the bend, not low on the right arm`);
+    }
+    // The walk from every entrance is longer than going straight across the car park would be.
+    const d = walks(s);
+    for (const k of d) assert.ok(k > s.w - 1, `${size}: a walk of ${k} on a store ${s.w} wide`);
+    assert.ok(x1 < s.w - 3);
+  }
+});
+
+test('nothing can be built outdoors or in the walls round the car park, and changing the store to it in the lobby works', () => {
+  for (const size of ['xs', 's', 'l']) {
+    const s = createGame({ map: { design: 'horseshoe', size } });
+    addPlayer(s, 'Dave');
+    s.players[0].cash = 1e9;
+    const { x0, y0, x1, y1 } = lotOf(s);
+    const kinds = Object.keys(BUILD);
+    for (let y = y0 - 1; y < y1; y++) {
+      for (let x = x0 - 1; x <= x1; x++) {
+        for (const k of kinds) assert.notEqual(canPlace(s, k, x, y, 0, 0), null, `${size}: a ${k} allowed at ${x},${y}`);
+        assert.equal(applyCommand(s, 0, { c: 'place', k: 'crate', x, y }).ok, false);
+      }
+    }
+    // No marked floor anywhere near it.
+    for (let y = y0 - 2; y < y1; y++) for (let x = x0 - 2; x <= x1 + 1; x++) assert.equal(s.zones[y * s.w + x], ' ', `${size}: marked floor at ${x},${y}`);
+  }
+  const lobby = createGame({ lobby: true, map: { design: 'warehouse', size: 's' } });
+  addPlayer(lobby, 'Dave');
+  assert.ok(setMap(lobby, 'horseshoe', 'm'));
+  assert.deepEqual({ w: lobby.w, h: lobby.h }, mapSize('horseshoe', 'm'));
+  assert.equal(lobby.grid.length, lobby.w * lobby.h);
+  assert.equal(lobby.decor, makeMap('horseshoe', 'm', lobby.doors.length).decor);
+  assert.equal(lobby.zones.length, lobby.w * lobby.h);
+  assert.ok(setMap(lobby, 'warehouse', 'm'));
+  assert.equal(lobby.w, MAP_SIZES.m.w);
+  assert.equal(lobby.decor, '');
 });

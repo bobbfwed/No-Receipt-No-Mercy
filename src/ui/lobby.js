@@ -3,7 +3,7 @@
 // player presses Ready. The game starts when every connected player is ready.
 import { MAP_DESIGNS, MAP_SIZES, ZONES } from '../sim/index.js';
 import { h, setText, setClass, safeColor } from './dom.js';
-import { createSettings } from './settings.js';
+import { createSettings, labelSizes } from './settings.js';
 
 /**
  * @param {Object} session
@@ -78,6 +78,7 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
       mapSig = sig;
       designIn.value = s.map.design;
       sizeIn.value = s.map.size;
+      labelSizes(sizeIn, s.map.design);
       const z = MAP_SIZES[s.map.size];
       setText(about, MAP_DESIGNS[s.map.design].desc);
       const here = s.players.filter((p) => p.on).length;

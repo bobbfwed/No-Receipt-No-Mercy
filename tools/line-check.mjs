@@ -71,9 +71,14 @@ for (const design of designArg ? [designArg] : Object.keys(MAP_DESIGNS)) {
     s.players[0].cash = 1e9;
     let sections = 0, built = 0;
     const fails = [];
+    // The sections: each run of columns with marked floor in it (ten apart from column 9 on most
+    // designs; the Strip Mall places its own to fit its U).
+    const marked = (x) => { for (let y = 0; y < s.h; y++) if (s.zones[y * s.w + x] !== ' ') return true; return false; };
+    const starts = [];
+    for (let x = 0; x < s.w; x++) if (marked(x) && !marked(x - 1)) starts.push(x);
     // Two passes: a second line in each section shows whether there is room to grow.
     for (let pass = 0; pass < 2; pass++) {
-      for (let x0 = 9; x0 + 3 <= s.w - 4; x0 += 10) {
+      for (const x0 of starts) {
         if (pass === 0) sections++;
         const why = buildLine(s, x0);
         if (why) fails.push(`pass ${pass + 1} x${x0}: ${why}`); else built++;

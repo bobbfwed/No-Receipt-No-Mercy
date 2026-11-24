@@ -2,7 +2,7 @@
 import { MAP_DESIGNS, MAP_SIZES } from '../sim/index.js';
 import { VERSION, RELEASE, versionText } from '../version.js';
 import { h, loadName, saveName } from './dom.js';
-import { createSettings } from './settings.js';
+import { createSettings, labelSizes } from './settings.js';
 import { whenSaved } from './save.js';
 import { recordLine } from './record.js';
 import { openHandbook } from './handbook.js';
@@ -49,6 +49,7 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
       ? `This size suits ${z.players} player${z.players > 1 ? 's' : ''}; each player gets his own shopper entrance.`
       : 'This is the original small store: tight even for one.'}`;
     saveMap(m);
+    labelSizes(sizeIn, m.design);
   }
   designIn.addEventListener('change', describeMap);
   sizeIn.addEventListener('change', describeMap);
