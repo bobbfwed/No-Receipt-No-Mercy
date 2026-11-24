@@ -5,8 +5,10 @@
 //   const sound = createSound();
 //   sound.attach(session)   listen to 'fx', 'say', 'review', 'report', 'players'; returns an unsubscribe
 //   sound.unlock()          call from a click or key press: browsers only allow audio after one
-//   sound.play(name)        interface sounds: select, place, remove, rotate, nope, click, tutorial,
-//                           upgrade, rebuild, chat
+//   sound.play(name, opts)  interface sounds: select, place, remove, rotate, nope, click, tutorial,
+//                           upgrade, rebuild, chat; and the deal of the cards (0.3.01): cardDeal,
+//                           cardIn {side, i}, cardSlot {i}, cardHand
+//                           (opts: passed to the effect, as the simulation's events are)
 //   sound.get(key) / sound.set(key, value)   'sfx', 'music', 'voice' (booleans), 'volume' (0..1)
 //   sound.destroy()
 //
@@ -27,6 +29,8 @@ const DEFAULTS = { sfx: true, music: true, voice: true, volume: 0.7 };
 
 /** Interface sounds play() accepts. */
 const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']);
+// The deal of the cards (0.3.01): played by the deal screen from the state (src/ui/deal.js).
+for (const n of ['cardDeal', 'cardIn', 'cardSlot', 'cardHand']) UI_SOUNDS.add(n);
 
 /** Big moments: never dropped for being busy, and DEB's blips step aside for them. */
 const BIG = new Set(['waveStart', 'waveEnd', 'won', 'lost', 'report', 'begun', 'bossIn', 'bossOut', 'bossEscape', 'endless']);
@@ -344,10 +348,10 @@ export function createSound() {
     updateMusic();
   }
 
-  function play(name) {
+  function play(name, opts) {
     if (!UI_SOUNDS.has(name)) return;
     if ((name === 'upgrade' || name === 'rebuild') && heardAlready('ui', name)) return;
-    fire(name);
+    fire(name, opts && typeof opts === 'object' ? opts : {});
   }
 
   function get(key) {

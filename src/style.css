@@ -1318,6 +1318,27 @@ kbd {
 .hud-refunds .meter { flex: 0 1 7rem; min-width: 2.5rem; }
 @media (max-width: 1700px) { .hud-room small { display: none; } }
 @media (max-width: 1360px) { .hud-refunds .meter { flex-basis: 5rem; } }
+/* Since the auto-rebuild switch joined the top bar (0.2.15) the refunds box was squeezed until its
+   words were cut off ("Refunds 0 / 2" at 1280 pixels wide, "Refu" at 1400). Between 1100 and 1500
+   the switch is just its knob and ON or OFF (its tooltip says the rest) and the cash box drops its
+   label, as it already did below 1360. Below 1300, and in a game with a room code (whose box takes
+   more room), the refunds meter makes way too (the numbers say it, as on the smallest phones), and
+   so does the handbook button (the ? screen opens the handbook too). Nothing else moves. */
+@media (min-width: 1100px) and (max-width: 1500px) {
+  .hud-auto .ab-label { display: none; }
+  .hud-cash .lbl { display: none; }
+  .topbar:has(.hud-room) .hud-refunds .meter, .topbar:has(.hud-room) .btn-book { display: none; }
+  /* (Online, "Copy link" stays: the link fills the code in for whoever opens it.) */
+  .hud-room .btn-copy:not(:last-child) { display: none; }
+  .topbar:has(.hud-room) .btn-speed { min-width: 2.05rem; }
+  .hud-room .room-code { font-size: 1.1rem; letter-spacing: 0.08em; }
+  .topbar:has(.hud-room) .hud-refunds { padding-inline: 0.5rem; }
+  .topbar:has(.hud-room) { gap: 0.4rem; }
+}
+@media (min-width: 1100px) and (max-width: 1300px) {
+  .hud-refunds .meter, .btn-book { display: none; }
+}
+@media (min-width: 1100px) and (max-width: 1200px) { .btn-speed { min-width: 2.05rem; } }
 .btn-doors.asked::after { background: repeating-linear-gradient(-45deg, #9aa4b2 0 0.4rem, var(--ink) 0.4rem 0.8rem); }
 .hud-cash.is-budget { border-color: var(--orange); }
 .hud-cash.is-budget .coin { background: var(--orange); }
@@ -1836,6 +1857,255 @@ kbd {
 }
 .chat-open:hover { border-color: var(--yellow); color: var(--white); }
 
+/* ---------------------------------------------------------------- the game's cards (0.3.01) */
+/* The trading card (src/ui/hand.js) in three sizes: large in the deal, medium in the panel, tiny in
+   a slot. The sides differ in more than colour: the stamp says SCREWED, LUCKY or WEIRD, and the
+   frame is hazard-striped (bad), dotted with gold (good) or chequered (odd). */
+.tcard {
+  --accent: #dc2626;
+  position: relative;
+  display: block;
+  padding: 0.45rem;
+  border: 0.2rem solid var(--line);
+  border-radius: 0.8rem;
+  color: var(--ink);
+  box-shadow: 0 0.35rem 0 var(--line), 0 0.8rem 2rem rgba(0, 0, 0, 0.5);
+  text-align: left;
+}
+.tcard.is-bad { --accent: #dc2626; background: repeating-linear-gradient(-45deg, #c81e1e 0 0.55rem, #3b0909 0.55rem 1.1rem); }
+.tcard.is-good { --accent: #16a34a; background: radial-gradient(circle, #fde047 0 0.12rem, transparent 0.15rem) 0 0 / 0.7rem 0.7rem, linear-gradient(#22c55e, #166534); }
+.tcard.is-odd { --accent: #9333ea; background: repeating-conic-gradient(#8b3fd9 0 25%, #2e0854 0 50%) 0 0 / 1rem 1rem; }
+.cc-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.45rem 0.6rem 0.4rem;
+  background: var(--paper);
+  border: 0.15rem solid var(--line);
+  border-radius: 0.5rem;
+}
+.cc-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.cc-stamp { padding: 0.14rem 0.5rem 0.1rem; font: 1.1rem/1 var(--font-stamp); letter-spacing: 0.07em; }
+/* A red rubber stamp, a gold rosette, a dashed purple sticker. */
+.is-bad .cc-stamp { color: #fff; background: var(--red); border: 0.15rem solid var(--line); transform: rotate(-4deg); }
+.is-good .cc-stamp { color: #14532d; background: #fde047; border: 0.15rem solid #14532d; border-radius: 1rem; box-shadow: 0 0 0 0.12rem #fde047; }
+.is-odd .cc-stamp { color: #fff; background: #7e22ce; border: 0.15rem dashed #fde68a; transform: skewX(-12deg); }
+.cc-n { font: 800 0.7rem var(--font); color: #57534e; text-transform: uppercase; white-space: nowrap; }
+.cc-name { margin: 0; font: 900 1.2rem/1.12 var(--font-heavy); color: var(--ink); text-wrap: balance; }
+.cc-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 7rem;
+  overflow: hidden;
+  border: 0.15rem solid var(--line);
+  border-radius: 0.4rem;
+}
+.is-bad .cc-art { background: radial-gradient(circle at 50% 40%, #fee2e2, #f87171 75%); }
+.is-good .cc-art { background: radial-gradient(circle at 50% 40%, #fef9c3, #86efac 75%); }
+.is-odd .cc-art { background: radial-gradient(circle at 50% 40%, #fae8ff, #c084fc 75%); }
+/* The portrait is drawn at a fixed size; here it fills the window's height. */
+.tcard .cc-art .portrait { position: absolute; inset: 0; margin: auto; width: auto !important; height: 100% !important; aspect-ratio: 1; background: none; border: 0; border-radius: 0; }
+.cc-icon { display: block; width: 4.8rem; height: 4.8rem; }
+.cc-icon svg, .cc-badge svg { display: block; width: 100%; height: 100%; }
+.cc-badge { position: absolute; right: 0.3rem; bottom: 0.3rem; width: 2.1rem; height: 2.1rem; }
+.cc-text { display: flex; flex-direction: column; gap: 0.35rem; }
+.cc-rule { margin: 0; font-size: 0.98rem; font-weight: 700; line-height: 1.3; }
+.cc-joke { margin: 0; padding-top: 0.3rem; border-top: 0.1rem dashed #a8a29e; font-size: 0.86rem; font-style: italic; line-height: 1.3; color: #44403c; }
+.cc-foot { display: flex; justify-content: space-between; gap: 0.5rem; font: 900 0.6rem var(--font-heavy); letter-spacing: 0.06em; text-transform: uppercase; color: #57534e; }
+.cc-foot span:first-child { color: var(--accent); }
+.tcard-big { width: 23rem; }
+.tcard-big .cc-name { font-size: 1.4rem; }
+.tcard-big .cc-rule { font-size: 1.05rem; }
+.tcard-big .cc-joke { font-size: 0.92rem; }
+.tcard-mid { width: 100%; }
+.tcard-mid .cc-art { height: 5.6rem; }
+.tcard-mid .cc-name { font-size: 1.08rem; }
+.tcard-mid .cc-rule { font-size: 0.88rem; }
+.tcard-mid .cc-joke { font-size: 0.8rem; }
+/* The tiny one in a slot: the frame, the picture, and a mark (minus, plus, tilde) in the corner. */
+.tcard-mini { width: 2.3rem; height: 3.1rem; padding: 0.16rem; border-width: 0.12rem; border-radius: 0.35rem; box-shadow: 0 0.12rem 0 var(--line); }
+.tcard-mini .cc-art { height: 100%; border-width: 0.1rem; border-radius: 0.2rem; }
+.tcard-mini .cc-icon { width: 85%; height: auto; aspect-ratio: 1; }
+.tcard-mini .cc-badge { width: 45%; height: auto; aspect-ratio: 1; right: 0.05rem; bottom: 0.05rem; }
+.cc-mark {
+  position: absolute;
+  left: -0.3rem;
+  top: -0.3rem;
+  display: grid;
+  place-items: center;
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 0.1rem solid var(--line);
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font: 900 0.8rem/1 var(--font-heavy);
+}
+
+/* The strip of five slots over the top of the floor, for the whole game. It floats, so it resizes
+   nothing; it sits in the middle at the top, under the boss bar while that shows, and the notices
+   and the zone hint move down out of its way. */
+.hand-wrap { position: absolute; z-index: 9; top: 0.6rem; left: 50%; transform: translateX(-50%); }
+.game.boss-up .hand-wrap { top: 4.1rem; }
+.game.has-hand .notices, .game.has-hand .zone-hint { top: 4.9rem; }
+.game.has-hand.boss-up .notices, .game.has-hand.boss-up .zone-hint { top: 8.4rem; }
+.game.in-lobby .hand-wrap, .game.ended .hand-wrap { display: none; }
+.hand-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.45rem 0.25rem 0.35rem;
+  background: rgba(17, 21, 26, 0.9);
+  border: 0.15rem solid var(--yellow);
+  border-radius: 0.6rem;
+  box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.45);
+  color: var(--white);
+}
+.hand-strip:hover:not(.is-dealing) { border-color: #fff; }
+.hand-strip:active:not(.is-dealing) { transform: translateY(0.1rem); }
+.hand-strip.is-dealing { cursor: default; border-color: #6b7280; }
+.hs-label { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.hs-label b { font: 900 0.68rem var(--font-heavy); color: var(--yellow); letter-spacing: 0.06em; }
+.hs-label small { margin-top: 0.15rem; font-size: 0.62rem; font-weight: 700; color: var(--muted); }
+.hs-slots { display: flex; gap: 0.3rem; }
+.hs-slot { display: block; width: 2.3rem; height: 3.1rem; border: 0.12rem dashed #6b7280; border-radius: 0.35rem; background: rgba(255, 255, 255, 0.04); }
+.hs-slot.is-full { border: 0; background: none; animation: slot-in 0.25s ease-out; }
+@keyframes slot-in { from { transform: scale(1.3); } }
+.hs-tip {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 0.4rem);
+  width: 19rem;
+  padding: 0.4rem 0.6rem 0.45rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 0.15rem solid var(--line);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.45);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.hs-tip b { display: block; font: 900 0.92rem var(--font-heavy); }
+.hs-tip b small { font: 1rem var(--font-stamp); letter-spacing: 0.05em; }
+.hs-tip b.is-bad small { color: var(--red-2); }
+.hs-tip b.is-good small { color: var(--green); }
+.hs-tip b.is-odd small { color: #7e22ce; }
+.hs-tip p { margin: 0.15rem 0 0; }
+
+/* The deal (src/ui/deal.js): over the whole screen, the floor dimmed, the cards below the strip. */
+.deal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(var(--deal-top, 6rem) + 0.5rem) 1rem 1rem;
+  background: rgba(8, 10, 14, 0.74);
+  overflow: hidden;
+}
+body.dealing .hand-wrap { z-index: 41; }
+.deal-top { position: relative; z-index: 1; text-align: center; }
+.deal-head { margin: 0; font: 900 1.55rem/1.1 var(--font-heavy); color: var(--yellow); letter-spacing: 0.02em; text-shadow: 0.12rem 0.12rem 0 var(--red), 0.24rem 0.24rem 0 var(--line); }
+.deal-sub { margin: 0.25rem 0 0; font-weight: 700; color: #e5e7eb; }
+.deal-table { position: relative; flex: 1; width: 100%; min-height: 0; }
+.deal-card { position: absolute; left: 50%; top: 50%; translate: -50% -50%; }
+.deal-foot { position: relative; z-index: 1; display: flex; align-items: center; gap: 0.8rem; }
+.deal-skip { width: auto; min-width: 9rem; padding: 0.45rem 1.4rem; font-size: 1.05rem; }
+.deal-skip.is-on { background: #9ca3af; }
+.deal-count { font-weight: 800; color: #e5e7eb; }
+.deal-count:empty { display: none; }
+.deal-flash { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.deal-flash.go { animation: deal-flash 0.7s ease-out; }
+.deal-flash.is-bad { background: radial-gradient(circle, rgba(239, 68, 68, 0.6), rgba(127, 29, 29, 0.3) 55%, transparent 80%); }
+.deal-flash.is-good { background: radial-gradient(circle, rgba(253, 224, 71, 0.55), rgba(34, 197, 94, 0.22) 55%, transparent 80%); }
+.deal-flash.is-odd { background: radial-gradient(circle, rgba(192, 132, 252, 0.55), rgba(88, 28, 135, 0.3) 55%, transparent 80%); }
+@keyframes deal-flash { from { opacity: 1; } to { opacity: 0; } }
+/* Landed: a glow in the side's colour that stays; the rest plays once (and not at all with reduced
+   motion, which switches every CSS animation off). */
+.deal-card .tcard { transition: box-shadow 0.3s; }
+.deal-card.landed.is-bad .tcard { box-shadow: 0 0.35rem 0 var(--line), 0 0 2.4rem rgba(239, 68, 68, 0.75); }
+.deal-card.landed.is-good .tcard { box-shadow: 0 0.35rem 0 var(--line), 0 0 2.4rem rgba(250, 204, 21, 0.8); }
+.deal-card.landed.is-odd .tcard { box-shadow: 0 0.35rem 0 var(--line), 0 0 2.4rem rgba(192, 132, 252, 0.85); }
+.deal-card.landed:not(.settled) .cc-stamp { animation: stamp-slam 0.35s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes stamp-slam { from { scale: 2.6; } }
+.deal-card.is-bad.landed:not(.settled) .tcard { animation: card-shake 0.5s; }
+@keyframes card-shake { 10%, 50%, 90% { transform: translateX(-0.45rem) rotate(-1deg); } 30%, 70% { transform: translateX(0.45rem) rotate(1deg); } }
+.deal-card.is-odd.landed:not(.settled) .tcard { animation: card-wobble 1s ease-out; }
+@keyframes card-wobble { 15% { transform: rotate(-7deg) scale(1.03); } 35% { transform: rotate(5deg); } 55% { transform: rotate(-3deg); } 75% { transform: rotate(1.5deg); } }
+/* Bad: cracks across the card. */
+.deal-cracks { position: absolute; inset: 0; z-index: 2; opacity: 0; pointer-events: none; }
+.deal-cracks svg { display: block; width: 100%; height: 100%; }
+.deal-card.landed .deal-cracks { opacity: 1; }
+/* Good: gold coins burst out from behind it. */
+.deal-burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.deal-burst i {
+  position: absolute;
+  left: -0.75rem;
+  top: -0.75rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0.14rem solid #78350f;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fef9c3, #facc15 55%, #ca8a04);
+  opacity: 0;
+}
+.deal-card.is-good.landed:not(.settled) .deal-burst i { animation: coin-burst 1.3s cubic-bezier(0.15, 0.7, 0.4, 1) forwards; }
+@keyframes coin-burst {
+  from { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(0.5); }
+  70% { opacity: 1; }
+  to { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(1.1); }
+}
+.deal-card:not(.is-good) .deal-burst, .deal-card:not(.is-odd) .deal-swirl, .deal-card:not(.is-bad) .deal-cracks { display: none; }
+/* Odd: a purple swirl spins out behind it. */
+.deal-swirl {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36rem;
+  height: 36rem;
+  margin: -18rem 0 0 -18rem;
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgba(192, 132, 252, 0.6) 0 14deg, rgba(250, 204, 21, 0.25) 14deg 18deg, transparent 18deg 32deg);
+  opacity: 0;
+  pointer-events: none;
+}
+.deal-card.is-odd.landed:not(.settled) .deal-swirl { animation: swirl 1.3s ease-out; }
+@keyframes swirl { from { opacity: 0.95; transform: rotate(0) scale(0.4); } to { opacity: 0; transform: rotate(400deg) scale(1.3); } }
+
+/* A building price this game's cards changed (src/ui/buildbar.js): an arrow says which way, the
+   tooltip from what. */
+.bb-price.cheaper::before { content: "\2193"; margin-right: 0.06em; }
+.bb-price.dearer::before { content: "\2191"; margin-right: 0.06em; }
+.bb-btn:not(.poor) .bb-price.dearer { color: #fdba74; }
+
+/* The panel with the whole hand (src/ui/hand.js), over the game, the ? screen and the end screen. */
+.hand-panel { z-index: 30; }
+.hp-card { width: min(84rem, 100%); padding: 1rem 1.2rem 1.2rem; text-align: left; }
+.hp-head h2 { margin: 0; font: 900 1.4rem var(--font-heavy); }
+.hp-head h2 small { display: block; margin-top: 0.15rem; font: 600 0.85rem var(--font); color: #57534e; }
+.hp-card .hp-close { margin: 0; min-width: 8rem; padding: 0.35rem 1rem; font-size: 1rem; }
+.hp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr)); gap: 0.9rem; align-items: start; }
+.hp-grid .tcard { box-shadow: 0 0.25rem 0 var(--line); }
+.help .help-head .hp-open { flex: none; }
+/* On the end screen: the hand, as five tiny cards with a caption. Click to read them. */
+.hand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--ink);
+  color: var(--white);
+  border: 0.15rem solid var(--line);
+  border-radius: 0.6rem;
+  box-shadow: 0 0.2rem 0 var(--line);
+}
+.hand-row small { font: 900 0.7rem var(--font-heavy); color: var(--yellow); letter-spacing: 0.06em; }
+.hand-row:hover { background: #2b323b; }
+
 /* ================================================================ phones and tablets */
 /* Nothing below changes a desktop with a mouse. The wrappers added for small screens take no part
    in the layout on a big one (display: contents), the touch buttons only show on a touch screen
@@ -1946,24 +2216,6 @@ html, body { overscroll-behavior: none; }
 .ts-up { background: var(--green); }
 .ts-up.poor { background: #6b7280; }
 .ts-remove { background: var(--red-2); }
-
-/* The deal of the game's cards (0.3.01): a plain list in the middle of the floor until the real
-   card display replaces it. */
-.deal {
-  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 30;
-  width: min(34rem, calc(100vw - 2rem)); max-height: calc(100vh - 8rem); overflow: auto;
-  padding: 1rem 1.2rem; border: var(--chunk) solid var(--line); border-radius: var(--radius);
-  background: var(--ink-2); color: var(--white); box-shadow: 0 0.3rem 0 var(--line);
-}
-.deal.hidden { display: none; }
-.deal-title { margin: 0 0 0.6rem; font: 900 1.3rem var(--font-heavy); color: var(--yellow); }
-.deal-list { margin: 0 0 0.8rem; padding-left: 1.4rem; }
-.deal-card { margin: 0 0 0.6rem; }
-.deal-card p { margin: 0.15rem 0 0; color: var(--paper); }
-.deal-card small { color: var(--muted); }
-.deal-bad b { color: #f87171; }
-.deal-good b { color: var(--green-2); }
-.deal-odd b { color: var(--yellow); }
 
 @media (pointer: coarse) {
   .touch-pad, .bb-touch { display: flex; }
@@ -2545,4 +2797,72 @@ html, body { overscroll-behavior: none; }
 @media (pointer: coarse) { .rebuild-pop { right: calc(31.5rem + 56px + env(safe-area-inset-right)); } }
 @media (pointer: coarse) and (max-width: 1099px), (pointer: coarse) and (max-height: 559px) {
   .rebuild-pop { right: calc(0.5rem + 56px + env(safe-area-inset-right)); }
+}
+
+/* ---------------------------------------------------------------- the game's cards on small screens (0.3.01) */
+/* The strip sits at the top left, beside the players button (where nothing else is), with smaller
+   slots; whatever else talks from the top of the floor moves down out of its way. */
+@media (max-width: 1099px), (max-height: 559px) {
+  .hand-wrap { top: 0.4rem; left: calc(5.4rem + env(safe-area-inset-left)); transform: none; }
+  .game.boss-up .hand-wrap { top: 3.4rem; }
+  .hand-strip { gap: 0.3rem; min-height: 34px; padding: 0.15rem 0.3rem 0.15rem 0.25rem; border-width: 0.13rem; }
+  .hs-label small { display: none; }
+  .hs-slots { gap: 0.22rem; }
+  .hs-slot, .tcard-mini { width: 1.85rem; height: 2.45rem; }
+  .tcard-mini { padding: 0.12rem; }
+  .cc-mark { width: 0.85rem; height: 0.85rem; font-size: 0.7rem; left: -0.25rem; top: -0.25rem; }
+  .game.has-hand .notices { top: 3.5rem; }
+  .game.has-hand .zone-hint { top: 3.5rem; }
+  .game.has-hand.boss-up .notices { top: 6.5rem; }
+  .game.has-hand.boss-up .zone-hint { top: 6.6rem; }
+
+  /* The deal: the card large, the words at reading size. */
+  .deal { padding: calc(var(--deal-top, 6rem) + 0.35rem) calc(0.5rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.5rem + env(safe-area-inset-left)); }
+  .deal-head { font-size: 1.2rem; }
+  .deal-sub { font-size: max(13px, 0.85rem); }
+  .deal-skip { min-height: 44px; font-size: 1rem; }
+
+  /* The panel: one card under another, scrolling, its heading and button always in reach. */
+  .hp-card { padding: 0 0.8rem 0.8rem; }
+  .hp-head h2 { font-size: 1.05rem; }
+  .hp-head h2 small { font-size: 0.75rem; }
+  .hp-card .hp-close { min-width: 5.5rem; min-height: 40px; }
+  .hp-grid { grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: 0.7rem; }
+  .tcard-mid .cc-rule { font-size: max(14px, 0.95rem); }
+  .tcard-mid .cc-joke { font-size: max(13px, 0.86rem); }
+  .help .help-head .hp-open { padding-inline: 0.5rem; }
+}
+/* Phones held upright: DEB and the reviews talk from the top of the floor too. */
+@media (max-width: 699px) {
+  .game.has-hand .deb, .game.has-hand .reviews { top: 3.5rem; }
+  .game.has-hand.boss-up .deb, .game.has-hand.boss-up .reviews { top: 6.5rem; }
+  /* The card in the deal takes most of the screen. */
+  .tcard-big { width: 86vw; padding: 0.35rem; }
+  .tcard-big .cc-inner { gap: 0.3rem; padding: 0.4rem 0.55rem 0.35rem; }
+  .tcard-big .cc-name { font-size: max(19px, 1.35rem); }
+  .tcard-big .cc-art { height: 5.6rem; }
+  .tcard-big .cc-rule { font-size: max(16px, 1.1rem); }
+  .tcard-big .cc-joke { font-size: max(15px, 1rem); }
+  .tcard-big .cc-foot { font-size: max(10px, 0.62rem); }
+}
+/* Phones on their side: no room for a tall card, so it lies on its side too: the picture on the
+   left, the words on the right. */
+@media (max-height: 559px) {
+  .deal-head { font-size: 1.05rem; }
+  .deal-sub { margin-top: 0.1rem; }
+  .tcard-big { width: min(46rem, 88vw); padding: 0.3rem; }
+  .tcard-big .cc-inner {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    grid-template-areas: "top top" "art name" "art text" "foot foot";
+    gap: 0.25rem 0.6rem;
+    padding: 0.35rem 0.55rem 0.3rem;
+  }
+  .tcard-big .cc-top { grid-area: top; }
+  .tcard-big .cc-name { grid-area: name; font-size: max(17px, 1.2rem); }
+  .tcard-big .cc-art { grid-area: art; height: auto; min-height: 6rem; }
+  .tcard-big .cc-text { grid-area: text; }
+  .tcard-big .cc-foot { grid-area: foot; }
+  .tcard-big .cc-rule { font-size: max(15px, 1rem); }
+  .tcard-big .cc-joke { font-size: max(14px, 0.92rem); }
 }

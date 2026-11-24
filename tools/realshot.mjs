@@ -7,6 +7,7 @@
 //                  `(pointer: coarse)` matches and the page gets touch-type pointer events), and
 //                  the page laid out the way a phone browser does it (the viewport meta tag counts)
 //   --dpr=N        device pixels per CSS pixel (default 1); the picture is N times the size
+//   --reduced      the page is told the player prefers reduced motion (prefers-reduced-motion)
 //   --eval=<js>    after the wait, evaluate this expression in the page and print the result
 //                  (a test page can leave its findings in a global for this to read)
 import { spawn } from 'node:child_process';
@@ -27,6 +28,7 @@ const waitMs = Number(waitArg) || 8000, width = Number(wArg) || 1600, height = N
 const touch = !!flag('touch');
 const dpr = Number(flagValue('dpr')) || 1;
 const evalExpr = flagValue('eval');
+const reducedMotion = !!flag('reduced');
 const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const port = 9300 + Math.floor(Math.random() * 500);
 const profile = mkdtempSync(join(tmpdir(), 'edge-real-'));
@@ -74,6 +76,7 @@ try {
     // A phone in landscape reports a landscape screen.
     ...(touch ? { screenOrientation: width > height ? { type: 'landscapePrimary', angle: 90 } : { type: 'portraitPrimary', angle: 0 } } : {}),
   });
+  if (reducedMotion) await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
   if (touch) {
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     // Some builds only switch the pointer and hover media features with the emitter on.

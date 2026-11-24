@@ -282,7 +282,9 @@ test('a copy of the game made mid-deal plays on identically', () => {
   run(s, 7);
   const copy = JSON.parse(JSON.stringify(s));
   assert.deepEqual(copy, s);
-  const a = run(s, 30), b = run(copy, 30);
+  // (Played on to a little past the end of the deal, however long TUNE makes it.)
+  const rest = dealLength(5) / TICK_HZ - 7 + 1;
+  const a = run(s, rest), b = run(copy, rest);
   assert.deepEqual(b, a);
   assert.deepEqual(copy, s);
   assert.equal(s.phase, 'build');

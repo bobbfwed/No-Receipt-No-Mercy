@@ -14,7 +14,9 @@ import { createReview } from './review.js';
 import { endScreen, closedScreen, handoverScreen, helpScreen } from './overlays.js';
 import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
-import { createDealNotice } from './deal.js';
+import { createDeal } from './deal.js';
+import { createHandStrip, handPanel, handRow } from './hand.js';
+import { handOf, blockedSpans, clearLeft } from './cardart.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
 import { createBossBar } from './bossbar.js';
@@ -54,12 +56,24 @@ export function startGame(session, {
   const canvas = h('canvas', { class: 'world', 'aria-label': 'The warehouse floor. Use the mouse to build.' });
   const stage = h('main', { class: 'stage' }, canvas);
   const renderer = createRenderer(canvas, session);
-  const playSound = (name) => { if (sound) sound.play(name); };
+  const playSound = (name, opts) => { if (sound) sound.play(name, opts); };
+
+  // The game's cards (0.3.01): a panel with all five at a readable size, from the strip of slots,
+  // the ? screen and the end screen.
+  let cardsPanel = null;
+  const closeCards = () => { cardsPanel?.remove(); cardsPanel = null; };
+  const openCards = () => {
+    if (cardsPanel || !handOf(session.state).length) return;
+    playSound('click');
+    cardsPanel = handPanel(session.state, closeCards);
+    root.append(cardsPanel);
+  };
 
   let help = null;
   const toggleHelp = () => {
     if (help) { help.remove(); help = null; return; }
-    help = helpScreen(() => { help?.remove(); help = null; }, () => { toggleHelp(); openHandbook(session.state); });
+    help = helpScreen(() => { help?.remove(); help = null; }, () => { toggleHelp(); openHandbook(session.state); },
+      handOf(session.state).length ? () => { toggleHelp(); openCards(); } : null);
     root.append(help);
   };
 
@@ -67,6 +81,7 @@ export function startGame(session, {
   const input = createInput({
     canvas, renderer, session, playSound,
     onEscape: () => {
+      if (cardsPanel) { closeCards(); return true; }
       if (help) { toggleHelp(); return true; }
       if (review.open) { review.close(); return true; }
       return false;
@@ -151,13 +166,15 @@ export function startGame(session, {
   const lobby = createLobby(session, { renderer, playSound });
   stage.append(lobby.el);
 
-  // The deal of the game's cards, between the lobby and the first build phase.
-  const deal = createDealNotice(session, { playSound });
-  stage.append(deal.el);
+  // The game's cards: five slots over the top of the floor for the whole game, filled by the deal
+  // between the lobby and the first build phase (which covers the whole screen while it runs).
+  const strip = createHandStrip({ onOpen: openCards });
+  stage.append(strip.el);
+  const deal = createDeal(session, { strip, playSound });
 
   // In training the lesson panel sits where the players list normally is.
   stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet);
-  const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, planner.el, bar.tip, planner.tip);
+  const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, planner.el, bar.tip, planner.tip, deal.el);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');
   if (sound) sound.attach(session);
@@ -274,6 +291,7 @@ export function startGame(session, {
   // ---- Drawing loop --------------------------------------------------------------------------------
   const touchWords = isTouch();
   let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false, wasBoss = false;
+  let dealFilled = Infinity, wasHand = false;
   let endEl = null; // the end screen, while it is up
   function frame(now) {
     if (dead) return;
@@ -313,7 +331,11 @@ export function startGame(session, {
     toasts.tick(now);
     if (training) training.tick();
     updateZoneHint(s);
-    deal.update(s);
+    // The strip of cards (and, during the deal, the cards flying into it).
+    const handUp = strip.update(s, dealFilled);
+    if (handUp !== wasHand) { wasHand = handUp; root.classList.toggle('has-hand', handUp); }
+    dealFilled = deal.update(s);
+    placeStrip(s);
     // In the lobby the floor is drawn to the right of the panel, whole, so the store can be seen.
     const inLobby = lobby.update(s);
     if (inLobby !== wasLobby) {
@@ -346,6 +368,7 @@ export function startGame(session, {
           // In a multiplayer game the group goes round again from the lobby, and only the host
           // can send them there. A solo game keeps its plain "New game".
           onLobby: session.isHost ? onLobby : null, waitForHost: !session.isHost && !!roomKind,
+          hand: handRow(now, openCards),
         });
         root.append(endEl);
       }, session.isHost ? 600 : 1200);
@@ -356,6 +379,7 @@ export function startGame(session, {
       root.classList.remove('ended');
       endEl?.remove();
       endEl = null;
+      closeCards();
     }
     // The boss: a strip over the top of the floor while he is coming or in the store.
     const bossUp = bossBar.update(s);
@@ -389,6 +413,24 @@ export function startGame(session, {
     renderer.draw(view);
   }
   requestAnimationFrame(frame);
+
+  // On a big screen the strip of cards stays in the middle at the top of the floor unless an
+  // entrance or a till is under it there; then it moves along to the nearest clear place. (On a
+  // small screen it has a corner of its own, beside the players button.)
+  let stripKey = '';
+  function placeStrip(s) {
+    if (!wasHand || narrow()) { if (stripKey) { stripKey = ''; strip.place(null); } return; }
+    const cam = renderer.cam;
+    const box = strip.el.firstChild;
+    const W = stage.clientWidth, H = stage.clientHeight, w = box.offsetWidth, top = strip.el.offsetTop;
+    const left = players.el.isConnected && players.el.offsetWidth ? players.el.offsetLeft + players.el.offsetWidth + 8 : 8;
+    const key = [cam.x, cam.y, cam.zoom, W, H, w, top, left, s.gridVer, s.w].join();
+    if (key === stripKey) return;
+    stripKey = key;
+    const want = (W - w) / 2;
+    const x = clearLeft(blockedSpans(s, cam, W, H, top, top + box.offsetHeight), w, left, W - w - 8, want);
+    strip.place(Math.abs(x - want) < 1 ? null : x);
+  }
 
   // For the test pages in tools/, which drive the game with made-up mouse and key events and
   // need to know where a tile is on screen.

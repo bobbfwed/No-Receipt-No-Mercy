@@ -1,6 +1,6 @@
 // The build bar: one button per building, grouped Factory and Security, plus the Upgrade and
 // Remove tools.
-import { BUILD, TUNE, ZONES, anchorOf, levelOf, rebuildDeal } from '../sim/index.js';
+import { BUILD, TUNE, ZONES, anchorOf, levelOf, rebuildDeal, buildPrice } from '../sim/index.js';
 import { tracksInfo } from './upgradetext.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
@@ -38,13 +38,20 @@ const one = (n) => (Math.round(n * 10) / 10).toString();
 export function createBuildBar(input, session) {
   const tip = h('div', { class: 'tip hidden', role: 'tooltip', id: 'build-tip' });
   const buttons = new Map();
+  // What each building costs in this game: a card can change it (0.3.01: shrinkflation,
+  // staffdiscount, rentacop, sweatshop). Filled in by update() from the rules' buildPrice.
+  const price = new Map();
+  const priceOf = (k) => price.get(k) ?? BUILD[k].cost;
+  /** "$5", and in a game whose cards change the price, what it normally is. */
+  const priceNote = (k) => (priceOf(k) !== BUILD[k].cost ? ` (normally ${BUILD[k].cost}: this game's cards)` : '');
 
   function showTip(btn, k) {
     const def = BUILD[k];
     const lines = [];
     if (def) {
       const how = HOW[k];
-      lines.push(h('div', { class: 'tip-head' }, h('b', null, def.name), h('span', { class: 'tip-cost' }, `$${def.cost}`)));
+      lines.push(h('div', { class: 'tip-head' }, h('b', null, def.name), h('span', { class: 'tip-cost' }, `${priceOf(k)}`)));
+      if (priceNote(k)) lines.push(h('small', null, `${priceOf(k)}${priceNote(k)}`));
       lines.push(h('p', null, how ? worded(how.does) : def.desc));
       if (how) lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), worded(how.use)));
       const facts = [];
@@ -149,7 +156,7 @@ export function createBuildBar(input, session) {
         // What it means for the maze, in two words.
         def ? h('span', { class: 'bbi-maze' }, !def.blocks ? 'Walkable' : k === 'belt' ? 'Blocks all but dads' : 'Blocks everyone') : null,
         def && def.zone ? h('span', { class: 'bbi-maze bbi-zone', style: { background: ZONES[def.zone].color } }, `${ZONES[def.zone].name} only`) : null,
-        def ? h('span', { class: 'bbi-cost' }, `$${def.cost}`) : null,
+        def ? h('span', { class: 'bbi-cost' }, `${priceOf(k)}`) : null,
         foldBtn()),
       h('p', null, worded(how.does)),
       h('p', null, h('b', null, 'How: '), worded(how.use)));
@@ -191,11 +198,33 @@ export function createBuildBar(input, session) {
     }
   }
 
+  /** The prices on the buttons, for this game's cards (a new game from the lobby may have others). */
+  let lastHand = null;
+  function updatePrices(s) {
+    const hand = `${s.training ? 't' : ''}${(s.cards || []).join(',')}`;
+    if (hand === lastHand) return;
+    lastHand = hand;
+    lastCash = null;
+    for (const [k, btn] of buttons) {
+      const def = BUILD[k];
+      if (!def) continue;
+      const p = buildPrice(s, k);
+      price.set(k, p);
+      const tag = btn.querySelector('.bb-price');
+      tag.textContent = `${p}`;
+      setClass(tag, 'cheaper', p < def.cost);
+      setClass(tag, 'dearer', p > def.cost);
+      btn.setAttribute('aria-label', `${def.name}, ${p}${priceNote(k)}, key ${HOTKEYS[BUILD_KEYS.indexOf(k)]}`);
+    }
+    if (input.tool && BUILD[input.tool]) showInfo(input.tool);
+  }
+
   function update(s) {
+    updatePrices(s);
     const cash = Math.floor(s.players[session.me]?.cash ?? 0);
     if (cash !== lastCash) {
       lastCash = cash;
-      for (const [k, btn] of buttons) if (BUILD[k]) setClass(btn, 'poor', cash < BUILD[k].cost);
+      for (const [k, btn] of buttons) if (BUILD[k]) setClass(btn, 'poor', cash < priceOf(k));
     }
     if (input.tool !== lastTool) {
       lastTool = input.tool;

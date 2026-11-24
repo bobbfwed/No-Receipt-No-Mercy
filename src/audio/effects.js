@@ -22,6 +22,7 @@ import { bossWave, bossIn, pep, bossOut, bossEscape, endless } from './boss.js';
 import { popSound, noPop, waah, babyTill, nursery } from './preggo.js';
 import { releaseSound, ripSound } from './trader.js';
 import { litterSound, whimper, pupTill, kennel, drunkSound, boughtSound, trailSound, wrongway, petSound } from './cardfx.js';
+import { cardDealSound, cardInSound, cardSlotSound, cardHandSound } from './cards.js';
 
 /**
  * The fifteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
@@ -1268,6 +1269,47 @@ export const SOUNDS = {
       tone(v, { t: t + 0.1, f: mtof(79), type: 'triangle', peak: 0.07, a: 0.004, d: 0.4 });
       return v.end;
     },
+  },
+
+  // ---------------------------------------------------------------- the deal of the cards (cards.js)
+  // Played by the deal screen (src/ui/deal.js) from the state, through sound.play(name, opts).
+  cardDeal: {
+    about: 'The deal starts: a dealer\'s riffle shuffle, the bridge, another riffle, and the deck knocked square on the table.',
+    max: 1.6,
+    shapes: 2,
+    play: cardDealSound,
+  },
+
+  cardIn: {
+    about: 'A card flies in spinning (a fluttering whoosh) and lands. Bad: a thud, cracking glass and a sour low brass "bwom-bwommm". Good: a till "ka-ching", coins pouring out and a run of bells up. Neither: a slide whistle that goes up, thinks better of it and comes down, then a boing. Each card along the hand (i) is pitched differently.',
+    max: 2.0,
+    shapes: 3,
+    variants: [
+      { label: 'bad, 1st', opts: { side: 'bad', i: 0 } },
+      { label: 'bad, 3rd', opts: { side: 'bad', i: 2 } },
+      { label: 'good, 2nd', opts: { side: 'good', i: 1 } },
+      { label: 'good, 4th', opts: { side: 'good', i: 3 } },
+      { label: 'odd, 5th', opts: { side: 'odd', i: 4 } },
+    ],
+    play: cardInSound,
+  },
+
+  cardSlot: {
+    about: 'A card shrinks into its slot at the top of the screen: a little "shff", a click and a small thud, a step higher for each slot along.',
+    max: 0.4,
+    shapes: 3,
+    variants: [
+      { label: '1st slot', opts: { i: 0 } },
+      { label: '4th slot', opts: { i: 3 } },
+    ],
+    play: cardSlotSound,
+  },
+
+  cardHand: {
+    about: 'The fifth card goes in and the hand is complete: a click, the cards fanned out, then a cheap game-show "ta-DAAA" (one version with the third flattened, because the store is not pleased for you).',
+    max: 1.6,
+    shapes: 2,
+    play: cardHandSound,
   },
 };
 

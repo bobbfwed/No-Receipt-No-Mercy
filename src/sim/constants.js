@@ -668,8 +668,12 @@ export const TUNE = {
   // revealed one by one: the first cardLead seconds in, then one every cardSecs (slow enough to
   // read each on a phone before the next), and cardPause after the last card has had its cardSecs,
   // the build phase starts. Seconds at normal speed: game speed does not shorten it.
+  // cardSecs was 4.5 until the cards were put on screen (0.3.01): a card takes 0.7 s to fly in,
+  // so that left under 4 s to read it, and a typical card (name, rule and joke) is about 33 words,
+  // 14 of them the name and the rule. At 7 s a phone player reads the rule and most of the joke
+  // before the next card arrives; the long ones can be read again from the slots afterwards.
   cardLead: 1.5,
-  cardSecs: 4.5,
+  cardSecs: 7,
   cardPause: 1.5,
 };
 

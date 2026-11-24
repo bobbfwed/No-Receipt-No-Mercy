@@ -91,8 +91,9 @@ function overlay(cls, ...children) {
  *   back to the lobby with this, over the same connections, instead of reloading the page
  * @param {boolean} [o.waitForHost] a joined player: only the host can start another round, so
  *   say so; the main button just leaves for the menu
+ * @param {HTMLElement|null} [o.hand] the cards the game was dealt (handRow in hand.js), or null
  */
-export function endScreen(s, debLine, me = -1, { onEndless = null, record = null, onLobby = null, waitForHost = false } = {}) {
+export function endScreen(s, debLine, me = -1, { onEndless = null, record = null, onLobby = null, waitForHost = false, hand = null } = {}) {
   const stored = s.phase === 'won';
   const endless = isEndless(s);
   const boss = s.office ? s.players[s.office.pid] : null;
@@ -175,6 +176,7 @@ export function endScreen(s, debLine, me = -1, { onEndless = null, record = null
     h('table', { class: 'end-table' },
       h('thead', null, h('tr', null, ['Employee', 'Role', 'Shipped', 'Stopped', 'Earned', 'Wasted', 'Built'].map((t) => h('th', null, t)))),
       h('tbody', null, players)),
+    hand,
     debLine ? h('div', { class: 'end-deb' }, h('span', { class: 'end-deb-face', html: debFace(stored ? 'smug' : 'angry') }), h('p', null, debLine)) : null,
     wait,
     more ? h('div', { class: 'end-btns' }, btn, more) : btn);
@@ -206,13 +208,17 @@ export function closedScreen(why) {
     btn);
 }
 
-/** The rules, over the game, closable. */
-export function helpScreen(onClose, onHandbook = null) {
+/**
+ * The rules, over the game, closable. onHandbook opens the Employee Handbook; onCards, in a game
+ * with cards, the panel with this game's cards.
+ */
+export function helpScreen(onClose, onHandbook = null, onCards = null) {
   const btn = h('button', { type: 'button', class: 'btn-big btn-yellow', onclick: onClose }, 'Got it');
   setTimeout(() => btn.focus(), 50);
   // The close button sits at the top, so opening the help shows the start of it, not the end.
   const el = overlay('help', h('div', { class: 'help-head' }, h('h2', null, 'HOW THIS WORKS'),
-    onHandbook ? h('button', { type: 'button', class: 'btn-small hb-open', onclick: onHandbook }, '📖 Employee Handbook: all the numbers') : null, btn),
+    onHandbook ? h('button', { type: 'button', class: 'btn-small hb-open', onclick: onHandbook }, '📖 Employee Handbook: all the numbers') : null,
+    onCards ? h('button', { type: 'button', class: 'btn-small hp-open', onclick: onCards }, "This game's cards") : null, btn),
     h('div', { class: 'help-cols' }, howToPlay(), h('div', { class: 'howto' }, buildingGuide()), h('div', { class: 'howto' }, shopperGuide())));
   el.addEventListener('click', (e) => { if (e.target === el) onClose(); });
   return el;
