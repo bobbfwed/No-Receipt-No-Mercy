@@ -3,7 +3,7 @@
 // version changes, and what every upgrade level of security costs and does.
 // Opened from the menu and from the game (the book button, or the ? screen). In a game it uses
 // that game's length, difficulty and number of players; from the menu, the standard game.
-import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
+import { BUILD, MACHINE_SPD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
@@ -207,7 +207,7 @@ export function handbook({ state = null, onClose }) {
         + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds never change. A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
-      note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price; everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
+      note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price: up to ${MACHINE_SPD.max} levels, each ${fmt((MACHINE_SPD.mul - 1) * 100)}% faster than the last, costing ×${fmt(MACHINE_SPD.grow)} the level before up to level ${MACHINE_SPD.gentleFrom} and ×${fmt(MACHINE_SPD.gentleGrow)} after. Everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
       body.replaceChildren(...FACTORY_ORDER.map((k) => factoryCard(k, ctx)));
     } else {
       note.textContent = `Each kind of upgrade is bought separately, up to ${TUNE.maxLevel} levels, and each level costs ×${fmt(TUNE.upGrowth)} the last. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event, and a wrecked building comes back at half price with its upgrades (B).`;

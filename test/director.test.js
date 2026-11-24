@@ -230,6 +230,21 @@ test('once a line has been used, its share of picks drops sharply', () => {
   assert.equal(fresh.get(got), 1);
 });
 
+test('DEB calls an upgrade maxed at the top of its own track (a machine\'s speed goes to 10)', () => {
+  // A line from the 'maxed' bank, whatever was filled into it.
+  const pattern = (l) => new RegExp(`^${textOf(l).replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{\w+\}/g, '.*')}$`, 's');
+  const maxedRe = LINES.maxed.map(pattern);
+  const isMaxed = (text) => maxedRe.some((r) => r.test(text));
+  const said = (k, t, lv) => {
+    const state = game('Zed');
+    state.tick = 1e6;
+    return says(createDirector(() => 0).handle([{ e: 'upgraded', k, x: 2, y: 2, by: 0, t, lv }], state));
+  };
+  assert.ok(said('unpacker', 'spd', 8).every((s) => !isMaxed(s)), 'level 8 of 10 is not the top');
+  assert.ok(said('unpacker', 'spd', 10).some(isMaxed), 'level 10 is');
+  assert.ok(said('sprinkler', 'dmg', TUNE.maxLevel).some(isMaxed), 'a tower at the usual top');
+});
+
 test('over a whole game, wave openings rarely repeat', () => {
   const director = createDirector(seeded(11));
   const state = game('Dave', 'Steve');

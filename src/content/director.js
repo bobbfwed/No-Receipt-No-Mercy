@@ -22,7 +22,7 @@
 //   connected, a share of the time it is one of his own lines instead, and now and then DEB has a
 //   go at one of them unprompted between waves.
 import {
-  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle,
+  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle, maxIn,
 } from '../sim/index.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, FRIENDS,
@@ -415,7 +415,8 @@ export function createDirector(random = Math.random) {
       case 'upgraded': {
         const vars = { k: thing(e.k), n: e.lv };
         const pid = state.players[e.by] ? e.by : undefined;
-        if (e.lv >= TUNE.maxLevel) say(out, state, 'maxed', LINES.maxed, vars, { pid, mood: 'smug' });
+        // Each track has its own top (a factory machine's speed goes to 10, most others to 8).
+        if (e.lv >= (e.t ? maxIn(e.k, e.t) : TUNE.maxLevel)) say(out, state, 'maxed', LINES.maxed, vars, { pid, mood: 'smug' });
         else {
           // Lines about the kind of upgrade join the general ones. Factory machines only get faster.
           const group = own(BUILD, e.k)?.group === 'factory' ? 'factory' : e.t;

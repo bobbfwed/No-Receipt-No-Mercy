@@ -63,4 +63,3 @@ You are the owner and long-term maintainer of this codebase, and its design is u
 
 ## Things to take care of next round of changes (by request of owner -- remove each task as they are accomplished, remove this section once it's empty):
 - When a multiplayer game ends, the menu for "new game" should return all players to the lobby (change the text on the button). All players already in the game should be taken to the lobby, where the host can choose the map and size, length, difficulty, etc. Using the same 5-digit code and join link (URL).
-- More factory upgrades should be available. The game is designed so there is only ever a limited number of factory buildings that can be built, so they need to be able to expand more in the very late game. This might require speeding up belt speeds?

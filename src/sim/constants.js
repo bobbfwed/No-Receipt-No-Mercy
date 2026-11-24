@@ -56,9 +56,15 @@ export const ITEMS = {
  * way, so at equal levels none outruns another (the owner's request). MACHINE_SECS is the time
  * for one item at level 0; MACHINE_SPD is the shared speed track (each machine adds only its own
  * `base` price for the first level).
+ * Ten levels since 0.2.13 (five before): the number of machines is held down by the painted floor,
+ * so in a long endless game the only way to earn more is to make each one faster. Levels 1 to 5
+ * cost what they always did (x1.8 a level). Past that a level costs only x1.4 the last
+ * (`gentleFrom`, `gentleGrow`): each level adds a quarter, so at x1.8 every level would take
+ * longer to pay for itself than the one before (level 10 well over four hours of play), while
+ * at x1.4 levels 6 to 10 pay back in about the hour level 5 does.
  */
 export const MACHINE_SECS = 2.5;
-export const MACHINE_SPD = { mul: 1.25, grow: 1.8, max: 5 };
+export const MACHINE_SPD = { mul: 1.25, grow: 1.8, max: 10, gentleFrom: 5, gentleGrow: 1.4 };
 
 /**
  * Marked areas of the floor. Each of the four factory machines may only be built on its own
@@ -91,7 +97,8 @@ export const ZONES = {
  *   In a track: `mul` multiplies per level, `add` adds per level; the price of the next level is
  *   `cost` times the building's own price (or a fixed `base`), times `grow` (TUNE.upGrowth unless
  *   given) to the power of the levels already bought; `max` levels at most (TUNE.maxLevel unless
- *   given). The Wet Floor Sign's dmg track has `slow` (speed multiplier per level) and `slip`
+ *   given). With `gentleFrom` n, levels after the n-th each cost `gentleGrow` times the last
+ *   instead of `grow`. The Wet Floor Sign's dmg track has `slow` (speed multiplier per level) and `slip`
  *   (added to the chance a dad slips); the Salesman's has `keep` (what is left of each shopper's
  *   chance NOT to stop, per level) and `rush` (multiplies every chance to hurry past, per level).
  */
@@ -102,8 +109,8 @@ export const BUILD = {
     desc: 'Moves goods. Shoppers cannot cross it. Dads step right over.',
   },
   // Factory machines all share MACHINE_SECS and MACHINE_SPD: faster by a quarter a level, and it is
-  // deliberately very expensive. A belt carries up to 4 items a second, so even a machine at the
-  // top level (about 1.2 a second) is never held up by it.
+  // deliberately very expensive. At the top level (10) a machine makes 3.75 items a second; see
+  // TUNE.beltSpeed for why a belt keeps up with it.
   unpacker: {
     name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: MACHINE_SECS, makes: 'box', zone: 'u',
     // (Speed levels start at $100: a quarter of the $400 they cost until 0.2.12, the owner's number.)
@@ -444,7 +451,13 @@ export const TUNE = {
   waves: 20,
   buildSecs: 45, // pause between waves; players can start early
   sellBack: 0.75, // share of the price returned when you remove something
-  beltSpeed: 2, // tiles per second
+  // Tiles per second. Items ride at least half a tile apart and a simulation tick is 1/30 s, so a
+  // belt carries one item every ceil(15 / beltSpeed) ticks or so. It was 2 (3.75 items a second)
+  // until 0.2.13, exactly what one factory machine makes at the new top speed level, with nothing
+  // to spare. At 5.25 a belt carries 10 a second: two top-level machines feeding one belt (7.5)
+  // with a third to spare. (Exactly 5 still only carries 7.5: the half-tile gap lands on the
+  // fourth tick, not the third, when an item moves from one belt to the next.)
+  beltSpeed: 5.25,
   // Patience in wave n is base * (1 + hpGrowth * (n - 1) + hpGrowth2 * (n - 1)^2):
   // gentle early, steep late.
   hpGrowth: 0.15,
@@ -458,7 +471,10 @@ export const TUNE = {
   slipDmg: 6,
   sampleSecs: 2.2, // how long a free sample stops a shopper
   grabSecs: 1.5, // how long grabbing goods off a belt stops a shopper
-  grabChance: 0.35, // chance per second that a browsing shopper next to goods grabs one
+  // Chance per second that a browsing shopper next to goods grabs one. It was 0.35 while belts
+  // ran at 2 tiles a second; at 5.25 an item passes a shopper in 2.6 times less time, so the chance
+  // went up by as much (0.92) and a passing item is as likely to be stolen as before.
+  grabChance: 0.92,
   browseCooldown: 7, // seconds before the same shopper can be distracted again
   nagRange: 2.5, // towers this close to a Karen...
   nagRate: 0.5, // ...fire at this share of their speed

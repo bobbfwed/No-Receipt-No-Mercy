@@ -233,21 +233,23 @@ test('each kind has the upgrade tracks it should, and a plain upgrade means dama
   for (const k of ['sprinkler', 'forklift', 'wetfloor', 'samples']) for (const t of tracksOf(k)) assert.ok(upgradeCost({ k }, t) < BUILD[k].cost, `${k} ${t}`);
 });
 
-test('a factory machine gets a quarter faster a level, at most five, each level x1.8 the last', () => {
-  // (The first level cost $400, $600 and $900 until 0.2.12; the owner cut them to 25%, 50% and 60%.)
+test('a factory machine gets a quarter faster a level, at most ten, x1.8 a level to 5 and x1.4 after', () => {
+  // (The first level cost $400, $600 and $900 until 0.2.12; the owner cut them to 25%, 50% and 60%.
+  // Levels 6 to 10 came in 0.2.13; levels 1 to 5 kept their speeds and prices.)
   for (const [k, base] of [['unpacker', 100], ['press', 300], ['packer', 540]]) {
     const tr = BUILD[k].up.spd;
-    assert.deepEqual([tr.mul, tr.base, tr.grow, tr.max], [1.25, base, 1.8, 5]);
+    assert.deepEqual([tr.mul, tr.base, tr.grow, tr.max, tr.gentleFrom, tr.gentleGrow], [1.25, base, 1.8, 10, 5, 1.4]);
     const b = { k, u: {} };
     const costs = [];
-    for (let lv = 0; lv < 5; lv++) { b.u.spd = lv; costs.push(upgradeCost(b, 'spd')); }
-    assert.deepEqual(costs, [0, 1, 2, 3, 4].map((n) => Math.round(base * 1.8 ** n)));
-    b.u.spd = 5;
-    assert.equal(upgradeCost(b, 'spd'), 0, 'five is the top');
-    // Even at the top it makes fewer than 4 items a second: a belt can carry it.
-    const st = statsOf(b);
-    assert.ok(1 / (st.period || st.time) < 4);
+    for (let lv = 0; lv < 10; lv++) { b.u.spd = lv; costs.push(upgradeCost(b, 'spd')); }
+    assert.deepEqual(costs.slice(0, 5), [0, 1, 2, 3, 4].map((n) => Math.round(base * 1.8 ** n)), 'levels 1-5 as before');
+    assert.deepEqual(costs.slice(5), [1, 2, 3, 4, 5].map((n) => Math.round(base * 1.8 ** 4 * 1.4 ** n)), 'levels 6-10');
+    b.u.spd = 10;
+    assert.equal(upgradeCost(b, 'spd'), 0, 'ten is the top');
+    assert.ok(Math.abs((statsOf(b).period || statsOf(b).time) - 2.5 / 1.25 ** 10) < 1e-9);
   }
+  // The speeds of levels 1 to 5 are what they were.
+  for (let lv = 0; lv <= 5; lv++) assert.ok(Math.abs(statsOf({ k: 'packer', u: { spd: lv } }).time - 2.5 / 1.25 ** lv) < 1e-9);
   // An upgraded unpacker really makes boxes faster.
   const boxes = (lv) => {
     const s = stage(3);
@@ -259,6 +261,51 @@ test('a factory machine gets a quarter faster a level, at most five, each level 
   };
   const plain = boxes(0), fast = boxes(2);
   assert.ok(Math.abs(fast / plain - 1.25 ** 2) < 0.1, `${fast} boxes against ${plain}`);
+});
+
+test('at the top speed level a whole production line makes what its machines promise, and belts keep up', () => {
+  // What one second of steady running ships, after 10 s to fill the belts.
+  const rate = (build, secs = 60) => {
+    const s = stage(3);
+    build(s);
+    for (let i = 0; i < 10 * TICK_HZ; i++) step(s);
+    let n = 0;
+    for (let i = 0; i < secs * TICK_HZ; i++) n += step(s).filter((e) => e.e === 'sale').length;
+    return n / secs;
+  };
+  const max = (s, x, y) => { for (let n = 0; n < 10; n++) assert.ok(applyCommand(s, 0, { c: 'upgrade', x, y, t: 'spd' }).ok); };
+  // 2.5 s / 1.25^10 is 8 ticks an item: 3.75 a second, for every kind of machine.
+  const top = TICK_HZ / Math.max(1, Math.round((2.5 / 1.25 ** 10) * TICK_HZ));
+  assert.equal(top, 3.75);
+  // Unpacker -> Press -> Packer -> chute, two belts between each: the Press and Packer keep the
+  // Unpacker's pace (they used to lose two ticks an item), and no belt holds them up.
+  const line = rate((s) => {
+    place(s, 'unpacker', 3, 3, 0); max(s, 3, 3);
+    place(s, 'belt', 4, 3, 0); place(s, 'belt', 5, 3, 0);
+    place(s, 'press', 6, 3, 0); max(s, 6, 3);
+    place(s, 'belt', 7, 3, 0); place(s, 'belt', 8, 3, 0);
+    place(s, 'packer', 9, 3, 0); max(s, 9, 3);
+    place(s, 'belt', 10, 3, 0); place(s, 'belt', 11, 3, 0); place(s, 'chute', 12, 3);
+  });
+  assert.ok(Math.abs(line - top) < 0.05, `${line} gift sets a second`);
+  // Two top-level machines feeding one belt (the busiest a belt gets: a machine takes in no more
+  // than it makes) both run flat out...
+  const two = rate((s) => {
+    place(s, 'unpacker', 3, 3, 0); max(s, 3, 3);
+    place(s, 'unpacker', 5, 4, 3); max(s, 5, 4);
+    for (let x = 4; x < 10; x++) place(s, 'belt', x, 3, 0);
+    place(s, 'chute', 10, 3);
+  });
+  assert.ok(Math.abs(two - 2 * top) < 0.05, `${two} boxes a second`);
+  // ...with room to spare: a third one squeezes in until the belt carries one item every 3 ticks.
+  const three = rate((s) => {
+    place(s, 'unpacker', 3, 3, 0); max(s, 3, 3);
+    place(s, 'unpacker', 5, 4, 3); max(s, 5, 4);
+    place(s, 'unpacker', 7, 2, 1); max(s, 7, 2);
+    for (let x = 4; x < 12; x++) place(s, 'belt', x, 3, 0);
+    place(s, 'chute', 12, 3);
+  });
+  assert.ok(three >= 1.3 * 2 * top, `a belt carries ${three} a second`);
 });
 
 test('the stats of any mix of levels, the overall level, and what was spent', () => {

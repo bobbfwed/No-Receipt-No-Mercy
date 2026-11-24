@@ -40,7 +40,13 @@ export function levelOf(b) {
 export function levelCost(k, track, lv) {
   const def = BUILD[k], tr = def.up[track];
   const base = tr.base ?? def.cost * tr.cost;
-  return Math.round(base * (tr.grow ?? TUNE.upGrowth) ** lv);
+  const grow = tr.grow ?? TUNE.upGrowth;
+  // A track with `gentleFrom` grows more slowly past that level (see MACHINE_SPD in constants.js).
+  // `lv` levels are already bought, so this prices level lv + 1: past level n it is level n's
+  // price (base * grow^(n-1)) times gentleGrow for each level beyond n.
+  const n = tr.gentleFrom;
+  if (n !== undefined && lv >= n) return Math.round(base * grow ** (n - 1) * tr.gentleGrow ** (lv - n + 1));
+  return Math.round(base * grow ** lv);
 }
 
 /**

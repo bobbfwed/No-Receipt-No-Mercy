@@ -557,11 +557,13 @@ function stepBuildings(state, fields, ev, only = null) {
         break;
       case 'press':
       case 'packer':
-        if (b.out) {
-          if (offer(state, neighbour(state, i, b.d), b.out, b.d, ev)) b.out = 0;
-        } else if (b.t > 0) {
-          if (--b.t === 0) b.out = def.makes;
-        } else if (b.n > 0) {
+        // Finishing, handing over and starting the next item all happen in the same tick, so an
+        // item takes exactly its time, like the Unpacker's. (Until 0.2.13 each step took a tick of
+        // its own: two extra ticks an item, which at the top speed level made a Press or Packer a
+        // fifth slower than an Unpacker.)
+        if (b.t > 0 && --b.t === 0) b.out = def.makes;
+        if (b.out && offer(state, neighbour(state, i, b.d), b.out, b.d, ev)) b.out = 0;
+        if (!b.out && b.t <= 0 && b.n > 0) {
           b.n--;
           b.t = secs(statsOf(b).time);
         }
