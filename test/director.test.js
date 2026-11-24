@@ -47,7 +47,7 @@ const VARS = {
   reportPerfect: 'p', pee: 'pk', flash: 'pn', fall: 'p', pitchStop: 'pk', pitchRush: 'pk',
   kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
   pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw', early: 'pnm',
-  pop: 'pn', nopop: 'p',
+  pop: 'pn', nopop: 'p', autoRebuildOn: 'p',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -66,6 +66,8 @@ const AT_LEAST = {
   carPark: 12,
   // Version 0.2.09: the Pregnant Lady.
   pop: 12, nopop: 9,
+  // Version 0.2.14: auto-rebuild switched on.
+  autoRebuildOn: 5,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };

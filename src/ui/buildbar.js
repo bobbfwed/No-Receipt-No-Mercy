@@ -25,7 +25,7 @@ const DIR_ARROWS = ['→', '↓', '←', '↑'];
 const TOOLS = {
   upgrade: { name: 'Upgrade', key: 'U', price: 'anything', how: HOW_UPGRADE, keys: 'key U' },
   // Not a tool you hold: one press puts back everything of yours that gym bros have wrecked.
-  rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true },
+  rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B · Shift+B switches auto-rebuild on or off', action: true },
   remove: { name: 'Remove', key: 'X', price: `${Math.round(TUNE.sellBack * 100)}% back`, how: HOW_REMOVE, keys: 'key X or Delete' },
 };
 
@@ -131,6 +131,10 @@ export function createBuildBar(input, session) {
   });
   let lastCash = null, lastTool, lastDir, lastUp = '', lastRubble = '';
   const rebuildBtn = buttons.get('rebuild'), rebuildNote = rebuildBtn.querySelector('.bb-price');
+  // A badge on the Rebuild button while auto-rebuild is on (the switch itself is in the top bar).
+  const autoBadge = h('span', { class: 'bb-auto hidden', title: 'Auto-rebuild is on (Shift+B switches it off)' }, 'AUTO');
+  rebuildBtn.append(autoBadge);
+  let lastAuto = null;
 
   function showInfo(k) {
     const def = BUILD[k];
@@ -215,6 +219,8 @@ export function createBuildBar(input, session) {
       setClass(rebuildBtn, 'idle', n === 0);
       setClass(rebuildBtn, 'alert', n > 0);
     }
+    const auto = !!s.players[session.me]?.autoRebuild;
+    if (auto !== lastAuto) { lastAuto = auto; setClass(autoBadge, 'hidden', !auto); }
     if (input.dir !== lastDir) {
       lastDir = input.dir;
       dirEl.textContent = `${DIR_ARROWS[input.dir]} ${DIR_NAMES[input.dir]}`;

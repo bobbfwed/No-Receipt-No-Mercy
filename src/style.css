@@ -1162,6 +1162,35 @@ kbd {
 .bb-btn.tool-rebuild.idle { opacity: 0.45; }
 .bb-btn.tool-rebuild.alert { border-color: var(--orange); animation: rebuild-nudge 1.4s ease-in-out infinite; }
 @keyframes rebuild-nudge { 50% { box-shadow: 0 0 0 0.2rem rgba(249, 115, 22, 0.45); } }
+/* "AUTO" on the Rebuild button while auto-rebuild is on. */
+.bb-auto {
+  position: absolute; top: 0.15rem; right: 0.2rem; padding: 0 0.2rem; border-radius: 0.25rem;
+  background: var(--green-2); color: var(--ink); font: 900 0.55rem var(--font-heavy); line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- auto-rebuild switch (0.2.14) */
+
+.btn-auto {
+  display: inline-flex; align-items: center; gap: 0.4rem; flex: none;
+  height: 2.25rem; padding: 0 0.6rem 0 0.4rem;
+  border: 0.15rem solid var(--line); border-radius: 0.5rem; background: #3a424c;
+  font: 800 0.72rem var(--font); letter-spacing: 0.03em; white-space: nowrap; cursor: pointer;
+}
+.btn-auto:hover { background: #4b5563; }
+/* A sliding knob, so on and off read at a glance, not only from the word. */
+.ab-knob {
+  position: relative; flex: none; width: 2rem; height: 1.1rem; border-radius: 0.55rem;
+  background: #1c2127; border: 0.12rem solid #6b7280;
+}
+.ab-knob::after {
+  content: ""; position: absolute; top: 0.08rem; left: 0.1rem; width: 0.75rem; height: 0.75rem;
+  border-radius: 50%; background: #9ca3af; transition: left 0.12s;
+}
+.ab-state { min-width: 1.9rem; color: var(--muted); font: 900 0.78rem var(--font-heavy); }
+.btn-auto.on { border-color: var(--green-2); background: #1f3a28; }
+.btn-auto.on .ab-knob { background: var(--green); border-color: var(--green-2); }
+.btn-auto.on .ab-knob::after { left: 0.95rem; background: #fff; }
+.btn-auto.on .ab-state { color: #4ade80; }
 
 /* ---------------------------------------------------------------- menu tagline */
 
@@ -1958,6 +1987,7 @@ html, body { overscroll-behavior: none; }
     box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.55);
   }
   .hud-more .btn-speed { flex: 1; min-width: 46px; height: 42px; }
+  .hud-more .btn-auto { height: 46px; justify-content: flex-start; }
   .hud-more .hud-room { height: auto; padding: 0.35rem 0.5rem; flex-wrap: wrap; }
   .hud-more .hud-room small { display: block; width: 100%; }
   .hud-more .btn-copy { min-height: 38px; }

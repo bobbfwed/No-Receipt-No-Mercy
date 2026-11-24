@@ -136,6 +136,9 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [gone] how long he has been away, while his grace period runs, in ticks at
  *                          normal speed (so it measures real time at any game speed; see
  *                           setPlayerOnline). Absent when he is here, or away with nothing pending.
+ * @property {boolean} [autoRebuild] his auto-rebuild switch (0.2.14; absent, as in older saves,
+ *                          means off): step() puts back his wrecks for him (see autoRebuild in
+ *                          commands.js)
  * @property {Object} w      statistics for this wave
  * @property {Object} all    statistics for the whole game
  */
@@ -203,9 +206,11 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
      *  it existed lacks it; the simulation makes it when first needed.) */
     carts: [],
     /** What gym bros have destroyed and nobody has rebuilt yet, oldest first, as
-     *  { i, k, d, o, u, spent }: anchor tile, kind, facing, owner, upgrade levels (as on a
-     *  building, possibly {}), and what had been spent on it (spentOn). The 'rebuild' command, or
-     *  placing the same kind there, puts them back at TUNE.rebuildShare of that. */
+     *  { i, k, d, o, u, spent, at }: anchor tile, kind, facing, owner, upgrade levels (as on a
+     *  building, possibly {}), what had been spent on it (spentOn), and the tick it broke (since
+     *  0.2.14, for auto-rebuild's delay; rubble in an older save lacks it and counts as long
+     *  broken). The 'rebuild' command, or placing the same kind there, puts them back at
+     *  TUNE.rebuildShare of that. */
     rubble: [],
     nextId: 1,
     /** Shoppers still to arrive this wave, as [tick, kind, super 0|1, entrance or -1 for any],

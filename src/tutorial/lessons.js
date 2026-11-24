@@ -440,6 +440,7 @@ export const STEPS = [
       `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that durability soaks up still uses one of his.`,
       'Do this: put Crates (press 6) on the three highlighted tiles by the entrance, so shoppers have to walk round. Then OPEN THE DOORS for one Gym Bro.',
       'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, upgrades and all, for half of what you had spent on it.',
+      `Sick of pressing it? Shift+B switches on auto-rebuild: the store does it for you, at the same price, ${TUNE.autoRebuildSecs} seconds after each wreck. The wait is on purpose: the shoppers behind him get through the hole first.`,
     ],
     quip: "Gym bro. Skips leg day, never skips your crates. He grunts like that in bed, too. Ask your wife.",
     mood: 'angry',

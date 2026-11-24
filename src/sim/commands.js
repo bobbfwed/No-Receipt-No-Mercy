@@ -8,7 +8,7 @@ import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
-const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'endless']);
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'autoRebuild', 'endless']);
 
 /** Seconds of build time before wave 1, counted from the first thing placed. */
 const FIRST_BUILD_SECS = 90;
@@ -151,6 +151,91 @@ function lift(state, ai) {
 }
 
 /**
+ * Puts back a player's wrecked buildings: the B key, and auto-rebuild, which uses exactly this so
+ * the two can never disagree on what is allowed or what it costs. Oldest wreck first, each at the
+ * rebuild price with as many of its upgrades as the cash covers (rebuildDeal). Whatever cannot go
+ * back yet (no cash, a shopper in the way, it would wall the route) stays as rubble.
+ * @param {Object} [o]
+ * @param {boolean} [o.all] everybody's rubble, not only his own (paid for by him)
+ * @param {(r: Object) => boolean} [o.only] leave out any rubble this says no to
+ * @param {boolean} [o.waitForCash] stop at the first wreck he cannot afford, so younger ones do
+ *   not eat the money the oldest is waiting for (auto-rebuild; the B key buys what it can)
+ * @returns {{n: number, short: number, why: string}} how many went back, how many of those lost
+ *   upgrades, and why the last one refused was refused ('empty' if there was nothing to do)
+ */
+function rebuildRubble(state, pid, { all = false, only = null, waitForCash = false } = {}) {
+  const player = state.players[pid];
+  let n = 0, short = 0, why = 'empty';
+  for (const r of state.rubble.slice()) {
+    if (r.o !== pid && !all) continue;
+    if (only && !only(r)) continue;
+    const x = r.i % state.w, y = (r.i / state.w) | 0;
+    const tiles = footprint(state, r.k, x, y, r.d | 0);
+    // Something has been built there since: that hole is already patched.
+    if (!tiles || tiles.some((t) => state.grid[t])) {
+      const j = state.rubble.indexOf(r);
+      if (j >= 0) state.rubble.splice(j, 1);
+      continue;
+    }
+    const no = canPlace(state, r.k, x, y, pid, r.d | 0);
+    const deal = no ? null : rebuildDeal(r, player.cash);
+    if (!deal) {
+      why = no || 'cash';
+      if (why === 'cash' && waitForCash) break;
+      continue;
+    }
+    put(state, tiles, newBuilding(r.k, pid, r.d | 0, deal.u));
+    clearRubble(state, tiles);
+    player.cash -= deal.pay;
+    bump(state, pid, 'spent', deal.pay);
+    bump(state, pid, 'built');
+    n++;
+    if (deal.lost > 0) short++;
+  }
+  return { n, short, why };
+}
+
+/** Ticks after it broke before auto-rebuild may put a building back (TUNE.autoRebuildSecs). */
+export const autoRebuildWait = () => Math.round(TUNE.autoRebuildSecs * TICK_HZ);
+
+/**
+ * Whether auto-rebuild may touch this wreck yet: it broke at least autoRebuildWait() ticks ago.
+ * Rubble from a save made before 0.2.14 does not know when it broke, and counts as long ago.
+ */
+export function autoReady(state, r) {
+  return r.at === undefined || state.tick - r.at >= autoRebuildWait();
+}
+
+/** One auto-rebuild attempt for one player: his wrecks that are old enough, oldest first. */
+function autoRebuildFor(state, player, ev) {
+  if (player.side === 'office') return;
+  const { n, short } = rebuildRubble(state, player.id, { only: (r) => autoReady(state, r), waitForCash: true });
+  if (n) ev.push({ e: 'rebuilt', by: player.id, n, short, auto: 1 });
+}
+
+/**
+ * Auto-rebuild, run by step() every tick after the shoppers move. For each player who has it
+ * switched on, it tries at the very tick a wreck of his becomes old enough (so the delay is
+ * exactly TUNE.autoRebuildSecs), and after that every TUNE.autoRebuildEvery while something of
+ * his is still waiting (a refused rebuild costs a path search, too dear for every tick).
+ */
+export function autoRebuild(state, ev) {
+  if (!state.rubble.length) return;
+  const wait = autoRebuildWait();
+  const retry = state.tick % Math.max(1, Math.round(TUNE.autoRebuildEvery * TICK_HZ)) === 0;
+  for (const p of state.players) {
+    if (!p.autoRebuild) continue;
+    let due = false;
+    for (const r of state.rubble) {
+      if (r.o !== p.id) continue;
+      const age = r.at === undefined ? Infinity : state.tick - r.at;
+      if (age === wait || (retry && age >= wait)) { due = true; break; }
+    }
+    if (due) autoRebuildFor(state, p, ev);
+  }
+}
+
+/**
  * Applies one command from a player.
  * Commands (x, y may be any tile of a building bigger than one tile, except for 'place'):
  *   { c: 'place', k, x, y, d }  build something with the top-left of its footprint on (x, y)
@@ -166,6 +251,9 @@ function lift(state, ai) {
  *   { c: 'give', to, n }        hand n of your cash to player `to`
  *   { c: 'rebuild' }            put back what gym bros destroyed of yours, oldest first, at the
  *                               rebuild price, as far as your cash goes (with all: true, everybody's)
+ *   { c: 'autoRebuild', on }    switch your own auto-rebuild on or off (without on: flip it). While
+ *                               on, step() rebuilds your wrecks like 'rebuild' does, each no sooner
+ *                               than TUNE.autoRebuildSecs after it broke (see autoRebuild)
  *   { c: 'map', design, size }  lobby only, host only (state.host): change the store
  *   { c: 'settings', waves, startCash, difficulty }  lobby only, host only: the game's
  *                               settings (see SETTINGS); anything left out keeps its value
@@ -207,7 +295,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       player.ready = cmd.on !== false;
       return { ok: true };
     }
-    if (cmd.c !== 'role') return { ok: false, why: 'lobby' };
+    // (Auto-rebuild may be switched on before the game starts: it does nothing until something breaks.)
+    if (cmd.c !== 'role' && cmd.c !== 'autoRebuild') return { ok: false, why: 'lobby' };
   }
   switch (cmd.c) {
     case 'place': {
@@ -280,34 +369,19 @@ export function applyCommand(state, pid, cmd, ev = []) {
       return { ok: true };
     }
     case 'rebuild': {
-      // Oldest wreck first, each at the rebuild price with as many of its upgrades as the cash
-      // covers. Whatever cannot go back yet (no cash, a shopper in the way) stays as rubble.
-      let n = 0, short = 0, why = 'empty';
-      for (const r of state.rubble.slice()) {
-        if (r.o !== pid && !cmd.all) continue;
-        const x = r.i % state.w, y = (r.i / state.w) | 0;
-        const tiles = footprint(state, r.k, x, y, r.d | 0);
-        // Something has been built there since: that hole is already patched.
-        if (!tiles || tiles.some((t) => state.grid[t])) {
-          const j = state.rubble.indexOf(r);
-          if (j >= 0) state.rubble.splice(j, 1);
-          continue;
-        }
-        const no = canPlace(state, r.k, x, y, pid, r.d | 0);
-        if (no) { why = no; continue; }
-        const deal = rebuildDeal(r, player.cash);
-        if (!deal) { why = 'cash'; continue; }
-        put(state, tiles, newBuilding(r.k, pid, r.d | 0, deal.u));
-        clearRubble(state, tiles);
-        player.cash -= deal.pay;
-        bump(state, pid, 'spent', deal.pay);
-        bump(state, pid, 'built');
-        n++;
-        if (deal.lost > 0) short++;
-      }
+      const { n, short, why } = rebuildRubble(state, pid, { all: !!cmd.all });
       if (!n) return { ok: false, why };
       ev.push({ e: 'rebuilt', by: pid, n, short });
       return { ok: true, n, short };
+    }
+    case 'autoRebuild': {
+      // A switch, his own only. Without `on` it flips.
+      player.autoRebuild = cmd.on === undefined ? !player.autoRebuild : !!cmd.on;
+      ev.push({ e: 'autoRebuild', by: pid, on: player.autoRebuild });
+      // Switched on with something already wrecked for longer than the delay: try it now, rather
+      // than at the next regular retry.
+      if (player.autoRebuild) autoRebuildFor(state, player, ev);
+      return { ok: true };
     }
     case 'side': {
       if (cmd.side !== 'office' && cmd.side !== 'store') return { ok: false, why: 'bad' };

@@ -2,6 +2,7 @@
 import { TUNE, ROLES, SPEEDS, officePlayer, isEndless, bossTier, bossTitle } from '../sim/index.js';
 import { eventOf } from '../content/facts.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton } from './dom.js';
+import { createAutoSwitch } from './rebuild.js';
 
 const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
 const BUDGET_TITLE = 'What you have left to spend on shoppers for the coming sales event. Half of what you leave unspent carries over to the next one.';
@@ -59,6 +60,8 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     onclick: () => session.send({ c: 'speed', n }),
   }, `${n}x`));
   const speed = h('div', { class: 'hud-speed', role: 'group', 'aria-label': 'Game speed' }, speedBtns);
+  // Auto-rebuild lives up here so it can be switched on before anything breaks, on any screen.
+  const auto = createAutoSwitch(session, { playSound, cls: 'hud-auto' });
 
   const room = roomCode ? h('div', { class: 'hud-room' },
     h('small', null, roomKind === 'local' ? 'TEST ROOM' : 'ROOM CODE'),
@@ -88,9 +91,9 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   // On a narrow screen the things a player needs less often (speed, room code, sound, help) fold
   // away behind one button. On a wide screen the wrapper takes no part in the layout
   // (display: contents) and the button is hidden, so the bar looks as it always has.
-  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, speed, room, audio, full, book, help);
+  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, auto.el, speed, room, audio, full, book, help);
   const moreBtn = h('button', {
-    type: 'button', class: 'btn-more', 'aria-label': 'More: speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
+    type: 'button', class: 'btn-more', 'aria-label': 'More: auto-rebuild, speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
     onclick: () => setMore(!more.classList.contains('open')),
   }, '☰');
   function setMore(open) {
@@ -194,6 +197,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     setStyle(refFill, 'background', `hsl(${Math.round(48 - 48 * share)} 90% ${Math.round(52 - 6 * share)}%)`);
     setClass(refunds, 'danger', share >= 0.75);
 
+    auto.update(s);
     speedBtns.forEach((b, i) => {
       const on = (s.speed || 1) === SPEEDS[i];
       setClass(b, 'on', on);

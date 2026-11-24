@@ -93,6 +93,14 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     send([{ c: 'rebuild' }]);
   }
 
+  /** Flips this player's auto-rebuild switch (Shift+B). */
+  function toggleAutoRebuild() {
+    const me = session.state?.players[session.me];
+    if (isOffice() || !me) return;
+    playSound('click');
+    session.send({ c: 'autoRebuild', on: !me.autoRebuild });
+  }
+
   /** Upgrades the building on a tile, if there is one that can be. */
   function upgrade(t, track) {
     const b = t && at(t);
@@ -368,7 +376,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       }
     } else if (lower === 'b') {
       e.preventDefault();
-      rebuild();
+      if (e.shiftKey) toggleAutoRebuild(); else rebuild();
     } else if (lower === 'f') {
       e.preventDefault();
       renderer.fit?.();
@@ -480,6 +488,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     get selected() { return selected; },
     setTool,
     rebuild,
+    toggleAutoRebuild,
     goHome,
     rotate,
     canRotate,

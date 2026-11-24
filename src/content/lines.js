@@ -286,6 +286,14 @@ export const LINES = {
     u('{p} rebuilt {n} wrecked things. Patching holes is a skill. He learned it in a marriage.'),
     r('{p} rebuilt {n} things a gym bro broke. The gym bro is watching. The gym bro is cracking his knuckles. The gym bro has a free afternoon.'),
   ],
+  // {p} switched auto-rebuild on: the game now puts his wrecked things back for him.
+  autoRebuildOn: [
+    '{p} turned on auto-rebuild. Even fixing his own mess is too much effort now. Very on brand.',
+    "{p} automated his rebuilding. Same as everything else in his life he can't be trusted to finish himself.",
+    "Auto-rebuild on for {p}. He'll still find a way to take credit for it.",
+    u('{p} has let the machine rebuild for him. Next he will want it to hold his hand at the tills.'),
+    r("{p} switched on auto-rebuild. Two seconds after anything breaks, it's back up. The stamina he's always lied about."),
+  ],
   // Same, but {m} of them came back with fewer upgrades because he could not afford them.
   rebuiltShort: [
     "{p} rebuilt {n} things but couldn't afford the upgrades on {m} of them. Poverty: the great leveller.",

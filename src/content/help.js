@@ -137,7 +137,7 @@ export const HOW_UPGRADE = {
 /** What the Rebuild button does. */
 export const HOW_REBUILD = {
   does: 'Puts back everything of yours that gym bros have wrecked, oldest first, at half of what you had spent on it, upgrades included.',
-  use: 'Press it (or B) once. If you cannot afford a building with all its upgrades, it comes back with the upgrades you can afford and the rest are lost; if you cannot afford even half its base price it stays as rubble. Building the same thing by hand on its rubble gets the same deal.',
+  use: `Press it (or B) once. If you cannot afford a building with all its upgrades, it comes back with the upgrades you can afford and the rest are lost; if you cannot afford even half its base price it stays as rubble. Building the same thing by hand on its rubble gets the same deal. Or let the store do it: switch on AUTO-REBUILD (Shift+B, or its switch in the top bar) and each wreck is put back the moment that is allowed, at the same price, oldest first, but never sooner than ${TUNE.autoRebuildSecs} seconds after it broke, so the crowd behind a gym bro still gets through.`,
   maze: '',
 };
 

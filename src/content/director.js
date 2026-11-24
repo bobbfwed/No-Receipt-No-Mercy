@@ -138,6 +138,7 @@ export const TOPICS = {
   removedOther: { note: true, gap: 8, friend: 'sold' },
   gave: { joke: true, gap: 10, friend: 'any' },
   rebuilt: { joke: true, gap: 25, friend: 'built' },
+  autoRebuild: { joke: true, gap: 60, friend: 'built' },
   crawl: { note: true, gap: 12 },
   kid: { note: true, gap: 20 },
   caught: { note: true, chance: 0.5, gap: 25 },
@@ -483,6 +484,9 @@ export function createDirector(random = Math.random) {
         else if (e.n >= 3) say(out, state, 'rebuilt', LINES.rebuilt, { n: e.n }, { pid, mood: 'smug' });
         break;
       }
+      case 'autoRebuild':
+        if (e.on && state.players[e.by]) say(out, state, 'autoRebuild', LINES.autoRebuildOn, {}, { pid: e.by, mood: 'smug' });
+        break;
       case 'begun':
         say(out, state, 'begun', LINES.begun);
         break;

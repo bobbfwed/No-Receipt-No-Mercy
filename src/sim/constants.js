@@ -455,6 +455,16 @@ export const TUNE = {
   maxLevel: 8,
   // Rebuilding what a gym bro destroyed costs this share of what had been spent on it.
   rebuildShare: 0.5,
+  // Auto-rebuild (0.2.14, a switch per player): something wrecked is put back automatically, but
+  // never sooner than this many seconds of game time after it broke. The delay is the point (the
+  // owner's reason): when a gym bro breaks through, the wave following him must still get
+  // through the gap; without the delay the gap would close at once and only cost money. Game
+  // time, not the clock, so the same number of shoppers get through at any game speed.
+  autoRebuildSecs: 2,
+  // After that, a rebuild that is refused (a shopper on the tile, it would block the route, too
+  // little cash) is tried again this often, in seconds of game time. Not every tick, because
+  // checking the route costs a path search per wreck.
+  autoRebuildEvery: 0.2,
   waves: 20,
   buildSecs: 45, // pause between waves; players can start early
   sellBack: 0.75, // share of the price returned when you remove something

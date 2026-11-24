@@ -5,6 +5,8 @@ import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expir
 import { getField, getFieldTo, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
+// (commands.js imports from this file too. That is safe: neither uses the other while loading.)
+import { autoRebuild } from './commands.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
 
@@ -888,7 +890,7 @@ function wreck(state, ti, s, ev, flatten = false) {
   if (left > 0) return true;
   for (const t of tilesOf(state, ai)) state.grid[t] = 0;
   state.gridVer++;
-  state.rubble.push({ i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b) });
+  state.rubble.push({ i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b), at: state.tick });
   if (state.rubble.length > RUBBLE_MAX) state.rubble.shift();
   return true;
 }
@@ -1283,6 +1285,9 @@ export function step(state) {
   const fields = [getField(state, NORMAL), getField(state, HOP), getField(state, SMASH)];
   const sec = stepBuildings(state, fields, ev);
   stepShoppers(state, fields, sec, ev);
+  // After the shoppers have moved, so a rebuild sees where they stand now (it must not be put
+  // down on one, or wall one in).
+  autoRebuild(state, ev);
   if (state.phase === 'wave' && !state.spawnQ.length && !state.shoppers.length) endWave(state, ev);
   return ev;
 }
