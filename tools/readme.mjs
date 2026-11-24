@@ -30,12 +30,13 @@ export function generated() {
     'The host picks a design and a size before the game starts. Each player gets his own shopper entrance, and the painted floor shows where each kind of machine may go.',
     '',
     ...Object.entries(MAP_DESIGNS).flatMap(([k, d]) => [`### ${d.name}`, d.desc, '', `![${d.name}](docs/img/map-${k}.png)`, '']),
-    // (The Strip Mall's plot is bigger than the others', as the middle of it is car park.)
-    `| Size | Tiles | ${MAP_DESIGNS.horseshoe.name} | Suits |`,
-    '|---|---|---|---|',
+    // (Two designs have plots of their own: the Back Passage's is taller, to stack up more
+    // corridors, and the Strip Mall's bigger, as the middle of it is car park.)
+    `| Size | Most designs | ${MAP_DESIGNS.corridors.name} | ${MAP_DESIGNS.horseshoe.name} | Suits |`,
+    '|---|---|---|---|---|',
     ...Object.entries(MAP_SIZES).map(([k, z]) => {
-      const m = mapSize('horseshoe', k);
-      return `| ${z.name} | ${z.w} x ${z.h} | ${m.w} x ${m.h} | ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'the original; cramped'} |`;
+      const [c, m] = ['corridors', 'horseshoe'].map((d) => mapSize(d, k));
+      return `| ${z.name} | ${z.w} x ${z.h} | ${c.w} x ${c.h} | ${m.w} x ${m.h} | ${z.players ? `${z.players} player${z.players > 1 ? 's' : ''}` : 'the original; cramped'} |`;
     }),
   ].join('\n');
 

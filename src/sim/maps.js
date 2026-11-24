@@ -49,7 +49,7 @@ export const MAP_DESIGNS = {
   },
   corridors: {
     name: 'The Back Passage',
-    desc: 'Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd.',
+    desc: 'Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd. The plot is taller than most, to fit more corridors in.',
   },
   horseshoe: {
     name: 'The Strip Mall',
@@ -59,12 +59,15 @@ export const MAP_DESIGNS = {
 
 /**
  * The width and height of a store of this design and size: the rectangle in MAP_SIZES, unless a
- * design needs a bigger plot. Everything outside this file must read the made map's `w` and `h`.
+ * design needs a bigger plot (the Back Passage a taller one, the Strip Mall a bigger one).
+ * Everything outside this file must read the made map's `w` and `h`: a game keeps the plan it
+ * was made with, even if the design's plot changes in a later version.
  * @returns {{w: number, h: number}}
  */
 export function mapSize(design, size) {
   const z = MAP_SIZES[size] || MAP_SIZES.xs;
   if (design === 'horseshoe') return stripSize(MAP_SIZES[size] ? size : 'xs');
+  if (design === 'corridors') return passageSize(MAP_SIZES[size] ? size : 'xs');
   return { w: z.w, h: z.h };
 }
 
@@ -636,13 +639,15 @@ export function makeZones(w, h, tiles, doors, design) {
 // The Back Passage (version 0.3): the store's service corridors.
 
 /**
- * The Back Passage's layout, worked out from the size alone, so the walls (passages) and the
- * marked floor (passageZones) always agree. Long walls run across the store, leaving a hall
+ * The Back Passage's layout, worked out from the width and height alone, so the walls (passages)
+ * and the marked floor (passageZones) always agree. Long walls run across the store, leaving a hall
  * three tiles wide along the left wall (in front of the entrances) and the right (in front of the
- * tills), and cut it into corridors, as many as fit (three on the smallest stores, thirteen on the
- * biggest); the layout is the same upside down. Each production line has its four kinds of
- * marked floor in four corridors one below the other (on the three-corridor stores the Press Shop
- * and Gift Wrap share the middle one), so every line has to get through the walls between them.
+ * tills), and cut it into corridors, as many as fit (four on the smallest store, fifteen on the
+ * biggest: the design's plot is taller than the size's rectangle, see passageSize); the layout is
+ * the same upside down. Each production line has its four kinds of marked floor in four corridors
+ * one below the other (a store too low for four corridors, which no size is since 0.3.01, has
+ * three, and the Press Shop and Gift Wrap share the middle one), so every line has to get through
+ * the walls between them.
  * The walls have few openings: in the gap between two sections of marked floor, but only every
  * other gap, taking turns from one wall to the next, so a belt usually runs along its corridor to
  * find one. A whole production line reaches from one of the outer corridors to the other, so the
@@ -654,17 +659,21 @@ export function makeZones(w, h, tiles, doors, design) {
  */
 function passagePlan(w, h) {
   const rows = h - 2;
-  const tall = h < 18 ? 1 : 2;
   // The least each corridor needs: a patch and a row either side of it (two patches and three
   // rows on the three-corridor layout's middle one).
-  const need = (K) => Array.from({ length: K }, (_, j) => (K === 3 && j === 1 ? 2 * tall + 3 : tall + 2));
+  const need = (K, tall) => Array.from({ length: K }, (_, j) => (K === 3 && j === 1 ? 2 * tall + 3 : tall + 2));
   const thick = (K) => (K % 2 === 0 && h % 2 === 0 ? 1 : 0);
-  const fits = (K) => need(K).reduce((a, b) => a + b, 0) + K - 1 + thick(K) <= rows;
-  let K = 3;
-  while (fits(K + 1)) K++;
+  const fits = (K, tall) => need(K, tall).reduce((a, b) => a + b, 0) + K - 1 + thick(K) <= rows;
+  const most = (tall) => { let K = 3; while (fits(K + 1, tall)) K++; return K; };
+  // Patches are two rows tall, unless that leaves room for only three corridors (the Corner
+  // Shop): then one row, which makes room for a fourth.
+  let tall = 2, K = most(2);
+  if (K < 4) { tall = 1; K = most(1); }
   // Rows left over go to the narrowest corridors, a pair (one above the middle and its mirror
   // below) at a time; a single row left over goes to the middle corridor.
-  const hts = need(K);
+  // (Ties go to the outer pair first, so the top and bottom corridors are the first to get a row
+  // more: that keeps their Loading Bays clear of the floor in front of an entrance in the outer wall.)
+  const hts = need(K, tall);
   let spare = rows - hts.reduce((a, b) => a + b, 0) - (K - 1) - thick(K);
   const half = K >> 1, odd = K % 2;
   while (spare > 0) {
@@ -715,6 +724,43 @@ function passagePlan(w, h) {
  */
 const HALL = 3;
 
+/**
+ * The fewest corridors the Back Passage has on the smaller sizes (the owner asked for more
+ * corridors than the size's own rectangle has room for). The bigger sizes have plenty anyway.
+ */
+const PASSAGE_LEAST = { xs: 4, s: 5, m: 5, l: 6 };
+
+const passageCache = new Map();
+/**
+ * The Back Passage's plot for a size: the size's width, made taller (more corridors, one above
+ * the other) until it has at least PASSAGE_LEAST corridors and at least as much floor as an Open
+ * Warehouse of that size, the walls taking some. Of those heights it takes the lowest at which the
+ * top and bottom corridors also have a row to spare (so a Loading Bay never loses a tile to the
+ * floor in front of an entrance) without the floor coming out more than 15% bigger than the
+ * warehouse's; if there is none, the lowest. Worked out once per size.
+ */
+function passageSize(size) {
+  let hit = passageCache.get(size);
+  if (hit) return { ...hit };
+  const { w, h } = MAP_SIZES[size];
+  const target = [...makeMap('warehouse', size, 1).tiles].filter((c) => c === '.').length;
+  const least = PASSAGE_LEAST[size] || 0;
+  const fit = [];
+  for (let H = h; H <= 2 * h; H++) {
+    const plan = passagePlan(w, H);
+    if (plan.bands.length < least) continue;
+    let walls = 0;
+    passages(w, H, () => walls++);
+    const floor = (w - 2) * (H - 2) - walls;
+    if (floor < target) continue;
+    const roomy = plan.bands[0][1] - plan.bands[0][0] + 1 >= plan.tall + 3;
+    fit.push({ H, roomy: roomy && floor <= target * 1.15 });
+  }
+  hit = { w, h: (fit.find((f) => f.roomy) || fit[0]).H };
+  passageCache.set(size, hit);
+  return { ...hit };
+}
+
 /** The Back Passage: the corridor walls, with their openings (see passagePlan). */
 function passages(w, h, wall) {
   const { walls, gaps } = passagePlan(w, h);
@@ -732,7 +778,8 @@ function passages(w, h, wall) {
  * from the bottom corridor up. A patch is in the middle of its corridor, or in the top and bottom
  * corridors as far from the outer wall as it can be with a row to spare: that keeps a Loading Bay
  * clear of the two rows in front of an entrance in that wall where the corridor is wide enough.
- * Where it is not (the two smallest stores), the tiles in front of the entrance are left off it.
+ * Where it is not (the Outlet, where one tile is lost), the tiles in front of the entrance are
+ * left off it.
  * @returns {string} one character per tile: a key of ZONES, or a space
  */
 function passageZones(w, h, tiles, doors) {

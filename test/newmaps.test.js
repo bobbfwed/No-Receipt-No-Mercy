@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, canPlace, step, makeMap, getDist, mapSize, setMap, tillBanks,
+  createGame, addPlayer, applyCommand, canPlace, step, makeMap, makeZones, getDist, mapSize, setMap, tillBanks,
   MAP_SIZES, MAP_DESIGNS, ZONES, BUILD, DECOR, UNREACHABLE,
 } from '../src/sim/index.js';
 import { createDirector, PLACE_BANKS } from '../src/content/director.js';
@@ -179,11 +179,14 @@ function corridorsOf(s) {
 }
 
 test('the Back Passage is long corridors: walls right across, few openings, more corridors on bigger stores', () => {
+  // The fewest corridors on each size: what the owner asked for on the four smallest (0.3.01, on a
+  // taller plot), and on the bigger ones what they had on the size's own rectangle.
+  const least = { xs: 4, s: 5, m: 5, l: 6, xl: 7, xxl: 8, huge: 10, titan: 13 };
   let last = 0;
   for (const size of SIZES) {
     const s = createGame({ map: { design: 'corridors', size } });
     const { wallRow, count } = corridorsOf(s);
-    assert.ok(count >= 3, `${size}: ${count} corridors`);
+    assert.ok(count >= least[size], `${size}: ${count} corridors`);
     assert.ok(count >= last, `${size}: fewer corridors than the size below`);
     last = count;
     const sections = Math.floor((s.w - 4 - 3 - 9) / 10) + 1;
@@ -209,15 +212,57 @@ test('in the Back Passage the four kinds of marked floor of a section are in dif
       const at = {};
       for (let y = 1; y < s.h - 1; y++) for (let x = x0; x < x0 + 4; x++) if (s.zones[y * s.w + x] !== ' ') at[s.zones[y * s.w + x]] = band[y];
       assert.deepEqual(Object.keys(at).sort(), ['c', 'k', 'p', 'u'], `${size} x${x0}`);
-      if (count === 3) {
-        assert.ok(at.u !== at.p && at.c !== at.k && at.u !== at.c, `${size} x${x0}: ${JSON.stringify(at)}`);
-      } else {
-        assert.equal(new Set(Object.values(at)).size, 4, `${size} x${x0}: ${JSON.stringify(at)}`);
-        // ...one corridor after another, so every belt goes through just one wall.
-        assert.equal(Math.abs(at.u - at.p) + Math.abs(at.p - at.k) + Math.abs(at.k - at.c), 3, `${size} x${x0}`);
+      assert.ok(count >= 4, `${size}: ${count} corridors`);
+      assert.equal(new Set(Object.values(at)).size, 4, `${size} x${x0}: ${JSON.stringify(at)}`);
+      // ...one corridor after another, so every belt goes through just one wall.
+      assert.equal(Math.abs(at.u - at.p) + Math.abs(at.p - at.k) + Math.abs(at.k - at.c), 3, `${size} x${x0}`);
+    }
+  }
+});
+
+test('the Back Passage is taller than the size\'s rectangle, with about as much floor as the Open Warehouse', () => {
+  for (const size of SIZES) {
+    const s = createGame({ map: { design: 'corridors', size } });
+    const open = createGame({ map: { design: 'warehouse', size } });
+    // As wide as the size's rectangle; the extra room is more corridors stacked up.
+    assert.equal(s.w, MAP_SIZES[size].w, size);
+    assert.ok(s.h > MAP_SIZES[size].h, `${size}: ${s.w} x ${s.h}`);
+    assert.ok(s.w / s.h > 1.3, `${size}: ${s.w} x ${s.h} is too tall for a screen`);
+    // No less floor than the warehouse, the walls taking their share, and not much more. (The
+    // Outlet comes out 18% bigger: five corridors need that height.)
+    const ratio = floorOf(s) / floorOf(open);
+    assert.ok(ratio >= 1 && ratio <= (size === 's' ? 1.2 : 1.15), `${size}: ${floorOf(s)} floor tiles, ${floorOf(open)} on the Open Warehouse`);
+  }
+});
+
+test('in the Back Passage a Loading Bay loses no tile to an entrance (but one on the Outlet, with no row to spare)', () => {
+  for (const size of SIZES) {
+    const s = createGame({ map: { design: 'corridors', size } });
+    const tall = size === 'xs' ? 1 : 2; // (the Corner Shop's patches are one row tall)
+    for (let x0 = 9; x0 + 3 <= s.w - 4; x0 += 10) {
+      let n = 0;
+      for (let i = 0; i < s.zones.length; i++) if (s.zones[i] === 'u' && Math.abs((i % s.w) - x0 - 1.5) <= 2) n++;
+      assert.ok(n >= 4 * tall - (size === 's' ? 1 : 0), `${size} x${x0}: ${n} tiles of Loading Bay`);
+    }
+  }
+});
+
+test('the other designs come out tile for tile as before the Back Passage got its own plot', async () => {
+  const { createHash } = await import('node:crypto');
+  const hash = createHash('sha256');
+  for (const design of Object.keys(MAP_DESIGNS)) {
+    if (design === 'corridors') continue;
+    for (const size of SIZES) {
+      for (let slots = 1; slots <= 7; slots++) {
+        const m = makeMap(design, size, slots);
+        hash.update(JSON.stringify(m));
+        hash.update(makeZones(m.w, m.h, m.tiles, m.doors, design));
       }
     }
   }
+  // (Taken from 0.3.01 before the change. A new design added after the Back Passage in
+  // MAP_DESIGNS changes this: take the new hash then, after checking the old designs by hand.)
+  assert.equal(hash.digest('hex'), '0d392ebad82c9f66f87a190da4bfa4e96378d845056500770f9c487cf27a2c1f');
 });
 
 test('DEB has lines of her own for the doors opening on each new design, about a third of the time, and nowhere else', () => {

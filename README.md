@@ -38,7 +38,7 @@ The sale has spilled outside. Rows of parked cars with the odd empty bay to sque
 ![Car Park](docs/img/map-carpark.png)
 
 ### The Back Passage
-Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd.
+Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd. The plot is taller than most, to fit more corridors in.
 
 ![The Back Passage](docs/img/map-corridors.png)
 
@@ -47,16 +47,16 @@ A U of dying shops round a car park nobody owns. In on one arm, round the bend, 
 
 ![The Strip Mall](docs/img/map-horseshoe.png)
 
-| Size | Tiles | The Strip Mall | Suits |
-|---|---|---|---|
-| Corner Shop | 30 x 16 | 33 x 18 | the original; cramped |
-| Outlet | 36 x 20 | 40 x 22 | 1 player |
-| Superstore | 44 x 24 | 48 x 26 | 2 players |
-| Megastore | 54 x 30 | 60 x 33 | 3 players |
-| Hypermarket | 66 x 37 | 73 x 41 | 4 players |
-| Distribution Centre | 81 x 45 | 89 x 50 | 5 players |
-| Regional Hub | 99 x 55 | 109 x 61 | 6 players |
-| Mega Mall | 121 x 67 | 134 x 74 | 7 players |
+| Size | Most designs | The Back Passage | The Strip Mall | Suits |
+|---|---|---|---|---|
+| Corner Shop | 30 x 16 | 30 x 19 | 33 x 18 | the original; cramped |
+| Outlet | 36 x 20 | 36 x 26 | 40 x 22 | 1 player |
+| Superstore | 44 x 24 | 44 x 28 | 48 x 26 | 2 players |
+| Megastore | 54 x 30 | 54 x 35 | 60 x 33 | 3 players |
+| Hypermarket | 66 x 37 | 66 x 43 | 73 x 41 | 4 players |
+| Distribution Centre | 81 x 45 | 81 x 53 | 89 x 50 | 5 players |
+| Regional Hub | 99 x 55 | 99 x 65 | 109 x 61 | 6 players |
+| Mega Mall | 121 x 67 | 121 x 78 | 134 x 74 | 7 players |
 <!-- /gen:maps -->
 
 ## The shoppers
