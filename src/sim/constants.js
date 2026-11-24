@@ -498,7 +498,23 @@ export const TUNE = {
   // ran at 2 tiles a second; at 5.25 an item passes a shopper in 2.6 times less time, so the chance
   // went up by as much (0.92) and a passing item is as likely to be stolen as before.
   grabChance: 0.92,
-  browseCooldown: 7, // seconds before the same shopper can be distracted again
+  browseCooldown: 7, // seconds before the same shopper can be distracted again (after a free sample)
+  // Shoplifting (0.3.01: the owner found it far too rare). After grabbing something, or giving up
+  // on going for it, a shopper cannot be distracted again for grabCooldown seconds (it was
+  // browseCooldown, 7; free samples keep that). And a browsing shopper who is not beside any goods
+  // looks round every liftLook seconds for a floor tile beside a belt carrying something
+  // stealable, liftMin to liftMax tiles of walking away; with chance liftChance he goes out of his
+  // way to it, takes the first thing that comes along, and goes back to his route. He gives up
+  // after liftSecs (getting there and waiting both count). Never in a training game.
+  grabCooldown: 5,
+  liftLook: 0.5,
+  liftMin: 2,
+  liftMax: 5,
+  // (Each look is a fresh chance, so it adds up while he walks past a line. 0.06 made about 2.9
+  // times as many goods go missing as before on the ready-made demo layout, which is what the owner
+  // asked for; see PLAN.md, version 0.3.01.)
+  liftChance: 0.06,
+  liftSecs: 5,
   nagRange: 2.5, // towers this close to a Karen...
   nagRate: 0.5, // ...fire at this share of their speed
   leaveSecs: 0.8, // how long the storming-out animation lasts

@@ -97,7 +97,7 @@ function play(bot, seed, map, endless = false, difficulty = null) {
   const total = list.length + machines.length;
   let fund = 0, lastCash = me.cash;
   let next = 0; // how far down the list it has got
-  let bought = 0, upgrades = 0, rebuilt = 0, wrecked = 0;
+  let bought = 0, upgrades = 0, rebuilt = 0, wrecked = 0, stolen = 0;
   const rows = [];
   let byKind = {};
   // An hour and a half of game time; an endless game gets six hours.
@@ -189,8 +189,9 @@ function play(bot, seed, map, endless = false, difficulty = null) {
       if (e.e === 'escape') { const k = (e.sup ? 'SUPER ' : '') + e.k; byKind[k] = (byKind[k] || 0) + 1; }
       if (e.e === 'smash') wrecked++;
       if (e.e === 'waveEnd' || e.e === 'lost') {
+        stolen += s.ws.stolen;
         rows.push({
-          wave: s.wave, escaped: s.ws.escaped, stopped: s.ws.stopped, wrecked: s.ws.wrecked,
+          wave: s.wave, escaped: s.ws.escaped, stopped: s.ws.stopped, wrecked: s.ws.wrecked, stolen: s.ws.stolen,
           earned: s.ws.earned, cash: Math.round(me.cash), refunds: s.refunds, built: bought, up: upgrades,
           who: Object.entries(byKind).map(([k, n]) => k + ' ' + n).join(', '),
         });
@@ -199,7 +200,7 @@ function play(bot, seed, map, endless = false, difficulty = null) {
   }
   return {
     bot, result: s.phase, wave: s.wave, refunds: s.refunds, limit: s.refundLimit, cash: Math.round(me.cash),
-    bought, of: total, upgrades, rebuilt, wrecked, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
+    bought, of: total, upgrades, rebuilt, wrecked, stolen, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
   };
 }
 
@@ -221,12 +222,12 @@ for (const size of sizes) {
     const result = r.result === 'lost' ? 'LOST' : endless ? 'ALIVE' : r.result.toUpperCase();
     console.log(`== ${bot.padEnd(7)} ${result.padEnd(5)} wave ${String(r.wave).padStart(2)}, `
       + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
-      + `${r.upgrades} upgrades, ${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.minutes} min`);
+      + `${r.upgrades} upgrades, ${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.stolen} stolen, ${r.minutes} min`);
     if (!verbose) continue;
-    console.log('wave  escaped  stopped  wrecked  earned    cash  refunds   built  upgr  who got through');
+    console.log('wave  escaped  stopped  wrecked  stolen  earned    cash  refunds   built  upgr  who got through');
     for (const w of r.rows) {
-      console.log([w.wave, w.escaped, w.stopped, w.wrecked, w.earned, w.cash, w.refunds, w.built, w.up]
-        .map((v, i) => String(v).padStart([4, 8, 8, 8, 7, 7, 8, 7, 5][i])).join(' ') + '  ' + w.who);
+      console.log([w.wave, w.escaped, w.stopped, w.wrecked, w.stolen, w.earned, w.cash, w.refunds, w.built, w.up]
+        .map((v, i) => String(v).padStart([4, 8, 8, 8, 7, 7, 7, 8, 7, 5][i])).join(' ') + '  ' + w.who);
     }
   }
 }

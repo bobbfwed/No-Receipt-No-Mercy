@@ -792,6 +792,125 @@ function walkToStand(state, s, def, i, ev) {
   return true;
 }
 
+const clearLift = (s) => { delete s.lf; delete s.lw; };
+
+/** True if building b is a belt carrying something a shopper may steal (anything but a Mystery Box). */
+const stealable = (b) => b && b.k === 'belt' && b.it.some((item) => item[0] !== 'box');
+
+/** True if a belt next to tile t carries something worth stealing. */
+function goodsBeside(state, t) {
+  for (let d = 0; d < 4; d++) {
+    const ni = neighbour(state, t, d);
+    if (ni >= 0 && stealable(state.grid[ni])) return true;
+  }
+  return false;
+}
+
+/** True if there is a belt next to tile t at all (goods keep coming along a working line). */
+function beltBeside(state, t) {
+  for (let d = 0; d < 4; d++) {
+    const ni = neighbour(state, t, d);
+    const b = ni < 0 ? 0 : state.grid[ni];
+    if (b && b.k === 'belt') return true;
+  }
+  return false;
+}
+
+/**
+ * A browsing shopper on tile i takes something off a belt beside him: on a roll of
+ * TUNE.grabChance a second as he passes, or for certain (`sure`) once he has gone out of his way
+ * to get there. Never a Mystery Box. He stands there for TUNE.grabSecs, and cannot be distracted
+ * again for TUNE.grabCooldown.
+ * @returns {boolean} true if he took something
+ */
+function grabBeside(state, s, i, sure, ev) {
+  for (let d = 0; d < 4; d++) {
+    const ni = neighbour(state, i, d);
+    const b = ni < 0 ? 0 : state.grid[ni];
+    if (!b || b.k !== 'belt') continue;
+    const j = b.it.findIndex((item) => item[0] !== 'box');
+    if (j < 0 || (!sure && rand(state) >= TUNE.grabChance * DT)) continue;
+    const kind = b.it.splice(j, 1)[0][0];
+    state.ws.stolen++;
+    s.st = ST.BROWSE;
+    s.t = secs(TUNE.grabSecs);
+    s.cd = secs(TUNE.grabCooldown);
+    const e = { e: 'grab', x: s.x, y: s.y, kind };
+    if (sure) e.far = 1;
+    ev.push(e);
+    return true;
+  }
+  return false;
+}
+
+/** Scratch lists for liftLook's search (it runs for one shopper at a time). */
+let FRONT = [], NEXT = [];
+
+/**
+ * A browsing shopper on tile i, not beside any goods, looks round for some (the owner's request,
+ * 0.3.01): a floor tile next to a belt carrying something stealable, between TUNE.liftMin and
+ * TUNE.liftMax tiles of walking away (counted over tiles he can walk on, so a belt between him and
+ * it means the long way round). The nearest is the one he considers; with chance TUNE.liftChance
+ * he goes for it (`lf` is that tile, `lw` the ticks he will give it).
+ */
+function liftLook(state, s, i) {
+  if (goodsBeside(state, i)) return; // right beside some already: he grabs as he passes, or not
+  const seen = new Set([i]);
+  FRONT.length = 0;
+  FRONT.push(i);
+  for (let d = 1; d <= TUNE.liftMax && FRONT.length; d++) {
+    NEXT.length = 0;
+    for (const t of FRONT) {
+      for (let k = 0; k < 4; k++) {
+        const n = neighbour(state, t, (k + s.id) & 3);
+        // (Never by way of a till: stepping on one is taking his refund.)
+        if (n < 0 || seen.has(n) || state.tiles[n] === 'T' || !walkable(state, n, NORMAL)) continue;
+        seen.add(n);
+        NEXT.push(n);
+      }
+    }
+    if (d >= TUNE.liftMin) {
+      for (const n of NEXT) {
+        if (!goodsBeside(state, n)) continue;
+        if (rand(state) < TUNE.liftChance) {
+          s.lf = n;
+          s.lw = secs(TUNE.liftSecs);
+        }
+        return;
+      }
+    }
+    [FRONT, NEXT] = [NEXT, FRONT];
+  }
+}
+
+/**
+ * One tick of a shopper going out of his way to steal (see liftLook). He walks to the tile `lf` by
+ * the shortest way there; once on it he takes the first stealable thing that comes along a belt
+ * beside him. He gives up, and is not tempted again for TUNE.grabCooldown, if it takes more than
+ * TUNE.liftSecs, if the tile is built on or walled off, or if there is no belt beside it any more.
+ * Then the ordinary path takes him on from wherever he is, as it does anyone. He is an ordinary
+ * shopper all the while: security hits him, wet floors slow him.
+ * @returns {boolean} true if this tick was spent on it
+ */
+function liftWalk(state, s, i, speed, ev) {
+  const t = s.lf, W = state.w;
+  const field = walkable(state, t, NORMAL) && state.tiles[t] !== 'T' ? getFieldTo(state, t) : null;
+  if (!field || field[i] === UNREACHABLE || !beltBeside(state, t) || --s.lw <= 0) {
+    clearLift(s);
+    s.cd = secs(TUNE.grabCooldown);
+    return false;
+  }
+  if (i === t && grabBeside(state, s, i, true, ev)) { clearLift(s); return true; }
+  // On his way; or there, and waiting for something worth taking to come along.
+  const going = i === t ? moveTo(s.x, s.y, (t % W) + 0.5 + s.ox, ((t / W) | 0) + 0.5 + s.oy, speed)
+    : moveAlong(state, field, s.x, s.y, s.ox, s.oy, speed, s.id);
+  if (going) {
+    s.vx = MV.vx; s.vy = MV.vy;
+    s.x += MV.vx; s.y += MV.vy;
+  }
+  return true;
+}
+
 /**
  * The chance a salesman stops a shopper: `stop0` is the shopper's base chance, `stopLeft` what
  * the salesman's upgrades leave of the chance to resist, `seen` how many times this same salesman
@@ -1063,6 +1182,8 @@ function stepShoppers(state, fields, sec, ev) {
       if (chasing || s.cr === 1) clearStand(s); // her child has run off: the television can wait
       else if (walkToStand(state, s, def, i, ev)) continue;
     }
+    // Her child has run off (or she is crawling to him): the goods she was after can wait too.
+    if (s.lf !== undefined && (chasing || s.cr === 1)) clearLift(s);
 
     // Each at his own pace (babies at theirs), so everything worked out from it below (a mom's
     // chase, a rush past a salesman, a bolting guide dog) keeps the same spread.
@@ -1201,6 +1322,7 @@ function stepShoppers(state, fields, sec, ev) {
           s.sa = m[4];
           s.sw = secs(st.secs);
           s.sl = secs(TUNE.pitchWalkSecs);
+          clearLift(s); // the television beats the goods he was off to steal
           ev.push({ e: 'pitch', x: s.x, y: s.y, k: s.k, r: 'stop', i: m[4] });
           continue;
         }
@@ -1224,21 +1346,17 @@ function stepShoppers(state, fields, sec, ev) {
           break;
         }
       }
-      for (let d = 0; d < 4 && !stopped; d++) {
-        const ni = neighbour(state, i, d);
-        const b = ni < 0 ? 0 : grid[ni];
-        if (!b || b.k !== 'belt') continue;
-        const j = b.it.findIndex((item) => item[0] !== 'box');
-        if (j < 0 || rand(state) >= TUNE.grabChance * DT) continue;
-        const kind = b.it.splice(j, 1)[0][0];
-        state.ws.stolen++;
-        s.st = ST.BROWSE;
-        s.t = secs(TUNE.grabSecs);
-        s.cd = secs(TUNE.browseCooldown);
-        ev.push({ e: 'grab', x: s.x, y: s.y, kind });
-        stopped = true;
+      // (On his way to goods he has his eye on, he does not stop for others on the way.)
+      if (!stopped && s.lf === undefined) stopped = grabBeside(state, s, i, false, ev);
+      if (stopped) { clearLift(s); continue; }
+      // Out of his way to steal: already on his way to the goods, or (now and then, never in a
+      // training game) looking round for some within a few tiles' walk.
+      if (s.lf !== undefined) {
+        if (liftWalk(state, s, i, speed, ev)) continue;
+      } else if (!state.training && s.cr !== 1 && (state.tick + s.id) % secs(TUNE.liftLook) === 0) {
+        liftLook(state, s, i);
+        if (s.lf !== undefined && liftWalk(state, s, i, speed, ev)) continue;
       }
-      if (stopped) continue;
     }
 
     // Walk toward whichever neighbouring tile is closest to the tills, on this shopper's own
@@ -1277,7 +1395,8 @@ function stepShoppers(state, fields, sec, ev) {
  *   bossIn {tier,x,y} the boss walked in · bossOut {tier,x,y,bounty} he stormed off (after his
  *     'left' event) and the store was paid `bounty`, before it is split
  *   pep {x,y,n} the boss gave a pep talk; n shoppers near him got patience back (may be 0)
- *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind}
+ *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind,far?}
+ *     (far 1: he went out of his way for it, see liftLook)
  *   rail {i,d,len,n} the Barcode Laser on anchor tile i fired facing d, a beam len tiles long, hitting n
  *   mess {i} a teenager dropped a mess on tile i · kid {x,y} a child escaped
  *   caught {x,y,carry} a mom has her child back (carry 1: in her arms, as she has no cart)

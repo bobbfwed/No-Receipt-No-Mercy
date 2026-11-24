@@ -110,6 +110,10 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [sw]  ...how many ticks he will watch for when he gets there
  * @property {number} [sl]  ...and how many ticks he has left to get there
  * @property {number} [ru]  ticks left hurrying away from a salesman (moves faster)
+ * @property {number} [lf]  browsing shoppers: the floor tile beside a belt he has left his route to
+ *                          steal from (see liftLook in step.js); absent when he is not doing it
+ * @property {number} [lw]  ...and the ticks he will still give it, getting there and waiting
+ *                          (absent with lf)
  * @property {number} [gz]  dads and teenagers: ticks before an exhibitionist can catch his eye again
  * @property {number} [fl]  exhibitionist: ticks left with her bathrobe open (for drawing)
  *                          (her `m` is the ticks until she next opens it)

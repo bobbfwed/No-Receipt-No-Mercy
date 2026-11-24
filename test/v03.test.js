@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, walkPace, babyPace, defOf, edgeMul,
+  createGame, addPlayer, applyCommand, canPlace, step, queueTrainingWave, walkPace, babyPace, defOf, edgeMul,
   SHOPPERS, SUPERS, BUILD, BOSS, BABY, TUNE, TICK_HZ, DT, ST,
 } from '../src/sim/index.js';
 import { edgeFacts, edgeText, shopperTraits } from '../src/content/facts.js';
@@ -256,4 +256,156 @@ test('the handbook, the help and the README say what each kind is weak to and to
   for (const [k, o] of Object.entries(EDGE_HELP)) for (const side of Object.keys(o)) assert.ok(SHOPPERS[k][side], `${k} ${side}`);
   const readme = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   for (const k of Object.keys(SHOPPERS)) if (edgeText(k)) assert.ok(readme.includes(edgeText(k)), `README has ${k}`);
+});
+
+// ---------------------------------------------------------------- out of his way to shoplift
+
+/**
+ * An ordinary game on the small map with the doors open and nobody else coming. A single belt on
+ * (10, 3), facing north into the wall, holds a gadget that goes nowhere. The route to the tills
+ * runs east along rows 7 and 8.
+ */
+function shop(t, { item = 'gadget', training = false, liftChance = 1 } = {}) {
+  tune(t, { liftChance });
+  const s = training ? stage(6) : game(6);
+  assert.ok(place(s, 'belt', 10, 3, 3).ok);
+  if (item) s.grid[3 * s.w + 10].it.push([item, 1]);
+  if (training) queueTrainingWave(s, [{ k: 'hunter', n: 1, gap: 1, at: 1000 }]);
+  assert.ok(applyCommand(s, 0, { c: 'start' }).ok);
+  s.spawnQ = [];
+  s.shoppers.length = 0;
+  return s;
+}
+/** A shopper of kind k walking from (x, y), with patience to spare. */
+function walker(s, k, x, y) {
+  const sh = { id: s.nextId++, k, x, y, vx: 0, vy: 0, hp: 1e5, mhp: 1e5, st: ST.WALK, t: 0, cd: 0, ox: 0, oy: 0, lt: -1 };
+  s.shoppers.push(sh);
+  return sh;
+}
+/** Steps until `until` is true (or the time runs out); returns every event. */
+function run(s, seconds, until = () => false) {
+  const all = [];
+  for (let i = 0; i < seconds * TICK_HZ; i++) {
+    all.push(...step(s));
+    if (until()) break;
+  }
+  return all;
+}
+/** Temporarily changes tuning numbers for one test. */
+function tune(t, changes, obj = TUNE) {
+  const old = {};
+  for (const k of Object.keys(changes)) { old[k] = obj[k]; obj[k] = changes[k]; }
+  t.after(() => Object.assign(obj, old));
+}
+const beltAt = (s) => s.grid[3 * s.w + 10];
+
+test('a bargain hunter walks a few tiles out of his way to steal off a belt, then carries on to the tills', (t) => {
+  const s = shop(t);
+  const h = walker(s, 'hunter', 10.5, 7.5);
+  let target = -1;
+  const ev = run(s, 30, () => { if (h.lf !== undefined) target = h.lf; return !s.shoppers.includes(h); });
+  // He picked the floor beside the belt, three tiles' walk up from where he stood.
+  assert.equal(target, 4 * s.w + 10);
+  const grab = ev.find((e) => e.e === 'grab');
+  assert.ok(grab && grab.far === 1 && grab.kind === 'gadget', 'he went and took it');
+  assert.equal(beltAt(s).it.length, 0);
+  assert.equal(s.ws.stolen, 1);
+  // And then he went on and took his refund like anyone else.
+  assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'hunter'));
+  assert.equal(h.lf, undefined);
+  assert.equal(h.lw, undefined);
+  assert.ok(TUNE.liftMin === 2 && TUNE.liftMax === 5);
+});
+
+test('goods further than five tiles\' walk away, Mystery Boxes and a training game tempt nobody', (t) => {
+  // Six tiles' walk (row 10 up to row 4), and further with every step he takes towards the tills.
+  let s = shop(t);
+  let h = walker(s, 'hunter', 10.5, 10.5);
+  let ev = run(s, 30, () => { assert.equal(h.lf, undefined); return !s.shoppers.includes(h); });
+  assert.ok(!ev.some((e) => e.e === 'grab'));
+  // A belt of Mystery Boxes.
+  s = shop(t, { item: 'box' });
+  h = walker(s, 'hunter', 10.5, 7.5);
+  ev = run(s, 30, () => { assert.equal(h.lf, undefined); return !s.shoppers.includes(h); });
+  assert.ok(!ev.some((e) => e.e === 'grab'));
+  // A training game.
+  s = shop(t, { training: true });
+  h = walker(s, 'hunter', 10.5, 7.5);
+  ev = run(s, 30, () => { assert.equal(h.lf, undefined); return !s.shoppers.includes(h); });
+  assert.ok(!ev.some((e) => e.e === 'grab'));
+});
+
+test('dads, the boss and babies never go after goods (they do not browse)', (t) => {
+  const s = shop(t);
+  const dad = walker(s, 'dad', 10.5, 7.5), baby = walker(s, 'baby', 10.5, 8.5);
+  const boss = walker(s, 'boss', 9.5, 7.5);
+  boss.tr = 1; boss.pp = 1e6;
+  const ev = run(s, 30, () => {
+    for (const m of [dad, baby, boss]) assert.equal(m.lf, undefined);
+    return !s.shoppers.length;
+  });
+  assert.ok(!ev.some((e) => e.e === 'grab'));
+  assert.equal(beltAt(s).it.length, 1);
+});
+
+test('if the belt he is going for is taken away, he gives up and carries on; he never gets stuck', (t) => {
+  const s = shop(t);
+  const h = walker(s, 'hunter', 10.5, 7.5);
+  run(s, 5, () => h.lf !== undefined);
+  assert.notEqual(h.lf, undefined, 'he set off');
+  assert.ok(applyCommand(s, 0, { c: 'remove', x: 10, y: 3 }).ok);
+  step(s);
+  assert.equal(h.lf, undefined, 'gave up');
+  const ev = run(s, 30, () => !s.shoppers.includes(h));
+  assert.ok(ev.some((e) => e.e === 'escape'), 'and reached the tills');
+  assert.equal(s.ws.stolen, 0);
+});
+
+test('if his way to the goods is walled off, he gives up and carries on; nobody can wall him in', (t) => {
+  const s = shop(t);
+  const h = walker(s, 'hunter', 10.5, 7.5);
+  run(s, 5, () => h.lf !== undefined);
+  assert.equal(h.lf, 4 * s.w + 10);
+  // Box in the tile beside the belt (it stays empty floor, but he cannot reach it).
+  for (const [x, y] of [[9, 4], [11, 4], [10, 5]]) assert.ok(place(s, 'crate', x, y).ok, `${x},${y}`);
+  step(s);
+  assert.equal(h.lf, undefined, 'gave up');
+  const ev = run(s, 30, () => !s.shoppers.includes(h));
+  assert.ok(ev.some((e) => e.e === 'escape'), 'and reached the tills');
+  // While one is on his way, the rule that nobody may be walled in still holds.
+  const s2 = shop(t);
+  const g = walker(s2, 'hunter', 10.5, 7.5);
+  beltAt(s2).it.length = 0; // nothing to take yet: he will wait beside the belt
+  beltAt(s2).it.push(['giftset', 1]);
+  run(s2, 5, () => g.lf !== undefined);
+  beltAt(s2).it.length = 0;
+  run(s2, 3, () => (g.y | 0) === 4);
+  assert.equal((g.y | 0) * s2.w + (g.x | 0), 4 * s2.w + 10, 'waiting beside the belt');
+  assert.ok(place(s2, 'crate', 9, 4).ok);
+  assert.ok(place(s2, 'crate', 11, 4).ok);
+  assert.equal(canPlace(s2, 'crate', 10, 5, 0), 'blocked');
+  // Something comes along: he takes it and goes. Nothing comes: he gives up in TUNE.liftSecs.
+  const ev2 = run(s2, TUNE.liftSecs + 1, () => g.lf === undefined);
+  assert.equal(g.lf, undefined);
+  assert.ok(!ev2.some((e) => e.e === 'grab'));
+  assert.ok(g.cd > 0, 'and is not tempted again straight away');
+});
+
+test('a shopper on his way to steal is an ordinary target, and a copy of the game made mid-detour plays on identically', (t) => {
+  const s = shop(t);
+  assert.ok(place(s, 'sprinkler', 9, 5).ok);
+  const h = walker(s, 'hunter', 10.5, 7.5);
+  run(s, 5, () => h.lf !== undefined);
+  const before = h.hp;
+  run(s, 1);
+  assert.ok(h.hp < before, 'the sprinkler sprays him on the way');
+  const copy = JSON.parse(JSON.stringify(s));
+  for (let i = 0; i < 4 * TICK_HZ; i++) { step(s); step(copy); }
+  assert.deepEqual(JSON.parse(JSON.stringify(copy)), JSON.parse(JSON.stringify(s)));
+});
+
+test('shoplifting is more common than it was: after a grab a shopper is tempted again sooner, and free samples keep their wait', () => {
+  assert.ok(TUNE.grabCooldown < 7);
+  assert.equal(TUNE.browseCooldown, 7);
+  assert.ok(TUNE.liftChance > 0 && TUNE.liftChance <= 1);
 });

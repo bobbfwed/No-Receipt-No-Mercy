@@ -129,7 +129,7 @@ export function bossFacts({ hpMul = 1, pay = 1, waves = SETTINGS.defaults.waves 
  */
 export function paceText() {
   const p = Math.round(TUNE.paceSpread * 100);
-  return `Speed is the kind's: each shopper walks anywhere from ${p}% slower to ${p}% faster than that, so a crowd strings out instead of arriving in one lump (the boss and the babies keep their own).`;
+  return `The speed shown is the kind's: each shopper walks anywhere from ${p}% slower to ${p}% faster than that, so a crowd strings out instead of arriving in one lump (the boss and the babies keep their own).`;
 }
 
 /**
@@ -170,7 +170,7 @@ export function shopperTraits(k, sup = 0) {
   const d = sup ? SUPERS[k] : SHOPPERS[k];
   const v = (key) => d[key] ?? TUNE[key];
   const out = [];
-  if (d.browses) out.push(['Free samples and goods on belts', 'stops for them']);
+  if (d.browses) out.push(['Free samples and goods on belts', `stops for them; now and then walks ${TUNE.liftMin} to ${TUNE.liftMax} tiles out of the way to steal off a belt (never a Mystery Box), then gets back in line`]);
   else out.push(['Free samples and goods on belts', 'ignores them']);
   if (d.steady) out.push(['Wet floors and messes', 'not affected']);
   else if (d.ignoresSigns) out.push(['Wet floors and messes', `not slowed; ${pct(TUNE.slipChance)} chance to slip (stunned ${fmt(TUNE.slipSecs)} s)`]);

@@ -78,7 +78,7 @@ export const HOW = {
  * Shown in the in-game help, in the order they first appear.
  */
 export const SHOPPER_HELP = {
-  hunter: { trick: 'The ordinary shopper. Stops for free samples and grabs goods off belts.', beat: 'Anything. Slow them at a gap and spray them.' },
+  hunter: { trick: 'The ordinary shopper. Stops for free samples and grabs goods off belts, and will wander a few tiles out of his way to do it: anything on a belt is fair game except a Mystery Box.', beat: 'Anything. Slow them at a gap and spray them. Keep your Gadgets and Gift Sets away from the route, or put a sprinkler where they come to help themselves.' },
   dad: { trick: 'Arrives in a single-file line, walks fast, ignores samples, and steps over conveyor belts.', beat: 'Time: his patience drains by itself. Crates and machines block him. He slips on wet floor signs. Cover his short cut.' },
   clipper: { trick: 'Fast, weak, and there are a lot of them.', beat: 'Sprinklers. Anything that hits a crowd.' },
   mom: { trick: 'Her kid escapes the cart and runs ahead, straight through your belts, machines and crates, then waits further along the route. She sprints round the maze to reach him and ignores free samples on the way. If her patience runs out while he is loose, she does not leave: she crawls to him, nothing can hurt her, and security wastes its shots on her. When she reaches him she gets up with a third of her patience back, without her cart, and carries him from then on. He runs away once only, he never runs all the way to the tills, and she will not take her refund without him.', beat: 'Finish her while the kid is in the cart. Forklifts and wet floor signs. Samples only work while the kid is in the cart. A TV Salesman stops most runaway kids.' },

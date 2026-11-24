@@ -115,6 +115,14 @@ export const LINES = {
     u("A shopper just grabbed a Mystery Box off the line. She has no idea what's in it. Neither do you. Nobody does. It's a Mystery Box."),
     u("Theft on the line. Call the police, {p}. They'll laugh. I'll listen in."),
     r('Somebody stole from the belt. When I was installed, I was promised a world-class workforce. I would like to file a grievance about that lie.'),
+    'A customer took a detour to rob you. She walked further for your stock than {p} has ever walked for a woman.',
+    'Somebody left the queue, crossed the floor and helped himself off the belt. More initiative than anyone on payroll, {p}.',
+    "That shopper went out of her way to steal from you. Nobody's gone out of their way for {p} since his mother's labour.",
+    'Detour, grab, back in line. The shoplifters run a tighter operation than this factory.',
+    "One of them saw the belt, licked his lips and wandered over. Same move {p} pulls at a buffet, and it's just as sad to watch.",
+    u('A shopper went five tiles out of his way for a free Gadget. Five tiles. {p} won\'t walk to the fridge for his own beer.'),
+    u("They're not even sneaking now. They stroll over to the line like it's a salad bar and you're the croutons, {p}."),
+    r('A woman abandoned her queue, her dignity and her children to lift one Gift Set off your belt. Honestly, {p}, respect. That is commitment. Write her up for employee of the month.'),
   ],
   // {p} anyone
   slip: [
