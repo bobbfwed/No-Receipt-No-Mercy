@@ -67,8 +67,11 @@ const tileOf = (s, sh) => (sh.y | 0) * s.w + (sh.x | 0);
 
 // ---- Every card can be dealt ---------------------------------------------------------------------
 
-test('every card in the deck can now be dealt', () => {
-  assert.deepEqual([...DEALABLE].sort(), Object.keys(CARDS).sort());
+// The playtest (0.3.01, tools/cardtest.mjs) took these out of the deal; their rules stay, for the owner to judge.
+const HELD_BACK = ['eightyproof', 'klepto'];
+
+test('every card in the deck can be dealt, but those the playtest held back', () => {
+  assert.deepEqual([...DEALABLE].sort(), Object.keys(CARDS).filter((c) => !HELD_BACK.includes(c)).sort());
 });
 
 // ---- offleash ------------------------------------------------------------------------------------

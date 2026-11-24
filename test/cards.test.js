@@ -812,7 +812,7 @@ test('every card has a name, a rule built from its numbers and a joke; a per-kin
     }
   }
   // Spot checks that the numbers read as they should.
-  assert.match(cardText('hardy:karen').rule, /Karens and Karen Supremes have 30% more patience/);
+  assert.match(cardText('hardy:karen').rule, /Karens and Karen Supremes have 25% more patience/);
   assert.match(cardText('slow:dad').rule, /Dads and Dads on a Mission walk 15% slower/);
   assert.match(cardText('litter').rule, /twice as many babies/);
   assert.match(cardText('pulledout').rule, /half as many babies/);
@@ -821,7 +821,7 @@ test('every card has a name, a rule built from its numbers and a joke; a per-kin
   assert.match(cardText('clearance').rule, /15% less/);
   assert.match(cardText('rentacop').rule, /Security buildings cost 20% less and factory buildings 20% more/);
   assert.match(cardText('firecode').rule, /5 shoppers at once instead of 4/);
-  assert.match(cardText('fathersday').rule, /^Twice as many Dads, each with 35% less patience/);
+  assert.match(cardText('fathersday').rule, /^Twice as many Dads, each with 28% less patience/);
   assert.match(cardText('preworkout').rule, /\(4; a Roid Rager 6\)/);
   assert.equal(cardText('nonsense'), null);
   assert.equal(cardName('bde'), 'Big Dick Energy');

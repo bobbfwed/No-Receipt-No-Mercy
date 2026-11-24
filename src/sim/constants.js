@@ -686,6 +686,10 @@ export const TUNE = {
  * The cards that change how shoppers behave (freerange, offleash, spayed, eyesup, wrongway,
  * slushie, eightyproof, warranty, supportdog, and the larger drawing of bde) came in a second
  * round of 0.3.01; their rules are in step.js, with helpers in cards.js.
+ * The numbers were tuned by a playtest with the scripted players (tools/cardtest.mjs, 0.3.01): one
+ * card alone should move how long they last by no more than about an event and a half, in the
+ * direction of its side (an odd card by under one), and a hand of five should leave them near
+ * where they end without cards. The numbers the playtest changed say what they were before it.
  */
 export const CARDS = {
   // ---- Bad for the players
@@ -696,11 +700,11 @@ export const CARDS = {
   preworkout: { side: 'bad', share: 0.4, hits: 2 }, // that share of gym bros land that many times the hits
   spayed: { side: 'bad', share: 0.3, pups: 5, supPups: 8 }, // that share of dogs are pregnant: puppies a Stray Dog, a Great Dane
   bde: { side: 'bad', hp: 1.2, size: 1.5 }, // bosses' patience, and how much larger they are drawn
-  hardy: { side: 'bad', per: 'kind', hp: 1.3 },
+  hardy: { side: 'bad', per: 'kind', hp: 1.25 }, // (1.3 before the playtest: on dads it cost too much)
   hurry: { side: 'bad', per: 'kind', speed: 1.2 },
   clearance: { side: 'bad', sell: 0.85 }, // everything shipped sells for that
   klepto: { side: 'bad', chance: 2, reach: 3 }, // shoplifters' chance to go for it, times; tiles further
-  shrinkflation: { side: 'bad', cost: 1.1 }, // every building's price (not upgrades)
+  shrinkflation: { side: 'bad', cost: 1.08 }, // every building's price (not upgrades; 1.1 before the playtest)
   pissing: { side: 'bad', pee: 1.5 }, // how long a dog's pee switches security off, times
   doorbuster: { side: 'bad', crowd: 1.1 }, // the ordinary crowd (not the boss, not a Midnight Release mob)
   sensibleshoes: { side: 'bad', slip: 0.7 }, // the chance to slip on a wet floor or a mess, times
@@ -729,12 +733,12 @@ export const CARDS = {
   happyhour: { side: 'good', fall: 2 },
   // ---- Neither
   convention: { side: 'odd', shield: 1.5, speed: 0.8, hp: 0.75 }, // a Cosplayer's shield reach (tiles), walking speed (tiles a second), patience
-  bulkbuy: { side: 'odd', crowd: 0.75, hp: 1.25 },
-  flashmob: { side: 'odd', crowd: 1.25, hp: 0.8 },
-  artisanal: { side: 'odd', sell: 1.3, work: 1.25 }, // everything sells for, and every machine's time for an item, times
+  bulkbuy: { side: 'odd', crowd: 0.75, hp: 1.15 }, // (hp 1.25 before the playtest: it was a bad card)
+  flashmob: { side: 'odd', crowd: 1.25, hp: 0.75 }, // (hp 0.8 before the playtest: it was a bad card)
+  artisanal: { side: 'odd', sell: 1.2, work: 1.25 }, // everything sells for, and every machine's time for an item, times (sell 1.3 before the playtest: it was a good card)
   premature: { side: 'odd', rate: 1.25, range: 0.85 }, // security's rate of fire and range, times
-  fathersday: { side: 'odd', who: 'dad', crowd: 2, hp: 0.65 }, // that kind's groups, times; and patience
-  payday: { side: 'odd', sell: 1.2, refund: 1.4 },
+  fathersday: { side: 'odd', who: 'dad', crowd: 2, hp: 0.72 }, // that kind's groups, times; and patience (0.65 before the playtest)
+  payday: { side: 'odd', sell: 1.2, refund: 1.6 }, // (refund 1.4 before the playtest: it was a good card)
   mallwalkers: { side: 'odd', speed: 1.15, hp: 0.85 }, // every shopper but the boss
   openbar: { side: 'odd', who: 'drinker', crowd: 2, hp: 0.7 },
   rentacop: { side: 'odd', cost: { security: 0.8, factory: 1.2 } },
@@ -742,19 +746,27 @@ export const CARDS = {
 };
 
 /**
- * The cards that can be dealt: those whose rules exist (all 48 since the second round of 0.3.01).
- * A card whose rule is still to be written stays off this list until it is. A forced hand
- * (createGame({ cards: [...] })) may hold any card in CARDS.
+ * The cards that can be dealt: those whose rules exist (all 48 since the second round of 0.3.01),
+ * less those the playtest took out (see CARDS). A card whose rule is still to be written stays off
+ * this list until it is. A forced hand (createGame({ cards: [...] })) may hold any card in CARDS.
+ * Taken out by the playtest (0.3.01), code kept, for the owner to decide:
+ *   eightyproof  it does not help the players at any numbers: the Day Drinker a Bargain Hunter
+ *                turns into has more patience than he had and shrugs off the Pepper Sprinkler,
+ *                which outweighs his falling over (the scripted players lasted no longer even
+ *                with every table pouring booze and twice the chance to turn).
+ *   klepto       a bad card that helps: a shoplifter's detour to a belt is more time in reach of
+ *                security, which outweighs the goods he takes (at 4 times as often and 5 tiles
+ *                further the scripted players lasted most of an event longer, not shorter).
  */
 export const DEALABLE = [
-  'litter', 'doubledip', 'preworkout', 'bde', 'hardy', 'hurry', 'clearance', 'klepto', 'shrinkflation',
+  'litter', 'doubledip', 'preworkout', 'bde', 'hardy', 'hurry', 'clearance', 'shrinkflation',
   'pissing', 'doorbuster', 'sensibleshoes', 'dryjanuary', 'retreat',
   'lootbox', 'asseenontv', 'regifting', 'offatruck', 'mallcop', 'pulledout', 'frail', 'slow',
   'staffdiscount', 'overtime', 'mopmike', 'restocking', 'firecode', 'happyhour',
   'convention', 'bulkbuy', 'flashmob', 'artisanal', 'premature', 'fathersday', 'payday', 'mallwalkers',
   'openbar', 'rentacop', 'sweatshop',
   // (The cards that change how shoppers behave, 0.3.01's second round.)
-  'freerange', 'offleash', 'spayed', 'eyesup', 'wrongway', 'slushie', 'eightyproof', 'warranty', 'supportdog',
+  'freerange', 'offleash', 'spayed', 'eyesup', 'wrongway', 'slushie', 'warranty', 'supportdog',
 ];
 
 /**

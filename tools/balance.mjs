@@ -22,7 +22,18 @@
 //             spends everything on upgrades (damage, speed and range of its towers), cheapest first
 //   focus     like keen, but pours its upgrade money into the sprinklers nearest the entrance,
 //             one at a time, as far as each will go, cheapest track first (how the owner plays)
-// None of them builds the Barcode Laser or the TV Salesman, or buys durability.
+//   stalls    like keen, but before its forklifts it also puts a TV Salesman, two Free Sample
+//             tables and four Wet Floor Signs in each channel of the maze (to measure the cards
+//             about those buildings; tools/cardtest.mjs stalls)
+// None of the others builds the Barcode Laser or the TV Salesman, and none buys durability. The
+// honest plan already has a Free Sample table at each gap but the first, and Wet Floor Signs.
+// Any bot may be given the steady opening by adding "+steady" to its name (keen+steady): it never
+// sits on cash that would buy its next Press while nothing else in its plan is affordable. Without
+// it a bot's first sales events are a knife edge: $25 more or less to start with moves keen's
+// average ending by several events, and a card that changes prices tips most seeds over it. With
+// it no seed collapses without cards, so it is the second opinion on the cards about money.
+// --bots=keen,focus+steady chooses the bots (default: nothing, honest, keen, focus).
+import { pathToFileURL } from 'node:url';
 import {
   createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, buildPrice, BUILD, TICK_HZ, MAP_SIZES, mapSize,
 } from '../src/sim/index.js';
@@ -89,14 +100,35 @@ function extras(s) {
   return out;
 }
 
-function play(bot, seed, map, endless = false, difficulty = null, cards = null) {
+/**
+ * The stalls bot's extra shopping, before the keen bot's forklifts: a TV Salesman in the middle of
+ * each channel between two production lines, a Free Sample table near each end of the channel and
+ * a few Wet Floor Signs in it, all where every shopper walks. It exists to measure the cards about
+ * those buildings (eightyproof, warranty, mopmike, sensibleshoes), which the other bots barely use.
+ * Anything that would wall off the route is refused by the game and skipped.
+ */
+function stalls(s) {
+  const out = [], mid = s.h >> 1;
+  for (let x0 = 9; x0 + 3 <= s.w - 4; x0 += 10) {
+    const x = x0 + 2;
+    if (x + 6 >= s.w - 1) break;
+    out.push(['salesman', x + 4, mid - 1, 0], ['samples', x + 4, 3, 0], ['samples', x + 4, s.h - 4, 0],
+      ['wetfloor', x + 5, 5, 0], ['wetfloor', x + 5, s.h - 6, 0], ['wetfloor', x + 3, mid + 2, 0], ['wetfloor', x + 6, mid - 3, 0]);
+  }
+  return out;
+}
+
+export function play(bot, seed, map, endless = false, difficulty = null, cards = null, keep = false) {
+  // "keen+steady": that bot with the steady opening (see the top of this file).
+  const steady = bot.endsWith('+steady');
+  if (steady) bot = bot.slice(0, -7);
   const settings = { ...(endless ? { waves: 0 } : null), ...(difficulty ? { difficulty } : null) };
   const s = createGame({ seed, map, settings: Object.keys(settings).length ? settings : null, cards });
   addPlayer(s, 'Bot');
   const me = s.players[0];
   const buyer = bot !== 'nothing';
   const made = buyer ? plan(s) : { list: [], machines: [] };
-  const list = made.list.concat(bot === 'keen' || bot === 'focus' ? extras(s) : []);
+  const list = made.list.concat(bot === 'stalls' ? stalls(s) : [], bot === 'keen' || bot === 'focus' || bot === 'stalls' ? extras(s) : []);
   const machines = made.machines;
   const total = list.length + machines.length;
   let fund = 0, lastCash = me.cash;
@@ -126,11 +158,14 @@ function play(bot, seed, map, endless = false, difficulty = null, cards = null) 
     fund = Math.min(fund, want, me.cash);
     for (let j = 0; j < machines.length; j++) {
       const [k, x, y, d, line] = machines[j];
-      if (line > next || fund < price(k)) break; // its line is not laid yet, or not enough saved
+      // The steady opening never sits on cash that would buy its next Press while nothing else in
+      // its plan is affordable: it buys the Press then, whatever it has saved.
+      const idle = steady && k === 'press' && me.cash >= price(k) && (next >= list.length || me.cash - fund < price(list[next][0]));
+      if (line > next || (fund < price(k) && !idle)) break; // its line is not laid yet, or not enough saved
       const there = s.grid[y * s.w + x];
       if (there && there.k === 'belt') applyCommand(s, 0, { c: 'remove', x, y });
       const cost = price(k);
-      if (applyCommand(s, 0, { c: 'place', k, x, y, d }).ok) { bought++; fund -= cost; }
+      if (applyCommand(s, 0, { c: 'place', k, x, y, d }).ok) { bought++; fund = Math.max(0, fund - cost); }
       machines.splice(j--, 1);
     }
     while (next < list.length) {
@@ -160,7 +195,7 @@ function play(bot, seed, map, endless = false, difficulty = null, cards = null) 
       }
       return;
     }
-    if (bot !== 'keen') return;
+    if (bot !== 'keen' && bot !== 'stalls') return;
     // Nothing left to build: upgrade, cheapest first. Sprinklers sit at the gaps everyone must
     // pass, so it will pay up to three times as much for one of those as for a forklift.
     for (;;) {
@@ -219,36 +254,43 @@ function play(bot, seed, map, endless = false, difficulty = null, cards = null) 
     hand: s.cards || [],
     bot, result: s.phase, wave: s.wave, refunds: s.refunds, limit: s.refundLimit, cash: Math.round(me.cash),
     bought, of: total, upgrades, rebuilt, wrecked, stolen, ripped, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
+    ...(keep ? { state: s } : null),
   };
 }
 
-const args = process.argv.slice(2);
-const verbose = args.includes('-v');
-const endless = args.includes('--endless');
-const difficulty = (args.find((a) => a.startsWith('--difficulty=')) || '').slice(13) || null;
-const [seedArg, sizeArg, designArg] = args.filter((a) => !a.startsWith('-'));
-const cardsArg = (args.find((a) => a.startsWith('--cards=')) || '').slice(8);
-const cards = !cardsArg ? null : cardsArg === 'deal' ? true : cardsArg.split(',').map((c) => c.trim()).filter(Boolean);
-const seed = Number(seedArg) || 11;
-const sizes = sizeArg === 'all' ? Object.keys(MAP_SIZES) : [sizeArg || 's'];
-const design = designArg || 'warehouse';
+// (tools/cardtest.mjs imports play() from here; only run as a script does this file play games itself.)
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) main();
 
-for (const size of sizes) {
-  const z = { ...MAP_SIZES[size], ...mapSize(design, size) };
-  console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player${endless ? ', ENDLESS' : ''}${difficulty ? ', ' + difficulty : ''}${cards ? `, cards: ${cardsArg}` : ''}`);
-  for (const bot of ['nothing', 'honest', 'keen', 'focus']) {
-    const r = play(bot, seed, { design, size }, endless, difficulty, cards);
-    // (An endless game is never won: it is lost, or still going when the time limit ran out.)
-    const result = r.result === 'lost' ? 'LOST' : endless ? 'ALIVE' : r.result.toUpperCase();
-    console.log(`== ${bot.padEnd(7)} ${result.padEnd(5)} wave ${String(r.wave).padStart(2)}, `
-      + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
-      + `${r.upgrades} upgrades, ${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.stolen} stolen (${r.ripped} boxes ripped), ${r.minutes} min`
-      + (cards ? `, cards ${r.hand.join(' ') || 'none'}` : ''));
-    if (!verbose) continue;
-    console.log('wave  escaped  stopped  wrecked  stolen  ripped  earned    cash  refunds   built  upgr  who got through');
-    for (const w of r.rows) {
-      console.log([w.wave, w.escaped, w.stopped, w.wrecked, w.stolen, w.ripped, w.earned, w.cash, w.refunds, w.built, w.up]
-        .map((v, i) => String(v).padStart([4, 8, 8, 8, 7, 7, 7, 7, 8, 7, 5][i])).join(' ') + '  ' + w.who);
+function main() {
+  const args = process.argv.slice(2);
+  const verbose = args.includes('-v');
+  const endless = args.includes('--endless');
+  const difficulty = (args.find((a) => a.startsWith('--difficulty=')) || '').slice(13) || null;
+  const [seedArg, sizeArg, designArg] = args.filter((a) => !a.startsWith('-'));
+  const cardsArg = (args.find((a) => a.startsWith('--cards=')) || '').slice(8);
+  const cards = !cardsArg ? null : cardsArg === 'deal' ? true : cardsArg.split(',').map((c) => c.trim()).filter(Boolean);
+  const seed = Number(seedArg) || 11;
+  const sizes = sizeArg === 'all' ? Object.keys(MAP_SIZES) : [sizeArg || 's'];
+  const design = designArg || 'warehouse';
+  const bots = ((args.find((a) => a.startsWith('--bots=')) || '').slice(7) || 'nothing,honest,keen,focus').split(',');
+
+  for (const size of sizes) {
+    const z = { ...MAP_SIZES[size], ...mapSize(design, size) };
+    console.log(`\n#### ${design}, ${z.name} (${z.w} x ${z.h}), seed ${seed}, one player${endless ? ', ENDLESS' : ''}${difficulty ? ', ' + difficulty : ''}${cards ? `, cards: ${cardsArg}` : ''}`);
+    for (const bot of bots) {
+      const r = play(bot, seed, { design, size }, endless, difficulty, cards);
+      // (An endless game is never won: it is lost, or still going when the time limit ran out.)
+      const result = r.result === 'lost' ? 'LOST' : endless ? 'ALIVE' : r.result.toUpperCase();
+      console.log(`== ${bot.padEnd(7)} ${result.padEnd(5)} wave ${String(r.wave).padStart(2)}, `
+        + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
+        + `${r.upgrades} upgrades, ${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.stolen} stolen (${r.ripped} boxes ripped), ${r.minutes} min`
+        + (cards ? `, cards ${r.hand.join(' ') || 'none'}` : ''));
+      if (!verbose) continue;
+      console.log('wave  escaped  stopped  wrecked  stolen  ripped  earned    cash  refunds   built  upgr  who got through');
+      for (const w of r.rows) {
+        console.log([w.wave, w.escaped, w.stopped, w.wrecked, w.stolen, w.ripped, w.earned, w.cash, w.refunds, w.built, w.up]
+          .map((v, i) => String(v).padStart([4, 8, 8, 8, 7, 7, 7, 7, 8, 7, 5][i])).join(' ') + '  ' + w.who);
+      }
     }
   }
 }
