@@ -2159,6 +2159,42 @@ html, body { overscroll-behavior: none; }
 .tc-dir:empty { display: none; }
 .game.in-lobby .touch-pad, .game.ended .touch-pad, .game.in-lobby .touch-sheet { display: none; }
 
+/* While a finger is down placing something (0.3.01): a big Rotate button and the hint that a
+   second finger cancels, halfway up the side of the floor away from the finger (touch.js picks the
+   side), where the other hand's thumb reaches. Over DEB and the held tool's card for that moment.
+   Only the button takes touches: a finger landing on the hint lands on the floor and cancels. */
+.place-aid {
+  position: absolute;
+  z-index: 12;
+  top: 46%;
+  transform: translateY(-50%);
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.place-aid[data-side="left"] { left: calc(0.5rem + env(safe-area-inset-left)); }
+.place-aid[data-side="right"] { right: calc(0.5rem + env(safe-area-inset-right)); flex-direction: row-reverse; }
+.place-aid .tc-turn {
+  pointer-events: auto;
+  touch-action: none;
+  min-width: 64px;
+  min-height: 64px;
+  border-color: var(--yellow);
+  background: rgba(31, 37, 44, 0.95);
+  box-shadow: 0 0.18rem 0 var(--line), 0 0 0 0.2rem rgba(0, 0, 0, 0.35);
+}
+.tc-turn .tc-icon { font-size: 1.7rem; color: var(--yellow); }
+.pa-hint {
+  margin: 0;
+  max-width: 9.5rem;
+  padding: 0.35rem 0.55rem;
+  border: 0.12rem solid rgba(255, 255, 255, 0.3);
+  border-radius: 0.5rem;
+  background: rgba(17, 24, 39, 0.9);
+  color: var(--white);
+  font: 800 0.86rem/1.25 var(--font);
+}
+
 /* The sheet for a building tapped with nothing held. */
 .touch-sheet {
   position: absolute;
@@ -2218,7 +2254,7 @@ html, body { overscroll-behavior: none; }
 .ts-remove { background: var(--red-2); }
 
 @media (pointer: coarse) {
-  .touch-pad, .bb-touch { display: flex; }
+  .touch-pad, .bb-touch, .place-aid { display: flex; }
   /* A finger swipes the build bar; a mouse in a narrow window keeps a thin scrollbar for it. */
   .buildbar .bb-scroll { scrollbar-width: none; }
   .buildbar .bb-scroll::-webkit-scrollbar { display: none; }

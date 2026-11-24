@@ -4,8 +4,11 @@
 //   - two buttons at the end of the build bar: rotate, put the tool down
 //   - the building sheet, which opens when a building is tapped or clicked with nothing held (or
 //     with the Upgrade tool): one button for each kind of upgrade it has, rotate, remove
-// The pad and the bar buttons are only shown on a touch screen (CSS: `(pointer: coarse)`); the
-// sheet is for everyone.
+//   - while a finger is down placing something: a big Rotate button (for a building that turns)
+//     and the hint that a second finger cancels, halfway up the side of the floor away from the
+//     finger, where the other hand's thumb reaches and the placing finger is not
+// The pad, the bar buttons and the placing aid are only shown on a touch screen (CSS:
+// `(pointer: coarse)`); the sheet is for everyone.
 import { BUILD, TUNE, levelOf, spentOn, statsOf } from '../sim/index.js';
 import { tracksInfo } from './upgradetext.js';
 import { h, setText, setClass, money } from './dom.js';
@@ -49,7 +52,29 @@ export function longPress(el, start, end = () => {}) {
   el.addEventListener('contextmenu', (e) => { if (lastTouch) e.preventDefault(); });
 }
 
+/**
+ * A button that acts the moment a finger lands on it. A tap made by a second finger while the
+ * first is down on the floor may never become a click (the browser can take two fingers for a
+ * gesture of its own), and the Rotate button is pressed exactly then. The click that follows a
+ * finger press is swallowed; a mouse or the keyboard still clicks it as usual.
+ */
+function pressNow(el, fn) {
+  let pressed = 0;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || el.disabled) return;
+    e.preventDefault();
+    pressed = performance.now();
+    fn();
+  });
+  el.addEventListener('click', () => {
+    if (pressed && performance.now() - pressed < 1500) { pressed = 0; return; }
+    fn();
+  });
+}
+
 const ARROWS = ['→', '↓', '←', '↑'];
+/** The words beside the Rotate button while a finger is placing something. */
+export const CANCEL_HINT = 'Tap the floor with another finger to cancel';
 
 /**
  * @param {Object} o
@@ -57,7 +82,7 @@ const ARROWS = ['→', '↓', '←', '↑'];
  * @param {Object} o.session
  * @param {Object} o.renderer
  * @param {(name: string) => void} [o.playSound]
- * @returns {{ pad: HTMLElement, bar: HTMLElement, sheet: HTMLElement, update(s): void, readonly sheetOpen: boolean }}
+ * @returns {{ pad: HTMLElement, bar: HTMLElement, sheet: HTMLElement, aid: HTMLElement, update(s): void, readonly sheetOpen: boolean }}
  */
 export function createTouchControls({ input, session, renderer, playSound = () => {} }) {
   const btn = (cls, label, icon, text, onclick) => h('button', {
@@ -71,10 +96,38 @@ export function createTouchControls({ input, session, renderer, playSound = () =
 
   // ---- In the build bar: rotate and put down ----
   const rotArrow = h('span', { class: 'tc-dir' });
-  const rotate = btn('tc-rotate', 'Rotate', '⟳', null, () => { input.rotate(); });
+  const rotate = btn('tc-rotate', 'Rotate', '⟳', null, null);
+  pressNow(rotate, () => input.rotate());
   rotate.append(rotArrow);
   const drop = btn('tc-drop', 'Put the tool down', '✋', 'DROP', () => { playSound('click'); input.setTool(null); input.select(null); });
   const bar = h('div', { class: 'bb-touch touch-only', role: 'group', 'aria-label': 'Held tool' }, rotate, drop);
+
+  // ---- On the floor while a finger is placing: Rotate, and how to cancel ----
+  // A button, not the floor: tapping it with another finger turns the building and does not
+  // cancel the placement. The hint lets touches through (pointer-events: none in style.css), so a
+  // second finger landing on it still lands on the floor and cancels.
+  const turnArrow = h('span', { class: 'tc-dir' });
+  const turn = btn('tc-turn', 'Rotate', '⟳', 'ROTATE', null);
+  pressNow(turn, () => input.rotate());
+  turn.append(turnArrow);
+  const hint = h('p', { class: 'pa-hint' }, CANCEL_HINT);
+  const aid = h('div', { class: 'place-aid touch-only hidden', role: 'group', 'aria-label': 'Placing' }, turn, hint);
+  let aidUp = false, aidLeft = false, aidRot = null, aidDir = -1;
+  function updateAid() {
+    const p = input.placing;
+    const show = !!p && isCoarse();
+    if (show !== aidUp) { aidUp = show; setClass(aid, 'hidden', !show); }
+    if (!show) return;
+    // Halfway up the side of the floor away from the finger. It changes sides only once the
+    // finger is well into its half, so it does not flick back and forth near the middle.
+    const box = aid.parentElement ? aid.parentElement.getBoundingClientRect() : { left: 0, width: innerWidth };
+    const f = (p.x - box.left) / Math.max(1, box.width);
+    const left = f > 0.6 ? true : f < 0.4 ? false : aidLeft;
+    if (left !== aidLeft || !aid.dataset.side) { aidLeft = left; aid.dataset.side = left ? 'left' : 'right'; }
+    const canTurn = !!BUILD[input.tool]?.rot;
+    if (canTurn !== aidRot) { aidRot = canTurn; setClass(turn, 'hidden', !canTurn); }
+    if (canTurn && input.dir !== aidDir) { aidDir = input.dir; setText(turnArrow, ARROWS[input.dir]); }
+  }
 
   // ---- The sheet for a tapped building ----
   const sheetHead = h('div', { class: 'ts-head' });
@@ -161,7 +214,8 @@ export function createTouchControls({ input, session, renderer, playSound = () =
       setText(rotArrow, input.tool && BUILD[input.tool] ? ARROWS[input.dir] : '');
       drop.disabled = !input.tool;
     }
+    updateAid();
   }
 
-  return { pad, bar, sheet, update, get sheetOpen() { return sheetOpen; } };
+  return { pad, bar, sheet, aid, update, get sheetOpen() { return sheetOpen; } };
 }

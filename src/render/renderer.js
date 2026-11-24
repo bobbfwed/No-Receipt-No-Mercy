@@ -335,6 +335,7 @@ export function createRenderer(canvas, session) {
     fx.draw(ctx, now, 0, sprites, cam.zoom, bossGrow);
     drawShoppers(s, alpha);
     fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
+    if (view.aim) drawAim(s, view.hover);
     drawPreview(s, view);
     if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now, s.w, s.h);
     ctx.restore();
@@ -767,6 +768,36 @@ export function createRenderer(canvas, session) {
   const probe = { k: '', d: 0, u: null };
   const probeU = {};
   const TRACK_NAME = { dmg: 'DAMAGE', spd: 'SPEED', rng: 'RANGE', dur: 'TOUGHER' };
+
+  const AIM_REACH = 5; // tiles each arm of the crosshair reaches out from the aimed tile
+  const AIM_DASH = [8, 6];
+  /**
+   * A finger placing something covers the tile it is on (view.aim, touch only): dashed lines
+   * along its row and column, stopping short of the tile itself, show where it is from outside
+   * the finger.
+   */
+  function drawAim(s, h) {
+    if (!h || !(h.x >= 0 && h.y >= 0 && h.x < s.w && h.y < s.h)) return;
+    const px = T / (cam.zoom || 32); // one screen pixel, in floor units
+    const cx = (h.x + 0.5) * T, cy = (h.y + 0.5) * T;
+    const gap = T * 0.65, reach = AIM_REACH * T;
+    const arms = [
+      [cx - gap, cy, Math.max(0, cx - reach), cy], [cx + gap, cy, Math.min(s.w * T, cx + reach), cy],
+      [cx, cy - gap, cx, Math.max(0, cy - reach)], [cx, cy + gap, cx, Math.min(s.h * T, cy + reach)],
+    ];
+    ctx.save();
+    ctx.beginPath();
+    for (const [x0, y0, x1, y1] of arms) { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); }
+    ctx.setLineDash(AIM_DASH.map((d) => d * px));
+    ctx.lineCap = 'butt';
+    ctx.strokeStyle = 'rgba(17,24,39,0.75)';
+    ctx.lineWidth = 4.5 * px;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+    ctx.lineWidth = 2 * px;
+    ctx.stroke();
+    ctx.restore();
+  }
 
   /** Ghost of the selected building at the hovered tile, the remove highlight, or the upgrade preview. */
   function drawPreview(s, view) {

@@ -6,11 +6,16 @@
 //   - two fingers always move the view (drag) and zoom it (pinch), and never build
 //   - one finger with nothing held drags the view; a tap on a building selects it (touch.js then
 //     offers rotate, upgrade and remove for it)
-//   - one finger with a building held builds: a tap places, a drag lays a line, as the mouse does.
-//     With the Remove tool a tap or drag removes; with the Upgrade tool a tap upgrades and a drag
-//     moves the view.
-// Nothing is built until the finger has either lifted or moved a little, so a second finger that
-// lands a moment after the first turns the touch into a pinch before anything is placed.
+//   - one finger with a building held (not the belt), or the Remove or Upgrade tool, places: the
+//     preview follows the finger while it is down, and the building is placed (or removed, or its
+//     sheet opened) once, on the tile the finger lifts from. Lifted off the floor, or over a
+//     button or panel, it does nothing. (The owner's request, 0.3.01: a drag used to build a row.)
+//   - with the belt held, a tap lays one and a drag lays a line, as the mouse does
+//   - a second finger on the floor while the first is placing cancels it: nothing more is built
+//     when either lifts (belts already laid by a drag stay), and the two fingers move the view
+// Nothing is built until the finger has either lifted or (a belt) moved a little, so a second
+// finger that lands a moment after the first turns the touch into a pinch before anything is placed.
+// touch.js shows a Rotate button and a "second finger cancels" hint while a finger is placing.
 import { BUILD, doorOf, anchorOf } from '../sim/index.js';
 import { startDrag } from './drag.js';
 
@@ -212,23 +217,45 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   // ---- Touch -------------------------------------------------------------------------------------
   const touches = new Map(); // pointer id -> { x, y } of each finger on the floor
   // What the fingers are doing:
-  //   { kind: 'one', id, x0, y0, lx, ly, t0, mode: 'wait' | 'pan' | 'build' | 'idle' }
+  //   { kind: 'one', id, x0, y0, lx, ly, tile, mode: 'wait' | 'pan' | 'build' | 'place' }
+  //     'wait': not yet known whether it is a tap or a drag (nothing held, or the belt)
+  //     'build': a belt line being laid; 'place': one building, tool action on the lift tile
   //   { kind: 'two', dist, mx, my }
   let gesture = null;
   let tdrag = null; // a line being built by one finger: the drag planner
 
   const builds = () => !isOffice() && (tool === 'remove' || !!BUILD[tool]);
+  /** What is held acts once, where the finger lifts (everything but the belt; see the top). */
+  const placesOne = () => !isOffice() && !!tool && tool !== 'belt' && (builds() || tool === 'upgrade');
+
+  /** The finger is over the floor itself: on the map, and not under a button or panel. */
+  function onFloor(x, y) {
+    const t = renderer.tileAt(x, y);
+    if (!t) return null;
+    const doc = canvas.ownerDocument;
+    const top = doc && doc.elementFromPoint ? doc.elementFromPoint(x, y) : canvas;
+    return top === canvas ? t : null;
+  }
+
+  /** One finger lifted (or tapped) on tile t with something held that acts once. */
+  function placeAt(t) {
+    if (!t || !session.state || isOffice()) return;
+    hover = t;
+    if (tool === 'upgrade') { selected = anchorTile(t); return; }
+    if (tool === 'remove') { send([{ c: 'remove', x: t.x, y: t.y }]); return; }
+    send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]);
+  }
 
   function notePointer(x, y, t) {
     const p = exactTile(x, y, t);
     if (p && (!pointer || p.x !== pointer.x || p.y !== pointer.y)) { pointer = p; cursorDirty = true; }
   }
 
+  /** A belt line under one finger (the only thing a finger drags to build). */
   function startTouchBuild(t) {
-    const mode = tool === 'remove' ? 'remove' : 'build';
     // As with the mouse: dragging belt over belts turns them, so those tiles are not skipped.
-    const taken = mode === 'build' && tool === 'belt' ? (tile) => { const b = at(tile); return !!b && b.k !== 'belt'; } : hasBuilding;
-    tdrag = startDrag({ mode, kind: tool, start: t, dir, hasBuilding: taken });
+    const taken = (tile) => { const b = at(tile); return !!b && b.k !== 'belt'; };
+    tdrag = startDrag({ mode: 'build', kind: 'belt', start: t, dir, hasBuilding: taken });
     send(tdrag.first);
   }
 
@@ -239,13 +266,10 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     send(d.end(dir));
   }
 
-  /** One finger tapped a tile without moving. */
+  /** One finger tapped a tile without moving, with nothing held or the belt. */
   function touchTap(t) {
     if (!t || !session.state || isOffice()) { selected = null; return; }
-    if (tool === 'upgrade') { hover = t; selected = anchorTile(t); return; }
-    // (The Remove tool also "builds" but is not in BUILD: test the kind, or a tap with it throws.)
-    if (builds() && BUILD[tool]?.size) { hover = t; send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
-    if (builds()) { hover = t; startTouchBuild(t); endTouchBuild(); return; }
+    if (tool === 'belt') { hover = t; startTouchBuild(t); endTouchBuild(); return; }
     // Nothing held: select the building there (touch.js offers what can be done with it).
     selected = anchorTile(t);
     hover = selected;
@@ -262,14 +286,17 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     try { canvas.setPointerCapture(e.pointerId); } catch { /* fine without */ }
     if (touches.size === 1) {
       const t = renderer.tileAt(e.clientX, e.clientY);
-      gesture = { kind: 'one', id: e.pointerId, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, tile: t, mode: 'wait' };
+      gesture = { kind: 'one', id: e.pointerId, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, tile: t, mode: placesOne() ? 'place' : 'wait' };
       // Show the ghost of what is held under the finger straight away.
       if (builds() || tool === 'upgrade') hover = t;
       notePointer(e.clientX, e.clientY, t);
     } else if (touches.size === 2) {
-      // A second finger: whatever the first was doing becomes moving the view. A line already
-      // being laid is finished where it is.
-      endTouchBuild();
+      // A second finger on the floor cancels what the first was placing (belts a drag has already
+      // laid stay; the one still under the finger is not laid), and the two move the view.
+      const g = gesture;
+      const placing = g && g.kind === 'one' && (g.mode === 'place' || (g.mode !== 'pan' && tool === 'belt'));
+      tdrag = null;
+      if (placing) { hover = null; playSound('click'); }
       startPinch();
     }
   }
@@ -292,11 +319,19 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       return;
     }
     if (e.pointerId !== g.id) return;
+    if (g.mode === 'place') {
+      // The preview follows the finger; over a button or off the map there is none (nothing
+      // would be placed there).
+      hover = onFloor(e.clientX, e.clientY);
+      notePointer(e.clientX, e.clientY, hover);
+      g.lx = e.clientX; g.ly = e.clientY;
+      return;
+    }
     if (g.mode === 'wait') {
       if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < TAP_SLOP_PX) return;
-      // It is a drag. With a building or the Remove tool it lays a line from where it started;
-      // otherwise it moves the view.
-      if (builds() && g.tile) { g.mode = 'build'; startTouchBuild(g.tile); } else g.mode = 'pan';
+      // It is a drag. With the belt it lays a line from where it started; with nothing held it
+      // moves the view.
+      if (tool === 'belt' && builds() && g.tile) { g.mode = 'build'; startTouchBuild(g.tile); } else g.mode = 'pan';
     }
     if (g.mode === 'pan') {
       renderer.pan((g.lx - e.clientX) / z, (g.ly - e.clientY) / z);
@@ -325,7 +360,12 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     }
     if (e.pointerId !== g.id) return;
     gesture = null;
-    if (g.mode === 'build') endTouchBuild();
+    if (g.mode === 'place') {
+      // Acts once, on the tile the finger lifted from, if that is the floor itself.
+      // (A second finger may have put the tool down meanwhile, with the bar's DROP button.)
+      const t = e.type === 'pointerup' && placesOne() ? onFloor(e.clientX, e.clientY) : null;
+      if (t) placeAt(t); else hover = null;
+    } else if (g.mode === 'build') endTouchBuild();
     else if (g.mode === 'wait' && e.type === 'pointerup') touchTap(g.tile);
   }
 
@@ -449,11 +489,24 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (!tool) hover = selected;
   }
 
-  const view = { tool: null, dir: 0, hover: null, cursors };
+  /**
+   * Where the finger placing something is ({ x, y } in page pixels), or null when no finger is.
+   * A placement is one finger down with something held that it will place: any building, the
+   * Remove or the Upgrade tool. touch.js shows the Rotate button and the cancel hint meanwhile.
+   */
+  function placing() {
+    const g = gesture;
+    if (!g || g.kind !== 'one' || isOffice()) return null;
+    const on = g.mode === 'place' || (tool === 'belt' && (g.mode === 'build' || (g.mode === 'wait' && !!g.tile)));
+    return on ? { x: g.lx, y: g.ly } : null;
+  }
+
+  const view = { tool: null, dir: 0, hover: null, aim: false, cursors };
   function getView() {
     view.tool = tool;
     view.dir = dir;
     view.hover = hover;
+    view.aim = !!placing();
     return view;
   }
 
@@ -486,6 +539,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     get hover() { return hover; },
     /** The building a finger tapped with nothing held, or null. */
     get selected() { return selected; },
+    /** A finger placing something: where it is, or null (see placing() above). */
+    get placing() { return placing(); },
     setTool,
     rebuild,
     toggleAutoRebuild,

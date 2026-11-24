@@ -173,7 +173,7 @@ export function startGame(session, {
   const deal = createDeal(session, { strip, playSound });
 
   // In training the lesson panel sits where the players list normally is.
-  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet);
+  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet, touchUi.aid);
   const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, planner.el, bar.tip, planner.tip, deal.el);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');

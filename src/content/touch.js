@@ -28,7 +28,7 @@ const RULES = [
   [/Press it \(or B\) once\./g, 'Tap it once.'],
   [/ \(Shift\+B, or its switch in the top bar\)/g, ' (its switch is in the top bar, under ☰ on a phone, and beside the big REBUILD button)'],
   [/Shift\+B switches on auto-rebuild/g, 'The AUTO-REBUILD switch in the top bar (under ☰ on a phone) turns on auto-rebuild'],
-  [/Click or drag over buildings\. Right-clicking does the same without picking this tool\./g, 'Tap or drag over buildings. Tapping a building with nothing picked also offers Remove.'],
+  [/Click or drag over buildings\. Right-clicking does the same without picking this tool\./g, 'Tap a building to remove it, or slide your finger onto it and lift. Tapping a building with nothing picked also offers Remove.'],
   [/right-click the highlighted belt to remove it/gi, 'tap the highlighted belt and choose Remove'],
   [/right-click the highlighted belt/gi, 'tap the highlighted belt and choose Remove'],
   [/Right-click it to remove it/g, 'Tap it and choose Remove'],

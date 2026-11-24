@@ -25,7 +25,8 @@ export function howToPlay() {
     // On a touch screen (only shown there): fingers instead of the mouse and keys.
     h('ul', { class: 'keys touch-only' },
       h('li', null, h('b', null, 'Tap a building'), ' in the bar to pick it up, tap it again to put it down'),
-      h('li', null, h('b', null, 'Tap the floor'), ' to build · ', h('b', null, 'drag'), ' to build a line; belts follow your finger'),
+      h('li', null, h('b', null, 'Tap the floor'), ' to build · or ', h('b', null, 'hold a finger down'), ' to see where it goes, slide it into place and ', h('b', null, 'lift'), ' to build · only ', h('b', null, 'belts'), ' build a line when dragged'),
+      h('li', null, h('b', null, 'A second finger'), ' on the floor while you place cancels it · the big ', h('b', null, '⟳ ROTATE'), ' that shows meanwhile turns it'),
       h('li', null, h('b', null, 'One finger'), ' with nothing held moves the view · ', h('b', null, 'two fingers'), ' move and zoom it, and never build'),
       h('li', null, h('b', null, '⟳'), ' rotates what you hold · ', h('b', null, '✋'), ' puts it down · ', h('b', null, '⤢'), ' whole map · ', h('b', null, '⌂'), ' your entrance'),
       h('li', null, h('b', null, 'Tap something you built'), ' with nothing held to upgrade, rotate or remove it'),

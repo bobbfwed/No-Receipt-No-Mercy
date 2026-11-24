@@ -44,6 +44,25 @@ const tileAt = (x, y) => js(`const g = __game, r = document.querySelector('canva
 const centreOf = (sel) => js(`const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };`);
 const cam = () => js('const c = __game.renderer.cam; return { x: c.x, y: c.y, zoom: c.zoom };');
 const at = (x, y) => js(`const s = __game.session.state, b = s.grid[${y} * s.w + ${x}]; return b ? { k: b.k, d: b.d } : null;`);
+const count = () => js('return __game.session.state.grid.filter(Boolean).length;');
+/** A free tile for a kind, on screen where the floor itself is (not under a panel or button). */
+const freeTile = (kind, d = 0, skip = 0) => js(`return import('/src/sim/index.js').then((m) => {
+  const g = __game, s = g.session.state, r = g.renderer.viewRect(), c = document.querySelector('canvas.world'), cr = c.getBoundingClientRect(), cam = g.renderer.cam;
+  let n = ${skip};
+  for (let y = Math.ceil(r.y0) + 2; y < Math.floor(r.y1) - 2; y++) for (let x = Math.ceil(r.x0) + 2; x < Math.floor(r.x1) - 2; x++) {
+    const px = cr.left + cr.width / 2 + (x + 0.5 - cam.x) * cam.zoom, py = cr.top + cr.height / 2 + (y + 0.5 - cam.y) * cam.zoom;
+    if (document.elementFromPoint(px, py) !== c || s.grid[y * s.w + x] || m.canPlace(s, '${kind}', x, y, g.session.me, ${d}) !== null) continue;
+    if (n-- <= 0) return { x, y };
+  }
+  return null;
+});`);
+const aidUp = () => js("const a = document.querySelector('.place-aid'); return !!a && getComputedStyle(a).display !== 'none';");
+/** One finger down at a, slid to b, still down (the caller lifts it with touch('touchEnd', [])). */
+async function holdAndSlide(a, b, steps = 8) {
+  await touch('touchStart', [a]);
+  for (let n = 1; n <= steps; n++) { await wait(25); await touch('touchMove', [{ x: a.x + ((b.x - a.x) * n) / steps, y: a.y + ((b.y - a.y) * n) / steps }]); }
+  await wait(120);
+}
 let fails = 0;
 const check = (ok, text) => { if (!ok) fails++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${text}`); };
 
@@ -94,6 +113,60 @@ await drag(await tileAt(tx - 2, ty + 2), await tileAt(tx + 2, ty + 2), 10);
 const belts = [];
 for (let x = tx - 2; x <= tx + 2; x++) belts.push((await at(x, ty + 2))?.k === 'belt');
 check(belts.every(Boolean), `a one-finger drag with Belt picked lays a line of 5 (${belts.filter(Boolean).length} laid)`);
+
+// Since 0.3.01 every other building is placed one at a time: the preview follows the finger and
+// one is built where it lifts. A second finger on the floor cancels; the Rotate button turns it.
+await js('__game.session.state.players[__game.session.me].cash += 5000; return 1;');
+await pick('sprinkler');
+let s0 = await freeTile('sprinkler'), s1 = await freeTile('sprinkler', 0, 3);
+let n0 = await count();
+await holdAndSlide(await tileAt(s0.x, s0.y), await tileAt(s1.x, s1.y));
+const hov = await js('const h = __game.input.hover; return h ? { x: h.x, y: h.y } : null;');
+check(await count() === n0, 'with Sprinkler picked, a finger sliding over the floor builds nothing while it is down');
+check(hov && hov.x === s1.x && hov.y === s1.y, `... the preview follows it (${JSON.stringify(hov)}, finger on ${s1.x},${s1.y})`);
+check(await aidUp(), '... and the "another finger cancels" hint shows');
+await touch('touchEnd', []); await wait(300);
+check(await count() === n0 + 1 && (await at(s1.x, s1.y))?.k === 'sprinkler' && !(await at(s0.x, s0.y)), 'lifting builds exactly one, where the finger lifted');
+check(!(await aidUp()), '... and the hint goes');
+
+s0 = await freeTile('sprinkler'); s1 = await freeTile('sprinkler', 0, 2);
+n0 = await count();
+const zoom0 = (await cam()).zoom;
+const a0 = await tileAt(s0.x, s0.y);
+await holdAndSlide(a0, { x: a0.x + 8, y: a0.y + 6 }, 3);
+// The second finger lands on the floor 90 pixels away, then the two spread apart.
+const b0 = { x: a0.x + 90, y: a0.y + 70 };
+await touch('touchStart', [{ x: a0.x + 8, y: a0.y + 6 }, b0]);
+for (let n = 1; n <= 8; n++) { await wait(25); await touch('touchMove', [{ x: a0.x + 8 - n * 8, y: a0.y + 6 - n * 6 }, { x: b0.x + n * 8, y: b0.y + n * 6 }]); }
+await wait(40); await touch('touchEnd', [{ x: a0.x - 56, y: a0.y - 42 }]); await wait(40); await touch('touchEnd', []); await wait(300);
+check(await count() === n0, 'a second finger on the floor cancels the placement: nothing is built when they lift');
+check((await cam()).zoom > zoom0 * 1.15 || zoom0 > 71, `... and the two fingers zoom the view (${zoom0.toFixed(0)} to ${(await cam()).zoom.toFixed(0)} px a tile)`);
+check(await js('return __game.input.tool;') === 'sprinkler', '... and the Sprinkler stays picked');
+
+await js('__game.renderer.fit(); __game.input.goHome(); return 1;'); await wait(300);
+await pick('railgun');
+const d0 = await js('return __game.input.dir;'), d1 = (d0 + 1) & 3;
+const rl = await freeTile('railgun', d1);
+const ra = await tileAt(rl.x, rl.y);
+await holdAndSlide(ra, { x: ra.x + 2, y: ra.y + 1 }, 2);
+const turn = await centreOf('.place-aid .tc-turn');
+check(!!turn && turn.w >= 56 && turn.h >= 56, `with Barcode Laser picked, a Rotate button of at least 56 px shows while the finger is down (${turn ? `${turn.w.toFixed(0)} x ${turn.h.toFixed(0)}` : 'none'})`);
+if (turn) {
+  // A tap on it with a second finger while the first stays down.
+  await touch('touchStart', [{ x: ra.x + 2, y: ra.y + 1 }, turn]); await wait(80);
+  await touch('touchEnd', [{ x: ra.x + 2, y: ra.y + 1 }]); await wait(200);
+}
+check(await js('return __game.input.dir;') === d1, 'a tap on it with another finger turns the building');
+check(await js('return !!__game.input.placing;') && await aidUp(), '... and does not cancel the placement');
+await touch('touchEnd', []); await wait(300);
+const laser = await at(rl.x, rl.y);
+check(laser?.k === 'railgun' && laser.d === d1, `... lifting places it facing the turned way (${laser ? `${laser.k} d=${laser.d}` : 'nothing'})`);
+
+await pick('remove');
+n0 = await count();
+await drag(await tileAt(tx - 2, ty + 2), await tileAt(tx + 2, ty + 2), 10);
+check(await count() === n0 - 1 && !(await at(tx + 2, ty + 2)) && (await at(tx - 2, ty + 2))?.k === 'belt', 'a drag with Remove removes one building, where the finger lifts');
+await pick('belt');
 
 await tap(await centreOf('[data-k="belt"]'));
 check(await js('return __game.input.tool;') === null, 'tapping the picked tool again puts it down');

@@ -150,7 +150,11 @@ The game works by touch, in either orientation (a tablet, or a phone held sidewa
 |---|---|
 | Tap a button in the bar | Pick that building or tool; tap it again to put it down. Hold a button to read what it does |
 | Tap the floor with a building picked | Build |
-| Drag with a building picked | Build a line; belts follow your finger |
+| Hold a finger on the floor with a building picked | Shows where it will go; slide it into place and lift to build one there (lifted off the floor or over a button, nothing is built) |
+| A second finger on the floor while placing | Cancels it; the two fingers then move and zoom the view |
+| ROTATE button that shows while placing | Turns the building before you lift |
+| Drag with Belt picked | Lay a line of belt that follows your finger |
+| Tap, or slide and lift, with Remove picked | Remove that one building |
 | Drag with nothing picked | Move the view |
 | Two fingers | Move the view and pinch to zoom, whatever is picked |
 | Tap a building with nothing picked | Opens its actions: a button for each kind of upgrade, rotate, remove |

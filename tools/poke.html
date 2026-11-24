@@ -20,6 +20,8 @@
             set:<css selector>=<value> (choose an option in a drop-down)
             tap:<x>,<y> (a finger tap on a tile)   swipe:<x>,<y>,<x2>,<y2> (a one-finger drag between tiles)
             pick:<building or tool> (tap that build-bar button with a finger)
+            fdown:<x>,<y> (put a finger down on a tile and keep it there)   fmove:<x>,<y> (slide that
+            finger to another tile, still down; for a picture of a placement in progress)
             build:<kind>,<x>,<y>[,<dir>] (put a building straight into the game, to set a scene)
             js:<code> (run a line of JavaScript in the game's page, e.g. js:__game.session.state.refunds=99)
   Example:  tools/poke.html?u=solo%3D1&do=key:7;hover:8,10;click:.btn-help
@@ -37,7 +39,7 @@
   frame.addEventListener('load', async () => {
     const win = frame.contentWindow, doc = frame.contentDocument;
     await wait(700);
-    const canvas = () => doc.querySelector('canvas');
+    const canvas = () => doc.querySelector('canvas.world') || doc.querySelector('canvas');
     // Where a tile is on screen, from the game's own camera.
     const at = (tx, ty) => {
       const r = canvas().getBoundingClientRect();
@@ -47,6 +49,13 @@
     const keyEvent = (type, k) => win.dispatchEvent(new win.KeyboardEvent(type, { key: k, code: /^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`, bubbles: true }));
     const finger = (type, p) => canvas().dispatchEvent(new win.PointerEvent(type, { ...p, pointerType: 'touch', pointerId: 7, isPrimary: true, button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
     const mouse = (type, x, y) => canvas().dispatchEvent(new win.PointerEvent(type, { ...at(x, y), button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerId: 1, bubbles: true, cancelable: true }));
+    let held = null; // where the finger put down with fdown is now
+    // A grey disc where that finger is, so a picture shows what the finger would hide. (The page
+    // is the iframe's size and place, so the game's coordinates are the page's.)
+    const fingerDot = document.createElement('div');
+    fingerDot.style.cssText = 'position:fixed;z-index:8;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(214,180,160,0.85);border:2px solid rgba(0,0,0,0.5);pointer-events:none;display:none';
+    document.body.append(fingerDot);
+    const showFinger = (p) => { fingerDot.style.left = `${p.clientX}px`; fingerDot.style.top = `${p.clientY}px`; fingerDot.style.display = 'block'; };
     for (const step of (q.get('do') || '').split(';').filter(Boolean)) {
       const [verb, ...rest] = step.split(':');
       const arg = rest.join(':');
@@ -63,6 +72,17 @@
         const a = at(x, y), b = at(x2, y2), n = Math.max(1, Math.ceil(Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) / 8));
         for (let k = 1; k <= n && verb === 'swipe'; k++) { finger('pointermove', { clientX: a.clientX + ((b.clientX - a.clientX) * k) / n, clientY: a.clientY + ((b.clientY - a.clientY) * k) / n }); await wait(4); }
         finger('pointerup', verb === 'swipe' ? b : a);
+      } else if (verb === 'fdown') {
+        const [x, y] = arg.split(',').map(Number);
+        held = at(x, y);
+        finger('pointerdown', held);
+        showFinger(held);
+      } else if (verb === 'fmove' && held) {
+        const [x, y] = arg.split(',').map(Number);
+        const a = held, b = at(x, y), n = Math.max(1, Math.ceil(Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) / 8));
+        for (let k = 1; k <= n; k++) { finger('pointermove', { clientX: a.clientX + ((b.clientX - a.clientX) * k) / n, clientY: a.clientY + ((b.clientY - a.clientY) * k) / n }); await wait(4); }
+        held = b;
+        showFinger(held);
       } else if (verb === 'pick') {
         const el = doc.querySelector(`.bb-btn[data-k="${arg}"]`);
         if (el) { for (const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new win.PointerEvent(t, { pointerType: 'touch', bubbles: true })); el.click(); } else log('no button ' + arg);
