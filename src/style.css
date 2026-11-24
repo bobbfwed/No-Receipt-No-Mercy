@@ -1227,6 +1227,12 @@ kbd {
 .rebuild-pop .btn-auto { height: auto; min-height: 3.4rem; border-width: 0.18rem; box-shadow: 0 0.25rem 0 var(--line); }
 /* Beside the big button it is plainly about rebuilding: AUTO is enough. */
 .rebuild-pop .ab-long { display: none; }
+/* On a desktop the switch in the top bar is always in sight, so a second one down here is
+   overkill (the owner, 0.2.16). Phones and touch screens keep it: their top-bar switch is tucked
+   away under the menu button. */
+@media (min-width: 1100px) and (min-height: 560px) and (pointer: fine) {
+  .rebuild-pop .btn-auto { display: none; }
+}
 /* On a big map the small map of the whole store is in the bottom left corner: stand above it. */
 .has-minimap .rebuild-pop { bottom: 9.7rem; }
 /* A tapped building's sheet sits where the button would: stand on it. */
