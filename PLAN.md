@@ -1,6 +1,6 @@
 # No Receipt, No Mercy: plan
 
-The game's name is "No Receipt, No Mercy", with the tagline "The customer is always a prick." (the owner's choice from the list further down). Chosen concept: 01 Returns Department (see `concepts/index.html`). This file records the plan, the decisions made without asking, and what is done. Keep it up to date as work lands.
+The game's name is "No Receipt, No Mercy", with the tagline "The customer is always a prick." (the owner's choice from the list further down). Chosen concept: 01 Returns Department (the gallery of all twelve concepts, `concepts/`, was removed from the repository once the game was under way; it is still in the git history). This file records the plan, the decisions made without asking, and what is done. Keep it up to date as work lands.
 
 ## The game
 A discount warehouse on Black Friday. Shoppers come in through the entrances (one per player) and want a refund at the tills on the right. Each player has his own cash, the store's income and refunds are split evenly between them, and they split two jobs: the **factory** (belts and machines that make goods and sell them) and **security** (towers that annoy shoppers until they storm out). Belts and machines block shoppers, so the factory is the maze. Twenty waves; forty refunds (ten more per extra player) and the store closes. DEB, the HR chatbot, insults everyone throughout.

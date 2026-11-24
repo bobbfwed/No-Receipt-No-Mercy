@@ -29,7 +29,6 @@ Building the first playable version. `PLAN.md` has the plan, the decisions made 
   - `test/` - tests. `tools/` - dev server, screenshot script, balance bots.
   - `vendor/peerjs.min.js` - third-party network library (PeerJS 1.5.4, MIT licence). Do not edit.
   - `LICENSE.md` - the game is under the PolyForm Noncommercial License 1.0.0 (owner's choice), with a "Required Notice" line crediting Brandon Nimon. PeerJS keeps its MIT licence, listed at the end of that file.
-  - `concepts/` - the earlier concept gallery. Kept for reference; not part of the game.
   - `.claude/reports/` - end-of-task reports.
 
 ## Commands
