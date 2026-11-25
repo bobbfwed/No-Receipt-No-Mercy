@@ -451,14 +451,19 @@ export function startGame(session, {
   // On a phone the building sheet covers the bottom of the floor (0.3.01). When a building is
   // tapped low on the screen, its reach (or the building itself) would be under the sheet, so as the
   // sheet opens the view moves up once, just far enough to show it above the sheet, as far as the
-  // map's edge allows and never pushing the top of the reach off the floor. Not on a big screen with
-  // a mouse, where the sheet is smaller and a click must not move the view.
+  // map's edge allows and never pushing the top of the reach off the floor; where that is not far
+  // enough, the sheet opens at the top of the floor instead. Not on a big screen with a mouse,
+  // where a click must not move the view.
+  // On a big screen with a mouse the view must not move on a click (and usually shows the whole
+  // store, so it cannot): there the sheet itself moves to the top of the floor instead (.at-top).
   let sightKey = '';
   function keepInSight(s, t) {
     const key = t ? `${t.x},${t.y}` : '';
     if (key === sightKey) return;
     sightKey = key;
-    if (!t || !(isCoarse() || narrow())) return;
+    const mouse = !(isCoarse() || narrow());
+    touchUi.sheet.classList.remove('at-top');
+    if (!t) return;
     const b = s.grid[t.y * s.w + t.x];
     if (!b || !BUILD[b.k]) return;
     const [, bh] = sizeOf(b.k, BUILD[b.k].rot ? b.d | 0 : 0);
@@ -472,9 +477,13 @@ export function startGame(session, {
     const screenY = (ty) => r.top + r.height / 2 + (ty - cam.y) * z;
     const over = screenY(bottom) - (touchUi.sheet.getBoundingClientRect().top - 10);
     if (over <= 0) return;
+    if (mouse) { touchUi.sheet.classList.add('at-top'); return; }
     const room = screenY(top) - (r.top + 8);
     const dy = Math.min(over, Math.max(0, room)) / z;
     if (dy > 0) renderer.pan(0, dy);
+    // The camera stops at the map's edge (and cannot move at all when the store's height fits on
+    // screen): if the reach is still under the sheet, the sheet goes to the top of the floor.
+    if (screenY(bottom) > touchUi.sheet.getBoundingClientRect().top - 10) touchUi.sheet.classList.add('at-top');
   }
 
   // On a big screen the strip of cards stays in the middle at the top of the floor unless an

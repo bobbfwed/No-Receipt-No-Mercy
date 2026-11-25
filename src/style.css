@@ -1295,7 +1295,7 @@ body.dealing .pause-banner { z-index: 42; }
 /* On a big map the small map of the whole store is in the bottom left corner: stand above it. */
 .has-minimap .rebuild-pop { bottom: 9.7rem; }
 /* A tapped building's sheet sits where the button would: stand on it. */
-.game:has(.touch-sheet:not(.hidden)) .rebuild-pop { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
+.game:has(.touch-sheet:not(.hidden):not(.at-top)) .rebuild-pop { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
 
 /* ---------------------------------------------------------------- menu tagline */
 
@@ -2314,6 +2314,9 @@ html, body { overscroll-behavior: none; }
   font: 800 0.86rem/1.25 var(--font);
 }
 
+/* (On a big screen, when the selected building's reach would be under the sheet, the sheet goes to
+   the top of the floor instead: game.js, keepInSight.) */
+.touch-sheet.at-top { top: 0.5rem; bottom: auto; animation: none; }
 /* The sheet for a building tapped with nothing held. */
 .touch-sheet {
   position: absolute;
@@ -2952,7 +2955,7 @@ html, body { overscroll-behavior: none; }
 .touch-sheet { max-width: min(58rem, calc(100% - 1.2rem)); }
 /* The sheet and DEB's bubble share the bottom of the floor: while the sheet is open the bubble
    stands on top of it (touch.js measures the sheet into --sheet-h). */
-.game:has(.touch-sheet:not(.hidden)) .deb { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
+.game:has(.touch-sheet:not(.hidden):not(.at-top)) .deb { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
 .ts-btns { flex-wrap: wrap; }
 .ts-btn.ts-up { align-items: flex-start; text-align: left; min-width: 9.5rem; }
 .ts-btn .ts-gain { white-space: normal; line-height: 1.2; opacity: 0.95; }
