@@ -92,7 +92,7 @@ Double-click `play.bat`. It starts a small local server and opens the game in yo
 
 Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chrome, Edge or Firefox.
 
-- **Training shift** teaches every building hands on in about ten minutes, then every awkward kind of shopper in about ten more ("Jump to part 2" skips straight to those). Start here.
+- **Training shift** has you place every building and use every tool, hands on, in about ten minutes, against the plainest shopper there is (the Coupon Clipper); then two shoppers with a trick, Dads and the Gym Bro, in about five more ("Jump to part 2" skips straight to those). The other kinds you meet on the job; the Employee Handbook lists them all. Start here.
 - **Painted floor:** Unpackers, Presses, Packers and Shipping Chutes each only go on their own named patch of floor (Loading Bay, Press Shop, Gift Wrap, Shipping). The patches are apart, so belts carry the goods between them, and those belts are your maze.
 - **The store** on the menu picks the map for Play solo and Host a game: a design (open warehouse, showroom of walled rooms, supermarket aisles, food court, car park) and a size. Each size says how many players it suits; every player gets his own shopper entrance.
 - **The game** on the menu sets its length (10, 15, 20 or 30 sales events, or **Endless**), the difficulty and each player's starting cash. An endless game has no last sales event: it goes on until the refunds close the store, and the browser remembers the furthest sales event reached on each difficulty. A game that has been won can also be carried on as an endless one with **Keep going (endless)** on the win screen.

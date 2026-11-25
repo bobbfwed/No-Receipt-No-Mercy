@@ -191,6 +191,68 @@ test('every lesson has something to point at, in every state it goes through', (
   assert.ok(seen['Belts carry goods'].touch.includes('button:belt'), 'a phone taps the Belt first, then drags on the floor');
   assert.ok(seen['Gym Bros'].desk.includes('button:rebuild'), 'the Rebuild button after the gym bro');
   assert.ok(seen.Dads.desk.includes('control:doors'));
+  // The two big buildings (0.3.03): the button, their top-left tile, then the doors; a finger drags.
+  const laser = seen['Aim down the line: the Barcode Laser'];
+  assert.deepEqual(laser.desk.slice(0, 3), ['button:railgun', 'tile:12,7', 'control:doors']);
+  assert.deepEqual(laser.touch.slice(0, 3), ['drag:railgun:12,7', 'tile:12,7', 'control:doors']);
+  const sales = seen['Hold them up: the TV Salesman'];
+  assert.deepEqual(sales.desk.slice(0, 2), ['button:salesman', 'tile:4,13']);
+  assert.deepEqual(sales.touch.slice(0, 2), ['drag:salesman:4,13', 'tile:4,13']);
+});
+
+test('a lesson with two buildings to place goes on to the second once the first is down', () => {
+  const check = (title, first, then) => {
+    const session = trainingSession();
+    const tut = createTutorial(session);
+    tut.autoplay(STEPS.findIndex((st) => st.title === title));
+    for (const cmd of first) assert.ok(session.send(cmd).ok);
+    const at = (ui) => arrowTarget(tut.step, session.state, tut.marks(), ui);
+    assert.deepEqual(at({}), { kind: 'button', k: then.k }, `${title}: the next button`);
+    assert.deepEqual(at({ touch: true }), { kind: 'drag', ...then }, `${title}: the next drag`);
+    assert.equal(tut.tool(), then.k, `${title}: the panel lights up the next button`);
+  };
+  check('Hold them up: the TV Salesman', [{ c: 'place', k: 'salesman', x: 4, y: 13, d: 0 }], { k: 'sprinkler', x: 5, y: 12 });
+  check('Stopping dads', [{ c: 'place', k: 'forklift', x: 12, y: 6, d: 0 }, { c: 'place', k: 'wetfloor', x: 9, y: 7, d: 0 }, { c: 'place', k: 'wetfloor', x: 9, y: 8, d: 0 }],
+    { k: 'crate', x: 9, y: 9 });
+});
+
+test('the Barcode Laser: turned round on its card, or removed when it lies the wrong way or in the wrong place', async () => {
+  const { forTouch } = await import('../src/content/touch.js');
+  const session = trainingSession();
+  const tut = createTutorial(session);
+  tut.autoplay(STEPS.findIndex((st) => st.title === 'Aim down the line: the Barcode Laser'));
+  const st = tut.step, s = session.state;
+  const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
+  // Three tiles marked, the top-left one saying what it wants.
+  assert.deepEqual(tut.marks().map((m) => [m.x, m.y]), [[12, 7], [13, 7], [14, 7]]);
+  assert.deepEqual({ k: tut.marks()[0].k, d: tut.marks()[0].d }, { k: 'railgun', d: 2 });
+  // Dropped facing right (as a finger's drag lands it): Rotate on its card turns it round.
+  assert.ok(session.send({ c: 'place', k: 'railgun', x: 12, y: 7, d: 0 }).ok);
+  assert.deepEqual(at({}), { kind: 'tile', x: 12, y: 7 });
+  assert.deepEqual(at({ selected: { x: 12, y: 7 } }), { kind: 'control', name: 'spin' });
+  assert.deepEqual(at({ tool: 'railgun' }), { kind: 'button', k: 'railgun' }, 'a mouse puts the Laser down first');
+  assert.deepEqual(at({ tool: 'railgun', touch: true }), { kind: 'control', name: 'drop' });
+  assert.match(tut.hint(), /The Laser's arrow must point left\. .*click ⟳ Rotate on its card until the arrow points left\./);
+  assert.ok(session.send({ c: 'rotate', x: 12, y: 7 }).ok);
+  assert.equal(tut.marks().length, 0, 'turned round: done');
+  // Standing up and down: Rotate only turns it end for end, so it has to come up.
+  session.send({ c: 'remove', x: 12, y: 7 });
+  assert.ok(session.send({ c: 'place', k: 'railgun', x: 12, y: 7, d: 1 }).ok);
+  assert.deepEqual(at({ selected: { x: 12, y: 7 } }), { kind: 'control', name: 'remove' });
+  assert.match(tut.hint(), /Right-click it to remove it, press R until the arrow on the preview points left, and place it again/);
+  assert.match(forTouch(tut.hint()), /Tap it and choose Remove, tap the rotate button at the end of the bar until its arrow points left, and place it again/);
+  // One tile too far left: its own top-left is (11, 7), and its card (opened there) removes it.
+  session.send({ c: 'remove', x: 12, y: 7 });
+  assert.ok(session.send({ c: 'place', k: 'railgun', x: 11, y: 7, d: 2 }).ok);
+  assert.deepEqual(at({}), { kind: 'tile', x: 12, y: 7 });
+  assert.deepEqual(at({ selected: { x: 11, y: 7 } }), { kind: 'control', name: 'remove' });
+  assert.match(tut.hint(), /The Laser is not on the highlighted tiles/);
+  // Something else on one of its other tiles: that is marked first, to be removed.
+  session.send({ c: 'remove', x: 11, y: 7 });
+  assert.ok(session.send({ c: 'place', k: 'crate', x: 14, y: 7, d: 0 }).ok);
+  assert.deepEqual(tut.marks()[0], { x: 14, y: 7, label: 'Remove', k: 'railgun', d: 2 });
+  assert.deepEqual(at({ selected: { x: 14, y: 7 } }), { kind: 'control', name: 'remove' });
+  assert.match(tut.hint(), /Something else is on a highlighted tile/);
 });
 
 test('a wrong building on the tile: its sheet fixes it (Remove, or Rotate), and a finger puts its tool down first', () => {

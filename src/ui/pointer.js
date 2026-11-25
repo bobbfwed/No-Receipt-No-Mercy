@@ -8,6 +8,7 @@
 // lesson panel's text, and never leaves the screen.
 import { targetKey } from '../tutorial/target.js';
 import { liftPx } from './lift.js';
+import { BUILD, sizeOf } from '../sim/index.js';
 
 /** The arrow's size in CSS pixels: shaft and head along `len`, `wide` across, `gap` from the target. */
 export const ARROW = { len: 64, wide: 44, gap: 6, bounce: 12 };
@@ -342,10 +343,15 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
       const sr = rectOf(scroller), c = centre(br);
       if (c.x < sr.x || c.x > sr.x + sr.w) return null;
     }
-    const tr = tileRect(t.x, t.y);
+    // A building bigger than one tile is dragged by its middle: input.js centres its footprint on
+    // the lifted point (liftedAnchor in lift.js), so the drag ends over the middle of all its tiles,
+    // as it lies when it lands (the way the bar's rotate button has it turned).
+    const [w, h] = sizeOf(t.k, BUILD[t.k] && BUILD[t.k].rot ? input.dir | 0 : 0);
+    const one = tileRect(t.x, t.y);
+    const tr = { x: one.x, y: one.y, w: one.w * w, h: one.h * h };
     if (!inside(centre(tr), floorRect(), 2)) return null;
-    // The finger ends below the tile by as much as input.js lifts a dragged building (lift.js);
-    // the building is drawn on the tile, above the finger.
+    // The finger ends below the building by as much as input.js lifts a dragged building (lift.js);
+    // the building is drawn on its tiles, above the finger.
     const lift = liftPx(renderer.cam.zoom);
     return { from: centre(br), to: { x: tr.x + tr.w / 2, y: tr.y + tr.h / 2 + lift }, ghost: tr, lift };
   }

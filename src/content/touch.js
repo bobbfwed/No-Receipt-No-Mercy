@@ -27,6 +27,8 @@ const RULES = [
   [/drag belt over it again in the new direction, or point at it and press R\./g, 'drag belt over it again in the new direction, or tap it and choose Rotate.'],
   [/Press the mouse button on the first highlighted tile, drag straight down to the last one, and let go\./g, 'Put your finger on the first highlighted tile, drag straight down to the last one, and lift it.'],
   [/Press R until the arrow on the preview points DOWN\./g, 'Tap the rotate button at the end of the bar until its arrow points DOWN.'],
+  // (A big building in the wrong place or lying the wrong way: the training shift's hint, 0.3.03.)
+  [/press R until the arrow on the preview points (\w+)/g, 'tap the rotate button at the end of the bar until its arrow points $1'],
   [/Press R before placing to choose the side\./g, 'Use the rotate button at the end of the bar before placing to choose the side.'],
   [/\(press R to turn it\)/g, '(the rotate button at the end of the bar turns it)'],
   [/Press it \(or B\) once\./g, 'Tap it once.'],
@@ -37,8 +39,8 @@ const RULES = [
   [/right-click the highlighted belt/gi, 'tap the highlighted belt and choose Remove'],
   [/Right-click it to remove it/g, 'Tap it and choose Remove'],
   [/Right-click to remove/g, 'Tap, then Remove'],
-  // "(or press 2)", "(press 7)": the number keys.
-  [/ \((?:or )?press \d\)/g, ''],
+  // "(or press 2)", "(press 7)": the number keys (and - and =, the Laser's and the Salesman's).
+  [/ \((?:or )?press [\d=-]\)/g, ''],
   // What is left: single words.
   [/\bclicking\b/g, 'tapping'], [/\bClicking\b/g, 'Tapping'],
   [/\bclick\b/g, 'tap'], [/\bClick\b/g, 'Tap'],

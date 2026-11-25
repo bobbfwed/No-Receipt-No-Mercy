@@ -2573,6 +2573,8 @@ html, body { overscroll-behavior: none; }
   .hud-more .btn-help { width: auto; height: 42px; padding: 0 0.8rem; border-radius: 0.5rem; text-align: left; }
   .hud-more > .btn-help::after { content: "  How to play"; font: 700 0.9rem var(--font); }
   .hud-more > .btn-help.btn-full::after { content: "  Full screen"; }
+  /* (The 📖 button said "How to play" too; the last training lesson sends players to it by name.) */
+  .hud-more > .btn-help.btn-book::after { content: "  Employee Handbook"; }
   .hud-more .btn-sound { width: 100%; }
   .hud-more .btn-sound::after { content: "  Sound"; font: 700 0.9rem var(--font); }
   .hud-more .snd-menu { position: static; width: auto; margin-top: 0.4rem; }

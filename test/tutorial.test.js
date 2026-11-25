@@ -7,78 +7,41 @@ import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
 import { createTutorial, STEPS, PART_TWO } from '../src/tutorial/lessons.js';
 import { HOW } from '../src/content/help.js';
-import { createGame, applyCommand, step, queueTrainingWave, levelIn, statsOf, defOf, BUILD, TUNE, TICK_HZ, DT, ST } from '../src/sim/index.js';
+import { createGame, applyCommand, step, queueTrainingWave, levelIn, statsOf, BUILD, SHOPPERS, TUNE, TICK_HZ, ST } from '../src/sim/index.js';
 
 function trainingSession(seed = 9) {
   return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
 }
 
 const title = (t) => { const st = STEPS.find((x) => x.title === t); assert.ok(st, `there is a lesson called "${t}"`); return t; };
-const TEENS = title('Teenagers'), KARENS = title('Karens'), STEADY = title('Shoppers you cannot slow down');
-const GYM = title('Gym Bros'), MOMS = title('Mom and Kid'), MOMS_FIX = title('Finish her while the kid is in the cart');
+const SALES = title('Hold them up: the TV Salesman'), UPGRADES = title('Upgrades, and super shoppers');
+const DADS = title('Dads'), STOP_DADS = title('Stopping dads'), LASER = title('Aim down the line: the Barcode Laser');
+const GYM = title('Gym Bros'), WET = title('Slow them down: the Wet Floor Sign');
+/** The only kinds of shopper the training shift sends in (0.3.03, the owner's request). */
+const SHIFT_KINDS = ['clipper', 'dad', 'gymbro'];
 
 /**
- * What happened on the floor during one lesson's wave, watched tick by tick: the things each part 2
+ * What happened on the floor during one lesson's wave, watched tick by tick: the things each
  * lesson says the player will see.
  */
 function newWatch() {
   return {
     shots: new Map(), // tile index of a tower -> shots it fired
     smashes: [], // smash events
-    puddleWade: 0, // ticks a shopper other than a teenager spent walking through a puddle
-    puddleSlow: 0, // ...of which he was moving at half his speed or less
-    karenNear: new Set(), // tile indexes of towers that had a Karen within her reach at some point
-    bolted: new Set(), // ids of guide dog owners whose dog bolted
-    sprayedOut: new Set(), // ids of guide dog owners who gave up on the spot when first sprayed
-    steadyOnSign: 0, // ticks a guide dog owner or scooter spent walking over a Wet Floor Sign...
-    steadySlowed: 0, // ...moving slower than his own speed while not bolting
-    kidThroughLine: false, // a loose child past the production line while his mom was still before it
-    crawlHit: 0, // ticks a crawling mom lost patience (must stay 0: nothing can hurt her)
-    gotUp: 0, // moms who reached their child on their hands and knees and got up again
+    beams: [], // shoppers hit by each Barcode Laser beam, in order
+    watching: [], // where shoppers stood to watch the TV Salesman, as [x, y]
+    crossed: new Set(), // rows on which dads stepped over the production line's belts
+    kinds: new Set(), // kinds of shopper that walked in
   };
 }
 
-function watchTick(s, w, before) {
-  const messes = new Set(s.messes.map((m) => m[0]));
+function watchTick(s, w) {
   for (const m of s.shoppers) {
-    const def = defOf(m);
-    const was = before.get(m.id);
-    if (m.st === ST.LEAVE) {
-      // A spray that uses up the last of his patience leaves no time for the dog to bolt.
-      if (def.bolts && was && was.st !== ST.LEAVE && !w.bolted.has(m.id)) {
-        for (let t = 0; t < s.grid.length; t++) {
-          const b = s.grid[t];
-          if (b && b.k === 'sprinkler' && (m.x - (t % s.w) - 0.5) ** 2 + (m.y - ((t / s.w) | 0) - 0.5) ** 2 <= statsOf(b).range ** 2) w.sprayedOut.add(m.id);
-        }
-      }
-      continue;
-    }
-    const i = (m.y | 0) * s.w + (m.x | 0);
-    const moved = Math.hypot(m.vx, m.vy);
-    const walking = m.st === ST.WALK && moved > 0;
-    if (walking && m.k !== 'teen' && messes.has(i) && !s.grid[i]) {
-      w.puddleWade++;
-      if (moved <= def.speed * DT * 0.51) w.puddleSlow++;
-    }
-    if (def.nag) {
-      for (let t = 0; t < s.grid.length; t++) {
-        const b = s.grid[t];
-        if (!b || (b.k !== 'sprinkler' && b.k !== 'forklift')) continue;
-        if ((m.x - (t % s.w) - 0.5) ** 2 + (m.y - ((t / s.w) | 0) - 0.5) ** 2 <= TUNE.nagRange ** 2) w.karenNear.add(t);
-      }
-    }
-    if (def.bolts && m.bt > 0) w.bolted.add(m.id);
-    // (A bolting dog only makes him faster, so any tick under his own speed would be the sign.)
-    if (def.steady && walking && was && s.grid[was.i] && s.grid[was.i].k === 'wetfloor') {
-      w.steadyOnSign++;
-      if (moved < def.speed * DT * 0.99) w.steadySlowed++;
-    }
-    if (def.kid && (m.kd === 1 || m.kd === 2) && m.kx > 11 && m.x < 10) w.kidThroughLine = true;
-    if (def.kid && was && was.cr === 1 && m.cr === 1 && m.hp < was.hp) w.crawlHit++;
-    if (def.kid && was && was.cr === 1 && m.cr !== 1 && m.hp > 0) w.gotUp++;
+    w.kinds.add(m.k);
+    if (m.k !== 'dad' || m.st === ST.LEAVE) continue;
+    const g = s.grid[(m.y | 0) * s.w + (m.x | 0)];
+    if (g && g.k === 'belt' && (m.x | 0) === 10) w.crossed.add(m.y | 0);
   }
-  before.clear();
-  for (const m of s.shoppers) before.set(m.id, { cr: m.cr, hp: m.hp, st: m.st, i: (m.y | 0) * s.w + (m.x | 0) });
 }
 
 /**
@@ -111,6 +74,8 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
     for (const e of events) {
       if (e.e === 'shot') w.shots.set(e.i, (w.shots.get(e.i) || 0) + 1);
       if (e.e === 'smash') w.smashes.push(e);
+      if (e.e === 'rail') w.beams.push(e.n);
+      if (e.e === 'watching') w.watching.push([e.x, e.y]);
     }
   });
   tut.start();
@@ -118,14 +83,13 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
     const st = tut.step;
     onStep(tut, st);
     w = newWatch();
-    const before = new Map();
     for (const cmd of st.solve(session.state)) session.send(cmd);
     if (!st.manual) {
       let sent = false;
       for (let n = 0; n < 240 * 15 && !tut.check(); n++) {
         sent = tut.finish(sent);
         session.fastForward(1);
-        watchTick(session.state, w, before);
+        watchTick(session.state, w);
       }
       if (st.wave) waves[st.title] = tut.lastWave;
       seen[st.title] = { ...w, facts: { ...tut.facts } };
@@ -138,31 +102,34 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
 
 const tileOf = (s, x, y) => y * s.w + x;
 
-/** What each part 2 lesson says happens. The same for every seed. */
-function checkPartTwo(s, waves, seen, label) {
-  // Teenagers: puddles, and the hunters behind them slowed down in them.
-  assert.ok(seen[TEENS].facts.mess >= 2, `${label}: the teenagers spilled (${seen[TEENS].facts.mess} puddles)`);
-  assert.ok(seen[TEENS].puddleWade > 0, `${label}: hunters walked through the puddles`);
-  assert.ok(seen[TEENS].puddleSlow > 0, `${label}: and went at half speed in them`);
-  assert.equal(waves[TEENS].escaped, 0, `${label}: the teenagers and hunters are all stopped`);
+/** What the lessons from the TV Salesman on say happens. The same for every seed. */
+function checkLessons(s, waves, seen, label) {
+  // The TV Salesman: some Coupon Clippers stopped to watch, standing in the Sprinkler above him.
+  assert.ok(seen[SALES].facts.watched >= 1, `${label}: Coupon Clippers stopped to watch the salesman`);
+  const reach = statsOf(s.grid[tileOf(s, 5, 12)]).range;
+  assert.ok(seen[SALES].watching.some(([x, y]) => (x - 5.5) ** 2 + (y - 12.5) ** 2 <= reach ** 2),
+    `${label}: a shopper watched him from inside the Sprinkler's reach`);
+  assert.deepEqual(waves[SALES], { stopped: 24, escaped: 0 }, `${label}: the whole coach party stopped`);
 
-  // Karens: the sprinklers at the gap were in her reach; the new forklift never was, and it fired.
-  const fork = tileOf(s, 17, 12);
-  assert.ok(seen[KARENS].karenNear.has(tileOf(s, 9, 13)) && seen[KARENS].karenNear.has(tileOf(s, 11, 13)), `${label}: a Karen slowed the sprinklers at the gap`);
-  assert.ok(!seen[KARENS].karenNear.has(fork), `${label}: the forklift past the gap was never in a Karen's reach`);
-  assert.ok(seen[KARENS].shots.get(fork) > 0, `${label}: the new forklift fired at them`);
-  assert.deepEqual(waves[KARENS], { stopped: 3, escaped: 0 }, `${label}: three Karens stopped`);
+  // Upgrades: the upgraded sprinklers stop the Extreme Couponers.
+  assert.deepEqual(waves[UPGRADES], { stopped: 8, escaped: 0 }, `${label}: upgraded sprinklers stop eight super shoppers`);
 
-  // Guide dogs and scooters: every dog bolted when sprayed (unless that very spray finished his
-  // owner, who was worn down on the way in by the forklift on the dad short cut), and the sign
-  // slowed nobody.
-  assert.ok(seen[STEADY].bolted.size >= 1, `${label}: a guide dog bolted when sprayed`);
-  assert.equal(seen[STEADY].bolted.size + seen[STEADY].sprayedOut.size, 2, `${label}: both guide dogs bolted when sprayed, or the spray finished the man`);
-  assert.ok(seen[STEADY].steadyOnSign > 0, `${label}: they crossed the wet floor sign`);
-  assert.equal(seen[STEADY].steadySlowed, 0, `${label}: and it did not slow them`);
-  assert.ok(seen[STEADY].shots.get(fork) > 0, `${label}: the upgraded forklift hit them`);
-  assert.equal(levelIn(s.grid[fork], 'dmg'), 2);
-  assert.deepEqual(waves[STEADY], { stopped: 4, escaped: 0 }, `${label}: two guide dogs and two scooters stopped`);
+  // Dads: the four walk straight through; the forklift, signs and crate stop most of the next
+  // five, and every dad who steps over the belts does it on the same row.
+  assert.deepEqual(waves[DADS], { stopped: 0, escaped: 4 }, `${label}: all four dads walk straight through the belts`);
+  assert.ok(waves[STOP_DADS].stopped >= 3, `${label}: forklift, signs and crate stop most dads (stopped ${waves[STOP_DADS].stopped} of 5)`);
+  for (const t of [STOP_DADS, LASER]) {
+    assert.deepEqual([...seen[t].crossed], seen[t].crossed.size ? [7] : [], `${label}: in "${t}" every dad crosses the belt on row 7`);
+  }
+
+  // The Barcode Laser: the first dad sets it off on his own, the next beam takes most of the line.
+  const beams = seen[LASER].beams;
+  assert.equal(beams[0], 1, `${label}: the first beam hits the first dad alone (${beams})`);
+  assert.ok(Math.max(...beams) >= 4, `${label}: a later beam hits most of the line (${beams})`);
+  assert.equal(seen[LASER].facts.beam, Math.max(...beams));
+  assert.deepEqual(waves[LASER], { stopped: 10, escaped: 0 }, `${label}: all ten dads stopped`);
+  assert.equal(s.grid[tileOf(s, 12, 7)].k, 'railgun');
+  assert.equal(s.grid[tileOf(s, 12, 7)].d, 2, `${label}: the laser faces west`);
 
   // Gym bro: he walked through a crate by the entrance, and Rebuild put everything back.
   const doorCrates = [[2, 7], [2, 8], [1, 9]].map(([x, y]) => tileOf(s, x, y));
@@ -171,18 +138,9 @@ function checkPartTwo(s, waves, seen, label) {
   assert.ok(seen[GYM].facts.rebuilt >= 1, `${label}: Rebuild put things back`);
   for (const i of doorCrates) assert.equal(s.grid[i].k, 'crate', `${label}: the crates are back`);
 
-  // Mom and Kid: a child ran through the line, a mom crawled, nothing hurt her, and she got up.
-  // (Whether a kid gets loose before or after his mom is past the production line is chance, so
-  // the lesson says "usually"; the seed test checks that it usually does.)
-  assert.ok(seen[MOMS].facts.kid >= 1, `${label}: a kid escaped`);
-  assert.ok(seen[MOMS].facts.crawl >= 1, `${label}: a mom crawled`);
-  assert.equal(seen[MOMS].crawlHit, 0, `${label}: nothing hurt a crawling mom`);
-  assert.ok(seen[MOMS].gotUp >= 1, `${label}: a crawling mom reached her kid and got up`);
-
-  // Finishing her: the forklift by the entrance stops every mom before her child gets out.
-  assert.equal(seen[MOMS_FIX].facts.kid, 0, `${label}: no kid got out of the cart`);
-  assert.equal(seen[MOMS_FIX].facts.crawl, 0, `${label}: so no mom crawled`);
-  assert.deepEqual(waves[MOMS_FIX], { stopped: 3, escaped: 0 }, `${label}: three moms stopped`);
+  // Nobody but the three kinds came in, all shift long.
+  const kinds = new Set(Object.values(seen).flatMap((x) => [...x.kinds]));
+  for (const k of kinds) assert.ok(SHIFT_KINDS.includes(k), `${label}: a ${k} walked in`);
 
   // The gap cluster stays as part 1 left it, for the practice at the end.
   for (const [x, y] of [[9, 13], [11, 13]]) assert.ok(levelIn(s.grid[tileOf(s, x, y)], 'dmg') >= 3, `${label}: the sprinklers at the gap are still there`);
@@ -224,70 +182,64 @@ test('the whole training shift can be completed, and each lesson shows what it s
   });
   assert.equal(tut.step.last, true);
   assert.equal(STEPS[PART_TWO].title, 'Part 2: The difficult customers');
+  assert.ok(STEPS.length <= 23, `the shift is no longer than it was (${STEPS.length} lessons)`);
   // The Gym Bro lesson points at Rebuild once there is something to rebuild.
   assert.ok(seen[GYM].facts.smashedCrate >= 1);
-  checkPartTwo(session.state, waves, seen, 'seed 9');
+  checkLessons(session.state, waves, seen, 'seed 9');
   assert.equal(reports.length, 0, 'no performance reviews interrupt training');
   assert.ok(says.length >= STEPS.length, 'DEB speaks at every step');
 
   // What each wave lesson is meant to demonstrate.
   assert.deepEqual(waves['Security: the Pepper Sprinkler'], { stopped: 3, escaped: 0 }, 'one sprinkler stops three Coupon Clippers');
-  assert.deepEqual(waves['Slow them down: the Wet Floor Sign'], { stopped: 4, escaped: 0 }, 'sign plus two sprinklers stops four Bargain Hunters');
-  assert.equal(waves['Make them stop: Free Samples'].escaped, 0, 'the gap holds against a crowd');
-  assert.deepEqual(waves.Dads, { stopped: 0, escaped: 4 }, 'all four dads walk straight through the belts');
-  assert.ok(waves['Stopping dads'].stopped >= 3, `forklift and signs stop most dads (stopped ${waves['Stopping dads'].stopped} of 5)`);
-  assert.deepEqual(waves['Upgrades, and super shoppers'], { stopped: 3, escaped: 0 }, 'upgraded sprinklers stop three super shoppers');
+  assert.deepEqual(waves[WET], { stopped: 10, escaped: 0 }, 'sign plus two sprinklers stops ten Coupon Clippers');
+  assert.deepEqual(waves['Make them stop: Free Samples'], { stopped: 16, escaped: 0 }, 'the gap holds against a crowd');
   assert.ok(session.state.players[0].cash >= 1000, 'money is never the obstacle in training');
 });
 
 test('the wave lessons play out the same whatever the random seed', () => {
-  let kidsThroughLine = 0;
   const SEEDS = [1, 2, 3, 7, 11, 42, 99, 1234];
   for (const seed of SEEDS) {
     const session = trainingSession(seed);
     const tut = createTutorial(session);
     const { waves, seen } = playAll(session, tut, {
       onStep: (t, st) => {
-        // "Your sprinklers cannot stop it on their own": without the forklift, the Turbo Scooter gets through.
-        if (st.title === STEADY) {
-          const got = whatIf(session.state, [{ c: 'remove', x: 17, y: 12 }], st.wave);
-          assert.ok(got.some((e) => e.k === 'scooter' && e.sup), `seed ${seed}: the sprinklers alone let the Turbo Scooter through`);
-        }
+        // What each lesson says its new building is needed for: without it, some get through.
+        // "Ten Coupon Clippers in a bunch are more than one Sprinkler can wear down."
+        if (st.title === WET) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: one sprinkler lets some of the ten through`);
+        // "A crowd this big swamps your gap."
+        if (st.title === SALES) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: the gap alone lets some of the coach party through`);
+        // "As they are, your Sprinklers cannot stop the eight Extreme Couponers."
+        if (st.title === UPGRADES) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without upgrades some Extreme Couponers get through`);
+        // The laser lesson's ten dads are too many for the forklift and the signs.
+        if (st.title === LASER) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the laser some dads get through`);
       },
       onDone: (t, st) => assert.equal(t.check(), true, `seed ${seed}: step "${st.title}" completes`),
     });
     assert.deepEqual(waves['Security: the Pepper Sprinkler'], { stopped: 3, escaped: 0 }, `seed ${seed}: clippers`);
-    assert.deepEqual(waves['Slow them down: the Wet Floor Sign'], { stopped: 4, escaped: 0 }, `seed ${seed}: hunters`);
+    assert.deepEqual(waves[WET], { stopped: 10, escaped: 0 }, `seed ${seed}: ten clippers at the sign`);
     assert.equal(waves['Make them stop: Free Samples'].escaped, 0, `seed ${seed}: crowd`);
-    assert.deepEqual(waves.Dads, { stopped: 0, escaped: 4 }, `seed ${seed}: dads walk through`);
-    assert.ok(waves['Stopping dads'].stopped >= 3, `seed ${seed}: dads stopped ${waves['Stopping dads'].stopped} of 5`);
-    assert.deepEqual(waves['Upgrades, and super shoppers'], { stopped: 3, escaped: 0 }, `seed ${seed}: supers`);
-    checkPartTwo(session.state, waves, seen, `seed ${seed}`);
-    if (seen[MOMS].kidThroughLine) kidsThroughLine++;
+    checkLessons(session.state, waves, seen, `seed ${seed}`);
   }
-  assert.ok(kidsThroughLine >= SEEDS.length * 0.75, `a kid ran through the production line in ${kidsThroughLine} of ${SEEDS.length} games ("usually")`);
 });
 
 test('opening the doors too early lines the same shoppers up again', () => {
   const session = trainingSession(5);
   const tut = createTutorial(session);
-  tut.autoplay(STEPS.findIndex((st) => st.title === KARENS));
-  assert.equal(tut.step.title, KARENS);
-  session.send({ c: 'start' }); // before building the forklift
+  tut.autoplay(STEPS.findIndex((st) => st.title === LASER));
+  assert.equal(tut.step.title, LASER);
+  session.send({ c: 'start' }); // before building the laser
   for (let n = 0; n < 240 && !tut.facts.waveEnds; n++) session.fastForward(15);
   assert.equal(tut.facts.waveEnds, 1);
-  assert.equal(tut.check(), false, 'not done: the forklift is not there');
-  assert.ok(session.state.nextWave, 'three more Karens are waiting');
-  session.send({ c: 'place', k: 'forklift', x: 17, y: 12, d: 0 });
+  assert.equal(tut.check(), false, 'not done: the laser is not there');
+  assert.ok(session.state.nextWave, 'ten more dads are waiting');
+  session.send({ c: 'place', k: 'railgun', x: 12, y: 7, d: 2 });
   assert.equal(tut.check(), true, 'built now, after seeing a wave: done');
   // A lesson without shoppers leaves nobody waiting outside.
   tut.back();
-  tut.next();
-  tut.next();
-  assert.equal(tut.step.title, STEADY);
+  assert.equal(tut.step.title, STOP_DADS);
+  assert.ok(session.state.nextWave);
   tut.back();
-  tut.back();
-  assert.equal(tut.step.title, TEENS);
+  assert.equal(tut.step.title, DADS);
   tut.back();
   assert.equal(tut.step.manual, true);
   assert.equal(session.state.nextWave, null);
@@ -337,6 +289,7 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   const quips = new Set(STEPS.map((st) => st.quip));
   assert.deepEqual(says.filter((t) => quips.has(t)), [STEPS[PART_TWO].quip]);
   assert.ok(levelIn(third.state.grid[13 * third.state.w + 9], 'dmg') >= 3, 'the upgraded sprinklers are in place');
+  assert.equal(third.state.grid[13 * third.state.w + 4].k, 'salesman', 'and the TV Salesman');
 
   // The panel's jump keeps refusals off the screen; the "you cannot block the route" lesson
   // still counts its refusal.
@@ -345,6 +298,16 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   const emit = fourth.emit;
   fourth.emit = (type, msg) => { if (type !== 'nope' && type !== 'say') emit.call(fourth, type, msg); };
   assert.deepEqual(t4.autoplay(PART_TWO), []);
+
+  // Each lesson can be opened straight from the URL (?tutorial=1&step=N): autoplay to it, and it
+  // is not done yet.
+  for (let n = 1; n < STEPS.length; n++) {
+    const sn = trainingSession(4);
+    const tn = createTutorial(sn);
+    assert.deepEqual(tn.autoplay(n), [], `step=${n} is reached`);
+    assert.equal(tn.index, n);
+    if (!STEPS[n].manual) assert.equal(tn.check(), false, `step=${n} "${STEPS[n].title}" still waits for the player`);
+  }
 });
 
 test('every building has a plain explanation', () => {
@@ -352,11 +315,66 @@ test('every building has a plain explanation', () => {
     assert.ok(HOW[k], `help for ${k}`);
     assert.ok(HOW[k].does.length > 20 && HOW[k].use.length > 20, `help for ${k} says what it does and how to use it`);
   }
-  // Every building is taught by some tutorial step.
-  const taught = new Set(STEPS.map((s) => s.tool).filter(Boolean));
-  for (const k of Object.keys(BUILD)) {
-    const inText = STEPS.some((s) => s.text.join(' ').includes(BUILD[k].name.split(' ')[0]));
-    assert.ok(taught.has(k) || inText, `the tutorial covers ${k}`);
+});
+
+test('the player places every building at least once, and uses Upgrade, Rebuild and Remove (0.3.03)', () => {
+  // Played through, gathering what each lesson's marks ask for at the start and as it goes.
+  const session = trainingSession();
+  const tut = createTutorial(session);
+  const asked = new Map(); // kind of building -> titles of the lessons whose marks ask for it
+  const tools = { upgrade: new Set(), rebuild: new Set(), remove: new Set() };
+  const look = () => {
+    const st = tut.step;
+    for (const m of tut.marks()) {
+      if (m.up) tools.upgrade.add(st.title);
+      if (m.fix === 'rebuild') tools.rebuild.add(st.title);
+      if (!m.k || m.up) continue;
+      if (!asked.has(m.k)) asked.set(m.k, new Set());
+      asked.get(m.k).add(st.title);
+      // A mark on a tile that holds something else asks for that to be removed first.
+      const g = session.state.grid[m.y * session.state.w + m.x];
+      if (g && g.k !== m.k && g.part === undefined) tools.remove.add(st.title);
+    }
+  };
+  playAll(session, tut, {
+    onStep: () => look(),
+    onDone: () => {},
+  });
+  // (playAll does not look between ticks; the Gym Bro lesson's wrecks show after its wave, so
+  // play that lesson once more by hand to see its Rebuild marks.)
+  const again = trainingSession();
+  const t2 = createTutorial(again);
+  t2.autoplay(STEPS.findIndex((st) => st.title === GYM));
+  for (const cmd of t2.step.solve(again.state)) again.send(cmd);
+  for (let n = 0; n < 240 && !t2.facts.waveEnds; n++) again.fastForward(15);
+  assert.ok(t2.marks().some((m) => m.fix === 'rebuild'), 'the Gym Bro lesson marks the wrecks for Rebuild');
+  tools.rebuild.add(GYM);
+
+  const buildable = Object.keys(BUILD);
+  assert.equal(buildable.length, 12, 'every building in BUILD (a new one needs a lesson)');
+  for (const k of buildable) {
+    assert.ok(asked.has(k), `some lesson's marks ask the player to place a ${BUILD[k].name}`);
+    // ...and that lesson's own commands place it (the player does it, not the shift).
+    const placed = [...asked.get(k)].some((t) => STEPS.find((st) => st.title === t).solve(createGame({ training: true, zones: true })).some((c) => c.c === 'place' && c.k === k));
+    assert.ok(placed, `a lesson that asks for a ${BUILD[k].name} has the player place it`);
+  }
+  assert.ok(tools.upgrade.size >= 1, 'a lesson has the player upgrade something');
+  assert.ok(tools.remove.size >= 1, 'a lesson has the player remove something');
+  assert.ok(STEPS.some((st) => st.after && st.after(createGame({ training: true })).some((c) => c.c === 'rebuild')), 'a lesson waits for Rebuild');
+  assert.ok(STEPS.some((st) => st.solve(createGame({ training: true, zones: true })).some((c) => c.c === 'remove')), 'a lesson removes something');
+  assert.ok(STEPS.some((st) => st.solve(createGame({ training: true, zones: true })).some((c) => c.c === 'upgrade')), 'a lesson upgrades something');
+});
+
+test('the whole shift sends in Coupon Clippers, Dads and a Gym Bro, and nobody else (0.3.03)', () => {
+  const kinds = new Set(STEPS.flatMap((st) => (st.wave || []).map((g) => g.k)));
+  assert.deepEqual([...kinds].sort(), [...SHIFT_KINDS].sort(), 'exactly these three kinds, no fourth by accident');
+  // And the words name no other kind of shopper (the last lesson only says that there are more).
+  for (const st of STEPS) {
+    const words = [...st.text, ...(st.touch || []), st.quip].join(' ');
+    for (const [k, def] of Object.entries(SHOPPERS)) {
+      if (SHIFT_KINDS.includes(k)) continue;
+      assert.ok(!words.includes(def.name), `"${st.title}" mentions ${def.name}`);
+    }
   }
 });
 

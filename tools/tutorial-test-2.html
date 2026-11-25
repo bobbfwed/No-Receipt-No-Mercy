@@ -12,10 +12,11 @@
 <body>
 <!--
   A test page: opens the training shift, presses "Jump to part 2", and plays every lesson of part 2
-  ("The difficult customers") with made-up mouse and keyboard events, following each lesson's own
-  "Do this" text: number keys to pick a tool, clicks on the highlighted tiles, U over a building to
-  upgrade it, B to rebuild, and the OPEN THE DOORS button. It reports each lesson reached; if an
-  instruction were wrong or a control did not work, the lesson number would stop going up.
+  ("The difficult customers": dads, the Barcode Laser, the gym bro) with made-up mouse and keyboard
+  events, following each lesson's own "Do this" text: number keys (and -) to pick a tool, R to turn
+  it, clicks on the highlighted tiles, B to rebuild, and the OPEN THE DOORS button. It reports each
+  lesson reached; if an instruction were wrong or a control did not work, the lesson number would
+  stop going up.
   The game runs at 3x speed (the speed buttons at the top) to keep the page quick.
   Open through the dev server: http://localhost:5173/tools/tutorial-test-2.html
   (Use tools/realshot.mjs to photograph it, waiting about 120 seconds.)
@@ -56,30 +57,25 @@
     press('3x');
     b = lesson(); press('Next'); await until(b, 2000); log('ok   Next -> ' + lesson());
 
-    // Teenagers: just open the doors and watch.
+    // Dads: just open the doors and watch them walk over the belts.
     await doors();
-    if (!await stepDone('teenagers and hunters wave finished', 30000)) return;
+    if (!await stepDone('four dads walked through the belts', 30000)) return;
 
-    // Karens: "put a Forklift (press 8) on the highlighted tile, past the gap. Then OPEN THE DOORS".
-    key("8", "Digit8"); click(17, 12);
-    await doors();
-    if (!await stepDone('forklift past the gap, three Karens stopped', 30000)) return;
-
-    // "point at the Forklift you just built past the gap and press U twice, until it shows Damage 2/8".
-    key('Escape', 'Escape');
-    mouse("pointermove", 17, 12); key("u"); await wait(100); key('u');
-    await doors();
-    if (!await stepDone('forklift at level 3, dogs and scooters stopped', 30000)) return;
-
-    // Mom and Kid: open the doors and watch for the kid and the crawl.
-    await doors();
-    if (!await stepDone('moms wave finished, a kid ran and a mom crawled', 40000)) return;
-
-    // "put a Forklift (press 8) on the highlighted tile by the entrance. Then OPEN THE DOORS".
-    key('8', 'Digit8'); click(3, 5);
+    // Stopping dads: "put a Forklift (press 8) on the highlighted tile ..., Wet Floor Signs (press 9)
+    // on the two tiles in front of the belt and a Crate (press 6) below them, then OPEN THE DOORS".
+    key('8', 'Digit8'); click(12, 6);
+    key('9', 'Digit9'); click(9, 7); click(9, 8);
+    key('6', 'Digit6'); click(9, 9);
     key('Escape', 'Escape');
     await doors();
-    if (!await stepDone('forklift by the entrance, three moms stopped', 30000)) return;
+    if (!await stepDone('forklift, signs and crate; five dads', 30000)) return;
+
+    // The Barcode Laser: "click Laser (or press -), press R until the arrow on the preview points
+    // LEFT, click the left end of the three highlighted tiles, then press OPEN THE DOORS".
+    key('-', 'Minus'); key('r'); key('r'); click(12, 7);
+    key('Escape', 'Escape');
+    await doors();
+    if (!await stepDone('laser facing left, ten dads', 30000)) return;
 
     // Gym Bros: crates by the entrance, open the doors, then B once he has gone.
     key('6', 'Digit6'); click(2, 7); click(2, 8); click(1, 9);
