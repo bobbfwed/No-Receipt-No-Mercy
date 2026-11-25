@@ -191,7 +191,17 @@ export function slotsFilled(view) {
  * @returns {number[][]} [left, right] pairs
  */
 export function blockedSpans(state, cam, w, h, top, bottom) {
-  const spans = [];
+  return blockedRects(state, cam, w, h, top, bottom).map(([x0, , x1]) => [x0, x1]);
+}
+
+/**
+ * The same as blockedSpans, as boxes: [left, top, right, bottom] in CSS pixels from the floor's top
+ * left, for the entrances and tills (a tile to spare round each) on screen between rows `top` and
+ * `bottom`. `doors` says which entrances count (all of them unless given).
+ * @returns {number[][]}
+ */
+export function blockedRects(state, cam, w, h, top = 0, bottom = h, doors = state.doors || []) {
+  const rects = [];
   const z = cam.zoom || 30;
   const add = (t) => {
     const x = t % state.w, y = (t / state.w) | 0;
@@ -199,17 +209,57 @@ export function blockedSpans(state, cam, w, h, top, bottom) {
     if (y1 < top || y0 > bottom) return;
     const x0 = w / 2 + (x - 1 - cam.x) * z, x1 = w / 2 + (x + 2 - cam.x) * z;
     if (x1 < 0 || x0 > w) return;
-    spans.push([x0, x1]);
+    rects.push([x0, y0, x1, y1]);
   };
-  for (const door of state.doors || []) for (const t of door) add(t);
+  for (const door of doors) for (const t of door) add(t);
   const tiles = state.tiles || '';
   // Only the rows that can be on screen in the band.
   const r0 = Math.max(0, Math.floor(cam.y + (top - h / 2) / z) - 2), r1 = Math.min(state.h - 1, Math.ceil(cam.y + (bottom - h / 2) / z) + 2);
   for (let y = r0; y <= r1; y++) for (let x = 0; x < state.w; x++) if (tiles[y * state.w + x] === 'T') add(y * state.w + x);
-  return spans;
+  return rects;
 }
 
 /**
+ * Where the strip of cards goes on a big screen (0.3.01, the owner: "by/below the ON SHIFT
+ * window"): under the players panel, lined up with its left edge, so the two read as one column.
+ * When that would cover an entrance, a till or anything else in `rects`, or run off the floor, it
+ * goes beside the panel instead: to its right, top-aligned; then lower down in that place (under
+ * the boss bar, say); then along to the right to the nearest clear place.
+ * @param {{x: number, y: number, w: number, h: number}|null} panel the players panel (CSS pixels
+ *   from the floor's top left), or null when it is not shown
+ * @param {{w: number, h: number}} size the strip
+ * @param {{w: number, h: number}} area the floor
+ * @param {number[][]} rects what it must not cover: [left, top, right, bottom]
+ * @param {number} [gap] pixels between the panel and the strip, and from the floor's edges
+ * @returns {{x: number, y: number, below: boolean}}
+ */
+export function sidePlace(panel, size, area, rects, gap = 8) {
+  const { w, h } = size;
+  const hits = (x, y) => rects.filter(([a, b, c, d]) => x < c && x + w > a && y < d && y + h > b);
+  const fits = (x, y) => x >= gap - 0.5 && y >= gap - 0.5 && x + w <= area.w - gap + 0.5 && y + h <= area.h - gap + 0.5;
+  const clear = (x, y) => fits(x, y) && !hits(x, y).length;
+  if (!panel) {
+    for (const y of [gap, ...rects.map((r) => r[3] + gap).sort((a, b) => a - b)]) if (clear(gap, y)) return { x: gap, y, below: true };
+    return { x: gap, y: gap, below: true };
+  }
+  const under = { x: panel.x, y: panel.y + panel.h + gap, below: true };
+  if (clear(under.x, under.y)) return under;
+  const x0 = panel.x + panel.w + gap, y0 = panel.y;
+  if (clear(x0, y0)) return { x: x0, y: y0, below: false };
+  // Lower down beside the panel, just under whatever was in the way.
+  for (const y of rects.filter(([a, , c]) => x0 < c && x0 + w > a).map((r) => r[3] + gap).filter((y) => y > y0).sort((a, b) => a - b)) {
+    if (clear(x0, y)) return { x: x0, y, below: false };
+  }
+  // Along the top, to the right.
+  for (const x of rects.filter(([, b, , d]) => y0 < d && y0 + h > b).map((r) => r[2] + gap).filter((x) => x > x0).sort((a, b) => a - b)) {
+    if (clear(x, y0)) return { x, y: y0, below: false };
+  }
+  return { x: x0, y: y0, below: false };
+}
+
+/**
+ * (How the strip was placed along the top of the floor before it moved beside the players panel;
+ * the game screen no longer uses it, but it is kept with its test for a strip along the top.)
  * Where to put the strip's left edge: `want` (the middle) if that covers none of the spans, or else
  * the clear place nearest to it between `min` and `max`; `want` again if there is no clear place.
  */

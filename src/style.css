@@ -2113,6 +2113,24 @@ body.dealing .pause-banner { z-index: 42; }
 .hs-tip b.is-odd small { color: #7e22ce; }
 .hs-tip p { margin: 0.15rem 0 0; }
 
+/* On a big screen (0.3.01) the strip sits in the left column under the ON SHIFT panel, as wide as
+   the panel (game.js places it and sets its width): HAND on a line of its own, the five slots in a
+   row under it, each as big as the width allows (up to the size they had along the top). The top
+   middle of the floor is left to the boss bar and the notices, which no longer move down for it,
+   unless a tall panel has put the strip beside it at the top (.hand-mid). */
+@media (min-width: 1100px) and (min-height: 560px) {
+  .hand-wrap.is-side { transform: none; }
+  .hand-wrap.is-side .hand-strip { flex-direction: column; align-items: stretch; gap: 0.25rem; width: 100%; padding: 0.3rem 0.55rem 0.45rem; }
+  .hand-wrap.is-side .hs-label { flex-direction: row; justify-content: space-between; align-items: baseline; }
+  .hand-wrap.is-side .hs-label b { font-size: 0.72rem; letter-spacing: 0.08em; }
+  .hand-wrap.is-side .hs-label small { margin-top: 0; }
+  .hand-wrap.is-side .hs-slots { justify-content: space-between; gap: 0.3rem; }
+  .hand-wrap.is-side .hs-slot { flex: 0 1 2.3rem; min-width: 0; width: auto; height: auto; aspect-ratio: 23 / 31; }
+  .hand-wrap.is-side .hs-slot .tcard-mini { width: 100%; height: 100%; }
+  .game.has-hand:not(.hand-mid) .notices, .game.has-hand:not(.hand-mid) .zone-hint { top: 0.6rem; }
+  .game.has-hand.boss-up:not(.hand-mid) .notices, .game.has-hand.boss-up:not(.hand-mid) .zone-hint { top: 4.1rem; }
+}
+
 /* The deal (src/ui/deal.js): over the whole screen, the floor dimmed, the cards below the strip. */
 .deal {
   position: fixed;

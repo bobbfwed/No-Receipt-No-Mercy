@@ -1,6 +1,7 @@
 // The deal (0.3.01): when every player is ready, the game's five cards fly in one at a time over the
-// dimmed floor, each held large in the middle long enough to read, then shrink and slide up into
-// their slots in the strip at the top of the floor (src/ui/hand.js) as the next one arrives.
+// dimmed floor, each held large in the middle long enough to read, then shrink and slide into
+// their slots in the strip of slots (src/ui/hand.js; on a big screen under the players panel, on a
+// phone at the top left), wherever it is, as the next one arrives.
 //
 // Everything here follows the state (phase 'cards' and its clock: dealView in cardart.js), never a
 // timer of its own started when a message arrives: every player sees the same card at the same
@@ -151,9 +152,12 @@ export function createDeal(session, { strip, playSound = () => {} }) {
       if (!on) { clear(); topPx = -1; startedSound = false; }
     }
     if (!on) return Infinity;
-    // The cards sit below the strip of slots, whatever height the top bar has on this screen.
+    // The cards sit below the strip of slots if it is over the middle of the screen (a phone, or a
+    // big game's tall players panel that put it beside the panel), or else just below the top bar,
+    // whatever height that has on this screen (the strip off to the left under the players panel).
     const r = strip.el.firstChild.getBoundingClientRect();
-    const top = Math.round(r.bottom);
+    const mid = r.right > innerWidth / 4 && r.left < innerWidth * 3 / 4;
+    const top = Math.round(mid ? r.bottom : strip.el.offsetParent?.getBoundingClientRect().top ?? r.bottom);
     if (top !== topPx && r.height) { topPx = top; el.style.setProperty('--deal-top', `${top}px`); }
     if (!startedSound) { startedSound = true; if (v.secs < 1) playSound('cardDeal'); }
 
@@ -181,7 +185,7 @@ export function createDeal(session, { strip, playSound = () => {} }) {
     // The words over the table.
     if (v.done) {
       setText(head, "THAT'S YOUR HAND");
-      setText(sub, 'Now go and lose with it. Tap the cards up top to read them again.');
+      setText(sub, 'Now go and lose with it. Tap the HAND to read them again.');
     } else {
       setText(head, 'HEAD OFFICE HAS DEALT YOU A HAND');
       const c = v.centre >= 0 ? faceOf(v.cards[v.centre].id) : null;

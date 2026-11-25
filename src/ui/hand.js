@@ -1,5 +1,5 @@
 // The game's cards on screen (0.3.01): the trading card itself (in three sizes: large in the deal,
-// medium in the detail panel, tiny in a slot), the strip of five slots over the top of the floor
+// medium in the detail panel, tiny in a slot), the strip of five slots beside the players panel
 // for the whole game, and the panel where all five can be read in full. The deal that fills the
 // slots is src/ui/deal.js; what each card shows is decided in src/ui/cardart.js.
 import { CARDS, cardParts } from '../sim/index.js';
@@ -73,8 +73,9 @@ export function cardLine(id) {
 }
 
 /**
- * The strip of five slots over the top of the floor. It floats (position: absolute), so it never
- * resizes the floor or the top bar. Click or tap it to read the cards (onOpen). During the deal
+ * The strip of five slots: on a big screen in the left column under the players panel (placed by
+ * game.js), on a small one at the top left beside the players button. It floats (position:
+ * absolute), so it never resizes the floor or the top bar. Click or tap it to read the cards (onOpen). During the deal
  * (src/ui/deal.js) the slots fill one by one as each card slides up into its place.
  * @param {Object} o
  * @param {() => void} o.onOpen open the detail panel
@@ -85,7 +86,7 @@ export function cardLine(id) {
 export function createHandStrip({ onOpen }) {
   const tip = h('div', { class: 'hs-tip hidden', role: 'tooltip' });
   const slots = h('div', { class: 'hs-slots' });
-  const label = h('span', { class: 'hs-label', 'aria-hidden': 'true' }, h('b', null, 'HAND'), h('small', null, 'read'));
+  const label = h('span', { class: 'hs-label', 'aria-hidden': 'true' }, h('b', null, 'HAND'), h('small', null, 'click to read'));
   const el = h('button', {
     type: 'button', class: 'hand-strip hidden', 'aria-label': "This game's cards: open them to read",
     onclick: () => { if (!el.classList.contains('is-dealing')) { hideTip(); onOpen(); } },
@@ -104,6 +105,10 @@ export function createHandStrip({ onOpen }) {
     const r = slots.children[i].getBoundingClientRect(), w = wrap.getBoundingClientRect();
     const tw = tip.offsetWidth;
     tip.style.left = `${Math.max(-w.left + 8, Math.min(innerWidth - w.left - tw - 8, r.left - w.left + r.width / 2 - tw / 2))}px`;
+    // Under the strip, or over it if the strip is low on the screen (under a tall players panel).
+    const up = w.bottom + tip.offsetHeight + 16 > innerHeight && w.top - tip.offsetHeight - 16 > 0;
+    tip.style.top = up ? 'auto' : '';
+    tip.style.bottom = up ? 'calc(100% + 0.4rem)' : '';
   }
   function hideTip() { tip.classList.add('hidden'); }
 
@@ -131,12 +136,16 @@ export function createHandStrip({ onOpen }) {
     return true;
   }
 
-  /** Moves the strip along the top of the floor (px from its left edge), or back to the middle (null). */
-  function place(left) {
-    const v = left === null ? '' : `${Math.round(left)}px`;
-    if (wrap.style.left === v) return;
-    wrap.style.left = v;
-    wrap.style.transform = left === null ? '' : 'none';
+  /**
+   * On a big screen: puts the strip in the left column (game.js works out where), `w` pixels wide,
+   * its slots in a row under the word HAND. null hands it back to the style sheet (the phone layout).
+   * @param {{x: number, y: number, w: number}|null} p
+   */
+  function place(p) {
+    setClass(wrap, 'is-side', !!p);
+    wrap.style.left = p ? `${Math.round(p.x)}px` : '';
+    wrap.style.top = p ? `${Math.round(p.y)}px` : '';
+    wrap.style.width = p ? `${Math.round(p.w)}px` : '';
   }
 
   return { el: wrap, update, place, slot: (i) => slots.children[i] || null };

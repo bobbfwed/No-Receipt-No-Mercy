@@ -16,7 +16,7 @@ import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { createDeal } from './deal.js';
 import { createHandStrip, handPanel, handRow } from './hand.js';
-import { handOf, blockedSpans, clearLeft } from './cardart.js';
+import { handOf, blockedRects, sidePlace } from './cardart.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
 import { createBossBar } from './bossbar.js';
@@ -193,7 +193,7 @@ export function startGame(session, {
   const lobby = createLobby(session, { renderer, playSound });
   stage.append(lobby.el);
 
-  // The game's cards: five slots over the top of the floor for the whole game, filled by the deal
+  // The game's cards: five slots under the players panel for the whole game, filled by the deal
   // between the lobby and the first build phase (which covers the whole screen while it runs).
   const strip = createHandStrip({ onOpen: openCards });
   stage.append(strip.el);
@@ -486,22 +486,43 @@ export function startGame(session, {
     if (screenY(bottom) > touchUi.sheet.getBoundingClientRect().top - 10) touchUi.sheet.classList.add('at-top');
   }
 
-  // On a big screen the strip of cards stays in the middle at the top of the floor unless an
-  // entrance or a till is under it there; then it moves along to the nearest clear place. (On a
-  // small screen it has a corner of its own, beside the players button.)
+  // On a big screen the strip of cards sits under the ON SHIFT panel, lined up with it and as wide,
+  // so the two read as one column (the owner, 0.3.01), and follows the panel down as it grows. If
+  // that would cover an open entrance, a till, the boss bar or the small map, or run off the floor
+  // (a tall panel in a big game), it goes beside the panel instead (sidePlace in cardart.js). On a
+  // small screen it has a corner of its own, beside the players button (style.css).
   let stripKey = '';
+  /** An element's box in CSS pixels from the floor's top left, or null if it is not showing. */
+  const boxIn = (el, at) => {
+    if (!el || !el.isConnected || !el.offsetWidth) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left - at.left, y: r.top - at.top, w: r.width, h: r.height };
+  };
   function placeStrip(s) {
-    if (!wasHand || narrow()) { if (stripKey) { stripKey = ''; strip.place(null); } return; }
+    if (!wasHand || narrow()) { if (stripKey) { stripKey = ''; strip.place(null); root.classList.remove('hand-mid'); } return; }
     const cam = renderer.cam;
-    const box = strip.el.firstChild;
-    const W = stage.clientWidth, H = stage.clientHeight, w = box.offsetWidth, top = strip.el.offsetTop;
-    const left = players.el.isConnected && players.el.offsetWidth ? players.el.offsetLeft + players.el.offsetWidth + 8 : 8;
-    const key = [cam.x, cam.y, cam.zoom, W, H, w, top, left, s.gridVer, s.w].join();
+    const at = stage.getBoundingClientRect();
+    const W = stage.clientWidth, H = stage.clientHeight;
+    // (In training the lesson panel sits where the players list goes; nothing is under it then.)
+    const panel = boxIn(training ? null : players.el, at);
+    const others = [wasBoss && bossBar.el, mapShown && mapBox, chat.el.querySelector('.chat-open'), chat.el.querySelector('.chat-form')]
+      .map((el) => el && boxIn(el, at)).filter(Boolean);
+    const sig = (b) => (b ? [b.x, b.y, b.w, b.h].map(Math.round).join(' ') : '-');
+    const key = [cam.x, cam.y, cam.zoom, W, H, sig(panel), others.map(sig).join('|'), s.gridVer, s.w, s.open].join();
     if (key === stripKey) return;
     stripKey = key;
-    const want = (W - w) / 2;
-    const x = clearLeft(blockedSpans(s, cam, W, H, top, top + box.offsetHeight), w, left, W - w - 8, want);
-    strip.place(Math.abs(x - want) < 1 ? null : x);
+    // As wide as the panel; its height follows from that (the slots keep their shape).
+    const w = panel ? panel.w : strip.el.offsetWidth;
+    strip.place({ x: panel ? panel.x : 8, y: panel ? panel.y + panel.h + 8 : 8, w });
+    const h = strip.el.offsetHeight;
+    // Only the entrances in use: a locked one is a wall until another player joins (s.open changes).
+    const rects = blockedRects(s, cam, W, H, 0, H, (s.doors || []).slice(0, s.open || 1))
+      .concat(others.map((b) => [b.x - 4, b.y - 4, b.x + b.w + 4, b.y + b.h + 4]));
+    const p = sidePlace(panel, { w, h }, { w: W, h: H }, rects);
+    strip.place({ x: p.x, y: p.y, w });
+    // Beside the panel at the top, it may reach the middle, where the notices drop down from: they
+    // move down out of its way, as they did when the strip sat in the middle.
+    root.classList.toggle('hand-mid', !p.below && p.y < 90);
   }
 
   // For the test pages in tools/, which drive the game with made-up mouse and key events and

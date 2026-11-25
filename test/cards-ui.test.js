@@ -1,13 +1,13 @@
 // Tests for the cards on screen (0.3.01), the parts that need no browser (src/ui/cardart.js): every
 // card's picture exists and its words read without gaps; where each card is during the deal for a
 // given state and moment (which one is large in the middle, which are in their slots); where the
-// strip of slots may sit along the top of the floor; and the deal's sounds are in the effects table.
+// strip of slots may sit (along the top of the floor, or beside the players panel); and the deal's sounds are in the effects table.
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, addPlayer, applyCommand, step, cardsShown, revealTick, dealLength, CARDS, SHOPPERS, BUILD, TUNE, TICK_HZ } from '../src/sim/index.js';
 import {
-  CARD_ART, SYMBOLS, STAMPS, FLY, SLIDE, artOf, faceOf, handOf, dealView, slotsFilled, artExists, everyCardId, blockedSpans, clearLeft,
+  CARD_ART, SYMBOLS, STAMPS, FLY, SLIDE, artOf, faceOf, handOf, dealView, slotsFilled, artExists, everyCardId, blockedSpans, blockedRects, clearLeft, sidePlace,
 } from '../src/ui/cardart.js';
 import { SOUNDS } from '../src/audio/effects.js';
 
@@ -154,6 +154,33 @@ test('the strip keeps off entrances and tills along the top of the floor', () =>
   for (const [a, b] of blockedSpans(s, cam, 900, 600, 0, 10)) assert.ok(b > a);
   const tills = blockedSpans(s, cam, 900, 600, 0, 600).length;
   assert.ok(tills > 0, 'the tills are found');
+});
+
+test('on a big screen the strip goes under the players panel, or beside it when that is blocked', () => {
+  const area = { w: 1200, h: 600 }, size = { w: 180, h: 60 };
+  const panel = { x: 10, y: 10, w: 180, h: 90 };
+  assert.deepEqual(sidePlace(panel, size, area, []), { x: 10, y: 108, below: true }, 'under the panel, lined up with it');
+  // A taller panel: the strip follows it down.
+  assert.equal(sidePlace({ ...panel, h: 300 }, size, area, []).y, 318);
+  // An entrance under the panel: beside it, top-aligned.
+  assert.deepEqual(sidePlace(panel, size, area, [[150, 120, 200, 150]]), { x: 198, y: 10, below: false });
+  // No room under a very tall panel: beside it.
+  assert.deepEqual(sidePlace({ ...panel, h: 540 }, size, area, []), { x: 198, y: 10, below: false });
+  // Something beside it at the top too (the boss bar): lower down beside the panel, under that.
+  const boss = [300, 5, 900, 60];
+  assert.deepEqual(sidePlace({ ...panel, h: 540 }, size, area, [boss]), { x: 198, y: 68, below: false });
+  // Nothing on screen: at the top left.
+  assert.deepEqual(sidePlace(null, size, area, []), { x: 8, y: 8, below: true });
+  // Every place it is put is on the floor and clear of what was in the way, when there is one.
+  const rects = [[0, 100, 400, 140], [180, 0, 260, 600]];
+  const p = sidePlace(panel, size, area, rects);
+  assert.ok(p.x + size.w <= area.w && p.y + size.h <= area.h);
+  assert.ok(rects.every(([a, b, c, d]) => p.x >= c || p.x + size.w <= a || p.y >= d || p.y + size.h <= b), JSON.stringify(p));
+  // blockedRects and blockedSpans agree; only the entrances asked for count.
+  const s = createGame({ seed: 1 });
+  const cam = { x: s.w / 2, y: s.h / 2, zoom: 30 };
+  assert.deepEqual(blockedRects(s, cam, 900, 600, 0, 600).map(([a, , c]) => [a, c]), blockedSpans(s, cam, 900, 600, 0, 600));
+  assert.ok(blockedRects(s, cam, 900, 600, 0, 600, []).length < blockedRects(s, cam, 900, 600, 0, 600).length);
 });
 
 test('the deal\'s sounds are in the effects table, one for each moment and side', () => {
