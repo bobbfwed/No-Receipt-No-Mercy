@@ -7,7 +7,7 @@ import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, HOTKEYS } from './input.js';
 import { longPress, touchedLast } from './touch.js';
 import { HOW, HOW_REMOVE, HOW_UPGRADE, HOW_REBUILD } from '../content/help.js';
-import { worded } from '../content/touch.js';
+import { worded, isTouch, PLACE_BY_TOUCH } from '../content/touch.js';
 
 // On a phone the info card is a sheet over the floor; the player can fold it down to one line,
 // and it stays folded for the next tool too.
@@ -124,6 +124,9 @@ export function createBuildBar(input, session) {
   // the layout (display: contents), so the bar is laid out as it always was.
   const scroller = h('div', { class: 'bb-scroll' }, groups, tools);
   const el = h('footer', { class: 'buildbar' }, scroller, info, hint);
+  // A finger (or pen) can drag a building up out of its button onto the floor (0.3.03, input.js);
+  // a sideways swipe still scrolls the bar (touch-action: pan-x in style.css).
+  if (input.watchBar) input.watchBar(scroller, { onPick: hideTip });
 
   /** The button that folds the card down to its heading, for players who know the buildings. */
   const foldBtn = () => h('button', {
@@ -160,6 +163,8 @@ export function createBuildBar(input, session) {
         foldBtn()),
       h('p', null, worded(how.does)),
       h('p', null, h('b', null, 'How: '), worded(how.use)));
+    // On a touch screen: how a finger places it (0.3.03). (The belt's "How" already says drag.)
+    if (def && k !== 'belt' && isTouch()) info.append(h('p', { class: 'bbi-touch' }, PLACE_BY_TOUCH));
   }
 
   /** With the upgrade tool held: what the building under the mouse has and what more it could have. */

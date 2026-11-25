@@ -124,7 +124,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     const f = (p.x - box.left) / Math.max(1, box.width);
     const left = f > 0.6 ? true : f < 0.4 ? false : aidLeft;
     if (left !== aidLeft || !aid.dataset.side) { aidLeft = left; aid.dataset.side = left ? 'left' : 'right'; }
-    const canTurn = !!BUILD[input.tool]?.rot;
+    const canTurn = !!BUILD[input.placingKind]?.rot;
     if (canTurn !== aidRot) { aidRot = canTurn; setClass(turn, 'hidden', !canTurn); }
     if (canTurn && input.dir !== aidDir) { aidDir = input.dir; setText(turnArrow, ARROWS[input.dir]); }
   }

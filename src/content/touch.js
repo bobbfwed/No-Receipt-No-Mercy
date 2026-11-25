@@ -53,3 +53,7 @@ export const isTouch = () => typeof matchMedia === 'function' && matchMedia('(po
 
 /** Words text for the device it is shown on. */
 export const worded = (text) => (isTouch() ? forTouch(text) : text);
+
+/** How a building is placed by touch (0.3.03), for the held building's card in the bar on a touch
+ *  screen. (The training shift words its own lessons.) */
+export const PLACE_BY_TOUCH = 'Tap the floor to build it there. Or drag, from the floor or straight up out of the bar: it rides just above your finger and lands where it shows.';

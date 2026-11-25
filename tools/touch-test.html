@@ -30,6 +30,16 @@
     exactly one building, where the finger lifts, by tap or drag (a bigger one tapped off its
     top-left tile too) without an error banner; tapping the held tool's button again puts it down,
     as does the put-down button; the map and home buttons move the view.
+  0.3.03 (the owner's requests): once a finger with a building held drags, the preview rides above
+    it and the building goes there, not under the finger; a finger that does not drag places on the
+    tapped tile however long it rests, and one that drags and comes back stays lifted; a building
+    dragged up out of its bar button follows the finger lifted and lifting places exactly one (a
+    Barcode Laser and a TV Salesman centred on the lifted point, the belt one belt), with what was
+    held before held again after; a sideways swipe on the bar places nothing; a second finger
+    cancels a bar drag; a preview lifted off the floor places nothing; a pointercancel leaves nothing
+    held or previewed; a finger held at an edge of the floor slides the view slowly and it stops
+    when the finger leaves the edge or lifts (the bottom edge only once a bar drag has been up on
+    the floor).
   Open it at phone size with touch emulation, and read the results from the page:
     node tools/realshot.mjs "http://localhost:5173/tools/touch-test.html" out.png 40000 390 844 --touch --dpr=2 --eval=__result
   __result is "PASS n/n" or "FAIL ..." once done; each check is also listed on the picture.
@@ -39,6 +49,7 @@
 <script type="module">
   import { canPlace, statsOf } from '../src/sim/index.js';
   import { selectedReach } from '../src/render/reach.js';
+  import { LIFT, EDGE, liftPx } from '../src/ui/lift.js';
   const frame = document.getElementById('game');
   const logEl = document.getElementById('log');
   const results = [];
@@ -69,6 +80,10 @@
       const cam = renderer.cam;
       return { x: r.left + r.width / 2 + (tx + 0.5 - cam.x) * cam.zoom, y: r.top + r.height / 2 + (ty + 0.5 - cam.y) * cam.zoom };
     };
+    // Where a finger goes for a lifted preview (0.3.03) to be centred on a w x h footprint whose
+    // top-left tile is (tx, ty): below it by the lift.
+    const liftNow = () => liftPx(renderer.cam.zoom);
+    const under = (tx, ty, w = 1, h = 1) => { const c = at(tx + (w - 1) / 2, ty + (h - 1) / 2); return { x: c.x, y: c.y + liftNow() }; };
     const count = () => s().grid.filter(Boolean).length;
     const b = (x, y) => s().grid[y * s().w + x];
     const fire = (type, id, x, y) => canvas.dispatchEvent(new win.PointerEvent(type, {
@@ -82,10 +97,11 @@
       for (let k = 1; k <= n; k++) { fire('pointermove', id, a.x + ((z.x - a.x) * k) / n, a.y + ((z.y - a.y) * k) / n); await wait(4); }
     }
     /** One finger along a path of screen points. */
-    async function finger(points, id = 11) {
+    async function finger(points, id = 11, hold = 0) {
       fire('pointerdown', id, points[0].x, points[0].y);
       for (let i = 1; i < points.length; i++) await slide(id, points[i - 1], points[i]);
       const e = points[points.length - 1];
+      if (hold) await wait(hold); // (a lifted preview eases up before the finger lifts)
       fire('pointerup', id, e.x, e.y);
       await wait(30);
     }
@@ -274,57 +290,91 @@
     check('tapping empty floor closes the sheet', sheet.classList.contains('hidden') && !input.selected);
     check('... and a tap does not move the view', renderer.cam.x === cam1.x && renderer.cam.y === cam1.y);
 
-    // 10. A drag with a Sprinkler held: nothing while the finger is down, the preview follows it,
-    // one Sprinkler where it lifts.
+    // 10. A drag with a Sprinkler held: nothing while the finger is down; once it drags, the preview
+    // rises above the finger (0.3.03) and follows it there, and one Sprinkler goes where the preview
+    // is when it lifts, not under the finger.
     await pick('sprinkler');
     s().players[me].cash += 2000;
     const row = freeRun('sprinkler', 5);
     n0 = count();
     const path = [0, 1, 2, 3, 4].map((i) => ({ x: row.x + i, y: row.y }));
-    fire('pointerdown', 11, at(path[0].x, path[0].y).x, at(path[0].x, path[0].y).y);
+    const p0 = under(path[0].x, path[0].y);
+    fire('pointerdown', 11, p0.x, p0.y);
     await frameWait();
     const seen = [];
     let builtMeanwhile = false;
     for (let i = 1; i < path.length; i++) {
-      await slide(11, at(path[i - 1].x, path[i - 1].y), at(path[i].x, path[i].y));
+      await slide(11, under(path[i - 1].x, path[i - 1].y), under(path[i].x, path[i].y));
+      await wait(LIFT.easeMs + 60); // the preview eases up the first time
       const h = input.hover;
       seen.push(h && h.x === path[i].x && h.y === path[i].y);
       if (count() !== n0) builtMeanwhile = true;
     }
     await frameWait();
     check('with a Sprinkler held, a finger moving over the floor builds nothing while it is down', !builtMeanwhile && count() === n0);
-    check('... the preview tile follows the finger', seen.every(Boolean), seen.map((x) => (x ? 'y' : 'n')).join(''));
-    check('... the renderer is told to draw the aiming lines', input.view().aim === true);
+    check('... the preview follows the finger, lifted above it', seen.every(Boolean), seen.map((x) => (x ? 'y' : 'n')).join(''));
+    check('... with no dashed aiming lines, and a line to the finger instead', input.view().aim === false && !!input.view().lift);
     check('... the hint that another finger cancels is showing', shown(aid()) && /another finger to cancel/.test(aid().textContent), aid().textContent);
     check('... with no Rotate button: a Sprinkler does not turn', !shown(turnBtn()));
-    const last = at(path[4].x, path[4].y);
+    const last = under(path[4].x, path[4].y);
+    const lastTile = renderer.tileAt(last.x, last.y);
     const ar = aid().getBoundingClientRect();
     check('... and the hint is not under the finger', !(last.x >= ar.left && last.x <= ar.right && last.y >= ar.top && last.y <= ar.bottom), `finger ${last.x | 0},${last.y | 0}; hint ${ar.left | 0}-${ar.right | 0}, ${ar.top | 0}-${ar.bottom | 0}`);
     fire('pointerup', 11, last.x, last.y);
     await wait(40);
-    check('lifting the finger builds exactly one Sprinkler, on the tile it lifted from',
+    check('lifting the finger builds exactly one Sprinkler, where the lifted preview was',
       count() === n0 + 1 && b(path[4].x, path[4].y)?.k === 'sprinkler' && path.slice(0, 4).every((t) => !b(t.x, t.y)), `${count() - n0} built`);
+    check('... and nothing under the finger', !!lastTile && (lastTile.y !== path[4].y) && b(lastTile.x, lastTile.y)?.k !== 'sprinkler', `finger on ${lastTile?.x},${lastTile?.y}`);
     await frameWait();
     check('... and the hint goes when the finger lifts', !shown(aid()) && input.placing === null);
     const sp = path[4];
 
-    // 10b. Lifted on a tile that is taken: nothing is built, and the player is told why.
+    // 10b. Lifted with the preview on a tile that is taken: nothing is built, and the player is told why.
     const [f1] = freeTiles('sprinkler', 1);
     n0 = count();
     let nope0 = nopes;
-    await finger([at(f1.x, f1.y), at(c1.x, c1.y)]);
+    await finger([under(f1.x, f1.y), under(c1.x, c1.y)], 11, LIFT.easeMs + 60);
     await wait(40);
-    check('lifted on a tile already built on, nothing is built', count() === n0 && b(c1.x, c1.y)?.k === 'crate' && !b(f1.x, f1.y));
+    check('lifted with the preview on a tile already built on, nothing is built', count() === n0 && b(c1.x, c1.y)?.k === 'crate' && !b(f1.x, f1.y));
     check('... and the refusal is reported, as for a tap', nopes === nope0 + 1, `${nopes - nope0} refusals`);
 
-    // 10c. Lifted over a button (the camera pad): nothing is built, nothing refused.
+    // 10c. Lifted with the preview over a button (the camera pad): nothing is built, nothing refused.
     const padBtn = doc.querySelector('.tc-fit').getBoundingClientRect();
-    const overPad = { x: padBtn.left + padBtn.width / 2, y: padBtn.top + padBtn.height / 2 };
+    const overPad = { x: padBtn.left + padBtn.width / 2, y: padBtn.top + padBtn.height / 2 + liftNow() };
     n0 = count(); nope0 = nopes;
     const camPad = { ...renderer.cam };
-    await finger([at(f1.x, f1.y), overPad]);
+    await finger([under(f1.x, f1.y), overPad], 11, LIFT.easeMs + 60);
     await wait(40);
-    check('lifted over a button, nothing is built or refused', count() === n0 && nopes === nope0 && renderer.cam.zoom === camPad.zoom);
+    check('lifted with the preview over a button, nothing is built or refused', count() === n0 && nopes === nope0 && renderer.cam.zoom === camPad.zoom);
+
+    // 10f. Tap or drag (the owner, 0.3.03): a finger that does not drag places on the tapped tile
+    // however long it rests; one that drags at all places where the lifted preview is, even when it
+    // comes back to where it went down.
+    const qs = freeTiles('sprinkler', 60);
+    const q1 = qs[0], q2 = qs.find((t) => Math.abs(t.x - q1.x) > 2 || Math.abs(t.y - q1.y) > 3) || qs[qs.length - 1];
+    n0 = count();
+    const qp = at(q1.x, q1.y);
+    fire('pointerdown', 11, qp.x, qp.y);
+    fire('pointermove', 11, qp.x + 3, qp.y - 1); // a shaky finger
+    await wait(600);
+    check('a long, still press (600 ms, 3 px) keeps the preview under the finger', input.hover?.x === q1.x && input.hover?.y === q1.y && !input.view().lift);
+    fire('pointerup', 11, qp.x + 3, qp.y - 1);
+    await wait(40);
+    check('... and places on the tapped tile', b(q1.x, q1.y)?.k === 'sprinkler' && count() === n0 + 1);
+    const back = under(q2.x, q2.y); // the finger goes down below q2, so its lifted preview is on q2
+    const downOn = renderer.tileAt(back.x, back.y);
+    n0 = count();
+    fire('pointerdown', 11, back.x, back.y);
+    await frameWait();
+    const firstOn = input.hover && `${input.hover.x},${input.hover.y}`;
+    await slide(11, back, { x: back.x, y: back.y - 20 });
+    await slide(11, { x: back.x, y: back.y - 20 }, back);
+    await wait(LIFT.easeMs + 80);
+    const stillUp = !!input.view().lift && input.hover?.x === q2.x && input.hover?.y === q2.y;
+    fire('pointerup', 11, back.x, back.y);
+    await wait(40);
+    check('a press that drags 20 px and comes back stays lifted', stillUp, `preview first on ${firstOn}, finger on ${downOn?.x},${downOn?.y}`);
+    check('... and places at the lifted tile, not the one it went down on', b(q2.x, q2.y)?.k === 'sprinkler' && count() === n0 + 1 && b(downOn.x, downOn.y)?.k !== 'sprinkler');
 
     // 10d. A second finger on the floor cancels, and the two then pinch.
     n0 = count();
@@ -469,6 +519,185 @@
       `${b(ts.x, ts.y)?.k || 'gone'}`);
     check('... without an error banner', errRows().length === errs0, errRows().join(' | '));
     click(doc.querySelector('.tc-drop'));
+
+    // 14. Dragging a building up out of its button in the bar (0.3.03). The finger's moves are sent
+    // to the button, as the browser does once the button has captured the finger.
+    renderer.fit(); input.goHome();
+    await wait(80);
+    const scroller = doc.querySelector('.bb-scroll');
+    const btnFire = (el, type, id, x, y) => el.dispatchEvent(new win.PointerEvent(type, {
+      pointerType: 'touch', pointerId: id, isPrimary: true, clientX: x, clientY: y,
+      button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
+      bubbles: true, cancelable: true, width: 20, height: 20,
+    }));
+    /** Brings a bar button into sight (the bar scrolls sideways on a phone) and gives its middle. */
+    function barSpot(k) {
+      const btn = barBtn(k);
+      const a = scroller.getBoundingClientRect(), r0 = btn.getBoundingClientRect();
+      if (r0.left < a.left || r0.right > a.right) scroller.scrollLeft += r0.left - a.left - (a.width - r0.width) / 2;
+      const r = btn.getBoundingClientRect();
+      return { btn, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    /** A finger down on bar button k, up to `to` (moves in small steps); left down, or ended with `end`. */
+    async function barDrag(k, to, { end = 'pointerup', id = 21, clickAfter = true } = {}) {
+      const { btn, x, y } = barSpot(k);
+      btnFire(btn, 'pointerdown', id, x, y);
+      const n = Math.max(1, Math.ceil(Math.hypot(to.x - x, to.y - y) / 8));
+      for (let i = 1; i <= n; i++) { btnFire(btn, 'pointermove', id, x + ((to.x - x) * i) / n, y + ((to.y - y) * i) / n); await wait(4); }
+      await wait(LIFT.easeMs + 60);
+      if (!end) return btn;
+      btnFire(btn, end, id, to.x, to.y);
+      // A phone may still send the button a click after the finger lifts: it must not pick the tool.
+      if (clickAfter && end === 'pointerup') btn.click();
+      await wait(40);
+      return btn;
+    }
+    check('the bar lets the browser keep sideways swipes only (touch-action: pan-x)', win.getComputedStyle(scroller).touchAction === 'pan-x' && win.getComputedStyle(barBtn('crate')).touchAction === 'pan-x');
+    s().players[me].cash += 5000;
+    input.setTool(null);
+    await wait(80);
+    const [d1] = freeTiles('sprinkler', 1);
+    n0 = count();
+    const fd1 = under(d1.x, d1.y);
+    const fingerTile1 = renderer.tileAt(fd1.x, fd1.y);
+    const fingerHad1 = fingerTile1 && (b(fingerTile1.x, fingerTile1.y)?.k || '-');
+    const dragBtn = await barDrag('sprinkler', fd1, { end: null });
+    await frameWait();
+    check('a building dragged up out of the bar follows the finger, lifted above it', input.carrying && input.view().tool === 'sprinkler' && input.hover?.x === d1.x && input.hover?.y === d1.y,
+      `preview ${JSON.stringify(input.hover)}, wanted ${d1.x},${d1.y}`);
+    check('... with the cancel hint showing, and nothing built yet', shown(aid()) && /another finger/.test(aid().textContent) && count() === n0);
+    check('... and nothing picked meanwhile', input.tool === null);
+    btnFire(dragBtn, 'pointerup', 21, fd1.x, fd1.y);
+    dragBtn.click();
+    await wait(60);
+    check('lifting places exactly one, where the lifted preview was', b(d1.x, d1.y)?.k === 'sprinkler' && count() === n0 + 1, `${count() - n0} built`);
+    check('... and nothing under the finger', !fingerTile1 || (b(fingerTile1.x, fingerTile1.y)?.k || '-') === fingerHad1, `finger on ${fingerTile1?.x},${fingerTile1?.y}`);
+    check('... and afterwards nothing is held, as before the drag (the click after it is swallowed)', input.tool === null && !input.carrying && input.placing === null);
+    await frameWait();
+    check('... and the hint goes', !shown(aid()));
+
+    // With a crate held, a Barcode Laser (it turns: Rotate shows) and a TV Salesman (2 x 2) dragged
+    // from the bar: each placed with its footprint centred on the lifted point; the crate is held after.
+    await pick('crate');
+    const dL = input.dir;
+    const [l1] = freeTiles('railgun', 1, null, dL);
+    n0 = count();
+    const lb = await barDrag('railgun', under(l1.x, l1.y, dL & 1 ? 1 : 3, dL & 1 ? 3 : 1), { end: null });
+    await frameWait();
+    check('dragging a Barcode Laser from the bar shows the big Rotate button', shown(turnBtn()));
+    btnFire(lb, 'pointerup', 21, under(l1.x, l1.y, dL & 1 ? 1 : 3, dL & 1 ? 3 : 1).x, under(l1.x, l1.y, dL & 1 ? 1 : 3, dL & 1 ? 3 : 1).y);
+    await wait(60);
+    check('... and lifting places it with its footprint centred on the lifted point', b(l1.x, l1.y)?.k === 'railgun' && count() === n0 + 3, `${count() - n0} tiles built at ${l1.x},${l1.y}`);
+    check('... and the crate is held again after', input.tool === 'crate');
+    const [t2] = freeTiles('salesman', 40).filter((t) => [0, 1].every((dx) => [0, 1].every((dy) => !b(t.x + dx, t.y + dy) && onFloor(t.x + dx, t.y + dy) && canPlace(s(), 'salesman', t.x, t.y, me, 0) === null)));
+    n0 = count();
+    await barDrag('salesman', under(t2.x, t2.y, 2, 2));
+    check('a TV Salesman (2 x 2) dragged from the bar goes with its footprint centred on the lifted point', b(t2.x, t2.y)?.k === 'salesman' && b(t2.x + 1, t2.y + 1)?.k === 'salesman' && count() === n0 + 4, `at ${t2.x},${t2.y}`);
+    check('... and the crate is still held', input.tool === 'crate');
+
+    // The belt from the bar: one belt where the lifted preview is, facing the current way.
+    const [e1] = freeTiles('belt', 1);
+    n0 = count();
+    await barDrag('belt', under(e1.x, e1.y));
+    check('the belt dragged from the bar places one belt at the lifted tile, facing the current way', b(e1.x, e1.y)?.k === 'belt' && b(e1.x, e1.y).d === input.dir && count() === n0 + 1);
+    input.setTool(null);
+    await wait(60);
+
+    // A sideways swipe on the bar: the browser scrolls the bar and cancels the finger. Nothing built.
+    n0 = count();
+    {
+      const { btn, x, y } = barSpot('forklift');
+      btnFire(btn, 'pointerdown', 22, x, y);
+      for (let i = 1; i <= 6; i++) { btnFire(btn, 'pointermove', 22, x - i * 8, y - 1); await wait(4); }
+      btnFire(btn, 'pointercancel', 22, x - 48, y - 1);
+      await wait(60);
+    }
+    check('a sideways swipe on the bar places nothing and picks nothing', count() === n0 && input.tool === null && input.placing === null && !input.carrying);
+
+    // A second finger on the floor cancels a drag from the bar.
+    const [g2] = freeTiles('sprinkler', 1);
+    n0 = count(); nope0 = nopes;
+    const cb = await barDrag('sprinkler', under(g2.x, g2.y), { end: null });
+    const other = at(g2.x + 2, g2.y + 1);
+    fire('pointerdown', 12, other.x, other.y);
+    await wait(30);
+    const cancelledNow = !input.carrying && input.placing === null;
+    fire('pointerup', 12, other.x, other.y);
+    btnFire(cb, 'pointerup', 21, under(g2.x, g2.y).x, under(g2.x, g2.y).y);
+    await wait(60);
+    check('a second finger on the floor cancels a drag from the bar: nothing is built when either lifts', cancelledNow && count() === n0 && !b(g2.x, g2.y) && !b(g2.x + 2, g2.y + 1));
+    check('... nothing is held after, and nothing refused', input.tool === null && nopes === nope0);
+
+    // Lifted with the preview off the floor (the finger near the top of the floor): nothing, quietly.
+    const top = canvas.getBoundingClientRect().top;
+    n0 = count(); nope0 = nopes;
+    const ob = await barDrag('sprinkler', { x: mid.x, y: top + 20 }, { end: null });
+    await frameWait();
+    const noPreview = input.hover === null;
+    btnFire(ob, 'pointerup', 21, mid.x, top + 20);
+    await wait(60);
+    check('lifted with the preview off the floor, nothing is built or refused', noPreview && count() === n0 && nopes === nope0);
+
+    // The browser cancelling the finger mid-drag (pointercancel): nothing held, nothing previewed.
+    n0 = count();
+    const pb = await barDrag('forklift', { x: mid.x, y: mid.y }, { end: 'pointercancel' });
+    await frameWait();
+    check('a pointercancel mid-drag leaves nothing built, held or previewed', count() === n0 && input.tool === null && !input.carrying && input.placing === null && input.hover === null && !input.view().tool && !shown(aid()));
+    void pb;
+
+    // 15. The edge slide (0.3.03): a finger placing a building held near an edge of the floor slides
+    // the view that way, and it stops when the finger leaves the edge or lifts.
+    renderer.zoomBy(3);
+    renderer.centerOn(s().w / 2, s().h / 2);
+    await wait(80);
+    const cr = canvas.getBoundingClientRect();
+    const camE = { ...renderer.cam };
+    const se = await barDrag('crate', { x: mid.x, y: mid.y }, { end: null });
+    const camMid = { ...renderer.cam };
+    await (async () => { for (let i = 1; i <= 8; i++) { btnFire(se, 'pointermove', 21, mid.x + ((cr.right - 6 - mid.x) * i) / 8, mid.y); await wait(4); } })();
+    await wait(500);
+    const camSlid = { ...renderer.cam };
+    check('a finger held at the right edge of the floor slides the view right, slowly', camSlid.x > camMid.x + 0.5 && camSlid.x - camMid.x < EDGE.tilesPerSec * 0.8 && Math.abs(camMid.x - camE.x) < 0.01,
+      `${camMid.x.toFixed(2)} -> ${camSlid.x.toFixed(2)} tiles`);
+    btnFire(se, 'pointermove', 21, mid.x, mid.y);
+    await wait(40);
+    const camStop = { ...renderer.cam };
+    await wait(300);
+    check('... and stops when the finger moves off the edge', Math.abs(renderer.cam.x - camStop.x) < 0.01 && Math.abs(renderer.cam.y - camStop.y) < 0.01);
+    // Just above the bar, never having been up on the floor clear of its bottom edge: no slide down.
+    btnFire(se, 'pointercancel', 21, mid.x, mid.y);
+    await wait(40);
+    renderer.zoomBy(2.5); // (so the store is taller than the view and can slide down)
+    renderer.centerOn(s().w / 2, s().h / 2);
+    await wait(60);
+    const b2 = await barDrag('crate', { x: mid.x, y: cr.bottom - 10 }, { end: null });
+    const camLow = { ...renderer.cam };
+    await wait(400);
+    check('a building just picked up from the bar does not at once slide the view down', Math.abs(renderer.cam.y - camLow.y) < 0.01);
+    btnFire(b2, 'pointermove', 21, mid.x, mid.y);
+    await wait(30);
+    btnFire(b2, 'pointermove', 21, mid.x, cr.bottom - 6);
+    await wait(500);
+    const camDown = { ...renderer.cam };
+    check('... but once it has been up on the floor, the bottom edge slides it down', camDown.y > camLow.y + 0.5, `${camLow.y.toFixed(2)} -> ${camDown.y.toFixed(2)}`);
+    n0 = count();
+    btnFire(b2, 'pointerup', 21, mid.x, cr.bottom - 6);
+    await wait(40);
+    const camUp = { ...renderer.cam };
+    await wait(300);
+    check('... and stops when the finger lifts', Math.abs(renderer.cam.x - camUp.x) < 0.01 && Math.abs(renderer.cam.y - camUp.y) < 0.01);
+    // A finger on the floor placing a held building slides it too.
+    await pick('crate');
+    const camF = { ...renderer.cam };
+    fire('pointerdown', 11, mid.x, mid.y);
+    await slide(11, mid, { x: cr.left + 6, y: mid.y });
+    await wait(500);
+    check('a finger on the floor placing a building slides the view at the left edge too', renderer.cam.x < camF.x - 0.5, `${camF.x.toFixed(2)} -> ${renderer.cam.x.toFixed(2)}`);
+    fire('pointerdown', 12, mid.x, mid.y); // (cancelled: nothing built)
+    fire('pointerup', 12, mid.x, mid.y);
+    fire('pointerup', 11, cr.left + 6, mid.y);
+    await wait(40);
+    input.setTool(null);
 
     // 13. The camera buttons.
     renderer.zoomBy(2.5);

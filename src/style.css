@@ -2256,6 +2256,10 @@ body.dealing .hand-wrap { z-index: 41; }
    The floor's own canvas takes every gesture (touch-action: none, above). */
 html, body { overscroll-behavior: none; }
 .game { touch-action: pan-x pan-y; -webkit-tap-highlight-color: transparent; }
+/* The build bar (0.3.03): the browser keeps sideways swipes, which scroll the bar, and hands every
+   other finger or pen movement to the page, where an upward drag out of a building's button picks
+   that building up (input.js, watchBar). A mouse is not affected. */
+.buildbar .bb-scroll, .buildbar .bb-btn { touch-action: pan-x; }
 .menu { -webkit-tap-highlight-color: transparent; }
 
 /* ---------------------------------------------------------------- touch screens */
@@ -2720,6 +2724,8 @@ html, body { overscroll-behavior: none; }
   .bbi-fold::after { content: "▾"; }
   .bb-info.folded .bbi-fold::after { content: "▴"; }
   .bb-info.folded p { display: none; }
+  /* How a finger places it (0.3.03), under the card's "How". */
+  .bb-info .bbi-touch { margin-top: 0.15rem; font-style: italic; opacity: 0.9; }
 }
 
 @media (max-width: 1099px), (max-height: 559px) {

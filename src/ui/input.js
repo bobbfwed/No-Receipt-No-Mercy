@@ -8,16 +8,28 @@
 //     offers rotate, upgrade and remove for it)
 //   - one finger with a building held (not the belt), or the Remove or Upgrade tool, places: the
 //     preview follows the finger while it is down, and the building is placed (or removed, or its
-//     sheet opened) once, on the tile the finger lifts from. Lifted off the floor, or over a
-//     button or panel, it does nothing. (The owner's request, 0.3.01: a drag used to build a row.)
-//   - with the belt held, a tap lays one and a drag lays a line, as the mouse does
+//     sheet opened) once, where the finger lifts. Lifted off the floor, or over a button or
+//     panel, it does nothing. (The owner's request, 0.3.01: a drag used to build a row.)
+//   - a building's preview is lifted above the finger (0.3.03, the owner's request; numbers in
+//     lift.js): a tap places on the tapped tile however long the finger rests, but once the finger
+//     drags at all the preview rises about one and a half tiles above it, stays up for the rest of
+//     that touch, and the building goes there. The
+//     Remove and Upgrade tools act on the tile under the finger, with dashed lines along its row and
+//     column (view.aim) because the finger hides it.
+//   - a building can be dragged up out of its button in the bar (0.3.03, watchBar below): the lifted
+//     preview follows the finger over the floor, and lifting places one. What was held before is
+//     held again afterwards. A sideways swipe on the bar still scrolls it.
+//   - while a building is being placed, a finger held near an edge of the floor slides the view
+//   - with the belt held, a tap lays one and a drag lays a line under the finger, as the mouse does
 //   - a second finger on the floor while the first is placing cancels it: nothing more is built
 //     when either lifts (belts already laid by a drag stay), and the two fingers move the view
 // Nothing is built until the finger has either lifted or (a belt) moved a little, so a second
 // finger that lands a moment after the first turns the touch into a pinch before anything is placed.
 // touch.js shows a Rotate button and a "second finger cancels" hint while a finger is placing.
-import { BUILD, doorOf, anchorOf } from '../sim/index.js';
+// A pen is treated as a finger; only the mouse keeps the mouse's rules.
+import { BUILD, doorOf, anchorOf, sizeOf } from '../sim/index.js';
 import { startDrag } from './drag.js';
+import { liftFraction, createPress, liftedSpot, edgeVelocity, barGesture, EDGE } from './lift.js';
 
 export const BUILD_KEYS = Object.keys(BUILD);
 /** Hotkeys 1-9 then 0, in the order of BUILD. */
@@ -35,6 +47,8 @@ const PAN_KEYS = {
   ArrowUp: [0, -1], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowRight: [1, 0],
 };
 const TAP_SLOP_PX = 10; // a finger that moves less than this is a tap, not a drag
+/** A finger, or a pen: both follow the finger's rules (the mouse keeps its own). */
+const fingerish = (e) => e.pointerType === 'touch' || e.pointerType === 'pen';
 
 /**
  * @param {Object} o
@@ -156,7 +170,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   // ---- Pointer ---------------------------------------------------------------------------------
   function onPointerMove(e) {
-    if (e.pointerType === 'touch') { onTouchMove(e); return; }
+    if (fingerish(e)) { onTouchMove(e); return; }
     if (grab && e.pointerId === grab.id) {
       const z = renderer.cam.zoom || 1;
       renderer.pan((grab.x - e.clientX) / z, (grab.y - e.clientY) / z);
@@ -171,7 +185,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   }
 
   function onPointerDown(e) {
-    if (e.pointerType === 'touch') { onTouchDown(e); return; }
+    if (fingerish(e)) { onTouchDown(e); return; }
     if (drag || grab) return;
     if (e.button === 1 && renderer.pan) {
       // Middle button: drag the map.
@@ -204,7 +218,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   }
 
   function finishDrag(e) {
-    if (e && e.pointerType === 'touch') { onTouchUp(e); return; }
+    if (e && fingerish(e)) { onTouchUp(e); return; }
     if (grab && (!e || e.pointerId === undefined || e.pointerId === grab.id)) {
       try { canvas.releasePointerCapture(grab.id); } catch { /* already released */ }
       grab = null;
@@ -218,23 +232,32 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   function onPointerLeave(e) {
     // A finger "leaves" every time it lifts; what it last touched stays marked.
-    if (e && e.pointerType === 'touch') return;
+    if (e && fingerish(e)) return;
     if (!drag) hover = null;
   }
 
   // ---- Touch -------------------------------------------------------------------------------------
   const touches = new Map(); // pointer id -> { x, y } of each finger on the floor
   // What the fingers are doing:
-  //   { kind: 'one', id, x0, y0, lx, ly, tile, mode: 'wait' | 'pan' | 'build' | 'place' }
+  //   { kind: 'one', id, x0, y0, lx, ly, tile, mode: 'wait' | 'pan' | 'build' | 'place', lifts, liftAt }
   //     'wait': not yet known whether it is a tap or a drag (nothing held, or the belt)
   //     'build': a belt line being laid; 'place': one building, tool action on the lift tile
+  //     lifts: a building is being placed, whose preview rises above the finger once it drags;
+  //     liftAt: when it started to rise (null while the press is still a tap)
   //   { kind: 'two', dist, mx, my }
   let gesture = null;
   let tdrag = null; // a line being built by one finger: the drag planner
+  // A building dragged out of its button in the bar (watchBar), or null:
+  //   { id, kind, btn, x0, y0, lx, ly, picked, above }
+  //   picked: the finger has left the button upward, and the building follows it; above: the finger
+  //   has been up on the floor, clear of its bottom edge (only then does that edge slide the view)
+  let carry = null;
 
   const builds = () => !isOffice() && (tool === 'remove' || !!BUILD[tool]);
   /** What is held acts once, where the finger lifts (everything but the belt; see the top). */
   const placesOne = () => !isOffice() && !!tool && tool !== 'belt' && (builds() || tool === 'upgrade');
+  /** The building being placed: one dragged from the bar, or else what is held. */
+  const placeKind = () => (carry && carry.picked ? carry.kind : tool);
 
   /** The finger is over the floor itself: on the map, and not under a button or panel. */
   function onFloor(x, y) {
@@ -243,6 +266,43 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const doc = canvas.ownerDocument;
     const top = doc && doc.elementFromPoint ? doc.elementFromPoint(x, y) : canvas;
     return top === canvas ? t : null;
+  }
+
+  /**
+   * The tile a building of kind k goes on with a finger at (x, y) and its preview lifted by the
+   * fraction f (0 under the finger, 1 fully up): the anchor tile of its footprint, centred on the
+   * lifted point. Null when that point is not on the floor itself (off the map, above the floor, or
+   * under the bar or a panel): nothing is placed there.
+   */
+  function liftTarget(x, y, k, f) {
+    const s = session.state, cam = renderer.cam;
+    if (!s || !BUILD[k] || !(cam.zoom > 0)) return null;
+    const [w, h] = sizeOf(k, BUILD[k].rot ? dir : 0);
+    const spot = liftedSpot(x, y, cam, canvas.getBoundingClientRect(), w, h, s.w, s.h, f);
+    if (!onFloor(spot.sx, spot.sy)) return null;
+    if (!pointer || spot.x !== pointer.x || spot.y !== pointer.y) { pointer = { x: spot.x, y: spot.y }; cursorDirty = true; }
+    return spot.tile;
+  }
+
+  /**
+   * The finger placing a building with its preview lifted, or null: { x, y, k, f, bottom }, where
+   * f is how far the preview has risen and bottom whether the floor's bottom edge slides the view.
+   */
+  function lifted(now = performance.now()) {
+    if (isOffice()) return null;
+    if (carry && carry.picked) return { x: carry.lx, y: carry.ly, k: carry.kind, f: 1, bottom: carry.above };
+    const g = gesture;
+    if (g && g.kind === 'one' && g.mode === 'place' && g.lifts && g.liftAt !== null && BUILD[tool]) {
+      return { x: g.lx, y: g.ly, k: tool, f: liftFraction(now - g.liftAt), bottom: true };
+    }
+    return null;
+  }
+
+  /** Points the preview where the finger placing a lifted building would put it. */
+  function aimLifted(now) {
+    const l = lifted(now);
+    if (l) hover = liftTarget(l.x, l.y, l.k, l.f);
+    return l;
   }
 
   /** One finger lifted (or tapped) on tile t with something held that acts once. */
@@ -292,11 +352,20 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     e.preventDefault();
     touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { canvas.setPointerCapture(e.pointerId); } catch { /* fine without */ }
+    // A finger on the floor while another drags a building from the bar cancels that drag, and
+    // this finger then only moves the view (it must not place what is held either).
+    const cancelled = carry && carry.picked;
+    if (carry) dropCarry(true);
     if (touches.size === 1) {
       const t = renderer.tileAt(e.clientX, e.clientY);
-      gesture = { kind: 'one', id: e.pointerId, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, tile: t, mode: placesOne() ? 'place' : 'wait' };
-      // Show the ghost of what is held under the finger straight away.
-      if (builds() || tool === 'upgrade') hover = t;
+      const mode = cancelled ? 'pan' : placesOne() ? 'place' : 'wait';
+      gesture = {
+        kind: 'one', id: e.pointerId, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, tile: t,
+        mode, lifts: mode === 'place' && !!BUILD[tool], liftAt: null, press: createPress(e.clientX, e.clientY),
+      };
+      // Show the ghost of what is held under the finger straight away (a building's rises above the
+      // finger once it drags).
+      if (!cancelled && (builds() || tool === 'upgrade')) hover = t;
       notePointer(e.clientX, e.clientY, t);
     } else if (touches.size === 2) {
       // A second finger on the floor cancels what the first was placing (belts a drag has already
@@ -328,11 +397,16 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     }
     if (e.pointerId !== g.id) return;
     if (g.mode === 'place') {
+      g.lx = e.clientX; g.ly = e.clientY;
+      // A building's preview rises above the finger once the press is not a quick tap, and then
+      // follows it there (tick() eases it up and slides the view at the edges).
+      const now = performance.now();
+      if (g.lifts && g.press.move(e.clientX, e.clientY) && g.liftAt === null) g.liftAt = now;
+      if (g.lifts && g.liftAt !== null) { aimLifted(now); return; }
       // The preview follows the finger; over a button or off the map there is none (nothing
       // would be placed there).
       hover = onFloor(e.clientX, e.clientY);
       notePointer(e.clientX, e.clientY, hover);
-      g.lx = e.clientX; g.ly = e.clientY;
       return;
     }
     if (g.mode === 'wait') {
@@ -369,13 +443,98 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (e.pointerId !== g.id) return;
     gesture = null;
     if (g.mode === 'place') {
-      // Acts once, on the tile the finger lifted from, if that is the floor itself.
-      // (A second finger may have put the tool down meanwhile, with the bar's DROP button.)
-      const t = e.type === 'pointerup' && placesOne() ? onFloor(e.clientX, e.clientY) : null;
+      // Acts once: a lifted building where its preview is, anything else on the tile the finger
+      // lifted from, if that is the floor itself. (A second finger may have put the tool down
+      // meanwhile, with the bar's DROP button.)
+      let t = null;
+      if (e.type === 'pointerup' && placesOne()) {
+        const up = g.lifts && g.liftAt !== null && BUILD[tool];
+        t = up ? liftTarget(e.clientX, e.clientY, tool, liftFraction(performance.now() - g.liftAt)) : onFloor(e.clientX, e.clientY);
+      }
       if (t) placeAt(t); else hover = null;
     } else if (g.mode === 'build') endTouchBuild();
     else if (g.mode === 'wait' && e.type === 'pointerup') touchTap(g.tile);
   }
+
+  // ---- Dragging a building out of the bar (0.3.03) -------------------------------------------------
+  // A finger (or pen) pressed on a building's button in the bar and moved mostly upward picks that
+  // building up: its lifted preview follows the finger over the floor, and lifting the finger places
+  // one there. Nothing about what is held changes, so what was held before is held again after. A
+  // mostly sideways move is left to the browser, which scrolls the bar (the bar's CSS allows it
+  // sideways pans only, touch-action: pan-x) and then cancels the pointer. A plain tap is the
+  // button's click, as always; the click that may follow a drag is swallowed.
+  // The click a drag's button may still get once the finger lifts: { btn, until }, or null. A new
+  // press on the bar clears it, so a real tap straight after a drop still counts.
+  let swallow = null;
+
+  /** Ends a drag from the bar; `cancelled`: a second finger or the browser stopped it. */
+  function dropCarry(cancelled) {
+    const c = carry;
+    if (!c) return;
+    carry = null;
+    if (!c.picked) return;
+    swallow = { btn: c.btn, until: performance.now() + 500 };
+    try { c.btn.releasePointerCapture(c.id); } catch { /* already released */ }
+    hover = null;
+    if (cancelled) playSound('click');
+  }
+
+  function onCarryMove(e) {
+    const c = carry;
+    if (!c || e.pointerId !== c.id) return;
+    c.lx = e.clientX; c.ly = e.clientY;
+    const floor = canvas.getBoundingClientRect();
+    if (!c.picked) {
+      const g = barGesture(e.clientX - c.x0, e.clientY - c.y0, e.clientY < floor.bottom);
+      if (g === 'scroll') { carry = null; return; }
+      if (g !== 'pick' || isOffice() || !BUILD[c.kind]) return;
+      c.picked = true;
+      selected = null; // a building's sheet would cover the bottom of the floor
+      // Keep hearing this finger once it is over the floor (an element under it would otherwise
+      // get its moves).
+      try { c.btn.setPointerCapture(c.id); } catch { /* the window still hears it */ }
+      c.onPick();
+      playSound('select');
+    }
+    if (e.clientY < floor.bottom - EDGE.bandPx) c.above = true;
+    aimLifted(performance.now());
+  }
+
+  function onCarryUp(e) {
+    const c = carry;
+    if (!c || e.pointerId !== c.id) return;
+    if (!c.picked) { carry = null; return; } // a tap: the button's click does what it always did
+    const t = e.type === 'pointerup' && !isOffice() ? liftTarget(e.clientX, e.clientY, c.kind, 1) : null;
+    dropCarry(e.type !== 'pointerup');
+    // Lifted off the floor, or under the bar or a panel: nothing, quietly.
+    if (t) send([{ c: 'place', k: c.kind, x: t.x, y: t.y, d: dir }]);
+  }
+
+  /**
+   * Lets the buildings in the bar be dragged onto the floor. `el` holds the bar's buttons (each with
+   * data-k); `onPick` runs when a building is picked up (the bar hides its tooltip).
+   */
+  function watchBar(el, { onPick = () => {} } = {}) {
+    el.addEventListener('pointerdown', (e) => {
+      swallow = null;
+      if (!fingerish(e) || carry || touches.size || isOffice()) return;
+      const btn = e.target && e.target.closest ? e.target.closest('[data-k]') : null;
+      const k = btn && btn.dataset.k;
+      // Only buildings: the Upgrade, Rebuild and Remove tools are tapped, as before.
+      if (!BUILD[k]) return;
+      carry = { id: e.pointerId, kind: k, btn, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, picked: false, above: false, onPick };
+    });
+    el.addEventListener('click', (e) => {
+      const w = swallow;
+      if (!w) return;
+      swallow = null;
+      if (performance.now() < w.until && w.btn.contains(e.target)) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+  }
+  // On the window, so the finger is heard wherever it goes and whatever is under it.
+  addEventListener('pointermove', onCarryMove, true);
+  addEventListener('pointerup', onCarryUp, true);
+  addEventListener('pointercancel', onCarryUp, true);
 
   // ---- Keyboard --------------------------------------------------------------------------------
   const typing = (e) => {
@@ -467,6 +626,14 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
         renderer.pan(dx * step, dy * step);
       }
     }
+    // A finger placing a lifted building: the preview finishes rising, and near an edge of the floor
+    // the view slides that way, with the preview's tile following the floor under a still finger.
+    const l = lifted(now);
+    if (l && renderer.pan && dt > 0) {
+      const v = edgeVelocity(l.x, l.y, canvas.getBoundingClientRect(), { bottom: l.bottom });
+      if (v.vx || v.vy) renderer.pan(v.vx * dt, v.vy * dt);
+    }
+    if (l) aimLifted(now);
     for (const [pid, c] of cursors) if (now - c.t > CURSOR_TTL_MS) cursors.delete(pid);
     if (cursorDirty && pointer && now - lastCursorSent >= CURSOR_EVERY_MS) {
       cursorDirty = false;
@@ -479,7 +646,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** What the rotate button would turn: the held building's facing, or the selected building. */
   function canRotate() {
     if (isOffice()) return false;
-    if (tool) return !!BUILD[tool];
+    if (placeKind()) return !!BUILD[placeKind()];
     const b = selected && at(selected);
     return !!(b && BUILD[b.k]?.rot);
   }
@@ -487,7 +654,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** The rotate button: as the R key, with the tapped building in place of the one under the mouse. */
   function rotate() {
     if (!canRotate()) return false;
-    if (tool) {
+    if (placeKind()) {
       dir = (dir + 1) & 3;
       onChange();
     } else {
@@ -506,21 +673,35 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /**
    * Where the finger placing something is ({ x, y } in page pixels), or null when no finger is.
    * A placement is one finger down with something held that it will place: any building, the
-   * Remove or the Upgrade tool. touch.js shows the Rotate button and the cancel hint meanwhile.
+   * Remove or the Upgrade tool, or a building dragged out of the bar. touch.js shows the Rotate
+   * button and the cancel hint meanwhile.
    */
   function placing() {
+    if (isOffice()) return null;
+    if (carry && carry.picked) return { x: carry.lx, y: carry.ly };
     const g = gesture;
-    if (!g || g.kind !== 'one' || isOffice()) return null;
+    if (!g || g.kind !== 'one') return null;
     const on = g.mode === 'place' || (tool === 'belt' && (g.mode === 'build' || (g.mode === 'wait' && !!g.tile)));
     return on ? { x: g.lx, y: g.ly } : null;
   }
 
-  const view = { tool: null, dir: 0, hover: null, aim: false, cursors };
+  const view = { tool: null, dir: 0, hover: null, aim: false, lift: null, cursors };
+  const liftAt = { x: 0, y: 0 };
   function getView() {
-    view.tool = tool;
+    view.tool = placeKind();
     view.dir = dir;
     view.hover = hover;
-    view.aim = !!placing();
+    // The dashed lines along the tile's row and column, for a finger hiding the tile it acts on;
+    // a lifted preview is not under the finger, and gets a thin line down to the finger instead.
+    const l = lifted();
+    view.aim = !!placing() && !l;
+    view.lift = null;
+    if (l && hover) {
+      const r = canvas.getBoundingClientRect(), cam = renderer.cam;
+      liftAt.x = cam.x + (l.x - (r.left + r.width / 2)) / cam.zoom;
+      liftAt.y = cam.y + (l.y - (r.top + r.height / 2)) / cam.zoom;
+      view.lift = liftAt;
+    }
     return view;
   }
 
@@ -532,6 +713,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     touches.clear();
     gesture = null;
     endTouchBuild();
+    dropCarry(true);
   };
   // Stop the middle button turning the pointer into the browser's scroll compass.
   const onMouseDown = (e) => { if (e.button === 1) e.preventDefault(); };
@@ -555,6 +737,11 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     get selected() { return selected; },
     /** A finger placing something: where it is, or null (see placing() above). */
     get placing() { return placing(); },
+    /** What is being placed: a building dragged from the bar, or else the held tool. */
+    get placingKind() { return placeKind(); },
+    /** A building is being dragged out of the bar (it has left its button). */
+    get carrying() { return !!(carry && carry.picked); },
+    watchBar,
     setTool,
     rebuild,
     toggleAutoRebuild,
@@ -570,6 +757,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       removeEventListener('keydown', onKeyDown);
       removeEventListener('keyup', onKeyUp);
       removeEventListener('blur', onBlur);
+      removeEventListener('pointermove', onCarryMove, true);
+      removeEventListener('pointerup', onCarryUp, true);
+      removeEventListener('pointercancel', onCarryUp, true);
     },
   };
 }

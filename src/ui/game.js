@@ -417,7 +417,8 @@ export function startGame(session, {
     // Show where shoppers will walk whenever the player is planning: between waves, while
     // holding something to build, and all through training. Head Office always sees them: the
     // routes are what he is planning against.
-    view.route = office || !!training || s.phase === 'build' || s.phase === 'lobby' || !!input.tool;
+    // (view.tool is also a building being dragged out of the bar.)
+    view.route = office || !!training || s.phase === 'build' || s.phase === 'lobby' || !!view.tool;
     // Nor does he get the tile outline under the mouse that says "you could build here".
     if (office) view.hover = null;
     // The building whose sheet is open, and the upgrade pointed at in it: the floor shows its reach,

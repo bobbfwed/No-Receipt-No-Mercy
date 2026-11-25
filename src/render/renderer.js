@@ -343,6 +343,7 @@ export function createRenderer(canvas, session) {
     drawShoppers(s, alpha);
     fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
     if (view.aim) drawAim(s, view.hover);
+    if (view.lift) drawLift(s, view);
     // The building whose sheet is open: its reach, and the reach after a Range upgrade while that
     // button is pointed at (see reach.js). The hover preview then leaves that building's reach out.
     const sel = selectedReach(s, view);
@@ -825,6 +826,33 @@ export function createRenderer(canvas, session) {
     ctx.strokeStyle = 'rgba(255,255,255,0.95)';
     ctx.lineWidth = 2 * px;
     ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * A building's preview lifted above the finger placing it (view.lift: the finger, in tiles; touch
+   * only, 0.3.03): a thin line from the finger up to the bottom of the preview and a small dot where
+   * the finger is, so the eye ties the two together.
+   */
+  function drawLift(s, view) {
+    const h = view.hover, k = view.tool, f = view.lift;
+    if (!h || !BUILD[k]) return;
+    const [w, hh] = sizeOf(k, BUILD[k].rot ? (view.dir | 0) & 3 : 0);
+    const px = T / (cam.zoom || 32); // one screen pixel, in floor units
+    const fx = f.x * T, fy = f.y * T;
+    const tx = (h.x + w / 2) * T, ty = (h.y + hh) * T - 2 * px;
+    ctx.save();
+    ctx.lineCap = 'round';
+    if (fy - ty > 6 * px) {
+      ctx.beginPath();
+      ctx.moveTo(fx, fy); ctx.lineTo(tx, ty);
+      ctx.strokeStyle = 'rgba(17,24,39,0.7)'; ctx.lineWidth = 3.5 * px; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5 * px; ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(fx, fy, 4 * px, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(17,24,39,0.8)'; ctx.lineWidth = 1.5 * px; ctx.stroke();
     ctx.restore();
   }
 
