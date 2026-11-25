@@ -3062,3 +3062,22 @@ html, body { overscroll-behavior: none; }
   .tcard-big .cc-rule { font-size: max(15px, 1rem); }
   .tcard-big .cc-joke { font-size: max(14px, 0.92rem); }
 }
+
+/* ---------------------------------------------------------------- training arrow (0.3.03)
+   The big arrow on whatever the lesson wants pressed next (src/ui/pointer.js), or, for a building a
+   finger drags from the bar, a dot doing that drag. Placed and bounced from JavaScript every frame
+   (so the global reduced-motion rule above does not apply: pointer.js fades it instead). It never
+   takes a click or a tap. */
+.tut-arrow { position: fixed; inset: 0; z-index: 35; pointer-events: none; overflow: hidden; }
+.tut-arrow * { pointer-events: none; }
+.ta-arrow { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: visible; will-change: transform; }
+.ta-arrow .ta-body { fill: var(--yellow); stroke: var(--ink); stroke-width: 3.6; stroke-linejoin: round; }
+.ta-arrow .ta-shadow { fill: rgba(11, 15, 20, 0.55); }
+.ta-arrow .ta-shine { stroke: #fff6bf; stroke-width: 3; stroke-linecap: round; }
+.ta-gesture { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ta-gesture .ta-trail-back { fill: none; stroke: var(--ink); stroke-width: 8; stroke-linecap: round; opacity: 0.75; }
+.ta-gesture .ta-trail { fill: none; stroke: var(--yellow); stroke-width: 4; stroke-dasharray: 10 8; stroke-linecap: round; }
+.ta-gesture .ta-head { fill: var(--yellow); stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; }
+.ta-gesture .ta-dot { fill: var(--yellow); stroke: var(--ink); stroke-width: 3.5; }
+.ta-gesture .ta-ring { fill: none; stroke: var(--yellow); stroke-width: 3; }
+.ta-gesture .ta-ghost { fill: rgba(250, 204, 21, 0.25); stroke: var(--yellow); stroke-width: 3; stroke-dasharray: 6 4; }

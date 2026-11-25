@@ -383,7 +383,16 @@ test('on a touch screen no lesson or help text mentions a key or the mouse', asy
   const { forTouch } = await import('../src/content/touch.js');
   const help = await import('../src/content/help.js');
   const texts = [];
-  for (const st of STEPS) texts.push(...st.text);
+  // A lesson with its own touch wording (0.3.03) shows that instead; it still goes through forTouch.
+  let ownWords = 0;
+  for (const st of STEPS) {
+    if (st.touch) {
+      ownWords++;
+      assert.ok(st.touch.length && st.touch[0].startsWith('Do this:'), `"${st.title}": its touch wording starts with what to do`);
+    }
+    texts.push(...(st.touch || st.text));
+  }
+  assert.ok(ownWords >= 10, 'the lessons that place buildings have touch wording of their own');
   for (const v of Object.values(help.HOW)) texts.push(v.does, v.use);
   for (const v of [help.HOW_REMOVE, help.HOW_UPGRADE, help.HOW_REBUILD]) texts.push(v.does, v.use);
   // The live hints too, at the moments a player is most likely to see them.
@@ -404,7 +413,16 @@ test('on a touch screen no lesson or help text mentions a key or the mouse', asy
     if (out !== t) changed++;
     assert.ok(!keys.test(out), `still keyboard or mouse wording after forTouch: "${out}"`);
   }
-  assert.ok(changed >= 15, `forTouch changed ${changed} texts`);
+  assert.ok(changed >= 8, `forTouch changed ${changed} texts`);
   // And it leaves desktop wording alone when there is nothing to change.
   assert.equal(forTouch('A Wet Floor Sign halves the speed of shoppers.'), 'A Wet Floor Sign halves the speed of shoppers.');
+});
+
+test('every lesson leads with what to do, and DEB says what to do before any joke', () => {
+  for (const st of STEPS) {
+    assert.ok(st.text[0].startsWith('Do this:'), `"${st.title}" starts with its "Do this:" line`);
+    // The first sentence alone says what to press (a lesson that teaches a key may add it).
+    assert.ok(/\b(press|click|put|drag|tap|try|read|find|look)\b/i.test(st.text[0].split('. ')[0]), `"${st.title}": the first sentence is an instruction`);
+    assert.ok(st.quip && st.quip.length < 170, `"${st.title}": DEB's line is short`);
+  }
 });

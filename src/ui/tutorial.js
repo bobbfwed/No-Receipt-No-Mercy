@@ -1,8 +1,9 @@
 // The training shift panel: shows the current lesson's instructions, a live hint, and the buttons
 // to move through the lessons. The lessons themselves are in src/tutorial/lessons.js.
-import { worded } from '../content/touch.js';
+import { worded, isTouch } from '../content/touch.js';
 import { h, setText, setClass } from './dom.js';
 import { createTutorial, STEPS, PART_TWO } from '../tutorial/lessons.js';
+import { arrowTarget } from '../tutorial/target.js';
 
 const DONE_PAUSE_MS = 1300; // how long the "Done" tick shows before the next lesson appears
 
@@ -24,8 +25,8 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
 
   const btnBack = h('button', { type: 'button', class: 'tut-btn', onclick: () => { cancelAdvance(); tut.back(); } }, 'Back');
   const btnSkip = h('button', { type: 'button', class: 'tut-btn', title: 'Does this step for you and moves on', onclick: () => { cancelAdvance(); tut.skip(); } }, 'Skip step');
-  const btnNext = h('button', { type: 'button', class: 'tut-btn tut-primary', onclick: () => { cancelAdvance(); tut.next(); } }, 'Next');
-  const btnPlay = h('button', { type: 'button', class: 'tut-btn tut-primary', onclick: () => onExit('solo') }, 'Play a real game');
+  const btnNext = h('button', { type: 'button', class: 'tut-btn tut-primary tut-next', onclick: () => { cancelAdvance(); tut.next(); } }, 'Next');
+  const btnPlay = h('button', { type: 'button', class: 'tut-btn tut-primary tut-play', onclick: () => onExit('solo') }, 'Play a real game');
   const btnMenu = h('button', { type: 'button', class: 'tut-btn', onclick: () => onExit('menu') }, 'Back to menu');
   // For players who already know the buildings: plays the rest of part 1 by itself.
   const btnPart2 = h('button', {
@@ -77,7 +78,9 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
     setText(count, `${tut.index + 1} of ${tut.total}`);
     fill.style.width = `${((tut.index + 1) / tut.total) * 100}%`;
     setText(title, st.title);
-    body.replaceChildren(...st.text.map((raw) => {
+    // A lesson may have its own words for a touch screen (0.3.03: dragging from the bar).
+    const text = isTouch() && st.touch ? st.touch : st.text;
+    body.replaceChildren(...text.map((raw) => {
       const p = worded(raw); // keys and mouse on a desktop, buttons and taps on a touch screen
       // "Do this:" paragraphs are the actual instruction; make them stand out.
       const task = p.startsWith('Do this:');
@@ -109,6 +112,15 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
     tutorial: tut,
     start(step = 0) {
       if (step > 0) tut.autoplay(Math.min(step, tut.total - 1)); else tut.start();
+    },
+    /**
+     * What the training arrow points at right now (src/tutorial/target.js): nothing while the
+     * panel says the lesson is done and the next is on its way.
+     * @param {{ tool, selected, touch }} ui
+     */
+    arrow(ui) {
+      if (advancing || !tut.step) return { kind: 'none', why: 'advancing' };
+      return arrowTarget(tut.step, session.state, tut.marks(), ui);
     },
     /** Tiles to highlight on the floor right now. */
     marks() {

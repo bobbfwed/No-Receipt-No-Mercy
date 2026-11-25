@@ -24,6 +24,7 @@ import { createRebuildPop } from './rebuild.js';
 import { noteRecord } from './record.js';
 import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
+import { createPointer } from './pointer.js';
 import { BUILD, ZONES, statsOf, sizeOf } from '../sim/index.js';
 
 /** A phone-sized screen (the same limits as the narrow layout in style.css). */
@@ -204,6 +205,10 @@ export function startGame(session, {
   const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, planner.el, bar.tip, planner.tip, deal.el);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');
+  // The training shift's arrow on whatever the lesson wants pressed next (0.3.03; src/ui/pointer.js).
+  const pointer = training ? createPointer({
+    root, canvas, renderer, input, selected: () => touchUi.selected, target: (ui) => training.arrow(ui), touch: isTouch, marks: () => training.marks(),
+  }) : null;
   if (sound) sound.attach(session);
   // Safari zooms the page with two fingers whatever CSS says; the floor has its own pinch.
   const noPageZoom = (e) => e.preventDefault();
@@ -446,6 +451,7 @@ export function startGame(session, {
       }
     } else if (!view.marks || !view.marks.length) marksSig = '';
     renderer.draw(view);
+    if (pointer) pointer.update(now);
   }
   requestAnimationFrame(frame);
 
