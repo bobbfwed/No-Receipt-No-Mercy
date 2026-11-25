@@ -3,7 +3,7 @@
 import { createRenderer } from '../render/renderer.js';
 import { createMinimap } from '../render/minimap.js';
 import { nopeLine } from '../content/lines.js';
-import { h } from './dom.js';
+import { h, setText } from './dom.js';
 import { createTopBar, createPlayersPanel } from './hud.js';
 import { createBuildBar } from './buildbar.js';
 import { createPlanner } from './planner.js';
@@ -157,6 +157,33 @@ export function startGame(session, {
   const bossBar = createBossBar(session);
   stage.append(bossBar.el);
 
+  // Paused (0.3.01): the floor dims and a banner says who stopped it and how to carry on. A click
+  // on the banner carries on; the dimming lets clicks through to the floor.
+  const pauseVeil = h('div', { class: 'pause-veil hidden', 'aria-hidden': 'true' });
+  const pauseWho = h('span', { class: 'pb-who' });
+  const pauseBanner = h('div', {
+    class: 'pause-banner hidden', role: 'button', tabindex: '0', 'aria-live': 'polite', 'aria-label': 'Paused. Carry on',
+    onclick: () => { playSound('click'); session.send({ c: 'pause', on: false }); },
+    onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.click(); } },
+  }, h('b', { class: 'pb-word' }, 'PAUSED'), pauseWho,
+  h('span', { class: 'pb-how' }, ...(isTouch()
+    ? ['Tap here to carry on, or ▶ beside the speed buttons.']
+    : ['Click here, press ', h('kbd', null, 'P'), ' or the ▶ button by the speeds to carry on.'])));
+  stage.append(pauseVeil, pauseBanner);
+  let pausedBy = undefined; // who the banner names: undefined while the game is not paused
+  function updatePause(s) {
+    const by = s.pause ? (s.pause.by | 0) : undefined;
+    const name = by === undefined ? '' : by === session.me ? 'you' : s.players[by]?.name || 'somebody';
+    const key = by === undefined ? undefined : `${by}|${name}`;
+    if (key === pausedBy) return;
+    pausedBy = key;
+    const on = by !== undefined;
+    pauseVeil.classList.toggle('hidden', !on);
+    pauseBanner.classList.toggle('hidden', !on);
+    root.classList.toggle('is-paused', on);
+    if (on) setText(pauseWho, by === session.me ? 'You stopped the store. Everyone is waiting on you.' : `${name} stopped the store. Anyone can carry on.`);
+  }
+
   // The big REBUILD button over the floor while anything of this player's is wrecked (0.2.15): on a
   // phone the build bar's Rebuild button is usually scrolled out of sight.
   const rebuildPop = createRebuildPop(session, { rebuild: () => input.rebuild(), playSound });
@@ -263,7 +290,7 @@ export function startGame(session, {
       const n = Math.min(30, ff - done);
       session.fastForward(n);
       done += n;
-      if (autostart && session.state.phase === 'build') session.send({ c: 'start' });
+      if (autostart && session.state.phase === 'build' && !session.state.pause) session.send({ c: 'start' });
     }
     replaying = false;
     deb.collapse();
@@ -271,7 +298,8 @@ export function startGame(session, {
     if (pendingReport && s.phase === 'build' && s.wave === pendingReport.wave) review.show(pendingReport);
   }
   if (autostart && session.isHost) {
-    setInterval(() => { if (session.state.phase === 'build') session.send({ c: 'start' }); }, 300);
+    // (Not while paused, when the doors cannot open: it would only collect refusals.)
+    setInterval(() => { if (session.state.phase === 'build' && !session.state.pause) session.send({ c: 'start' }); }, 300);
   }
   if (training) {
     // Jumping ahead plays the earlier lessons by themselves; their chatter is history.
@@ -310,6 +338,7 @@ export function startGame(session, {
       if (office) input.setTool(null);
     }
     top.update(s);
+    updatePause(s);
     players.update(s);
     bar.update(s);
     planner.update(s);

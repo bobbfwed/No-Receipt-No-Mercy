@@ -406,6 +406,65 @@ kbd {
 .btn-speed:hover { background: #4b5563; }
 .btn-speed.on { background: var(--yellow); color: var(--ink); }
 
+/* Pause (0.3.01): a button of its own just before the speed buttons, the same height, colours and
+   corners. Two bars while the game runs; a play triangle, on orange, while it is paused. */
+.hud-clock { display: flex; align-items: center; gap: 0.3rem; flex: none; }
+.btn-pause {
+  display: grid;
+  place-items: center;
+  min-width: 2.4rem;
+  height: 2.55rem;
+  padding: 0;
+  border: 0.15rem solid var(--line);
+  border-radius: 0.5rem;
+  background: #3a424c;
+  color: var(--white);
+}
+.btn-pause:hover { background: #4b5563; }
+.btn-pause:disabled { opacity: 0.45; cursor: default; }
+.btn-pause .pz-icon {
+  box-sizing: content-box;
+  width: 0.3rem;
+  height: 0.95rem;
+  border-left: 0.28rem solid currentColor;
+  border-right: 0.28rem solid currentColor;
+}
+/* (Orange, not the speed buttons' yellow, so it never reads as one more speed.) */
+.btn-pause.on { background: var(--orange); color: var(--ink); animation: pause-glow 1.6s ease-in-out infinite; }
+.btn-pause.on:hover { background: #fb923c; }
+.btn-pause.on .pz-icon { width: 0; height: 0; margin-left: 0.2rem; border-style: solid; border-width: 0.52rem 0 0.52rem 0.85rem; border-color: transparent transparent transparent currentColor; }
+@keyframes pause-glow { 50% { box-shadow: 0 0 0 0.25rem rgba(249, 115, 22, 0.4); } }
+
+/* While paused, the floor dims and a banner says who stopped it and how to carry on. The dimming
+   lets clicks through (a click with a building held then says why nothing happened); the banner
+   itself resumes when clicked. Neither covers the top bar or the build bar, which are outside the
+   floor. */
+.pause-veil { position: absolute; inset: 0; z-index: 1; background: rgba(8, 10, 14, 0.38); pointer-events: none; }
+.pause-banner {
+  position: absolute;
+  z-index: 25;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  max-width: calc(100% - 2rem);
+  padding: 0.9rem 2.2rem 1rem;
+  border: 0.25rem solid var(--yellow);
+  border-radius: 0.8rem;
+  background: var(--bar);
+  box-shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.6);
+  text-align: center;
+  cursor: pointer;
+}
+.pause-banner:hover { border-color: #fde047; }
+.pause-banner .pb-word { display: block; font: 900 3.4rem/1 var(--font-heavy); letter-spacing: 0.14em; color: var(--yellow); }
+.pause-banner .pb-who { display: block; margin-top: 0.45rem; font-weight: 800; font-size: 1.1rem; }
+.pause-banner .pb-how { display: block; margin-top: 0.3rem; font-size: 0.92rem; color: var(--muted); }
+.pause-banner kbd { padding: 0 0.35rem; border: 0.1rem solid var(--muted); border-radius: 0.25rem; font: 800 0.85rem var(--font); color: var(--white); }
+/* Over the deal of the cards too, which covers the whole screen. */
+body.dealing .pause-banner { z-index: 42; }
+/* Nothing can be built while paused: the build bar's buttons and a tapped building's say so. */
+.game.is-paused .buildbar .bb-btn, .game.is-paused .touch-sheet .ts-btn, .game.is-paused .rebuild-pop { opacity: 0.4; filter: grayscale(0.7); }
+
 .hud-room {
   display: flex;
   align-items: center;
@@ -1313,7 +1372,7 @@ kbd {
 .btn-doors.asked small { font: 800 0.62rem var(--font); }
 /* A game with a room code is wide: let the refunds meter give way before the speed buttons and
    the help button are squeezed out of sight. */
-.hud-speed, .hud-sound, .btn-help { flex: none; }
+.hud-speed, .hud-sound, .btn-help, .btn-pause { flex: none; }
 .hud-refunds { min-width: 0; }
 .hud-refunds .meter { flex: 0 1 7rem; min-width: 2.5rem; }
 @media (max-width: 1700px) { .hud-room small { display: none; } }
@@ -1330,7 +1389,7 @@ kbd {
   .topbar:has(.hud-room) .hud-refunds .meter, .topbar:has(.hud-room) .btn-book { display: none; }
   /* (Online, "Copy link" stays: the link fills the code in for whoever opens it.) */
   .hud-room .btn-copy:not(:last-child) { display: none; }
-  .topbar:has(.hud-room) .btn-speed { min-width: 2.05rem; }
+  .topbar:has(.hud-room) .btn-speed, .topbar:has(.hud-room) .btn-pause { min-width: 2.05rem; }
   .hud-room .room-code { font-size: 1.1rem; letter-spacing: 0.08em; }
   .topbar:has(.hud-room) .hud-refunds { padding-inline: 0.5rem; }
   .topbar:has(.hud-room) { gap: 0.4rem; }
@@ -1338,7 +1397,7 @@ kbd {
 @media (min-width: 1100px) and (max-width: 1300px) {
   .hud-refunds .meter, .btn-book { display: none; }
 }
-@media (min-width: 1100px) and (max-width: 1200px) { .btn-speed { min-width: 2.05rem; } }
+@media (min-width: 1100px) and (max-width: 1200px) { .btn-speed, .btn-pause { min-width: 2.05rem; } }
 /* Those widths were not enough (0.3.01): a hosted game's room code and "Copy link" still pushed the
    refunds count under the auto-rebuild switch at 1280 pixels ("Refunds 0 / 2"), and at 1600 to
    1920 pixels, where every label comes back, the bar ran off the screen, worse with a second
@@ -1360,6 +1419,10 @@ kbd {
   .topbar.fit-4 { gap: 0.4rem; padding-inline: 0.6rem; }
   .topbar.fit-4 .hud-event { min-width: 11.5rem; }
   .topbar.fit-4 .btn-speed { min-width: 2.05rem; }
+  /* (The pause button, 0.3.01, narrows with the speed buttons here, and its gap closes. It is never
+     dropped: pausing has no other button.) */
+  .topbar.fit-4 .btn-pause { min-width: 2.05rem; }
+  .topbar.fit-4 .hud-clock { gap: 0.2rem; }
   .topbar.fit-4 .hud-room .room-code { font-size: 1.1rem; letter-spacing: 0.08em; }
   .topbar.fit-4 .hud-refunds { padding-inline: 0.5rem; }
   /* 5. The team's total beside the cash (the players list shows everyone's). */
@@ -2405,6 +2468,15 @@ html, body { overscroll-behavior: none; }
     box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.55);
   }
   .hud-more .btn-speed { flex: 1; min-width: 46px; height: 42px; }
+  /* Pause sits on the speed buttons' row in the menu, a thumb's width, as tall as their box. */
+  .hud-more .hud-clock { gap: 0.4rem; }
+  .hud-more .hud-speed { flex: 1; }
+  .hud-more .btn-pause { min-width: 52px; height: calc(42px + 0.3rem); }
+  /* The banner, smaller, so it does not fill a phone's floor. */
+  .pause-banner { top: 42%; padding: 0.6rem 1.1rem 0.7rem; width: max-content; }
+  .pause-banner .pb-word { font-size: 2.3rem; }
+  .pause-banner .pb-who { font-size: 0.95rem; }
+  .pause-banner .pb-how { font-size: 0.8rem; }
   .hud-more .btn-auto { height: 46px; justify-content: flex-start; }
   /* The big REBUILD button: clear of the camera pad on the right, small enough for a phone,
      still a thumb's height. */

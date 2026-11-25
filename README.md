@@ -133,6 +133,7 @@ With two or more players, one can stop defending and run the other side. Between
 | Right-click, or X then click | Remove (75% of what was spent on it back) |
 | OPEN THE DOORS | Start the next sales event without waiting for the timer. It costs nothing: the factory is paid at once for what it would have sold in the time skipped |
 | Esc | Put the tool down |
+| P, or the pause button before the speed buttons | Pause the whole store, for everyone; press again (or click the PAUSED sign) to carry on. Any player can do either. Nothing can be built, sold or upgraded while paused, because the build pause runs on a timer |
 | W A S D, or arrow keys | Move the view around the map |
 | Mouse wheel | Zoom. Middle-button drag also moves the view |
 | F | Show the whole map |
@@ -160,7 +161,8 @@ The game works by touch, in either orientation (a tablet, or a phone held sidewa
 | Tap a building with nothing picked | Opens its actions: a button for each kind of upgrade, rotate, remove |
 | Buttons at the end of the bar | Rotate, and put the tool down |
 | MAP and HOME on the floor | Show the whole store; go to your entrance |
-| The menu button at the top right | Speed, room code and link, sound, help |
+| The menu button at the top right | Pause and speed, room code and link, sound, help |
+| The PAUSED sign | Tap it to carry on |
 
 The tutorial and the help text word their instructions for touch when the game is opened on a touch screen.
 

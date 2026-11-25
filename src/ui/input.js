@@ -106,6 +106,14 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     session.send({ c: 'autoRebuild', on: !me.autoRebuild });
   }
 
+  /** Pauses the game, or carries on if it is paused (the P key). Only while the game is being played. */
+  function togglePause() {
+    const s = session.state;
+    if (!s || (s.phase !== 'cards' && s.phase !== 'build' && s.phase !== 'wave')) return;
+    playSound('click');
+    session.send({ c: 'pause', on: !s.pause });
+  }
+
   /** Upgrades the building on a tile, if there is one that can be. */
   function upgrade(t, track) {
     const b = t && at(t);
@@ -384,6 +392,12 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const pk = panKey(e);
     if (pk) { held.add(pk); e.preventDefault(); return; }
     const lower0 = key.length === 1 ? key.toLowerCase() : key;
+    // P pauses the whole game for everyone, or carries on (0.3.01). Anyone may, Head Office too.
+    if (lower0 === 'p') {
+      e.preventDefault();
+      if (!e.repeat) togglePause();
+      return;
+    }
     // Head Office keeps only the camera keys (and Escape for dialogs).
     if (isOffice() && !['f', 'h', 'Home', 'Escape'].includes(lower0)) return;
     let digit = /^[0-9]$/.test(key) ? key : null;
@@ -544,6 +558,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     setTool,
     rebuild,
     toggleAutoRebuild,
+    togglePause,
     goHome,
     rotate,
     canRotate,

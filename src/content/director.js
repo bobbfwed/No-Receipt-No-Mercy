@@ -213,6 +213,12 @@ export const TOPICS = {
   trail: { note: true, gap: 30 },
   wrongway: { note: true, gap: 25 },
   pet: { note: true, gap: 35 },
+  // Somebody paused or resumed the game (0.3.01): one line each time, the first always, then fading
+  // like any note. Loud, because a pause and its resume often come at the same tick of play (the
+  // clock stands still while paused), and the topic's gap, counted in ticks of play, keeps a player
+  // pressing P over and over from getting a line every time.
+  paused: { note: true, loud: true, gap: 20 },
+  resumed: { note: true, loud: true, gap: 20 },
 };
 
 /** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
@@ -576,6 +582,11 @@ export function createDirector(random = Math.random) {
         break;
       case 'begun':
         say(out, state, 'begun', LINES.begun);
+        break;
+      case 'pause':
+        // Named: the one who paused (or resumed) gets the blame.
+        if (e.on) say(out, state, 'paused', LINES.paused, {}, { pid: state.players[e.by] ? e.by : undefined, mood: 'angry' });
+        else say(out, state, 'resumed', LINES.resumed, {}, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
         break;
       case 'side':
         say(out, state, 'side', e.side === 'office' ? LINES.officeTaken : LINES.officeLeft, {}, { pid: e.by, mood: 'smug' });

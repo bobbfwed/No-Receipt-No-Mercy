@@ -108,6 +108,7 @@ export function createRenderer(canvas, session) {
   let shapes = new Int8Array(0); // belt bend per tile, worked out for visible belts each frame
   let doorOpen = 0;
   let lastNow = 0;
+  let heldAlpha = 0; // the fraction between ticks last drawn, held while the game is paused
   let lastZoom = -1, zoomedAt = -1e9;
   let frames = 0;
   /** Everything a building or shopper drawing needs about the current frame. */
@@ -296,7 +297,11 @@ export function createRenderer(canvas, session) {
     F.bde = hasCard(s, 'bde');
     fx.handle(events, now, s);
 
-    const alpha = session.alpha();
+    // While the game is paused (0.3.01) the host's clock still runs its empty steps, so the fraction
+    // between ticks keeps cycling; held at its last value, shoppers stand still instead of jogging
+    // back and forth on the spot, and every animation that runs off F.time stops with them.
+    if (!s.pause) heldAlpha = session.alpha();
+    const alpha = heldAlpha;
     F.alpha = alpha;
     F.now = now;
     F.time = (s.tick + alpha) / TICK_HZ;

@@ -11,6 +11,7 @@ const WHY = {
   shopper: 'Some idiot is standing in the hole',
   blocked: 'It would wall the shoppers in. Let them pass',
   bank: 'It would wall off a bank of tills',
+  paused: 'The game is paused. Press play first',
 };
 
 /**

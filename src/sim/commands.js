@@ -11,6 +11,20 @@ import { buildPrice, freeTrack, boozeRoll } from './cards.js';
 /** Commands a Head Office player may not use: he does not touch the store. */
 const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'autoRebuild', 'endless']);
 
+/**
+ * Commands that still work while the game is paused (0.3.01; state.pause). Everything else is
+ * refused with 'paused': nothing can be built, sold, upgraded, rebuilt, given or bought. The build
+ * pause between sales events runs on a timer, and that timer stands still while the game is
+ * paused; a pause that let players build would turn it into free building time and take the
+ * pressure out of the timer and out of a sales event. (Players joining, leaving and coming back do
+ * not go through commands at all: the session calls addPlayer and setPlayerOnline, which work as
+ * ever while paused.)
+ */
+const WHILE_PAUSED = new Set(['pause', 'speed', 'role', 'autoRebuild', 'skipCards']);
+
+/** The phases a game may be paused in: the deal, a build pause and a sales event. */
+const PAUSE_PHASES = new Set(['cards', 'build', 'wave']);
+
 /** Seconds of build time before wave 1, counted from the first thing placed. */
 const FIRST_BUILD_SECS = 90;
 
@@ -53,7 +67,7 @@ function clearRubble(state, tiles) {
  * @param {number} [d] facing 0-3 (it decides the footprint of a building bigger than one tile)
  * @returns {string|null} null if allowed, otherwise the reason:
  *   'over' game finished, 'lobby' the game has not started, 'cards' the cards are being dealt,
- *   'kind' unknown building, 'bounds' not a floor tile, 'occupied',
+ *   'paused' the game is paused (state.pause), 'kind' unknown building, 'bounds' not a floor tile, 'occupied',
  *   'fit' part of a bigger building's footprint is off the floor or occupied,
  *   'zone' that machine only goes on its own marked floor,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
@@ -64,6 +78,7 @@ export function canPlace(state, k, x, y, pid = 0, d = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
   if (state.phase === 'lobby') return 'lobby';
   if (state.phase === 'cards') return 'cards';
+  if (state.pause) return 'paused';
   const def = BUILD[k];
   if (!def) return 'kind';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
@@ -110,12 +125,13 @@ export function canPlace(state, k, x, y, pid = 0, d = 0) {
  * Checks whether a player may upgrade one track of the building on a tile (any of its tiles).
  * @param {string} [track] 'dmg', 'spd', 'rng' or 'dur'; left out, the kind's default track
  *   (damage if it has it, otherwise its first)
- * @returns {string|null} null if allowed, otherwise the reason: 'over', 'bounds', 'empty' nothing
- *   there, 'noup' that kind has no such track (or no tracks), 'max' that track is at the top, 'cash'.
+ * @returns {string|null} null if allowed, otherwise the reason: 'over', 'cards', 'paused' the game
+ *   is paused, 'bounds', 'empty' nothing there, 'noup' that kind has no such track (or no tracks), 'max' that track is at the top, 'cash'.
  */
 export function canUpgrade(state, x, y, pid = 0, track = undefined) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
   if (state.phase === 'cards') return 'cards';
+  if (state.pause) return 'paused';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
   const b = state.grid[anchorOf(state, idxOf(state, x, y))];
   if (!b) return 'empty';
@@ -294,12 +310,37 @@ export function autoRebuild(state, ev) {
  *                               usual build pause before the next sales event
  *   { c: 'role', role }         change your job title (cosmetic)
  *   { c: 'speed', n }           game speed: one of SPEEDS (1, 2, 3 or 5)
+ *   { c: 'pause', on }          pause (on true) or resume (on false) the whole game, for everyone;
+ *                               without on: flip it. Any player may, Head Office too, during the
+ *                               deal, a build pause or a sales event. Asking for what already is
+ *                               (pausing a paused game) is a harmless yes. While paused, step() does
+ *                               nothing at all, and every command but those in WHILE_PAUSED is
+ *                               refused with 'paused' (see setPause)
  * @param {Array} ev events are appended here
  * @returns {{ok: true} | {ok: false, why: string}}
  */
+/**
+ * The 'pause' command (see applyCommand). state.pause is { by: the player who paused } while the
+ * game is paused and absent otherwise, so a game that is never paused (every save from before it,
+ * every scripted player) has no such field at all. Sends { e: 'pause', on, by } when it changes.
+ */
+function setPause(state, pid, cmd, ev) {
+  if (state.phase === 'lobby') return { ok: false, why: 'lobby' };
+  if (!PAUSE_PHASES.has(state.phase)) return { ok: false, why: 'over' };
+  if (cmd.on !== undefined && typeof cmd.on !== 'boolean') return { ok: false, why: 'bad' };
+  const on = cmd.on === undefined ? !state.pause : cmd.on;
+  if (on === !!state.pause) return { ok: true };
+  if (on) state.pause = { by: pid };
+  else delete state.pause;
+  ev.push({ e: 'pause', on, by: pid });
+  return { ok: true };
+}
+
 export function applyCommand(state, pid, cmd, ev = []) {
   const player = state.players[pid];
   if (!player || !cmd || typeof cmd !== 'object') return { ok: false, why: 'bad' };
+  if (cmd.c === 'pause') return setPause(state, pid, cmd, ev);
+  if (state.pause && !WHILE_PAUSED.has(cmd.c)) return { ok: false, why: 'paused' };
   if (player.side === 'office' && STORE_ONLY.has(cmd.c)) return { ok: false, why: 'office' };
   if (state.phase === 'lobby') {
     // Before the game starts there are only two things to do: pick the store, and say you are ready.
@@ -427,8 +468,9 @@ export function applyCommand(state, pid, cmd, ev = []) {
       player.autoRebuild = cmd.on === undefined ? !player.autoRebuild : !!cmd.on;
       ev.push({ e: 'autoRebuild', by: pid, on: player.autoRebuild });
       // Switched on with something already wrecked for longer than the delay: try it now, rather
-      // than at the next regular retry.
-      if (player.autoRebuild) autoRebuildFor(state, player, ev);
+      // than at the next regular retry. (Not while the game is paused, when nothing is built: once
+      // it is resumed, step() picks his wrecks up at its next regular retry.)
+      if (player.autoRebuild && !state.pause) autoRebuildFor(state, player, ev);
       return { ok: true };
     }
     case 'side': {

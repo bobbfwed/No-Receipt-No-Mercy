@@ -113,6 +113,8 @@ export function checksum(s) {
   mix(s.office ? s.office.pid + 1 : 0);
   // (The deal's clock, only in a game with cards while it runs.)
   if (s.dealT !== undefined) mix(s.dealT);
+  // (Paused, and by whom. Only while it is: a game never paused sums as it always did.)
+  if (s.pause) { mix(0x50415553); mix(s.pause.by); }
   for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);
@@ -352,7 +354,8 @@ export class HostSession extends Session {
 
   /**
    * Runs the game forward a number of ticks at once (testing and screenshots). Clients are not
-   * made to replay all of it: they get a fresh copy afterwards.
+   * made to replay all of it: they get a fresh copy afterwards. (On a paused game it runs the
+   * steps, which change nothing, and returns as usual.)
    */
   fastForward(ticks) {
     this._advance();
@@ -365,7 +368,10 @@ export class HostSession extends Session {
     this._n++;
     this._sinceAdv++;
     if (ev.length) this._onSimEvents(ev);
-    if (this.director && this.state.tick % TICK_HZ === 0) {
+    // About once a second of play. While the game is paused the step count goes on (messages,
+    // copies and joins all keep working) but state.tick stands still, so without the check a pause
+    // on a whole second would ask the director every step.
+    if (this.director && !this.state.pause && this.state.tick % TICK_HZ === 0) {
       for (const msg of this.director.idle(this.state)) this._announce(msg, true);
     }
   }

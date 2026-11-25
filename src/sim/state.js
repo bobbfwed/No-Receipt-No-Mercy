@@ -270,6 +270,11 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     /** Ticks left in the build phase; -1 means wait until a player starts the wave. */
     phaseT: -1,
     speed: 1,
+    // (state.pause, 0.3.01: { by: the id of the player who paused } while the game is paused, and
+    // absent the rest of the time, as in every save from before it. While it is set, step() does
+    // nothing at all, not even the clock, and applyCommand refuses everything but pausing, speed,
+    // job titles, auto-rebuild's switch and skipping the cards (see setPause in commands.js). It is
+    // saved and sent with the state, so a game saved or joined while paused is paused.)
     /** The player running the shoppers, if any: see office.js. */
     office: null,
     /** With a Head Office player: the store side has said the doors may open early. */

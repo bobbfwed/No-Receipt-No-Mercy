@@ -35,7 +35,7 @@ for (const n of ['cardDeal', 'cardIn', 'cardSlot', 'cardHand']) UI_SOUNDS.add(n)
 /** Big moments: never dropped for being busy, and DEB's blips step aside for them. */
 const BIG = new Set(['waveStart', 'waveEnd', 'won', 'lost', 'report', 'begun', 'bossIn', 'bossOut', 'bossEscape', 'endless']);
 /** Never thinned out or dropped for being busy (rare, and they mean something). */
-const VIP = new Set([...BIG, ...UI_SOUNDS, 'ready', 'side', 'gave', 'crawl', 'pep']);
+const VIP = new Set([...BIG, ...UI_SOUNDS, 'ready', 'side', 'gave', 'crawl', 'pep', 'pause', 'unpause']);
 /** Someone else's upgrade, rebuild or gift: still heard, but quieter than your own. */
 const OTHERS = 0.6;
 /**
@@ -49,6 +49,8 @@ const LOOKAHEAD = 0.6;
 const TICK_MS = 120;
 /** Music level while DEB is talking. */
 const DUCK = 0.45;
+/** Music level while the game is paused (on top of DUCK while she talks). */
+const PAUSED = 0.3;
 
 /**
  * Did this upgrade take its track to the top level? Tracks have different tops (TUNE.maxLevel,
@@ -90,6 +92,7 @@ export function createSound() {
   let destroyed = false;
   let hidden = !!(doc && doc.hidden);
   let talking = false;
+  let paused = false; // the game is paused, so the music is turned down (pauseDuck)
   const unsubs = [];
 
   // Crowd control (see crowd.js). The seed only makes each game's variations differ.
@@ -224,6 +227,8 @@ export function createSound() {
           break;
         case 'gave': fire('gave', { n: e.n }, { gain: mine(e.by) || mine(e.to) ? 1 : OTHERS }); break;
         case 'begun': fire('begun'); break;
+        // Somebody paused or resumed the game (0.3.01). The music follows by itself (pauseDuck).
+        case 'pause': fire(e.on ? 'pause' : 'unpause'); pauseDuck(); break;
         case 'ready': fire('ready', { side: e.side }); break;
         case 'side': fire('side', { side: e.side }); break;
         case 'waveStart': fire('waveStart', { dads: e.dads | 0, boss: e.boss | 0 }); break;
@@ -246,17 +251,38 @@ export function createSound() {
 
   // ------------------------------------------------------------------ music
 
-  function setDuck(on) {
-    talking = on;
+  /** The music's level: lowered while DEB talks, and further while the game is paused. */
+  const musicLevel = () => (talking ? DUCK : 1) * (paused ? PAUSED : 1);
+
+  /** Moves the music toward its level, with this time constant (seconds). */
+  function applyMusicLevel(tc) {
     if (!chain || !ctx) return;
     const p = chain.music.gain;
     const now = ctx.currentTime;
     p.cancelScheduledValues(now);
     p.setValueAtTime(p.value, now);
-    p.setTargetAtTime(on ? DUCK : 1, now, on ? 0.08 : 0.3);
+    p.setTargetAtTime(musicLevel(), now, tc);
+  }
+
+  function setDuck(on) {
+    talking = on;
+    applyMusicLevel(on ? 0.08 : 0.3);
+  }
+
+  /**
+   * The store's muzak is the only sound that loops, and it sinks to a murmur while the game is
+   * paused (0.3.01). Asked on every pause event and every time the music is scheduled, so a game
+   * joined or resumed from a save while paused is quiet too.
+   */
+  function pauseDuck() {
+    const now = !!session?.state?.pause;
+    if (now === paused) return;
+    paused = now;
+    applyMusicLevel(0.15);
   }
 
   function scheduleMusic() {
+    pauseDuck();
     if (!music || !running()) return;
     const now = ctx.currentTime;
     // If the page stalled and we fell behind, pick up from now instead of firing a burst of bars.

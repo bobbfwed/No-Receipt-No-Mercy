@@ -7,6 +7,8 @@ import { createAutoSwitch } from './rebuild.js';
 const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
 /** How many steps the top bar can take to fit a short window (the .fit-N rules in style.css). */
 const FIT_STEPS = 10;
+const PAUSE_TITLE = 'Pause the game (P). The whole store stops for everyone, and nothing can be built until somebody carries on.';
+const RESUME_TITLE = 'Carry on (P). Anyone can.';
 const BUDGET_TITLE = 'What you have left to spend on shoppers for the coming sales event. Half of what you leave unspent carries over to the next one.';
 
 /** The store players' money added up (Head Office's frozen cash is not the store's). */
@@ -62,6 +64,14 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     onclick: () => session.send({ c: 'speed', n }),
   }, `${n}x`));
   const speed = h('div', { class: 'hud-speed', role: 'group', 'aria-label': 'Game speed' }, speedBtns);
+  // Pause (0.3.01): anyone may pause the whole store for everyone, and anyone may carry on. Two
+  // bars while it runs, a play triangle while it is paused (drawn in CSS: .pz-icon).
+  const pauseBtn = h('button', {
+    type: 'button', class: 'btn-pause', 'aria-pressed': 'false', 'aria-label': 'Pause the game', title: PAUSE_TITLE,
+    onclick: () => { playSound('click'); session.send({ c: 'pause', on: !session.state?.pause }); },
+  }, h('span', { class: 'pz-icon', 'aria-hidden': 'true' }));
+  // The pause button sits just before the speed buttons, and goes wherever they go (under ☰ on a phone).
+  const timeBox = h('div', { class: 'hud-clock' }, pauseBtn, speed);
   // Auto-rebuild lives up here so it can be switched on before anything breaks, on any screen.
   const auto = createAutoSwitch(session, { playSound, cls: 'hud-auto' });
 
@@ -114,9 +124,9 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   // On a narrow screen the things a player needs less often (speed, room code, sound, help) fold
   // away behind one button. On a wide screen the wrapper takes no part in the layout
   // (display: contents) and the button is hidden, so the bar looks as it always has.
-  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, auto.el, speed, room, audio, full, book, help);
+  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, auto.el, timeBox, room, audio, full, book, help);
   const moreBtn = h('button', {
-    type: 'button', class: 'btn-more', 'aria-label': 'More: auto-rebuild, speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
+    type: 'button', class: 'btn-more', 'aria-label': 'More: auto-rebuild, pause and speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
     onclick: () => setMore(!more.classList.contains('open')),
   }, '☰');
   function setMore(open) {
@@ -250,6 +260,16 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     setClass(refunds, 'danger', share >= 0.75);
 
     auto.update(s);
+    const paused = !!s.pause;
+    if (pauseBtn.getAttribute('aria-pressed') !== String(paused)) {
+      pauseBtn.setAttribute('aria-pressed', String(paused));
+      pauseBtn.setAttribute('aria-label', paused ? 'Resume the game' : 'Pause the game');
+      pauseBtn.title = paused ? RESUME_TITLE : PAUSE_TITLE;
+      setClass(pauseBtn, 'on', paused);
+    }
+    // Only in a game that is being played: not in the lobby, and not once it is over.
+    const canPause = s.phase === 'cards' || s.phase === 'build' || s.phase === 'wave';
+    if (pauseBtn.disabled === canPause) pauseBtn.disabled = !canPause;
     speedBtns.forEach((b, i) => {
       const on = (s.speed || 1) === SPEEDS[i];
       setClass(b, 'on', on);

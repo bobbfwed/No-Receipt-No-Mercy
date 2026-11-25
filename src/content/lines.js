@@ -1088,6 +1088,24 @@ export const LINES = {
     u('{n} grown adults cooing at a spaniel in a vest. The vest says SUPPORT. The dog says nothing. Best colleague you have.'),
     r('The dog has been petted more times today than {p} has in his whole adult life. It is not close. The dog is a virgin too.'),
   ],
+  // A player paused the game (0.3.01): the whole store freezes for everyone. {p} is the one who paused it.
+  paused: [
+    '{p} paused the store. Go on then, piss break. Wash your hands this time.',
+    "Everything stops because {p} needs a minute. His mum's calling. She wants her basement back.",
+    '{p} hit pause. The shoppers are frozen mid-whinge. Enjoy it, {p}. Most control you have had over anything in years.',
+    'Paused by {p}. Bladder the size of a walnut, attention span of a goldfish.',
+    "{p} pressed pause. Real stores don't have a pause button, {p}. Real men don't need one.",
+    'Time out, called by {p}. The customers will wait. They have nothing else going on. Neither, apparently, does he.',
+    u("{p} paused the game. If that's a wank break, {p}, close the tab first. We've all seen your tabs."),
+    r("{p} stopped time itself. Like every man ever given a superpower, he's using it to go and make a sandwich."),
+  ],
+  // Somebody resumed a paused game. {p} is the one who pressed play.
+  resumed: [
+    "{p} pressed play. Break's over, ladies. Shoppers, resume screaming.",
+    "And we're back, thanks to {p}. Zip up, whoever that was.",
+    '{p} unpaused. Nothing got better while you were away. Nothing ever does.',
+    u("Back on, courtesy of {p}. Hope it was worth it. The queue certainly didn't go anywhere."),
+  ],
 };
 
 /**
@@ -1539,6 +1557,13 @@ export const NOPE = {
     "The cards aren't all out yet, {p}. Read them. They're short. Even you can manage it.",
     'Not yet, {p}. Cards first, then you can play with your blocks. Mummy will tell you when.',
     u("Patience, {p}. Five cards. You can count to five. You've done it on one hand plenty of times."),
+  ],
+  // The game is paused (0.3.01): nothing can be built, sold, upgraded or bought until someone resumes.
+  paused: [
+    "The game's paused, {p}. Nothing gets built until somebody presses play.",
+    "Paused, {p}. You can't build in a frozen store. That's cheating, and cheating is my job.",
+    'Hands off, {p}. The store is paused. Press play first, or sit there and admire your work.',
+    u("It's paused, {p}. The build clock has stopped, and so have you. Press play."),
   ],
   host: [
     'Only the host picks the store, {p}. You just get to complain about it.',

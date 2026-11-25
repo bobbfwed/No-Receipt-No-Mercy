@@ -1259,6 +1259,37 @@ export const SOUNDS = {
     },
   },
 
+  // The game paused and resumed (0.3.01): heard by every player, whoever pressed it.
+  pause: {
+    about: 'Somebody paused the game: a record scratch back, then the turntable winding down to a stop (a low buzz sliding down to nothing), and a soft thunk.',
+    max: 0.75,
+    play(ctx, dest, t, o = {}) {
+      const v = voice(ctx, dest, o.level);
+      // The scratch: a burst of noise pulled down sharply, then a shorter one pushed back up.
+      noise(v, { t, type: 'bandpass', f: 2600, f1: 700, glide: 0.09, q: 2.2, peak: 0.22, a: 0.004, h: 0.03, d: 0.06 });
+      noise(v, { t: t + 0.1, type: 'bandpass', f: 900, f1: 2000, glide: 0.05, q: 2.2, peak: 0.12, a: 0.004, d: 0.05 });
+      // The wind-down: a buzzy chord sliding an octave and more down as it fades.
+      tone(v, { t: t + 0.08, f: 196, f1: 38, glide: 0.45, type: 'sawtooth', lp: 900, peak: 0.12, a: 0.01, h: 0.12, d: 0.33 });
+      tone(v, { t: t + 0.08, f: 294, f1: 57, glide: 0.45, type: 'triangle', peak: 0.08, a: 0.01, h: 0.1, d: 0.3 });
+      // The platter stops: a small dull knock.
+      tone(v, { t: t + 0.52, f: 110, f1: 60, glide: 0.06, peak: 0.16, a: 0.003, d: 0.12 });
+      return v.end;
+    },
+  },
+
+  unpause: {
+    about: 'The game resumed: the turntable spinning back up to speed (a low buzz sliding up), a quick scratch forward, and a bright "tick" as it catches.',
+    max: 0.6,
+    play(ctx, dest, t, o = {}) {
+      const v = voice(ctx, dest, o.level);
+      tone(v, { t, f: 45, f1: 220, glide: 0.3, type: 'sawtooth', lp: 1100, peak: 0.11, a: 0.03, h: 0.18, d: 0.1 });
+      tone(v, { t, f: 67, f1: 330, glide: 0.3, type: 'triangle', peak: 0.07, a: 0.03, h: 0.16, d: 0.1 });
+      noise(v, { t: t + 0.26, type: 'bandpass', f: 800, f1: 2800, glide: 0.07, q: 2.2, peak: 0.16, a: 0.004, h: 0.02, d: 0.05 });
+      tone(v, { t: t + 0.36, f: 1320, f1: 1100, glide: 0.02, type: 'triangle', peak: 0.1, a: 0.002, d: 0.06 });
+      return v.end;
+    },
+  },
+
   tutorial: {
     about: 'A tutorial step done: a pleasant two-note "ding-DING" up a fifth.',
     max: 0.8,

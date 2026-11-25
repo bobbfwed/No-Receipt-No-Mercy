@@ -31,6 +31,7 @@ export function howToPlay() {
       h('li', null, h('b', null, '⟳'), ' rotates what you hold · ', h('b', null, '✋'), ' puts it down · ', h('b', null, '⤢'), ' whole map · ', h('b', null, '⌂'), ' your entrance'),
       h('li', null, h('b', null, 'Tap something you built'), ' with nothing held to upgrade, rotate or remove it'),
       h('li', null, h('b', null, 'AUTO-REBUILD'), ` (top bar, under ☰) puts back what gym bros wreck by itself, ${TUNE.autoRebuildSecs} seconds after each wreck · while anything of yours is wrecked, a big `, h('b', null, 'REBUILD'), ' button shows over the floor'),
+      h('li', null, h('b', null, '⏸'), ' (top bar, under ☰ on a phone, before the speeds) pauses the whole store for everyone; nothing can be built while paused · tap the ', h('b', null, 'PAUSED'), ' sign to carry on'),
       h('li', null, h('b', null, 'Hold a button'), ' in the bar to read what it does'),
       h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It costs you nothing: the factory is paid at once for the time you skip')),
     h('ul', { class: 'keys key-only' },
@@ -41,6 +42,7 @@ export function howToPlay() {
       h('li', null, h('kbd', null, 'Click'), ' a building with nothing held to see and buy its upgrades · ', h('kbd', null, 'U'), ' buys the first one for the building under the mouse'),
       h('li', null, h('kbd', null, 'B'), ' rebuild what gym bros wrecked, at half price · ', h('kbd', null, 'Shift'), '+', h('kbd', null, 'B'), ` auto-rebuild on or off (it waits ${TUNE.autoRebuildSecs} seconds after each wreck, then keeps trying) · the big REBUILD button over the floor does what B does`),
       h('li', null, h('kbd', null, 'W'), h('kbd', null, 'A'), h('kbd', null, 'S'), h('kbd', null, 'D'), ' or arrows move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'F'), ' whole map · ', h('kbd', null, 'H'), ' your entrance · click the small map to jump'),
+      h('li', null, h('kbd', null, 'P'), ' or the ⏸ button before the speeds pauses the whole store for everyone (nothing can be built while paused) · ', h('kbd', null, 'P'), ' again carries on; anyone can'),
       h('li', null, h('kbd', null, 'Enter'), ' chat with the other players'),
       h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It costs you nothing: the factory is paid at once for the time you skip')));
 }

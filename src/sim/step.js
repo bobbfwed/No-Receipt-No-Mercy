@@ -1803,11 +1803,16 @@ function stepShoppers(state, fields, sec, ev) {
  *     man at (x, y) (supportdog)
  * (Commands add: placed {k,x,y,d,by,rebuilt?,short?,free?} (free: the track a card's free upgrade
  *  went on), removed, upgraded {k,x,y,by,t,lv},
- *  gave {by,to,n}, rebuilt {by,n,short}, endless {by} a won game carries on as an endless one.)
+ *  gave {by,to,n}, rebuilt {by,n,short}, endless {by} a won game carries on as an endless one,
+ *  pause {on,by} player `by` paused (on true) or resumed (on false) the game.)
  */
 export function step(state) {
   const ev = [];
   if (state.phase === 'won' || state.phase === 'lost') return ev;
+  // Paused (0.3.01, the 'pause' command): nothing moves at all, the clock included, exactly as in
+  // the lobby. A game paused for any number of steps and then resumed carries on exactly as if it
+  // had never stopped; the build pause's timer, the deal and a dropped player's grace period wait.
+  if (state.pause) return ev;
   if (state.phase === 'lobby') {
     // Nothing runs in the lobby. The game starts when every connected player is ready.
     const here = state.players.filter((p) => p.on);
