@@ -138,6 +138,29 @@ export function createTouchControls({ input, session, renderer, playSound = () =
   let measuredSig = '';
   let sheetOpen = false;
 
+  // The upgrade button the mouse is over, or that has keyboard focus (0.3.01): the renderer shows
+  // what a Range upgrade would reach while it is Range (view.track; see src/render/reach.js).
+  // Listened for on the container, because the sheet replaces its buttons whenever what it shows
+  // changes (right after an upgrade is bought, say) and a replaced button never says the mouse has
+  // left it: the last answer stands until an event says otherwise, so with the mouse still on Range
+  // after buying a level, the floor shows the level after that. A finger has no hover: pressing
+  // Range just buys it, and the reach on the floor grows.
+  // (A button he cannot afford is disabled, and browsers may not report the mouse over a disabled
+  // button, so the floor may not show its next reach; a maxed Range has none to show anyway.)
+  let pointTrack;
+  const trackOf = (el) => (el && el.closest ? el.closest('[data-track]')?.dataset.track : undefined);
+  sheetBtns.addEventListener('pointerover', (e) => { if (e.pointerType !== 'touch') pointTrack = trackOf(e.target); });
+  sheetBtns.addEventListener('pointerout', (e) => {
+    if (e.pointerType === 'touch') return;
+    if (!sheetBtns.contains(e.relatedTarget)) pointTrack = undefined;
+  });
+  sheetBtns.addEventListener('focusin', (e) => { pointTrack = trackOf(e.target); });
+  sheetBtns.addEventListener('focusout', (e) => {
+    // (A button taken away as the sheet redraws loses its focus too; that is not the player moving on.)
+    if (!e.target.isConnected) return;
+    if (!sheetBtns.contains(e.relatedTarget)) pointTrack = undefined;
+  });
+
   function act(cmd, sound) {
     const r = session.send(cmd);
     if (!r || r.ok) playSound(sound);
@@ -164,6 +187,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     ].filter(Boolean));
     const btns = tracks.map((tr) => h('button', {
       type: 'button', class: `ts-btn ts-up ts-${tr.track}${tr.cost && cash < tr.cost ? ' poor' : ''}`, disabled: !tr.cost || cash < tr.cost,
+      'data-track': tr.track,
       title: `${tr.name}: ${tr.gain}`,
       onclick: () => act({ c: 'upgrade', x: t.x, y: t.y, t: tr.track }, 'upgrade'),
     },
@@ -198,7 +222,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     if (show !== sheetOpen) {
       sheetOpen = show;
       setClass(sheet, 'hidden', !show);
-      if (!show) sheetSig = '';
+      if (!show) { sheetSig = ''; pointTrack = undefined; }
     }
     // DEB's bubble sits in the same corner: tell the page how tall the sheet is so the bubble
     // can stand on top of it instead of behind it (see ".deb" beside ".touch-sheet" in style.css).
@@ -217,5 +241,12 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     updateAid();
   }
 
-  return { pad, bar, sheet, aid, update, get sheetOpen() { return sheetOpen; } };
+  return {
+    pad, bar, sheet, aid, update,
+    get sheetOpen() { return sheetOpen; },
+    /** The building whose sheet is open ({ x, y }, its anchor tile), or null: for view.selected. */
+    get selected() { return sheetOpen ? input.selected : null; },
+    /** The upgrade track pointed at in the sheet ('rng', ...), or undefined: for view.track. */
+    get track() { return sheetOpen ? pointTrack : undefined; },
+  };
 }

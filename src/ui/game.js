@@ -24,7 +24,7 @@ import { createRebuildPop } from './rebuild.js';
 import { noteRecord } from './record.js';
 import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
-import { BUILD, ZONES } from '../sim/index.js';
+import { BUILD, ZONES, statsOf, sizeOf } from '../sim/index.js';
 
 /** A phone-sized screen (the same limits as the narrow layout in style.css). */
 const narrow = () => innerWidth < 1100 || innerHeight < 560;
@@ -420,6 +420,11 @@ export function startGame(session, {
     view.route = office || !!training || s.phase === 'build' || s.phase === 'lobby' || !!input.tool;
     // Nor does he get the tile outline under the mouse that says "you could build here".
     if (office) view.hover = null;
+    // The building whose sheet is open, and the upgrade pointed at in it: the floor shows its reach,
+    // and what a Range upgrade would add (src/render/reach.js). Head Office has no sheet.
+    view.selected = office ? null : touchUi.selected;
+    view.track = office ? undefined : touchUi.track;
+    keepInSight(s, view.selected);
     view.marks = training ? training.marks() : null;
     // The captions on highlighted tiles speak of the mouse; on a touch screen, of taps.
     if (view.marks && touchWords) for (const m of view.marks) if (m.label) m.label = forTouch(m.label);
@@ -442,6 +447,35 @@ export function startGame(session, {
     renderer.draw(view);
   }
   requestAnimationFrame(frame);
+
+  // On a phone the building sheet covers the bottom of the floor (0.3.01). When a building is
+  // tapped low on the screen, its reach (or the building itself) would be under the sheet, so as the
+  // sheet opens the view moves up once, just far enough to show it above the sheet, as far as the
+  // map's edge allows and never pushing the top of the reach off the floor. Not on a big screen with
+  // a mouse, where the sheet is smaller and a click must not move the view.
+  let sightKey = '';
+  function keepInSight(s, t) {
+    const key = t ? `${t.x},${t.y}` : '';
+    if (key === sightKey) return;
+    sightKey = key;
+    if (!t || !(isCoarse() || narrow())) return;
+    const b = s.grid[t.y * s.w + t.x];
+    if (!b || !BUILD[b.k]) return;
+    const [, bh] = sizeOf(b.k, BUILD[b.k].rot ? b.d | 0 : 0);
+    const reach = statsOf(b, s).range || 0;
+    const circle = reach > 0 && !BUILD[b.k].beam;
+    // What must show, from top to bottom, in tiles: the reach's circle, or the building (and a
+    // beam fired downward).
+    const top = circle ? t.y + bh / 2 - reach : t.y;
+    const bottom = circle ? t.y + bh / 2 + reach : t.y + bh + (BUILD[b.k].beam && (b.d & 3) === 1 ? reach : 0);
+    const r = canvas.getBoundingClientRect(), cam = renderer.cam, z = cam.zoom || 30;
+    const screenY = (ty) => r.top + r.height / 2 + (ty - cam.y) * z;
+    const over = screenY(bottom) - (touchUi.sheet.getBoundingClientRect().top - 10);
+    if (over <= 0) return;
+    const room = screenY(top) - (r.top + 8);
+    const dy = Math.min(over, Math.max(0, room)) / z;
+    if (dy > 0) renderer.pan(0, dy);
+  }
 
   // On a big screen the strip of cards stays in the middle at the top of the floor unless an
   // entrance or a till is under it there; then it moves along to the nearest clear place. (On a

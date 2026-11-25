@@ -54,6 +54,7 @@ import {
 import { createMessSprites, drawMesses } from './messes.js';
 import { createEffects } from './effects.js';
 import { drawRoutes, drawMarks } from './guides.js';
+import { selectedReach, drawnBySelection } from './reach.js';
 
 const T = TILE;
 /** Closest zoom, in CSS pixels per tile. */
@@ -342,7 +343,11 @@ export function createRenderer(canvas, session) {
     drawShoppers(s, alpha);
     fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
     if (view.aim) drawAim(s, view.hover);
-    drawPreview(s, view);
+    // The building whose sheet is open: its reach, and the reach after a Range upgrade while that
+    // button is pointed at (see reach.js). The hover preview then leaves that building's reach out.
+    const sel = selectedReach(s, view);
+    if (sel) drawSelected(s, sel);
+    drawPreview(s, view, sel);
     if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now, s.w, s.h);
     ctx.restore();
 
@@ -676,12 +681,21 @@ export function createRenderer(canvas, session) {
 
   /**
    * A range circle. style: 'ok' placement allowed, 'bad' not allowed, 'faint' a tower's range
-   * shown on hover, 'next' (dashed gold outline) the range after an upgrade.
+   * shown on hover, 'sel' the reach of the building whose sheet is open (a solid white edge over
+   * a dark one, so it reads on any floor without looking like "you may place it here"), 'next'
+   * (dashed gold outline) the range after an upgrade.
    */
   function rangeCircle(cx, cy, range, style) {
     if (!(range > 0)) return;
     ctx.beginPath();
     ctx.arc(cx, cy, range * T, 0, Math.PI * 2);
+    if (style === 'sel') {
+      ctx.fillStyle = 'rgba(255,255,255,0.11)';
+      ctx.fill();
+      ctx.lineWidth = 4.5; ctx.strokeStyle = 'rgba(17,24,39,0.55)'; ctx.stroke();
+      ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.stroke();
+      return;
+    }
     if (style === 'next') {
       ctx.setLineDash(RANGE_DASH);
       ctx.lineWidth = 3;
@@ -722,15 +736,24 @@ export function createRenderer(canvas, session) {
       ctx.setLineDash(NO_DASH);
       return;
     }
+    if (style === 'sel') {
+      // The beam it fires now: solid edges, and the centre line with its arrowhead.
+      ctx.fillStyle = 'rgba(255,70,70,0.14)';
+      ctx.fill();
+      ctx.lineWidth = 4.5; ctx.strokeStyle = 'rgba(17,24,39,0.55)'; ctx.stroke();
+      ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(255,215,215,0.95)'; ctx.stroke();
+    }
     const faint = style === 'faint', ok = style !== 'bad';
-    // The scanner's red laser when it may go here; grey-white with a red fill when it may not.
-    ctx.fillStyle = faint ? 'rgba(255,60,60,0.08)' : ok ? 'rgba(255,70,70,0.16)' : 'rgba(239,68,68,0.14)';
-    ctx.fill();
-    if (!faint) ctx.setLineDash(RANGE_DASH);
-    ctx.lineWidth = faint ? 1.5 : 2.5;
-    ctx.strokeStyle = faint ? 'rgba(255,190,190,0.5)' : ok ? 'rgba(255,210,210,0.95)' : 'rgba(170,170,170,0.9)';
-    ctx.stroke();
-    ctx.setLineDash(NO_DASH);
+    if (style !== 'sel') {
+      // The scanner's red laser when it may go here; grey-white with a red fill when it may not.
+      ctx.fillStyle = faint ? 'rgba(255,60,60,0.08)' : ok ? 'rgba(255,70,70,0.16)' : 'rgba(239,68,68,0.14)';
+      ctx.fill();
+      if (!faint) ctx.setLineDash(RANGE_DASH);
+      ctx.lineWidth = faint ? 1.5 : 2.5;
+      ctx.strokeStyle = faint ? 'rgba(255,190,190,0.5)' : ok ? 'rgba(255,210,210,0.95)' : 'rgba(170,170,170,0.9)';
+      ctx.stroke();
+      ctx.setLineDash(NO_DASH);
+    }
     // The centre line, with an arrowhead at the far end.
     if (!faint) {
       ctx.beginPath();
@@ -805,8 +828,32 @@ export function createRenderer(canvas, session) {
     ctx.restore();
   }
 
-  /** Ghost of the selected building at the hovered tile, the remove highlight, or the upgrade preview. */
-  function drawPreview(s, view) {
+  /**
+   * The building whose sheet is open (view.selected, from selectedReach): its reach now, in the
+   * 'sel' style, and, while the sheet's Range button is pointed at (view.track 'rng') and Range is
+   * not at its top, the reach after one more level, dashed gold, on top.
+   */
+  function drawSelected(s, sel) {
+    showRange(s, sel.b, sel.ai, 'sel');
+    if (sel.next) showNext(s, sel.b, sel.ai);
+  }
+
+  /** The reach building b (anchor ai) would have with one more Range level: dashed gold. */
+  function showNext(s, b, ai) {
+    const ts = tracksOf(b.k);
+    for (const t of ts) probeU[t] = levelIn(b, t);
+    probeU.rng = levelIn(b, 'rng') + 1;
+    probe.k = b.k; probe.d = b.d | 0; probe.u = probeU;
+    showRange(s, probe, ai, 'next');
+    for (const t of ts) delete probeU[t];
+  }
+
+  /**
+   * Ghost of the selected building at the hovered tile, the remove highlight, or the upgrade
+   * preview. `sel` is the building whose sheet is open (selectedReach): its reach is drawn
+   * already, so it is not drawn again here when the mouse (or a finger) is on it.
+   */
+  function drawPreview(s, view, sel = null) {
     const h = view.hover;
     if (!h || !(h.x >= 0 && h.y >= 0 && h.x < s.w && h.y < s.h)) return;
     const i = h.y * s.w + h.x;
@@ -846,15 +893,11 @@ export function createRenderer(canvas, session) {
       const track = view.track && ts.includes(view.track) ? view.track : defaultTrack(here.k);
       const why = track ? canUpgrade(s, h.x, h.y, session.me, track) : 'noup';
       const ok = why === null;
-      showRange(s, here, ai, ok ? 'ok' : 'faint');
-      // Only a range upgrade changes what it reaches: show the reach it would have after.
-      if (track === 'rng' && levelIn(here, 'rng') < maxIn(here.k, 'rng')) {
-        for (const t of ts) probeU[t] = levelIn(here, t);
-        probeU.rng = levelIn(here, 'rng') + 1;
-        probe.k = here.k; probe.d = here.d | 0; probe.u = probeU;
-        showRange(s, probe, ai, 'next');
-        for (const t of ts) delete probeU[t];
-      }
+      const mine = drawnBySelection(sel, ai);
+      if (!mine) showRange(s, here, ai, ok ? 'ok' : 'faint');
+      // Only a range upgrade changes what it reaches: show the reach it would have after (unless
+      // the selection has just drawn it).
+      if (track === 'rng' && levelIn(here, 'rng') < maxIn(here.k, 'rng') && !(mine && sel.next)) showNext(s, here, ai);
       rr(ctx, hr.x + 1, hr.y + 1, hr.w - 2, hr.h - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.22)' : 'rgba(239,68,68,0.25)';
       ctx.fill();
@@ -924,7 +967,7 @@ export function createRenderer(canvas, session) {
     // No tool: show the reach of security under the mouse faintly, and a light hover outline
     // round the whole building.
     if (here && BUILD[here.k]) {
-      showRange(s, here, ai, 'faint');
+      if (!drawnBySelection(sel, ai)) showRange(s, here, ai, 'faint');
       tileOutline(hr.x, hr.y, 'rgba(255,255,255,0.7)', 2, hr.w, hr.h);
     } else tileOutline(px, py, 'rgba(255,255,255,0.7)', 2);
   }

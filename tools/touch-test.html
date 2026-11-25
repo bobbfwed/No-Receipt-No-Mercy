@@ -37,7 +37,8 @@
 <iframe id="game" src="../index.html?solo=1&name=Thumbs&seed=3&size=xs" title="Game"></iframe>
 <div id="log"></div>
 <script type="module">
-  import { canPlace } from '../src/sim/index.js';
+  import { canPlace, statsOf } from '../src/sim/index.js';
+  import { selectedReach } from '../src/render/reach.js';
   const frame = document.getElementById('game');
   const logEl = document.getElementById('log');
   const results = [];
@@ -405,6 +406,34 @@
     if (sheet.querySelector('.ts-dur')) click(sheet.querySelector('.ts-dur'));
     await wait(80);
     check('... and its Durability button a level of durability', lvOf('dmg') === 1 && lvOf('dur') === 1, `damage ${lvOf('dmg')}, durability ${lvOf('dur')}`);
+
+    // 11b. The reach of the tapped building (0.3.01): drawn while its sheet is open, whether it was
+    // tapped with the Upgrade tool or with nothing held; pressing Range buys a level and the reach,
+    // grown, stays; closing the sheet or tapping bare floor takes it away. (input.view() is the
+    // object the game hands the renderer each frame: view.selected and view.track are its own.)
+    const reachNow = () => selectedReach(s(), input.view());
+    const spB = () => b(sp.x, sp.y);
+    check('a sprinkler tapped with the Upgrade tool has its reach drawn while its sheet is open', reachNow()?.b === spB() && reachNow()?.next === false,
+      JSON.stringify(input.view().selected));
+    const reach0 = statsOf(spB(), s()).range, rng0 = lvOf('rng');
+    if (sheet.querySelector('.ts-rng')) click(sheet.querySelector('.ts-rng'));
+    await wait(80);
+    check('pressing Range buys a level, and the reach stays drawn, bigger', lvOf('rng') === rng0 + 1 && statsOf(spB(), s()).range > reach0 && reachNow()?.b === spB(),
+      `range ${reach0} -> ${statsOf(spB(), s()).range}`);
+    check('... with no second reach (a finger does not hover)', reachNow()?.next === false);
+    click(sheet.querySelector('.ts-x'));
+    await wait(80);
+    check('closing the sheet takes the reach away', !input.view().selected && reachNow() === null);
+    input.setTool(null);
+    await wait(80);
+    const [bare] = freeTiles('crate', 1, sp); // (looked for now: the open sheet hides some of the floor)
+    await tap(at(sp.x, sp.y));
+    await wait(80);
+    check('a sprinkler tapped with nothing held has its reach drawn', reachNow()?.b === spB());
+    await tap(at(bare.x, bare.y));
+    await wait(80);
+    check('tapping bare floor takes it away', reachNow() === null && sheet.classList.contains('hidden'));
+    await pick('upgrade');
     input.select(null);
 
     // 12. The Remove tool removes exactly one building, where the finger lifts.
