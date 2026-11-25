@@ -405,14 +405,14 @@ export const STEPS = [
     // (Without him the gap lets some of these through, whatever the seed: see the tests.)
     wave: [{ k: 'clipper', n: 24, gap: 0.1, at: 0 }],
     text: [
-      'Do this: click Salesman (or press =) and click the top-left one of the four highlighted tiles, put a Sprinkler (press 7) on the highlighted tile just above him, then press OPEN THE DOORS for a coach party of 24 Coupon Clippers. Shoppers who come within his reach may walk over to his stand and watch his knife demonstration for a couple of seconds, standing in that Sprinkler\'s spray.',
-      'A crowd this big swamps your gap: a Sprinkler only sprays four shoppers at a time. The ones he holds up reach the gap later, a few at a time, instead of all together. Now and then one hurries past him instead, faster for a few seconds.',
-      'He takes two tiles by two, and his circle is big: about 4½ tiles. Even a dad stops for him now and then (one in five), though more of them hurry past faster (three in ten), so put security round his stand, where they stop, not after it.',
+      'Do this: click Salesman (or press =) and click the top-left one of the four highlighted tiles, put a Sprinkler (press 7) on the tile just above him, then press OPEN THE DOORS for 24 Coupon Clippers. Shoppers who come near him may stop to watch his knife demonstration, standing in that Sprinkler\'s spray.',
+      'His reach is about 4½ tiles. A crowd this big swamps your gap, because a Sprinkler only sprays four shoppers at a time: the ones he holds up reach the gap later, a few at a time, instead of all together. Now and then one hurries past him instead, faster for a few seconds.',
+      'He takes two tiles by two. Even a dad stops for him now and then (one in five), though more of them hurry past faster (three in ten), so put security round his stand, where they stop, not after it.',
     ],
     touch: [
-      'Do this: drag Salesman from the bar onto the four highlighted tiles and Sprinkler onto the highlighted tile just above him, then tap OPEN THE DOORS for a coach party of 24 Coupon Clippers. Shoppers who come within his reach may walk over to his stand and watch his knife demonstration for a couple of seconds, standing in that Sprinkler\'s spray.',
-      'A crowd this big swamps your gap: a Sprinkler only sprays four shoppers at a time. The ones he holds up reach the gap later, a few at a time, instead of all together. Now and then one hurries past him instead, faster for a few seconds.',
-      'He takes two tiles by two, and his circle is big: about 4½ tiles. Even a dad stops for him now and then (one in five), though more of them hurry past faster (three in ten), so put security round his stand, where they stop, not after it.',
+      'Do this: drag Salesman from the bar onto the four highlighted tiles and Sprinkler onto the tile just above him, then tap OPEN THE DOORS for 24 Coupon Clippers. Shoppers who come near him may stop to watch his knife demonstration, standing in that Sprinkler\'s spray.',
+      'His reach is about 4½ tiles. A crowd this big swamps your gap, because a Sprinkler only sprays four shoppers at a time: the ones he holds up reach the gap later, a few at a time, instead of all together. Now and then one hurries past him instead, faster for a few seconds.',
+      'He takes two tiles by two. Even a dad stops for him now and then (one in five), though more of them hurry past faster (three in ten), so put security round his stand, where they stop, not after it.',
     ],
     quip: 'Salesman on the four highlighted tiles, a Sprinkler above him, then open the doors. Knives on TV: the only thing in this store sharper than you.',
     marks: (s) => [
@@ -516,13 +516,13 @@ export const STEPS = [
     // (Without it the forklift and the signs let some of these ten through, whatever the seed.)
     wave: [{ k: 'dad', n: 10, gap: 0.35, at: 0 }],
     text: [
-      'Do this: click Laser (or press -), press R until the arrow on the preview points LEFT, click the left end of the three highlighted tiles, then press OPEN THE DOORS for ten dads. The Barcode Laser fires a beam straight out of the end its arrow points to, through everything in the way, and hits every shopper in the line at once.',
-      'So it is the one building where the way it faces is everything: it only ever fires along its arrow, 10 tiles out. Here it lies on the dads\' row and fires back along it, through the belt, at the whole single-file line coming in from the entrance.',
+      'Do this: click Laser (or press -), press R until the arrow on the preview points LEFT, click the left end of the three highlighted tiles, then press OPEN THE DOORS for ten dads. The laser only fires the way its arrow points.',
+      'The Barcode Laser is the one building where the way it faces is everything: its beam goes straight out of the end its arrow points to, 10 tiles, through everything in the way, and hits every shopper in that line at once. Here it lies on the dads\' row and fires back along it, through the belt, at the single-file line coming in from the entrance.',
       'It is slow to reload, so it wants a queue, not a straggler: the first dad sets it off on his own, and the next beam takes most of the line behind him. It is three tiles long and expensive, and once built it only turns end for end (⟳ Rotate on its card), so turn it before you place it.',
     ],
     touch: [
-      'Do this: drag Laser from the bar onto the three highlighted tiles. It lands with its arrow pointing right: tap it, then tap ⟳ Rotate on its card to turn it round so its arrow points LEFT. Then tap OPEN THE DOORS for ten dads. The Barcode Laser fires a beam straight out of the end its arrow points to, through everything in the way, and hits every shopper in the line at once.',
-      'So it is the one building where the way it faces is everything: it only ever fires along its arrow, 10 tiles out. Here it lies on the dads\' row and fires back along it, through the belt, at the whole single-file line coming in from the entrance.',
+      'Do this: drag Laser from the bar onto the three highlighted tiles, then tap it and tap ⟳ Rotate on its card so its arrow points LEFT (it lands pointing right). Then tap OPEN THE DOORS for ten dads. The laser only fires the way its arrow points.',
+      'The Barcode Laser is the one building where the way it faces is everything: its beam goes straight out of the end its arrow points to, 10 tiles, through everything in the way, and hits every shopper in that line at once. Here it lies on the dads\' row and fires back along it, through the belt, at the single-file line coming in from the entrance.',
       'It is slow to reload, so it wants a queue, not a straggler: the first dad sets it off on his own, and the next beam takes most of the line behind him. It is three tiles long and expensive, and once built it only turns end for end, with ⟳ Rotate on its card.',
     ],
     quip: 'Laser on the highlighted row, arrow pointing left, then open the doors. Ten dads in single file, like the queue at the vasectomy clinic.',
@@ -582,7 +582,7 @@ export const STEPS = [
     text: [
       'Do this: press Play a real game when you are ready, or stay here and practise for as long as you like. Pick any button in the build bar to see what it does and how to use it.',
       'That is every building. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
-      'The real store has many more kinds of shopper than these three, each with its own trick, and the 📖 Employee Handbook (the 📖 button at the top right, also on the ? screen) lists them all.',
+      'The real store has many more kinds of shopper than these three, each with its own trick, and the Employee Handbook lists them all: press ? at the top right, then 📖 Employee Handbook.',
       'A real store is bigger than this one. Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. With friends, each of you gets your own entrance to look after.',
       'P, or the pause button beside the speed buttons at the top, stops the store for everyone; 1x to 5x set how fast it runs.',
       'A good opening: one production line built as a wall, one gap, sprinklers and a wet floor sign at the gap, and something covering the dad short cut. Then forklifts along the rest of the route, and a Barcode Laser down the longest straight stretch of it.',
@@ -590,7 +590,7 @@ export const STEPS = [
     touch: [
       'Do this: tap Play a real game when you are ready, or stay here and practise for as long as you like. Hold your finger on any button in the build bar to see what it does and how to use it.',
       'That is every building. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
-      'The real store has many more kinds of shopper than these three, each with its own trick, and the 📖 Employee Handbook (the 📖 button at the top, under ☰ on a phone, also on the ? screen) lists them all.',
+      'The real store has many more kinds of shopper than these three, each with its own trick, and the Employee Handbook lists them all: tap ? at the top right (under ☰ on a phone), then 📖 Employee Handbook.',
       'A real store is bigger than this one. Drag the floor with nothing picked to move the view, pinch with two fingers to zoom, tap MAP to see the whole floor and HOME to go back to your entrance. With friends, each of you gets your own entrance to look after.',
       'The pause button beside the speed buttons (under ☰ on a phone) stops the store for everyone; 1x to 5x set how fast it runs.',
       'A good opening: one production line built as a wall, one gap, sprinklers and a wet floor sign at the gap, and something covering the dad short cut. Then forklifts along the rest of the route, and a Barcode Laser down the longest straight stretch of it.',

@@ -110,6 +110,9 @@ export function drawMarks(ctx, marks, now, W, H) {
   const bounce = Math.abs(Math.sin(now / 260)) * 7;
   // With many marks (a run of belts) only the captioned ones get an arrow, or it turns to clutter.
   const arrows = marks.length <= 3;
+  // (In a run, the captions are drawn last, over every outline: a caption beside one tile can run
+  // over the next one, as the TV Salesman's does over his own other tiles.)
+  const captions = [];
   for (const m of marks) {
     if (!(m.x >= 0 && m.y >= 0 && m.x < W && m.y < H)) continue;
     const px = m.x * T, py = m.y * T, cx = px + T / 2;
@@ -124,11 +127,7 @@ export function drawMarks(ctx, marks, now, W, H) {
     ctx.stroke();
     if (!arrows) {
       // In a run of marks, captions go beside the tile so they do not cover the tile above.
-      if (m.label) {
-        ctx.font = font(12);
-        const w = ctx.measureText(m.label).width;
-        label(ctx, m.label, px + T + 8 + w / 2, py + T / 2, 12, '#ffffff', INK, 4);
-      }
+      if (m.label) captions.push([m.label, px, py]);
       continue;
     }
     // Arrow pointing down at the tile.
@@ -148,5 +147,11 @@ export function drawMarks(ctx, marks, now, W, H) {
     ctx.strokeStyle = INK;
     ctx.stroke();
     if (m.label) label(ctx, m.label, cx, ay - 32, 12, '#ffffff', INK, 4);
+  }
+  // In a run of marks, captions go beside the tile so they do not cover the tile above.
+  for (const [text, px, py] of captions) {
+    ctx.font = font(12);
+    const w = ctx.measureText(text).width;
+    label(ctx, text, px + T + 8 + w / 2, py + T / 2, 12, '#ffffff', INK, 4);
   }
 }
