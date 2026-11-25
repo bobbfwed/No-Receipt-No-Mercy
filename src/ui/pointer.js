@@ -245,7 +245,7 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
   root.append(cue, el);
 
   const reduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
-  let shownKey = 'none', pendingKey = 'none', pendingSince = 0, poppedAt = -1e9, current = null;
+  let shownKey = 'none', pendingKey = 'none', pendingSince = 0, poppedAt = -1e9, current = null, busyAt = -1e9;
   let mode = ''; // 'arrow', 'gesture' or '' (hidden)
 
   function setMode(m) {
@@ -451,13 +451,15 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
       // A finger is really placing something (dragging a building from the bar, or pressing the
       // floor with one held): the game's own preview shows it, so the cue and the arrow step
       // aside, and come back as they were if the finger lifts without finishing the step.
-      if (input.placing || input.carrying) { setMode(''); return; }
+      if (input.placing || input.carrying) { busyAt = now; setMode(''); return; }
       const t = target({ tool: input.tool, selected: selected(), touch: touch() });
       const key = targetKey(t);
       if (t.kind === 'none') { setMode(''); shownKey = 'none'; pendingKey = 'none'; current = null; return; }
       if (key !== shownKey) {
         if (key !== pendingKey) { pendingKey = key; pendingSince = now; }
-        if (now - pendingSince < SETTLE_MS && shownKey !== 'none') {
+        // (Not straight after a finger placed something: what it did is done, and the old cue must not
+        // flash up again for a moment before the new target.)
+        if (now - pendingSince < SETTLE_MS && shownKey !== 'none' && now - busyAt > 300) {
           // Keep pointing at the old one for a moment (if it is still there to point at).
         } else { shownKey = key; current = t; poppedAt = now; }
       } else pendingKey = key;
