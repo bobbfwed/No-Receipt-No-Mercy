@@ -65,4 +65,9 @@ You are the owner and long-term maintainer of this codebase, and its design is u
 - Comments explain why, in plain words. Commit messages say what changed for a reader who has not seen the work.
 
 ## TO-DO, left over from v0.3
-- A card left out of the first deck on the owner's instruction: "Factory buildings are 4x as big (2x2) but make 4x as much money." It needs its own design: how machines of that size are placed on the marked floor, fed and drawn, and what "4x the money" means for their price.
+- A card left out of the first deck on the owner's instruction: "Factory buildings are 4x as big (2x2) but make 4x as much money." It needs its own design: how machines of that size are placed on the marked floor, fed and drawn, and what "4x the money" means for their price.- Replace auto-rebuild with a rebuild the player has to ask for (owner, 2026-11-24): "The auto rebuild makes the game too easy... not having to do anything is too easy and passive."
+  - Remove the auto-rebuild toggle.
+  - The player clicks Rebuild. The money that will be used is taken at once, but the rebuilding waits until rebuilding is possible, then happens.
+  - If, when the button is first clicked, the player only has enough money for a lower-level rebuild, take that. As more funds become available (after the click, but before the rebuild is possible), take them automatically until the full rebuild amount is reserved.
+  - As additional buildings are broken, the player must click the button again.
+  - Keep the Rebuild button showing up on the screen to make it easy.
