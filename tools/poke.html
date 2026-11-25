@@ -26,6 +26,7 @@
             aim:<x>,<y>[,<w>,<h>] (slide the finger that is down, on the floor or from the bar, to where its
             lifted preview (0.3.03) is centred on the w x h footprint whose top-left tile is x,y)
             fto:<px>,<py> (slide the finger that is down to a point on the page, in CSS pixels)
+            fup (lift the finger that is down, where it is)
             build:<kind>,<x>,<y>[,<dir>] (put a building straight into the game, to set a scene)
             js:<code> (run a line of JavaScript in the game's page, e.g. js:__game.session.state.refunds=99)
   Example:  tools/poke.html?u=solo%3D1&do=key:7;hover:8,10;click:.btn-help
@@ -110,6 +111,12 @@
         for (let k = 1; k <= n; k++) { finger('pointermove', { clientX: a.clientX + ((b.clientX - a.clientX) * k) / n, clientY: a.clientY + ((b.clientY - a.clientY) * k) / n }); await wait(4); }
         held = b;
         showFinger(held);
+      } else if (verb === 'fup' && held) {
+        // Lifts the finger that is down, where it is (0.3.03: the end of a drag, for the next picture).
+        finger('pointerup', held);
+        held = null;
+        fingerOn = null;
+        fingerDot.style.display = 'none';
       } else if (verb === 'pick') {
         const el = doc.querySelector(`.bb-btn[data-k="${arg}"]`);
         if (el) { for (const t of ['pointerdown', 'pointerup']) el.dispatchEvent(new win.PointerEvent(t, { pointerType: 'touch', bubbles: true })); el.click(); } else log('no button ' + arg);

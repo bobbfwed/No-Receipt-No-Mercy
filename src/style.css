@@ -2668,7 +2668,7 @@ html, body { overscroll-behavior: none; }
 }
 .bbi-fold::after { content: "▾"; }
 .bb-info.folded .bbi-fold::after { content: "▴"; }
-.bb-info.folded p { display: none; }
+.bb-info.folded p:not(.bbi-touch) { display: none; }
 /* The key hints at the end of the bar are capped at a button's height, so they cannot change
    the bar's height either. */
 .bb-hints { align-self: center; max-height: 4.85rem; }
@@ -2723,7 +2723,7 @@ html, body { overscroll-behavior: none; }
   }
   .bbi-fold::after { content: "▾"; }
   .bb-info.folded .bbi-fold::after { content: "▴"; }
-  .bb-info.folded p { display: none; }
+  .bb-info.folded p:not(.bbi-touch) { display: none; }
   /* How a finger places it (0.3.03), under the card's "How". */
   .bb-info .bbi-touch { margin-top: 0.15rem; font-style: italic; opacity: 0.9; }
 }
@@ -2985,6 +2985,9 @@ html, body { overscroll-behavior: none; }
 .ts-btn .ts-gain { white-space: normal; line-height: 1.2; opacity: 0.95; }
 .ts-btn .ts-cost { margin-top: 0.1rem; font-size: 0.86rem; font-weight: 900; }
 .ts-btn.ts-up:disabled { opacity: 0.55; }
+/* Rotate and Remove never squeeze below their words (0.3.03 follow-up: at 390 px they overlapped as
+   "Rot...emove"): a row that has no room for them wraps, and they share the next one. */
+.ts-btn:not(.ts-up) { min-width: 6.5rem; }
 .ts-btn.ts-up.poor .ts-cost { color: #fecaca; }
 .bbi-track { margin: 0.05rem 0 0 !important; }
 .bbi-track .bbi-cost { margin-left: 0.3rem; font-size: 0.74rem; }
@@ -3074,6 +3077,16 @@ html, body { overscroll-behavior: none; }
 .ta-arrow .ta-body { fill: var(--yellow); stroke: var(--ink); stroke-width: 3.6; stroke-linejoin: round; }
 .ta-arrow .ta-shadow { fill: rgba(11, 15, 20, 0.55); }
 .ta-arrow .ta-shine { stroke: #fff6bf; stroke-width: 3; stroke-linecap: round; }
+/* The drag cue sits under the lesson panel (6), DEB (9), the notices, the camera pad and the bar
+   (10): only the floor is under it, so its trail never crosses words. */
+.tut-cue { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.tut-cue * { pointer-events: none; }
+/* The held tool's card, moved off a marked tile by pointer.js: to the top of the floor, or (no
+   room there either) folded down to its heading. */
+.bb-info.tut-top { bottom: calc(100% + var(--tut-top, 0px)); }
+.bb-info.tut-fold p:not(.bbi-touch) { display: none; }
+/* (A folded card opens with a tap anywhere on it: buildbar.js.) */
+.bb-info.folded { cursor: pointer; }
 .ta-gesture { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .ta-gesture .ta-trail-back { fill: none; stroke: var(--ink); stroke-width: 8; stroke-linecap: round; opacity: 0.75; }
 .ta-gesture .ta-trail { fill: none; stroke: var(--yellow); stroke-width: 4; stroke-dasharray: 10 8; stroke-linecap: round; }
@@ -3081,3 +3094,26 @@ html, body { overscroll-behavior: none; }
 .ta-gesture .ta-dot { fill: var(--yellow); stroke: var(--ink); stroke-width: 3.5; }
 .ta-gesture .ta-ring { fill: none; stroke: var(--yellow); stroke-width: 3; }
 .ta-gesture .ta-ghost { fill: rgba(250, 204, 21, 0.25); stroke: var(--yellow); stroke-width: 3; stroke-dasharray: 6 4; }
+
+/* The lesson panel (0.3.03 follow-up): the "Do this:" lines always show; the rest of the lesson
+   waits behind More on a phone, where the panel stands over the top of the floor and must leave
+   most of the screen to it. */
+.tut-more { display: none; }
+@media (max-width: 699px) {
+  .game.is-training .tutorial { max-height: 34%; }
+  .game.is-training .tut-head { padding-top: 0.2rem; padding-bottom: 0.1rem; }
+  .game.is-training .tut-title { font-size: 0.95rem; margin-bottom: 0.25rem; }
+  .game.is-training .tut-main { padding-top: 0.3rem; }
+  .game.is-training .tut-body p { margin-bottom: 0.35rem; }
+  .game.is-training .tut-foot { padding-top: 0.25rem; padding-bottom: 0.3rem; }
+  .game.is-training .tut-foot .tut-btn { padding: 0.2rem 0.6rem; }
+  .tut-more {
+    display: inline-block; margin: 0 0 0.35rem; padding: 0.1rem 0.6rem;
+    border: 0.1rem solid #38e1ff; border-radius: 0.35rem; background: transparent; color: #a5f3fc;
+    font-weight: 800; font-size: 0.8rem;
+  }
+  .tut-more::after { content: " ▾"; }
+  .tutorial.more .tut-more::after { content: " ▴"; }
+  .tut-more.none { display: none; }
+  .tutorial:not(.more) .tut-rest { display: none; }
+}

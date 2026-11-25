@@ -7,60 +7,97 @@
 // The arrow never takes a click or a tap (pointer-events: none), never covers its target or the
 // lesson panel's text, and never leaves the screen.
 import { targetKey } from '../tutorial/target.js';
+import { liftPx } from './lift.js';
 
 /** The arrow's size in CSS pixels: shaft and head along `len`, `wide` across, `gap` from the target. */
 export const ARROW = { len: 64, wide: 44, gap: 6, bounce: 12 };
 export const ARROW_SMALL = { len: 52, wide: 36, gap: 5, bounce: 10 };
-/** Where the arrow may sit, in order of preference: the side of the target it stands on. */
-export const SIDES = ['above', 'below', 'left', 'right'];
-/** Which way an arrow standing on each side points (at the target). */
-const POINTS = { above: 'down', below: 'up', left: 'right', right: 'left' };
-const VEC = { down: [0, 1], up: [0, -1], right: [1, 0], left: [-1, 0] };
-
-/** Assumption (0.3.03): a building dragged on a touch screen is drawn about this many tiles above
- * the finger (the drag-from-the-bar work on main), so the finger lifts that far below the tile. */
-export const LIFT_TILES = 1.5;
+/** Where the arrow may sit, in order of preference: the side of the target it stands on. The
+ * corners (0.3.03 follow-up) are for a target boxed in on its straight sides, such as DROP with the
+ * HOME button above it and Rotate beside it. */
+export const SIDES = ['above', 'below', 'left', 'right', 'aboveleft', 'aboveright', 'belowleft', 'belowright'];
+const R2 = Math.SQRT1_2;
+/** The way an arrow standing on each side points (at the target), and that direction's name. */
+const POINTS = {
+  above: [0, 1, 'down'], below: [0, -1, 'up'], left: [1, 0, 'right'], right: [-1, 0, 'left'],
+  aboveleft: [R2, R2, 'downright'], aboveright: [-R2, R2, 'downleft'], belowleft: [R2, -R2, 'upright'], belowright: [-R2, -R2, 'upleft'],
+};
+const VEC = Object.fromEntries(Object.values(POINTS).map(([vx, vy, name]) => [name, [vx, vy]]));
 
 const area = (a, b) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x))
   * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
 const outside = (box, bd) => box.w * box.h - area(box, bd);
 
 /**
+ * The arrow's outline as circles along its axis, from the tip back to the end of its bounce: the
+ * head widens to `wide`, the shaft is about two fifths of that. Used to tell exactly what it
+ * covers (a box round a slanted arrow would cover far more than the arrow does).
+ */
+function circlesOf(x, y, vx, vy, { len, wide, bounce }) {
+  const out = [];
+  const headLen = len * 0.48;
+  for (let t = 2; t <= len + bounce; t += 6) {
+    const r = (t < headLen ? Math.max(3, (wide / 2) * (t / headLen)) : wide * 0.21) + 1.5;
+    out.push({ x: x - vx * t, y: y - vy * t, r });
+  }
+  return out;
+}
+const circleHits = (c, a) => {
+  const dx = Math.max(a.x - c.x, 0, c.x - (a.x + a.w)), dy = Math.max(a.y - c.y, 0, c.y - (a.y + a.h));
+  return dx * dx + dy * dy < c.r * c.r;
+};
+
+/**
  * Where the arrow goes for a target that is on screen.
  * @param {{x,y,w,h}} target  the thing to point at (CSS px, page coordinates)
  * @param {{x,y,w,h}} bounds  where the arrow must stay (the window, or the floor for a tile)
- * @param {Array<{x,y,w,h}>} [avoid] what it must not cover (the lesson panel's text, a sheet)
- * @param {string[]} [sides]  preferred sides, best first
+ * @param {Array<{x,y,w,h}>} [avoid] what it must not cover (the lesson panel's text, a sheet,
+ *   the buttons next to the target)
+ * @param {string[]} [sides]  preferred sides, best first (see SIDES)
  * @param {Object} [size]     ARROW or ARROW_SMALL
  * @returns {{ x: number, y: number, dir: string, side: string, box: {x,y,w,h}, edge: false, fits: boolean }}
  *   (x, y) is the arrow's tip; `dir` the way it points; `box` all it covers while bouncing
  */
 export function placeArrow(target, bounds, avoid = [], sides = SIDES, size = ARROW) {
-  const { len, wide, gap, bounce } = size;
+  const { wide, gap } = size;
   const cx = target.x + target.w / 2, cy = target.y + target.h / 2;
   let best = null;
   for (const side of sides) {
-    const dir = POINTS[side];
-    const vertical = dir === 'down' || dir === 'up';
+    const [vx, vy, dir] = POINTS[side];
+    // The tip: where a line from the target's centre, away from the arrow's way, leaves the
+    // target, then `gap` further out. A slanted arrow points into the target's nearest corner.
+    const ux = -vx, uy = -vy;
     let x, y;
-    if (side === 'above') { x = cx; y = target.y - gap; }
-    else if (side === 'below') { x = cx; y = target.y + target.h + gap; }
-    else if (side === 'left') { x = target.x - gap; y = cy; }
-    else { x = target.x + target.w + gap; y = cy; }
-    // Slide along the target's edge to stay on screen, as long as the tip still points at the target.
-    if (vertical) {
+    if (vx && vy) {
+      x = (ux < 0 ? target.x : target.x + target.w) + ux * gap;
+      y = (uy < 0 ? target.y : target.y + target.h) + uy * gap;
+    } else {
+      const reach = Math.min(ux ? target.w / 2 / Math.abs(ux) : Infinity, uy ? target.h / 2 / Math.abs(uy) : Infinity);
+      x = cx + ux * (reach + gap); y = cy + uy * (reach + gap);
+    }
+    // A straight arrow slides along the target's edge to stay on screen, as long as its tip still
+    // points at the target.
+    if (!vx) {
       const lo = Math.max(bounds.x + wide / 2, target.x + 2), hi = Math.min(bounds.x + bounds.w - wide / 2, target.x + target.w - 2);
       if (lo <= hi) x = Math.min(hi, Math.max(lo, x));
-    } else {
+    } else if (!vy) {
       const lo = Math.max(bounds.y + wide / 2, target.y + 2), hi = Math.min(bounds.y + bounds.h - wide / 2, target.y + target.h - 2);
       if (lo <= hi) y = Math.min(hi, Math.max(lo, y));
     }
     const box = boxOf(x, y, dir, size);
     // How bad it is: off screen counts double, covering what must stay readable counts once.
-    const bad = outside(box, bounds) * 2 + avoid.reduce((n, a) => n + area(box, a), 0);
+    const circles = circlesOf(x, y, vx, vy, size);
+    // (An avoided box may say how much it matters, `weight`: a card's edge less than a button.)
+    const covers = avoid.reduce((n, a) => n + circles.filter((c) => circleHits(c, a)).length * 40 * (a.weight ?? 1), 0);
+    const bad = outside(box, bounds) * 2 + covers;
     const spot = { x, y, dir, side, box, edge: false, fits: bad === 0 };
+    // (A straight arrow reads more plainly than a slanted one: when neither is clear, the slanted
+    // one must be clearly better to win.)
+    if (vx && vy && bad > 0) spot.bad2 = bad + 100;
     if (bad === 0) return spot;
-    if (!best || bad < best.bad) best = { ...spot, bad };
+    const score = spot.bad2 ?? bad;
+    delete spot.bad2;
+    if (!best || score < best.bad) best = { ...spot, bad: score };
   }
   // Nowhere is perfect: the least bad, pushed back on screen.
   const { bad, ...spot } = best;
@@ -73,7 +110,12 @@ export function boxOf(x, y, dir, { len, wide, bounce }) {
   if (dir === 'down') return { x: x - wide / 2, y: y - far, w: wide, h: far };
   if (dir === 'up') return { x: x - wide / 2, y, w: wide, h: far };
   if (dir === 'right') return { x: x - far, y: y - wide / 2, w: far, h: wide };
-  return { x, y: y - wide / 2, w: far, h: wide };
+  if (dir === 'left') return { x, y: y - wide / 2, w: far, h: wide };
+  // A slanted arrow: the box round its corners.
+  const [vx, vy] = VEC[dir];
+  const ex = x - vx * far, ey = y - vy * far, half = (wide / 2) * R2;
+  const x0 = Math.min(x, ex) - half, x1 = Math.max(x, ex) + half, y0 = Math.min(y, ey) - half, y1 = Math.max(y, ey) + half;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
 /** Moves an arrow (and its tip) so its box is inside `bounds` where it can be. */
@@ -127,18 +169,23 @@ export const inside = (p, r, inset = 0) => p.x >= r.x + inset && p.x <= r.x + r.
 
 // ---- On screen --------------------------------------------------------------------------------
 
+/** Sides for an arrow beside a button in a card or a cluster: any, straight ones first. */
+const ANY = ['above', 'below', 'left', 'right', 'aboveleft', 'aboveright', 'belowleft', 'belowright'];
 /** Where each named control of target.js CONTROLS is, the sides the arrow prefers, and what opens
  * it when it is hidden (a shrunk lesson panel; the ☰ menu on a phone). */
 export const CONTROL_SPOTS = {
   next: { sel: '.tutorial .tut-next', sides: ['below', 'right', 'left', 'above'], opener: '.tutorial .tut-min' },
   play: { sel: '.tutorial .tut-play', sides: ['below', 'right', 'left', 'above'], opener: '.tutorial .tut-min' },
   doors: { sel: '.topbar .btn-doors', sides: ['below', 'left', 'right', 'above'], opener: '.topbar .btn-more' },
-  drop: { sel: '.buildbar .tc-drop', sides: ['above', 'left', 'right', 'below'] },
+  // DROP is boxed in: HOME above it, Rotate beside it, the edge of the screen on the other sides.
+  drop: { sel: '.buildbar .tc-drop', sides: ['above', 'aboveleft', 'left', 'belowleft'] },
   // (The sheet's buttons carry no names of their own: Rotate is the one that is neither an upgrade nor Remove.)
-  dmg: { sel: '.touch-sheet .ts-dmg', sides: ['above', 'below', 'left', 'right'] },
-  spin: { sel: '.touch-sheet .ts-btn:not(.ts-up):not(.ts-remove)', sides: ['above', 'below', 'left', 'right'] },
-  remove: { sel: '.touch-sheet .ts-remove', sides: ['above', 'below', 'left', 'right'] },
+  dmg: { sel: '.touch-sheet .ts-dmg', sides: ANY },
+  spin: { sel: '.touch-sheet .ts-btn:not(.ts-up):not(.ts-remove)', sides: ANY },
+  remove: { sel: '.touch-sheet .ts-remove', sides: ANY },
 };
+/** Groups of buttons whose other buttons the arrow keeps clear of when it points at one of them. */
+const GROUPS = '.touch-sheet, .tut-foot, .bb-touch, .touch-pad, .hud-phase, .bb-btns';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs = {}) => {
@@ -148,6 +195,7 @@ const svg = (tag, attrs = {}) => {
 };
 const rectOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
 const shown = (el) => !!el && el.isConnected && el.getClientRects().length > 0 && el.getBoundingClientRect().width > 0;
+const meets = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 /** How long a new target must last before the arrow moves to it: a tool held for a moment (a tap
  * that starts a drag from the bar, say) must not send it back and forth. */
 const SETTLE_MS = 140;
@@ -161,13 +209,14 @@ const MARK_ARROW_TILES = 0.9, MARK_CAPTION_TILES = 1.45;
  * @param {HTMLElement} o.root       the game screen (the arrow is added to it)
  * @param {HTMLCanvasElement} o.canvas  the floor
  * @param {Object} o.renderer       for the camera (tile to screen)
- * @param {Object} o.input          the tool held
+ * @param {Object} o.input          the tool held, and whether a finger is placing something
  * @param {() => ({x,y}|null)} o.selected  the building whose sheet is open
  * @param {(ui) => Object} o.target  the lesson's target (training panel's arrow())
  * @param {() => boolean} o.touch   a touch screen
  * @param {() => Array} [o.marks]   the lesson's floor marks (their captions are kept clear)
+ * @param {HTMLElement} [o.card]    the held tool's card, kept off the marked tiles
  */
-export function createPointer({ root, canvas, renderer, input, selected, target, touch, marks = () => [] }) {
+export function createPointer({ root, canvas, renderer, input, selected, target, touch, marks = () => [], card = null }) {
   const el = document.createElement('div');
   el.className = 'tut-arrow hidden';
   el.setAttribute('aria-hidden', 'true');
@@ -177,6 +226,13 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
     svg('path', { class: 'ta-shadow', d: 'M13 2 H31 V33 H43 L22 64 L1 33 H13 Z', transform: 'translate(0 3)' }),
     svg('path', { class: 'ta-body', d: 'M13 2 H31 V33 H43 L22 64 L1 33 H13 Z' }),
     svg('path', { class: 'ta-shine', d: 'M17 6 V31' }));
+  el.append(arrow);
+  // The drag cue is a layer of its own, under the lesson panel, DEB, the notices and the bar
+  // (style.css: .tut-cue), so its long trail never runs over words: the part that matters, the
+  // finger dot and the building above it near the tile, is out on the floor.
+  const cue = document.createElement('div');
+  cue.className = 'tut-cue hidden';
+  cue.setAttribute('aria-hidden', 'true');
   const gesture = svg('svg', { class: 'ta-gesture' });
   const trailBack = svg('path', { class: 'ta-trail-back' });
   const trail = svg('path', { class: 'ta-trail' });
@@ -185,8 +241,8 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
   const ring = svg('circle', { class: 'ta-ring', r: 18 });
   const dot = svg('circle', { class: 'ta-dot', r: 12 });
   gesture.append(trailBack, trail, head, ghost, ring, dot);
-  el.append(gesture, arrow);
-  root.append(el);
+  cue.append(gesture);
+  root.append(cue, el);
 
   const reduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
   let shownKey = 'none', pendingKey = 'none', pendingSince = 0, poppedAt = -1e9, current = null;
@@ -195,9 +251,8 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
   function setMode(m) {
     if (m === mode) return;
     mode = m;
-    el.classList.toggle('hidden', !m);
-    arrow.style.display = m === 'arrow' ? '' : 'none';
-    gesture.style.display = m === 'gesture' ? '' : 'none';
+    el.classList.toggle('hidden', m !== 'arrow');
+    cue.classList.toggle('hidden', m !== 'gesture');
   }
 
   /** A modal screen is up (help, handbook, the cards, a review, the end screen), or the game is paused. */
@@ -213,19 +268,24 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
   const windowRect = () => ({ x: 0, y: 0, w: innerWidth, h: innerHeight });
   const size = () => (innerWidth < 700 || innerHeight < 560 ? ARROW_SMALL : ARROW);
 
-  /** What must stay readable: the lesson panel's text and buttons, an open building sheet unless
-   * the target is in it, the buttons beside the target (the next upgrade in a sheet, say), and,
+  /** What must stay readable or pressable: the lesson panel's text and buttons, an open building
+   * sheet unless the target is in it, the other buttons of the target's group (the next upgrade
+   * and the close X in a sheet, Rotate beside DROP), the camera pad, the held tool's card, and,
    * for the floor, DEB's speech bubble. */
   function avoidFor(targetEl) {
     const out = [];
+    const add = (e, weight = 1) => { if (shown(e) && !(targetEl && (e === targetEl || e.contains(targetEl)))) out.push({ ...rectOf(e), weight }); };
     const panel = root.querySelector('.tutorial');
-    if (shown(panel)) for (const part of panel.querySelectorAll('.tut-main, .tut-foot')) if (shown(part) && !part.contains(targetEl)) out.push(rectOf(part));
+    if (shown(panel)) for (const part of panel.querySelectorAll('.tut-main, .tut-foot')) add(part);
     const sheet = root.querySelector('.touch-sheet');
-    if (shown(sheet) && !(targetEl && sheet.contains(targetEl))) out.push(rectOf(sheet));
-    if (targetEl && targetEl.parentElement) {
-      for (const b of targetEl.parentElement.children) if (b !== targetEl && b.tagName === 'BUTTON' && shown(b)) out.push(rectOf(b));
-    }
-    if (!targetEl) { const bubble = root.querySelector('.deb-body'); if (shown(bubble)) out.push(rectOf(bubble)); }
+    if (!(targetEl && sheet && sheet.contains(targetEl))) add(sheet);
+    const group = targetEl && targetEl.closest ? targetEl.closest(GROUPS) : null;
+    if (group) for (const b of group.querySelectorAll('button')) if (b !== targetEl) add(b);
+    for (const b of root.querySelectorAll('.touch-pad button, .bb-touch button')) if (!group || !group.contains(b)) add(b);
+    // Less important: the edge of the held tool's card, and the build bar's buttons under a sheet.
+    if (card && !card.classList.contains('hidden')) add(card, 0.25);
+    if (!group || !group.matches('.bb-btns')) for (const b of root.querySelectorAll('.buildbar .bb-btn')) add(b, 0.3);
+    if (!targetEl) add(root.querySelector('.deb-body'));
     return out;
   }
 
@@ -240,7 +300,7 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
       const c = centre(r);
       if (c.x < sr.x || c.x > sr.x + sr.w) return { spot: edgeArrow(c, sr, size()), el: btn };
     }
-    return { spot: placeArrow(r, windowRect(), avoidFor(btn), ['above', 'left', 'right', 'below'], size()), el: btn, rect: r };
+    return { spot: placeArrow(r, windowRect(), avoidFor(btn), ['above', 'aboveleft', 'aboveright', 'left', 'right'], size()), el: btn, rect: r };
   }
 
   /** A floor tile: beside it on the floor, or at the floor's edge when it is out of view. */
@@ -284,9 +344,44 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
     }
     const tr = tileRect(t.x, t.y);
     if (!inside(centre(tr), floorRect(), 2)) return null;
-    const lift = LIFT_TILES * tr.h;
-    // The finger ends that far below the tile; the building is drawn on the tile, above it.
+    // The finger ends below the tile by as much as input.js lifts a dragged building (lift.js);
+    // the building is drawn on the tile, above the finger.
+    const lift = liftPx(renderer.cam.zoom);
     return { from: centre(br), to: { x: tr.x + tr.w / 2, y: tr.y + tr.h / 2 + lift }, ghost: tr, lift };
+  }
+
+  /**
+   * The held tool's card must never sit over a tile the lesson has marked (on a phone it covers
+   * the bottom of the floor): it moves to the top of the floor while it would, and if it would
+   * cover a mark there too it folds down to its heading.
+   */
+  let cardTop = false, cardFold = false;
+  function keepCardClear() {
+    if (!card) return;
+    const ms = marks() || [];
+    let top = false, fold = false, up = 0;
+    if (ms.length && shown(card)) {
+      const tiles = ms.map((m) => tileRect(m.x, m.y));
+      // Measure where the card is without this rule moving it, so the decision does not flicker.
+      const had = [card.classList.contains('tut-top'), card.classList.contains('tut-fold')];
+      card.classList.remove('tut-top', 'tut-fold');
+      const r = rectOf(card);
+      card.classList.toggle('tut-top', had[0]);
+      card.classList.toggle('tut-fold', had[1]);
+      if (tiles.some((t) => meets(t, r))) {
+        const f = floorRect(), bar = card.parentElement.getBoundingClientRect();
+        // Its bottom edge goes this far above the bar: its top just under the top of the floor.
+        up = bar.top - (f.y + 8) - r.h;
+        top = up > 0;
+        fold = !top || tiles.some((t) => meets(t, { ...r, y: f.y + 8 }));
+      }
+    }
+    if (top) card.style.setProperty('--tut-top', `${Math.round(up)}px`);
+    if (top !== cardTop || fold !== cardFold) {
+      cardTop = top; cardFold = fold;
+      card.classList.toggle('tut-top', top);
+      card.classList.toggle('tut-fold', fold);
+    }
   }
 
   function drawArrow(spot, now) {
@@ -301,7 +396,8 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
       off = sz.bounce * Math.abs(Math.sin((now / 700) * Math.PI));
       if (sinceMove < POP_MS) { const k = sinceMove / POP_MS; scale = 1 + 0.45 * (1 - k) * (1 - k); opacity = Math.min(1, k * 3); }
     }
-    const angle = { down: 0, left: 90, up: 180, right: -90 }[spot.dir];
+    // The drawing points down (0 degrees); turn it to its way.
+    const angle = (Math.atan2(vy, vx) * 180) / Math.PI - 90;
     const x = spot.x - vx * off, y = spot.y - vy * off;
     // The drawing's tip is at (22, 64) of a 44 x 64 arrow; scale it to this size around the tip.
     const k = sz.len / 64;
@@ -347,9 +443,15 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
 
   return {
     el,
+    cue,
     /** Once per animation frame. */
     update(now) {
+      keepCardClear();
       if (covered()) { setMode(''); return; }
+      // A finger is really placing something (dragging a building from the bar, or pressing the
+      // floor with one held): the game's own preview shows it, so the cue and the arrow step
+      // aside, and come back as they were if the finger lifts without finishing the step.
+      if (input.placing || input.carrying) { setMode(''); return; }
       const t = target({ tool: input.tool, selected: selected(), touch: touch() });
       const key = targetKey(t);
       if (t.kind === 'none') { setMode(''); shownKey = 'none'; pendingKey = 'none'; current = null; return; }
@@ -373,6 +475,6 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
       setMode('arrow');
       drawArrow(found.spot, now);
     },
-    destroy() { el.remove(); },
+    destroy() { el.remove(); cue.remove(); },
   };
 }

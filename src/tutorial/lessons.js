@@ -55,9 +55,11 @@ const DOOR_CRATES = [[2, 7], [2, 8], [1, 9]];
 /** What removing something gives back, as the Remove button says it ("75% back"). */
 const BACK = `${Math.round(TUNE.sellBack * 100)}%`;
 /** On a touch screen, once (in the first lesson that places a building): the other way to place. */
-const OR_TAP = 'It shows above your finger while you drag, so you can see where it lands. (Or tap its button, then tap the tile.)';
-/** On a touch screen: turning a building already built, through the card that opens when it is tapped. */
-const TURN_IT = 'To turn it, tap it with nothing in your hand (tap DROP first if you are holding something) and tap ⟳ Rotate on the card that opens.';
+const OR_TAP = 'While you drag, the building rides above your finger so you can see where it lands. (Or tap its button, then tap the tile; then tap DROP to put it down before you tap the building.)';
+/** On a touch screen: a dragged machine lands facing right (unless turned while dragging), and is
+ * turned through the card that opens when it is tapped. (Not the Rotate button that shows during a
+ * drag, which a second finger has to press.) */
+const TURN_IT = 'It lands facing right: tap it, then tap ⟳ Rotate on its card until its arrow points DOWN.';
 
 /**
  * Marks for a list of [x, y, kind, facing, label] wanted buildings that are not correctly in place
@@ -75,7 +77,8 @@ function tileHint(s, x, y, k, d, name) {
   if (!b) return null;
   if (b.k !== k) return `Something else is on the highlighted tile. Right-click it to remove it, then place the ${name}.`;
   if (d !== undefined && b.d !== d) {
-    return `The ${name}'s arrow must point down. Press Esc to put your tool away, point at the ${name}, and press R until the arrow points down.`;
+    // (One way for both a mouse and a finger: the building's card. content/touch.js words it for a finger.)
+    return `The ${name}'s arrow must point down. Put down what you are holding (Esc, or click its button again), click the ${name}, and click ⟳ Rotate on its card until the arrow points down.`;
   }
   return null;
 }
@@ -122,8 +125,8 @@ export const STEPS = [
       'The painted, named patches of floor (LOADING BAY, PRESS SHOP, GIFT WRAP, SHIPPING) are where the four factory machines go, each only on its own: Unpackers on Loading Bay. The patches are apart, so goods travel between them on belts. Belts, crates and security can go anywhere.',
     ],
     touch: [
-      `Do this: drag Unpacker from the bar at the bottom onto the highlighted tile. ${OR_TAP}`,
-      `Then make its arrow point DOWN. ${TURN_IT} Every production line starts with an Unpacker: it makes a Mystery Box every 2.5 seconds, for free, and pushes it out of the side its arrow points to.`,
+      `Do this: drag Unpacker from the bar at the bottom onto the highlighted tile. ${TURN_IT}`,
+      `${OR_TAP} Every production line starts with an Unpacker: it makes a Mystery Box every 2.5 seconds, for free, and pushes it out of the side its arrow points to.`,
       'The painted, named patches of floor (LOADING BAY, PRESS SHOP, GIFT WRAP, SHIPPING) are where the four factory machines go, each only on its own: Unpackers on Loading Bay. The patches are apart, so goods travel between them on belts. Belts, crates and security can go anywhere.',
     ],
     quip: 'Unpacker on the highlighted tile, arrow pointing down. It makes the boxes that everything else turns into money.',
@@ -149,7 +152,7 @@ export const STEPS = [
     hint: (s) => {
       for (const y of BELTS) {
         const b = at(s, X, y);
-        if (b && b.k === 'belt' && b.d !== S) return 'A belt is pointing the wrong way. Press Esc to put your tool away, point at the highlighted belt, and press R until its arrows point down.';
+        if (b && b.k === 'belt' && b.d !== S) return 'A belt is pointing the wrong way. With Belt picked, drag again from the first highlighted tile down to the last: belts turn to the way you drag.';
         if (b && b.k !== 'belt') return 'Something else is on a highlighted tile. Right-click it to remove it, then lay belt there.';
       }
       return null;
@@ -183,8 +186,8 @@ export const STEPS = [
       'Then wait for a Gadget to reach the chute.',
     ],
     touch: [
-      'Do this: tap the highlighted belt and tap ✕ Remove on the card that opens. Then drag Press from the bar onto the same tile, arrow pointing DOWN. A Press turns a Mystery Box ($2) into a Gadget ($8).',
-      `${TURN_IT} Removing something gives back ${BACK} of what it cost. A Press only goes on PRESS SHOP floor. Machines take goods in from the back or the sides, and push the result out of the side their arrow points to.`,
+      'Do this: tap the highlighted belt and tap ✕ Remove on the card that opens, then drag Press from the bar onto the same tile. If it lands facing another way, tap it, then tap ⟳ Rotate on its card until its arrow points DOWN. A Press turns a Mystery Box ($2) into a Gadget ($8).',
+      `Removing something gives back ${BACK} of what it cost. A Press only goes on PRESS SHOP floor. Machines take goods in from the back or the sides, and push the result out of the side their arrow points to.`,
       'Then wait for a Gadget to reach the chute.',
     ],
     quip: 'Take the highlighted belt out and put a Press there, arrow down. It turns a two-dollar box into an eight-dollar Gadget.',
@@ -203,7 +206,7 @@ export const STEPS = [
       'It only goes on GIFT WRAP floor, and only accepts Gadgets, so it has to come after the Press. That makes a complete production line: Unpacker, Press, Packer, Chute. In a real game you will want several.',
     ],
     touch: [
-      'Do this: tap the highlighted belt and tap ✕ Remove, then drag Packer from the bar onto that tile, arrow pointing DOWN. A Packer turns a Gadget ($8) into a Gift Set ($15).',
+      'Do this: tap the highlighted belt and tap ✕ Remove, then drag Packer from the bar onto that tile. If it lands facing another way, tap it, then tap ⟳ Rotate on its card until its arrow points DOWN. A Packer turns a Gadget ($8) into a Gift Set ($15).',
       'It only goes on GIFT WRAP floor, and only accepts Gadgets, so it has to come after the Press. That makes a complete production line: Unpacker, Press, Packer, Chute. In a real game you will want several.',
     ],
     quip: 'Packer where the highlighted belt is, arrow down. Same Gadget, nicer box, double the price. That is retail. And dating.',

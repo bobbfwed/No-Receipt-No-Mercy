@@ -8,6 +8,10 @@
 
 const RULES = [
   // Whole instructions first, most specific to least.
+  // The training shift's hints (0.3.03 follow-up): a building facing the wrong way, or something else
+  // on a marked tile, is fixed through its card, and a finger holding a tool would build instead.
+  [/Put down what you are holding \(Esc, or click its button again\), click the ([^,]+), and click ⟳ Rotate on its card/g, 'Tap DROP if you are holding something, tap the $1, and tap ⟳ Rotate on its card'],
+  [/Something else is on the highlighted tile\. Right-click it to remove it,/g, 'Something else is on the highlighted tile. Tap DROP if you are holding something, then tap it and tap ✕ Remove,'],
   [/Press Esc to put your tool away, point at the ([^.,]+?),? and press R until/g, 'Tap DROP to put your tool away, tap the $1, and tap Rotate until'],
   [/\(press B to rebuild it\)/g, '(the Rebuild button in the bar puts it back)'],
   [/Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance\./g, 'Drag the floor with nothing picked to move the view, pinch with two fingers to zoom, tap MAP to see the whole floor and HOME to go back to your entrance.'],

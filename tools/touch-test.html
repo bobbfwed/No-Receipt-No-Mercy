@@ -39,7 +39,8 @@
     cancels a bar drag; a preview lifted off the floor places nothing; a pointercancel leaves nothing
     held or previewed; a finger held at an edge of the floor slides the view slowly and it stops
     when the finger leaves the edge or lifts (the bottom edge only once a bar drag has been up on
-    the floor).
+    the floor). Last, in the training shift: a held building's card starts folded on a phone, and
+    even unfolded it is never over a tile the lesson has marked, so a tap there builds there.
   Open it at phone size with touch emulation, and read the results from the page:
     node tools/realshot.mjs "http://localhost:5173/tools/touch-test.html" out.png 40000 390 844 --touch --dpr=2 --eval=__result
   __result is "PASS n/n" or "FAIL ..." once done; each check is also listed on the picture.
@@ -59,6 +60,9 @@
   window.__result = 'running';
 
   frame.addEventListener('load', async () => {
+    // (Once: the last checks load the training shift into the same frame.)
+    if (window.__started) return;
+    window.__started = true;
     try { await run(); } catch (err) { check(`no errors: ${err && err.message}`, false); }
     const bad = results.filter((r) => !r.ok);
     window.__result = bad.length ? `FAIL ${bad.length}/${results.length}: ${bad.map((r) => r.name).join('; ')}` : `PASS ${results.length}/${results.length}`;
@@ -719,6 +723,44 @@
     // Leave a held belt and a placed line on screen for the picture.
     renderer.fit(); input.goHome();
     await pick('belt');
+
+    // 14. The training shift (0.3.03 follow-up): a held building's card never covers a tile the
+    // lesson has marked, so a tap on that tile builds there, even with the card unfolded.
+    await trainingCard();
+  }
+
+  async function trainingCard() {
+    frame.src = '../index.html?tutorial=1&step=3&name=Thumbs';
+    await new Promise((r) => frame.addEventListener('load', r, { once: true }));
+    const win = frame.contentWindow, doc = frame.contentDocument;
+    for (let i = 0; i < 50 && !win.__game; i++) await wait(100);
+    await wait(600);
+    const { session, renderer, input } = win.__game;
+    const canvas = doc.querySelector('canvas.world');
+    const card = doc.querySelector('.bb-info');
+    const btn = doc.querySelector('.bb-btn[data-k="chute"]');
+    btn.dispatchEvent(new win.PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));
+    btn.dispatchEvent(new win.PointerEvent('pointerup', { pointerType: 'touch', bubbles: true }));
+    btn.click();
+    await wait(300);
+    check('a phone starts the held building\'s card folded', card.classList.contains('folded'));
+    // Unfolded, it would stand over the bottom of the floor, where the Chute's tile is.
+    doc.querySelector('.bbi-fold').click();
+    await wait(300);
+    const cam = renderer.cam, cr = canvas.getBoundingClientRect();
+    const p = { x: cr.left + cr.width / 2 + (10 + 0.5 - cam.x) * cam.zoom, y: cr.top + cr.height / 2 + (11 + 0.5 - cam.y) * cam.zoom };
+    const kr = card.getBoundingClientRect();
+    check('training: the unfolded card is not over the marked tile', !(p.x >= kr.left && p.x <= kr.right && p.y >= kr.top && p.y <= kr.bottom), `tile at ${p.x | 0},${p.y | 0}; card ${kr.left | 0}-${kr.right | 0}, ${kr.top | 0}-${kr.bottom | 0}`);
+    const fire = (type) => canvas.dispatchEvent(new win.PointerEvent(type, {
+      pointerType: 'touch', pointerId: 31, isPrimary: true, clientX: p.x, clientY: p.y,
+      button: 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true,
+    }));
+    check('... and the tile is the floor itself there, not the card', doc.elementFromPoint(p.x, p.y) === canvas);
+    fire('pointerdown'); fire('pointerup');
+    await wait(100);
+    const s = session.state;
+    check('... so a tap on it builds the Chute there', s.grid[11 * s.w + 10]?.k === 'chute');
+    input.setTool(null);
   }
 </script>
 </body>

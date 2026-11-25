@@ -77,26 +77,34 @@ export function arrowTarget(st, s, marks, { tool = null, selected = null, touch 
       if (!touch && tool !== 'upgrade' && !selected) return { kind: 'button', k: 'upgrade' };
       return { kind: 'tile', x: m.x, y: m.y };
     }
-    if (wrongThere(b, m)) {
-      // Something else on the tile, or the right thing facing the wrong way: its sheet fixes it.
-      if (same(selected, m)) return { kind: 'control', name: b.k !== m.k ? 'remove' : 'spin' };
-      // A finger holding a tool would try to build on it, not open it: put the tool down first.
-      if (touch && tool && tool !== 'upgrade') return { kind: 'control', name: 'drop' };
-      return { kind: 'tile', x: m.x, y: m.y };
-    }
-    if (!m.k || b) return { kind: 'tile', x: m.x, y: m.y };
-    if (tool === m.k) {
-      // A line of belts: drag along what is left of it.
-      const line = m.k === 'belt' ? marks.filter((mk) => mk.k === 'belt' && free(mk)) : [];
+    // Belts: a line laid (or laid again: dragging belt over belts turns them) by one drag along
+    // the tiles that still need one, with the Belt picked. Something else in the way is below.
+    if (m.k === 'belt' && !(b && b.k !== 'belt') && !same(selected, m)) {
+      if (tool !== 'belt') return { kind: 'button', k: 'belt' };
+      const line = marks.filter((mk) => { const o = buildingAt(s, mk.x, mk.y); return mk.k === 'belt' && (!o || o.k === 'belt'); });
       if (line.length > 1) {
         const a = line[0], z = line[line.length - 1];
         return { kind: 'swipe', from: { x: a.x, y: a.y }, to: { x: z.x, y: z.y } };
       }
       return { kind: 'tile', x: m.x, y: m.y };
     }
-    // On a touch screen a building is dragged from the bar onto its tile; a line of belts is
-    // drawn on the floor once the Belt is picked, so the Belt is only tapped.
-    if (touch && BUILD[m.k] && m.k !== 'belt') return { kind: 'drag', k: m.k, x: m.x, y: m.y };
+    if (wrongThere(b, m)) {
+      // Something else on the tile, or the right thing facing the wrong way: its sheet fixes it.
+      if (same(selected, m)) return { kind: 'control', name: b.k !== m.k ? 'remove' : 'spin' };
+      if (tool && tool !== 'upgrade') {
+        // Holding something, a tap or click on it would try to build there, not open its card:
+        // put it down first (a finger with DROP; a mouse by clicking its button again, or Esc).
+        // A mouse can remove the wrong thing straight away with a right-click.
+        if (touch) return { kind: 'control', name: 'drop' };
+        if (b.k === m.k && BUILD[tool]) return { kind: 'button', k: tool };
+      }
+      return { kind: 'tile', x: m.x, y: m.y };
+    }
+    if (!m.k || b) return { kind: 'tile', x: m.x, y: m.y };
+    if (tool === m.k) return { kind: 'tile', x: m.x, y: m.y };
+    // On a touch screen a building is dragged from the bar onto its tile (a line of belts, above,
+    // is drawn on the floor once the Belt is picked, so the Belt is only tapped).
+    if (touch && BUILD[m.k]) return { kind: 'drag', k: m.k, x: m.x, y: m.y };
     return { kind: 'button', k: m.k };
   }
   if (s.phase === 'wave') return NONE('watch');

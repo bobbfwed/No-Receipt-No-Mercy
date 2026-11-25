@@ -12,9 +12,10 @@ import { worded, isTouch, PLACE_BY_TOUCH } from '../content/touch.js';
 // On a phone the info card is a sheet over the floor; the player can fold it down to one line,
 // and it stays folded for the next tool too.
 const FOLD_KEY = 'returns-dept.info-folded';
-// Until the player chooses, a phone on its side starts with it folded: there the card would
-// cover half the floor.
-let folded = typeof innerHeight === 'number' && innerHeight < 560;
+// Until the player chooses, a phone starts with it folded (0.3.03 follow-up): unfolded it covers the
+// bottom half of the floor, and a tap meant for the floor lands on it. Folded it is one strip: the
+// building's name and price, and on a touch screen the line that says how a finger places it.
+let folded = typeof innerHeight === 'number' && (innerHeight < 560 || innerWidth < 700);
 try { const v = localStorage.getItem(FOLD_KEY); if (v !== null) folded = v === '1'; } catch { /* not remembered */ }
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
@@ -129,16 +130,19 @@ export function createBuildBar(input, session) {
   if (input.watchBar) input.watchBar(scroller, { onPick: hideTip });
 
   /** The button that folds the card down to its heading, for players who know the buildings. */
+  function toggleFold() {
+    folded = !folded;
+    try { localStorage.setItem(FOLD_KEY, folded ? '1' : '0'); } catch { /* not remembered */ }
+    setClass(info, 'folded', folded);
+    const b = info.querySelector('.bbi-fold');
+    if (b) { b.setAttribute('aria-expanded', String(!folded)); b.setAttribute('aria-label', folded ? 'Show what it does' : 'Hide the details'); }
+  }
   const foldBtn = () => h('button', {
     type: 'button', class: 'bbi-fold', 'aria-label': folded ? 'Show what it does' : 'Hide the details', 'aria-expanded': String(!folded),
-    onclick: () => {
-      folded = !folded;
-      try { localStorage.setItem(FOLD_KEY, folded ? '1' : '0'); } catch { /* not remembered */ }
-      setClass(info, 'folded', folded);
-      const b = info.querySelector('.bbi-fold');
-      if (b) { b.setAttribute('aria-expanded', String(!folded)); b.setAttribute('aria-label', folded ? 'Show what it does' : 'Hide the details'); }
-    },
+    onclick: (e) => { e.stopPropagation(); toggleFold(); },
   });
+  // A folded card opens with a tap anywhere on it, not only on its small button.
+  info.addEventListener('click', (e) => { if (folded && !e.target.closest('button')) toggleFold(); });
   let lastCash = null, lastTool, lastDir, lastUp = '', lastRubble = '';
   const rebuildBtn = buttons.get('rebuild'), rebuildNote = rebuildBtn.querySelector('.bb-price');
   // A badge on the Rebuild button while auto-rebuild is on (the switch itself is in the top bar).

@@ -19,7 +19,14 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
   const fill = h('i');
   const title = h('h3', { class: 'tut-title' });
   const result = h('p', { class: 'tut-result hidden' });
-  const body = h('div', { class: 'tut-body' });
+  // The "Do this:" lines, always in sight; the rest of the lesson under them, which on a phone
+  // waits behind the More button so the panel leaves the floor most of the screen (0.3.03).
+  const body = h('div', { class: 'tut-body tut-do' });
+  const rest = h('div', { class: 'tut-body tut-rest' });
+  const btnMore = h('button', {
+    type: 'button', class: 'tut-more', 'aria-expanded': 'false',
+    onclick: () => setMore(!el.classList.contains('more')),
+  }, 'More');
   const hint = h('p', { class: 'tut-hint hidden', role: 'status', 'aria-live': 'polite' });
   const tick = h('div', { class: 'tut-tick hidden', 'aria-hidden': 'true' }, '✓ Done');
 
@@ -56,8 +63,16 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
   const el = h('section', { class: 'panel tutorial', 'aria-label': 'Training' },
     h('header', { class: 'tut-head' }, h('b', null, 'TRAINING SHIFT'), count, btnMin),
     h('div', { class: 'tut-progress', role: 'presentation' }, fill),
-    h('div', { class: 'tut-main' }, title, result, body, hint, tick),
+    // (The hint and the "Done" tick come straight after the instruction, so on a phone they are
+    // in sight without scrolling.)
+    h('div', { class: 'tut-main' }, title, result, body, hint, tick, btnMore, rest),
     h('footer', { class: 'tut-foot' }, btnBack, btnSkip, btnPart2, btnNext, btnMenu, btnPlay));
+
+  function setMore(open) {
+    setClass(el, 'more', open);
+    btnMore.setAttribute('aria-expanded', String(open));
+    setText(btnMore, open ? 'Less' : 'More');
+  }
 
   let advancing = null; // timer while the "Done" tick is showing
   let shownIndex = -1;
@@ -80,12 +95,13 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
     setText(title, st.title);
     // A lesson may have its own words for a touch screen (0.3.03: dragging from the bar).
     const text = isTouch() && st.touch ? st.touch : st.text;
-    body.replaceChildren(...text.map((raw) => {
-      const p = worded(raw); // keys and mouse on a desktop, buttons and taps on a touch screen
-      // "Do this:" paragraphs are the actual instruction; make them stand out.
-      const task = p.startsWith('Do this:');
-      return h('p', { class: task ? 'tut-task' : null }, task ? h('b', null, 'Do this: ') : null, task ? p.slice(9) : p);
-    }));
+    const paras = text.map((raw) => worded(raw)); // keys and mouse on a desktop, buttons and taps on a touch screen
+    // "Do this:" paragraphs are the actual instruction; make them stand out, and keep them in sight.
+    const isTask = (p) => p.startsWith('Do this:');
+    body.replaceChildren(...paras.filter(isTask).map((p) => h('p', { class: 'tut-task' }, h('b', null, 'Do this: '), p.slice(9))));
+    rest.replaceChildren(...paras.filter((p) => !isTask(p)).map((p) => h('p', null, p)));
+    setClass(btnMore, 'none', !rest.childElementCount);
+    setMore(false);
     if (cameFromWave) {
       const w = tut.lastWave;
       setText(result, `Last wave: ${w.stopped} stormed off, ${w.escaped} got a refund.`);

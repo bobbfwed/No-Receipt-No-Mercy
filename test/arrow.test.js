@@ -250,3 +250,39 @@ test('an edge arrow slides along the edge, clear of DEB and the panel, when it c
   assert.ok(a.x < 600 && a.x > 500, 'as close to the target\'s side as it can');
   assert.equal(a.fits, true);
 });
+
+test('a building facing the wrong way: the words and the arrow agree on the one thing to do next', async () => {
+  const { forTouch } = await import('../src/content/touch.js');
+  const session = trainingSession();
+  const tut = createTutorial(session);
+  tut.start();
+  tut.next(); // the Unpacker
+  const st = tut.step, s = session.state;
+  session.send({ c: 'place', k: 'unpacker', x: 10, y: 2, d: 0 }); // lands facing right
+  const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
+  // A mouse still holding the Unpacker: click its button again to put it down (the words say so).
+  assert.deepEqual(at({ tool: 'unpacker' }), { kind: 'button', k: 'unpacker' });
+  assert.match(tut.hint(), /Put down what you are holding \(Esc, or click its button again\), click the Unpacker, and click ⟳ Rotate on its card/);
+  assert.deepEqual(at({}), { kind: 'tile', x: 10, y: 2 });
+  assert.deepEqual(at({ selected: { x: 10, y: 2 } }), { kind: 'control', name: 'spin' });
+  // A finger: DROP, the Unpacker, Rotate; and the words say exactly that, with no key in them.
+  assert.deepEqual(at({ touch: true, tool: 'unpacker' }), { kind: 'control', name: 'drop' });
+  const touchHint = forTouch(tut.hint());
+  assert.match(touchHint, /Tap DROP if you are holding something, tap the Unpacker, and tap ⟳ Rotate on its card/);
+  assert.ok(!/\bEsc\b|click/i.test(touchHint), touchHint);
+  // The touch lesson says it in that order: drag it, then turn it on its card.
+  assert.match(st.touch[0], /^Do this: drag Unpacker .* It lands facing right: tap it, then tap ⟳ Rotate on its card until its arrow points DOWN\.$/);
+});
+
+test('belts facing the wrong way are laid again by one drag along the line', () => {
+  const session = trainingSession();
+  const tut = createTutorial(session);
+  tut.autoplay(2); // the belt lesson
+  const st = tut.step, s = session.state;
+  for (const y of [3, 4, 5, 6, 7, 8, 9, 10]) session.send({ c: 'place', k: 'belt', x: 10, y, d: 0 }); // all facing right
+  const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
+  assert.deepEqual(at({}), { kind: 'button', k: 'belt' });
+  assert.deepEqual(at({ tool: 'belt' }), { kind: 'swipe', from: { x: 10, y: 3 }, to: { x: 10, y: 10 } });
+  assert.deepEqual(at({ tool: 'belt', touch: true }), { kind: 'swipe', from: { x: 10, y: 3 }, to: { x: 10, y: 10 } });
+  assert.match(tut.hint(), /drag again from the first highlighted tile down to the last/);
+});
