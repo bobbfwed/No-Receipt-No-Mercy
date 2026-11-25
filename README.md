@@ -149,9 +149,11 @@ The game works by touch, in either orientation (a tablet, or a phone held sidewa
 
 | Touch | Does |
 |---|---|
+| Drag a building up out of the bar onto the floor | It rides just above your finger; lift to build one where it shows. What you held before stays held |
 | Tap a button in the bar | Pick that building or tool; tap it again to put it down. Hold a button to read what it does |
-| Tap the floor with a building picked | Build |
-| Hold a finger on the floor with a building picked | Shows where it will go; slide it into place and lift to build one there (lifted off the floor or over a button, nothing is built) |
+| Tap the floor with a building picked | Build on the tapped tile (however long the finger rests, as long as it does not slide) |
+| Slide a finger on the floor with a building picked | The building rises just above your finger so you can see where it goes; lift to build it there (with it off the floor or over a button, nothing is built) |
+| Hold the placing finger at the edge of the floor | The view slides that way, slowly |
 | A second finger on the floor while placing | Cancels it; the two fingers then move and zoom the view |
 | ROTATE button that shows while placing | Turns the building before you lift |
 | Drag with Belt picked | Lay a line of belt that follows your finger |

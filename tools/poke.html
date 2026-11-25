@@ -22,6 +22,10 @@
             pick:<building or tool> (tap that build-bar button with a finger)
             fdown:<x>,<y> (put a finger down on a tile and keep it there)   fmove:<x>,<y> (slide that
             finger to another tile, still down; for a picture of a placement in progress)
+            bdown:<building> (put a finger down on that build-bar button and keep it there)
+            aim:<x>,<y>[,<w>,<h>] (slide the finger that is down, on the floor or from the bar, to where its
+            lifted preview (0.3.03) is centred on the w x h footprint whose top-left tile is x,y)
+            fto:<px>,<py> (slide the finger that is down to a point on the page, in CSS pixels)
             build:<kind>,<x>,<y>[,<dir>] (put a building straight into the game, to set a scene)
             js:<code> (run a line of JavaScript in the game's page, e.g. js:__game.session.state.refunds=99)
   Example:  tools/poke.html?u=solo%3D1&do=key:7;hover:8,10;click:.btn-help
@@ -47,7 +51,8 @@
       return { clientX: r.left + r.width / 2 + (tx + 0.5 - cam.x) * cam.zoom, clientY: r.top + r.height / 2 + (ty + 0.5 - cam.y) * cam.zoom };
     };
     const keyEvent = (type, k) => win.dispatchEvent(new win.KeyboardEvent(type, { key: k, code: /^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`, bubbles: true }));
-    const finger = (type, p) => canvas().dispatchEvent(new win.PointerEvent(type, { ...p, pointerType: 'touch', pointerId: 7, isPrimary: true, button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
+    let fingerOn = null; // the element the finger that is down sends its moves to (the canvas, or a bar button)
+    const finger = (type, p) => (fingerOn || canvas()).dispatchEvent(new win.PointerEvent(type, { ...p, pointerType: 'touch', pointerId: 7, isPrimary: true, button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
     const mouse = (type, x, y) => canvas().dispatchEvent(new win.PointerEvent(type, { ...at(x, y), button: 0, buttons: type === 'pointerup' ? 0 : 1, pointerId: 1, bubbles: true, cancelable: true }));
     let held = null; // where the finger put down with fdown is now
     // A grey disc where that finger is, so a picture shows what the finger would hide. (The page
@@ -80,6 +85,28 @@
       } else if (verb === 'fmove' && held) {
         const [x, y] = arg.split(',').map(Number);
         const a = held, b = at(x, y), n = Math.max(1, Math.ceil(Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) / 8));
+        for (let k = 1; k <= n; k++) { finger('pointermove', { clientX: a.clientX + ((b.clientX - a.clientX) * k) / n, clientY: a.clientY + ((b.clientY - a.clientY) * k) / n }); await wait(4); }
+        held = b;
+        showFinger(held);
+      } else if (verb === 'bdown') {
+        const el = doc.querySelector(`.bb-btn[data-k="${arg}"]`);
+        if (!el) { log('no button ' + arg); continue; }
+        el.scrollIntoView({ block: 'nearest', inline: 'center' });
+        const r = el.getBoundingClientRect();
+        held = { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+        fingerOn = el;
+        finger('pointerdown', held);
+        showFinger(held);
+      } else if ((verb === 'aim' || verb === 'fto') && held) {
+        const [x, y, w = 1, h = 1] = arg.split(',').map(Number);
+        let b;
+        if (verb === 'fto') b = { clientX: x, clientY: y };
+        else {
+          const { liftPx } = await import('../src/ui/lift.js');
+          const c = at(x + (w - 1) / 2, y + (h - 1) / 2);
+          b = { clientX: c.clientX, clientY: c.clientY + liftPx(win.__game.renderer.cam.zoom) };
+        }
+        const a = held, n = Math.max(2, Math.ceil(Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) / 8));
         for (let k = 1; k <= n; k++) { finger('pointermove', { clientX: a.clientX + ((b.clientX - a.clientX) * k) / n, clientY: a.clientY + ((b.clientY - a.clientY) * k) / n }); await wait(4); }
         held = b;
         showFinger(held);
