@@ -48,16 +48,18 @@ import { CARDS, CARDS_APART, DEALABLE, cardParts } from '../src/sim/index.js';
  * The fixed hands of five: bad, good, bad, good, odd, as a real game deals them, none holding a
  * pair from CARDS_APART. Between them every card that can be dealt (DEALABLE) is in at least one (a
  * per-kind card with one kind), so a run of these is the "every card in a hand of five" test the
- * owner asked for. (The two cards the playtest took out of the deal, eightyproof and klepto, were
- * in hands 5 and 6 at first; restocking and pissing took their places before the final run.)
+ * owner asked for. (Hands 5 and 6 hold eightyproof and klepto, as they did at first; while those two
+ * were out of the deal, restocking and pissing stood in for them. Reworked, they came back on the
+ * owner's decision of 2026-11-24. The keen and focus players build few sample tables, so eightyproof
+ * shows little here: the stalls suite measures it.)
  */
 export const HANDS = [
   ['litter', 'lootbox', 'doubledip', 'asseenontv', 'convention'],
   ['freerange', 'regifting', 'offleash', 'offatruck', 'bulkbuy'],
   ['preworkout', 'mallcop', 'spayed', 'pulledout', 'flashmob'],
   ['bde', 'eyesup', 'hardy:karen', 'wrongway', 'artisanal'],
-  ['hurry:dad', 'slushie', 'clearance', 'restocking', 'premature'],
-  ['pissing', 'frail:hunter', 'shrinkflation', 'slow:dad', 'fathersday'],
+  ['hurry:dad', 'slushie', 'clearance', 'eightyproof', 'premature'],
+  ['klepto', 'frail:hunter', 'shrinkflation', 'slow:dad', 'fathersday'],
   ['pissing', 'warranty', 'doorbuster', 'supportdog', 'payday'],
   ['sensibleshoes', 'staffdiscount', 'dryjanuary', 'overtime', 'mallwalkers'],
   ['retreat', 'mopmike', 'litter', 'restocking', 'openbar'],

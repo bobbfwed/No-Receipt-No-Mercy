@@ -103,8 +103,8 @@ const TEXT = {
   },
   klepto: {
     name: 'Five-Finger Discount',
-    rule: (c) => `Shoplifters go out of their way to steal ${times(c.chance)} as often, and from ${fmt(c.reach)} tiles further away. Not Card Traders.`,
-    joke: 'The shoplifters walk further for it now. More commitment than any of you ever showed a woman.',
+    rule: (c) => `Shoplifters go for goods ${times(c.chance)} as often, and every theft gives the thief back ${pct(c.heal)} of his patience. Not Card Traders.`,
+    joke: 'Stealing gets the shoplifters off now. One quick grab and they are good to go again. Which is more than any of you can say.',
   },
   shrinkflation: {
     name: 'Shrinkflation',
@@ -184,7 +184,7 @@ const TEXT = {
   },
   eightyproof: {
     name: 'Free Samples: Now 80 Proof',
-    rule: (c) => `${share(c.share)} of all Free Sample tables hand out booze. An adult who stops at one may turn into a Day Drinker: ${pct(c.chance)} at his first, ${fmt(c.step * 100)} points more at each one after.`,
+    rule: (c) => `${share(c.share)} of all Free Sample tables pour booze. An adult who stops at one may turn into a Day Drinker (${pct(c.chance)} at his first, ${fmt(c.step * 100)} points more at each after): he hits the floor and loses ${pct(c.hit)} of the patience he had left.`,
     joke: 'The free samples are booze now. Pour enough of it and somebody in this store finally gets lucky. Not you.',
   },
   frail: {

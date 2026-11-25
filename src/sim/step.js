@@ -7,7 +7,7 @@ import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { autoRebuild } from './commands.js';
-import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftReach, cardFee,
+import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
@@ -976,6 +976,14 @@ function grabBeside(state, s, i, sure, ev, def = defOf(s)) {
     s.cd = secs(TUNE.grabCooldown);
     const e = { e: 'grab', x: s.x, y: s.y, kind };
     if (sure) e.far = 1;
+    // The klepto card: the thrill of it gives him back a share of his full patience, never above it
+    // (`heal` on the event is how much, rounded, when he had any to get back).
+    const heal = cardLiftHeal(state, def);
+    if (heal > 0 && s.cr !== 1 && s.hp < s.mhp) {
+      const back = Math.min(s.mhp - s.hp, s.mhp * heal);
+      s.hp += back;
+      e.heal = Math.round(back * 10) / 10;
+    }
     ev.push(e);
     return true;
   }
@@ -1021,8 +1029,8 @@ let FRONT = [], NEXT = [];
 function liftLook(state, s, i, def = defOf(s)) {
   if (goodsBeside(state, i, def)) return; // right beside some already: he grabs as he passes, or not
   // (A Card Trader will go further, and is likelier to, for a Mystery Box: TUNE.ripMax, ripChance.)
-  // (The klepto card: ordinary shoplifters go for it more often, and further: cardLiftChance, cardLiftReach.)
-  const reach = def.rips ? TUNE.ripMax : TUNE.liftMax + cardLiftReach(state, def);
+  // (The klepto card: ordinary shoplifters go for it more often, cardLiftChance.)
+  const reach = def.rips ? TUNE.ripMax : TUNE.liftMax;
   const chance = def.rips ? TUNE.ripChance : TUNE.liftChance * cardLiftChance(state, def);
   const seen = new Set([i]);
   FRONT.length = 0;
@@ -1367,28 +1375,38 @@ function spillAround(state, i, ticks) {
 
 /**
  * The eightyproof card: a shopper who drinks (see drinks in cards.js) has stopped at a Free Sample
- * table that hands out booze. With boozeChance of the booze tables he has stopped at before (`bq`)
- * he turns into a Day Drinker where he stands: the same shopper (id, place, super or not, what
- * salesmen have pitched him), with a Day Drinker's patience for this sales event at the share of
- * his own he had left, swaying from now on. What only a browsing shopper uses goes: a detour to
- * steal (`lf`, `lw`), a walk over to a salesman (`sa`, `sw`, `sl`) and the booze count. Sends
- * `drunk` {x,y,k,sup} (k: what he was).
+ * table (owned by player `by`) that hands out booze. With boozeChance of the booze tables he has
+ * stopped at before (`bq`) he turns into a Day Drinker where he stands: the same shopper (id,
+ * place, super or not, what salesmen have pitched him), swaying from now on. What only a browsing
+ * shopper uses goes: a detour to steal (`lf`, `lw`), a walk over to a salesman (`sa`, `sw`, `sl`)
+ * and the booze count. Sends `drunk` {x,y,k,sup} (k: what he was).
+ * Reworked on the owner's decision (2026-11-24), because the card is meant to help the players and
+ * did not: he used to take a Day Drinker's patience at the share he had, which handed most kinds
+ * patience. Now he never gains any (his patience and its maximum stay as they were, or drop to a
+ * Day Drinker's if that is less), and the booze hits at once: he goes down on the spot exactly as a
+ * Day Drinker falls (ST.STUN for his kind's fallSecs, slowing whoever walks over him; a `fall`
+ * event), and loses CARDS.eightyproof.hit of the patience he has left, credited to the table's
+ * owner like any building's hit, so if that finishes him he storms out as stopped by the store.
  */
-function boozeUp(state, s, ev) {
+function boozeUp(state, s, by, ev) {
   const n = s.bq | 0;
   s.bq = n + 1;
   if (rand(state) >= boozeChance(n)) return;
-  const was = s.k, share = s.mhp > 0 ? Math.max(0, Math.min(1, s.hp / s.mhp)) : 1;
+  const was = s.k;
   s.k = 'drinker';
-  const hp = patienceFor(state, defOf(s), 'drinker');
-  s.mhp = hp;
-  s.hp = hp * share;
+  const def = defOf(s);
+  s.mhp = Math.min(s.mhp, patienceFor(state, def, 'drinker'));
+  s.hp = Math.min(s.hp, s.mhp);
   s.sv = 1;
   delete s.dr;
   delete s.bq;
   clearLift(s);
   clearStand(s);
   ev.push({ e: 'drunk', x: s.x, y: s.y, k: was, sup: s.sup | 0 });
+  s.st = ST.STUN;
+  s.t = secs(tv(def, 'fallSecs'));
+  ev.push({ e: 'fall', x: s.x, y: s.y });
+  hurt(state, s, s.hp * CARDS.eightyproof.hit, by, ev);
 }
 
 /**
@@ -1682,7 +1700,7 @@ function stepShoppers(state, fields, sec, ev) {
           // The game's cards: now and then he buys something (warranty); a table handing out booze
           // may turn him into a Day Drinker (eightyproof).
           maybeBuy(state, s, st[4], ev);
-          if (st[5] && drinks(def) && hasCard(state, 'eightyproof')) boozeUp(state, s, ev);
+          if (st[5] && drinks(def) && hasCard(state, 'eightyproof')) boozeUp(state, s, grid[st[4]] ? grid[st[4]].o : -1, ev);
           stopped = true;
           break;
         }

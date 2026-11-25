@@ -67,8 +67,9 @@ const tileOf = (s, sh) => (sh.y | 0) * s.w + (sh.x | 0);
 
 // ---- Every card can be dealt ---------------------------------------------------------------------
 
-// The playtest (0.3.01, tools/cardtest.mjs) took these out of the deal; their rules stay, for the owner to judge.
-const HELD_BACK = ['eightyproof', 'klepto'];
+// The playtest (0.3.01, tools/cardtest.mjs) held eightyproof and klepto out of the deal for a while;
+// both came back reworked on the owner's decision (2026-11-24). Any card held back again goes here.
+const HELD_BACK = [];
 
 test('every card in the deck can be dealt, but those the playtest held back', () => {
   assert.deepEqual([...DEALABLE].sort(), Object.keys(CARDS).filter((c) => !HELD_BACK.includes(c)).sort());
@@ -504,7 +505,7 @@ function sampleStop(cards, k, booze, more = {}) {
   return { s, sh, ev };
 }
 
-test('eightyproof: an adult who stops at a booze table may become a Day Drinker, keeping his share of patience and his super', (t) => {
+test('eightyproof: an adult who stops at a booze table may become a Day Drinker, keeping his super, never gaining patience, and losing a share of it', (t) => {
   tune(t, { chance: 1 }, CARDS.eightyproof);
   const { s, sh, ev } = sampleStop(['eightyproof'], 'clipper', true, { sup: 1, hp: 30, mhp: 120, lf: 99, lw: 30, pn: { 5: 1 } });
   assert.ok(ev.some((e) => e.e === 'sample'));
@@ -512,15 +513,53 @@ test('eightyproof: an adult who stops at a booze table may become a Day Drinker,
   assert.deepEqual([d.k, d.sup], ['clipper', 1]);
   assert.equal(sh.k, 'drinker');
   assert.equal(sh.sup, 1);
-  const hp = patienceFor(s, SUPERS.drinker, 'drinker');
-  assert.equal(sh.mhp, hp);
-  assert.ok(Math.abs(sh.hp - hp * 0.25) < 1e-9);
+  // A Bottomless Bruncher has far more patience than 120: he keeps his own maximum, and his 30
+  // less the booze's share (reworked 2026-11-24: he used to take the Day Drinker's at the same share).
+  assert.ok(patienceFor(s, SUPERS.drinker, 'drinker') > 120);
+  assert.equal(sh.mhp, 120);
+  assert.ok(Math.abs(sh.hp - 30 * (1 - CARDS.eightyproof.hit)) < 1e-9, `${sh.hp}`);
+  assert.equal(s.players[0].w.annoy, 30 * CARDS.eightyproof.hit, 'the table\'s owner did it');
   assert.equal(sh.sv, 1);
   for (const f of ['lf', 'lw', 'bq', 'sa']) assert.equal(sh[f], undefined, f);
   assert.deepEqual(sh.pn, { 5: 1 }, 'what the salesmen have pitched him stays');
-  // He walks off as a drunk: swaying, and able to fall.
-  const ev2 = run(s, 8, () => !s.shoppers.includes(sh));
+  // He hits the floor at once, exactly as a Day Drinker falls: lying there for his kind's fall time.
+  const fall = ev.findIndex((e) => e.e === 'fall');
+  assert.ok(fall > ev.findIndex((e) => e.e === 'drunk'));
+  assert.equal(sh.st, ST.STUN);
+  assert.equal(sh.t, Math.round(SUPERS.drinker.fallSecs * TICK_HZ));
+  // He gets up and walks off as a drunk: swaying, and able to fall again.
+  const ev2 = run(s, 12, () => !s.shoppers.includes(sh));
   assert.ok(sh.sv !== 1 || ev2.some((e) => e.e === 'fall' || e.e === 'escape'));
+});
+
+test('eightyproof: a turned shopper never has more patience than before, takes a Day Drinker\'s if that is less, and a hit that finishes him counts as stopped', (t) => {
+  tune(t, { chance: 1 }, CARDS.eightyproof);
+  // Fresh Bargain Hunters at real patience: the Day Drinker has more, and none of it is given.
+  for (const k of ['hunter', 'clipper']) {
+    const s0 = game(['eightyproof']);
+    const full = patienceFor(s0, SHOPPERS[k], k);
+    const { s, sh } = sampleStop(['eightyproof'], k, true, { hp: full, mhp: full });
+    assert.equal(sh.k, 'drinker', k);
+    assert.ok(patienceFor(s, SHOPPERS.drinker, 'drinker') > full, k);
+    assert.equal(sh.mhp, full, k);
+    assert.ok(Math.abs(sh.hp - full * (1 - CARDS.eightyproof.hit)) < 1e-9, k);
+  }
+  // One with more patience than a Day Drinker's drops to it (never above what he had), then loses the share.
+  const { s, sh } = sampleStop(['eightyproof'], 'hunter', true);
+  const dh = patienceFor(s, SHOPPERS.drinker, 'drinker');
+  assert.equal(sh.mhp, dh);
+  assert.ok(Math.abs(sh.hp - dh * (1 - CARDS.eightyproof.hit)) < 1e-9);
+  // Lying there, he slows whoever walks over him, as a fallen Day Drinker does.
+  assert.equal(sh.st, ST.STUN);
+  // A booze hit big enough to finish him: he storms out, stopped by the store, credited to the table's owner.
+  tune(t, { hit: 1 }, CARDS.eightyproof);
+  const r = sampleStop(['eightyproof'], 'hunter', true, { hp: 10, mhp: 36 });
+  const left = r.ev.find((e) => e.e === 'left');
+  assert.ok(left, 'he left');
+  assert.deepEqual([left.k, left.by, left.why], ['drinker', 0, 'annoyed']);
+  assert.equal(r.sh.st, ST.LEAVE);
+  assert.equal(r.s.ws.stopped, 1);
+  assert.equal(r.s.players[0].w.stopped, 1);
 });
 
 test('eightyproof: not moms or Pregnant Ladies, not at a plain table, not without the card; and it gets likelier each time', (t) => {
@@ -557,7 +596,67 @@ test('eightyproof: a copy made just after a shopper turned plays on identically'
   tune(t, { chance: 1 }, CARDS.eightyproof);
   const { s, sh } = sampleStop(['eightyproof'], 'hunter', true);
   assert.equal(sh.k, 'drinker');
+  assert.equal(sh.st, ST.STUN);
   twin(s, 5);
+});
+
+// ---- klepto ---------------------------------------------------------------------------------------
+// (Reworked on the owner's decision, 2026-11-24: every theft gives the thief back a share of his
+// patience. Its "twice as often" is tested in cards.test.js.)
+
+/** A shopper of kind k beside a belt carrying `item`, who takes it (as he passes, or, with `lf`, at the end of a detour). */
+function theft(cards, k, more = {}, item = 'gadget') {
+  const s = game(cards);
+  openEmpty(s, 3);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'crate', x: 21, y: 8 }).ok);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'belt', x: 20, y: 8, d: 0 }).ok);
+  s.grid[8 * s.w + 20].it.push([item, 0.99]);
+  const sh = walker(s, k, 19.5, 8.5, more);
+  const ev = run(s, 0.5, () => sh.st !== ST.WALK);
+  return { s, sh, ev, grab: ev.find((e) => e.e === 'grab') };
+}
+
+test('klepto: every theft gives the shoplifter back a share of his full patience, never above it; none without the card', (t) => {
+  tune(t, { grabChance: 1e6 });
+  const heal = CARDS.klepto.heal;
+  for (const [cards, hp, want, field] of [
+    [['klepto'], 10, 10 + 36 * heal, 36 * heal], // the share of his full patience
+    [['klepto'], 35, 36, 1], // capped at his maximum
+    [['klepto'], 36, 36, undefined], // nothing to give back
+    [null, 10, 10, undefined], // no card
+  ]) {
+    const { s, sh, grab } = theft(cards, 'hunter', { hp, mhp: 36 });
+    assert.ok(grab, `${cards} ${hp}: he stole`);
+    assert.equal(s.ws.stolen, 1);
+    assert.ok(Math.abs(sh.hp - want) < 1e-9, `${cards} ${hp}: ${sh.hp}`);
+    assert.equal(grab.heal, field === undefined ? undefined : Math.round(field * 10) / 10, `${cards} ${hp}`);
+  }
+  // At the end of a detour (liftWalk's certain grab) as well.
+  const s = game(['klepto']);
+  openEmpty(s, 3);
+  applyCommand(s, 0, { c: 'place', k: 'crate', x: 21, y: 8 });
+  applyCommand(s, 0, { c: 'place', k: 'belt', x: 20, y: 8, d: 0 });
+  s.grid[8 * s.w + 20].it.push(['gadget', 0.99]);
+  const sh = walker(s, 'hunter', 19.5, 8.5, { hp: 10, mhp: 36, lf: 8 * s.w + 19, lw: 100 });
+  const ev = run(s, 0.5, () => sh.st !== ST.WALK);
+  const g = ev.find((e) => e.e === 'grab');
+  assert.ok(g && g.far === 1, 'the detour\'s grab');
+  assert.ok(Math.abs(sh.hp - (10 + 36 * heal)) < 1e-9);
+});
+
+test('klepto: a Card Trader ripping a Mystery Box gets no patience back', (t) => {
+  tune(t, { grabChance: 1e6 });
+  const { s, sh, ev } = theft(['klepto'], 'trader', { hp: 10, mhp: 30 }, 'box');
+  assert.ok(ev.some((e) => e.e === 'rip'), 'he ripped a box');
+  assert.equal(s.ws.stolen, 1);
+  assert.equal(sh.hp, 10);
+});
+
+test('klepto: a copy made just after a theft plays on identically', (t) => {
+  tune(t, { grabChance: 1e6 });
+  const { s, sh, grab } = theft(['klepto'], 'hunter', { hp: 10, mhp: 36 });
+  assert.ok(grab && sh.hp > 10);
+  twin(s, 3);
 });
 
 // ---- warranty -------------------------------------------------------------------------------------

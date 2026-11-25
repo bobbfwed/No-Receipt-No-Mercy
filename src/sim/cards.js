@@ -380,9 +380,14 @@ export const cardPep = (state) => mul(state, 'retreat', 'pep');
 /** Tiles added to a Cosplayer's shield reach (convention: from TUNE.shield to the card's). */
 export const cardShield = (state, def) => (def.shields && hasCard(state, 'convention') ? CARDS.convention.shield - TUNE.shield : 0);
 
-/** A shoplifter's chance to go out of his way, times, and tiles further he will go (klepto; not a Card Trader). */
+/**
+ * The klepto card (not a Card Trader, whose Mystery Boxes it never touched): a shoplifter's chance
+ * to go out of his way for goods, times; and the share of his full patience every theft gives him
+ * back (the thrill of it), 0 without the card. Reworked on the owner's decision (2026-11-24): it
+ * used to send him from further away too, but a longer detour only kept him in reach of security.
+ */
 export const cardLiftChance = (state, def) => (def.rips ? 1 : mul(state, 'klepto', 'chance'));
-export const cardLiftReach = (state, def) => (!def.rips && hasCard(state, 'klepto') ? CARDS.klepto.reach : 0);
+export const cardLiftHeal = (state, def) => (!def.rips && hasCard(state, 'klepto') ? CARDS.klepto.heal : 0);
 
 /** What a shopper who storms out pays the store on his way (restocking; not babies or puppies). */
 export const cardFee = (state, s) => (s.k !== 'baby' && s.k !== 'pup' && hasCard(state, 'restocking') ? CARDS.restocking.fee : 0);

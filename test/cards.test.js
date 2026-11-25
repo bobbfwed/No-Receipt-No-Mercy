@@ -13,7 +13,7 @@ import {
   revealTick, dealLength, idShare, smashReady, patienceFor, bossPatience, CARDS, DEALABLE, CARDS_APART,
   CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
-import { cardSlip, cardFall, cardLiftChance, cardLiftReach, cardShield, cardPicks } from '../src/sim/cards.js';
+import { cardSlip, cardFall, cardLiftChance, cardLiftHeal, cardShield, cardPicks } from '../src/sim/cards.js';
 import { HostSession } from '../src/net/session.js';
 import { cardText, cardName, CARD_WORDS, PLURALS, cardsNote } from '../src/content/cards.js';
 import { NOPE } from '../src/content/lines.js';
@@ -594,28 +594,40 @@ test('convention: a Cosplayer walks at 0.8 tiles a second, has 25% less patience
   }
 });
 
-test('klepto: ordinary shoplifters go for goods from 3 tiles further, twice as often; not Card Traders', (t) => {
+test('klepto: ordinary shoplifters go out of their way for goods twice as often, from no further; not Card Traders', (t) => {
   const s = game(['klepto']);
   assert.equal(cardLiftChance(s, SHOPPERS.hunter), CARDS.klepto.chance);
-  assert.equal(cardLiftReach(s, SHOPPERS.hunter), CARDS.klepto.reach);
+  assert.equal(cardLiftHeal(s, SHOPPERS.hunter), CARDS.klepto.heal);
   assert.equal(cardLiftChance(s, SHOPPERS.trader), 1);
-  assert.equal(cardLiftReach(s, SHOPPERS.trader), 0);
+  assert.equal(cardLiftHeal(s, SHOPPERS.trader), 0);
   assert.equal(cardLiftChance(game(), SHOPPERS.hunter), 1);
-  // In play: goods 7 tiles of walking away (beyond TUNE.liftMax, within it plus 3), one look.
+  assert.equal(cardLiftHeal(game(), SHOPPERS.hunter), 0);
+  // In play: one look, at goods `x` tiles of walking away; returns whether he goes for them.
   tune(t, { liftChance: 1, liftLook: 1000 });
-  for (const [cards, goes] of [[null, false], [['klepto'], true]]) {
-    const g = game(cards);
+  const goes = (cards, x, seed = 5) => {
+    const g = game(cards, seed);
     openEmpty(g, 3);
     applyCommand(g, 0, { c: 'place', k: 'crate', x: 21, y: 8 });
     applyCommand(g, 0, { c: 'place', k: 'belt', x: 20, y: 8, d: 0 });
     g.grid[8 * g.w + 20].it.push(['gadget', 0.99]);
-    const sh = walker(g, 'hunter', 12.5, 8.5);
+    const sh = walker(g, 'hunter', 19.5 - x, 8.5);
     // His one look comes on the next tick.
     sh.id = secs(1000) - ((g.tick + 1) % secs(1000));
     step(g);
-    assert.equal(sh.lf !== undefined, goes, `${cards}`);
-    if (goes) assert.equal(sh.lf, 8 * g.w + 19);
+    if (sh.lf !== undefined) assert.equal(sh.lf, 8 * g.w + 19);
+    return sh.lf !== undefined;
+  };
+  // Goods 7 tiles away, beyond TUNE.liftMax: never, card or not (the card's old 3 tiles further is gone).
+  for (const cards of [null, ['klepto']]) assert.equal(goes(cards, 7), false, `${cards}`);
+  assert.equal(goes(['klepto'], 4), true);
+  // Twice as often: at half the usual chance, the card makes it certain.
+  TUNE.liftChance = 0.5;
+  let plain = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    assert.equal(goes(['klepto'], 4, seed), true, `seed ${seed}`);
+    if (goes(null, 4, seed)) plain++;
   }
+  assert.ok(plain > 8 && plain < 32, `${plain} of 40 without the card`);
 });
 
 test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, and what it sells back for', () => {

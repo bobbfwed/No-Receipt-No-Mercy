@@ -243,7 +243,8 @@ export function createEffects() {
           break;
         case 'grab':
           f = add(POP, now, e.x * T, e.y * T - 30);
-          if (f) { f.text = 'yoink'; f.color = '#ff8c1a'; f.r = 0.1; }
+          // (`heal`: the klepto card gave the thief patience back for the thrill of it.)
+          if (f) { f.text = e.heal ? 'YOINK!' : 'yoink'; f.color = e.heal ? '#ff4fa3' : '#ff8c1a'; f.r = 0.1; }
           break;
         case 'sample':
           f = add(POP, now, e.x * T, e.y * T - 30);

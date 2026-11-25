@@ -707,7 +707,7 @@ export const CARDS = {
   hardy: { side: 'bad', per: 'kind', hp: 1.25 }, // (1.3 before the playtest: on dads it cost too much)
   hurry: { side: 'bad', per: 'kind', speed: 1.2 },
   clearance: { side: 'bad', sell: 0.85 }, // everything shipped sells for that
-  klepto: { side: 'bad', chance: 2, reach: 3 }, // shoplifters' chance to go for it, times; tiles further
+  klepto: { side: 'bad', chance: 2, heal: 0.4 }, // shoplifters' chance to go for goods, times; the share of his full patience each theft gives back (reworked 2026-11-24, see DEALABLE: it was 3 tiles further)
   shrinkflation: { side: 'bad', cost: 1.08 }, // every building's price (not upgrades; 1.1 before the playtest)
   pissing: { side: 'bad', pee: 1.5 }, // how long a dog's pee switches security off, times
   doorbuster: { side: 'bad', crowd: 1.1 }, // the ordinary crowd (not the boss, not a Midnight Release mob)
@@ -724,7 +724,7 @@ export const CARDS = {
   eyesup: { side: 'good', share: 0.5, range: 4, gap: 1.5 }, // dads within range of an Exhibitionist ahead fall in that far behind her
   wrongway: { side: 'good', share: 0.35 }, // that share of runaway kids run back toward the entrance
   slushie: { side: 'good' }, // a Teenager's mess covers the tile and the four beside it
-  eightyproof: { side: 'good', share: 0.5, chance: 0.25, step: 0.25 }, // that share of Free Sample tables hand out booze
+  eightyproof: { side: 'good', share: 0.5, chance: 0.25, step: 0.25, hit: 0.4 }, // that share of Free Sample tables hand out booze; hit: the share of the patience he has left that turning costs him (reworked 2026-11-24, see DEALABLE)
   frail: { side: 'good', per: 'kind', hp: 0.75 },
   slow: { side: 'good', per: 'kind', speed: 0.85 },
   warranty: { side: 'good', chance: 0.06, sample: 50, salesMin: 100, salesMax: 400 },
@@ -750,27 +750,34 @@ export const CARDS = {
 };
 
 /**
- * The cards that can be dealt: those whose rules exist (all 48 since the second round of 0.3.01),
- * less those the playtest took out (see CARDS). A card whose rule is still to be written stays off
- * this list until it is. A forced hand (createGame({ cards: [...] })) may hold any card in CARDS.
- * Taken out by the playtest (0.3.01), code kept, for the owner to decide:
- *   eightyproof  it does not help the players at any numbers: the Day Drinker a Bargain Hunter
- *                turns into has more patience than he had and shrugs off the Pepper Sprinkler,
- *                which outweighs his falling over (the scripted players lasted no longer even
- *                with every table pouring booze and twice the chance to turn).
- *   klepto       a bad card that helps: a shoplifter's detour to a belt is more time in reach of
- *                security, which outweighs the goods he takes (at 4 times as often and 5 tiles
- *                further the scripted players lasted most of an event longer, not shorter).
+ * The cards that can be dealt: every card whose rule exists (all 48 since the second round of
+ * 0.3.01). A card whose rule is still to be written, or one the playtest finds working against its
+ * own side, stays off this list until it is fixed. A forced hand (createGame({ cards: [...] })) may
+ * hold any card in CARDS.
+ * Two cards were out of the deal for a while in 0.3.01, because the playtest (tools/cardtest.mjs)
+ * found them doing the opposite of what their side promises, and came back reworked on the owner's
+ * decision of 2026-11-24:
+ *   eightyproof  a good card that did not help: a shopper turned Day Drinker took a Day Drinker's
+ *                patience at the share he had, which gave most kinds patience, and shrugs off the
+ *                Pepper Sprinkler. Now he never gains patience, falls on the spot as he turns and
+ *                loses `hit` of what he has left. Measured with the "stalls" player (the one who
+ *                builds sample tables), seeds 1-40: the steady one lasts 0.6 events longer on
+ *                average (0.8 over seeds 1-20, with 0.7 fewer refunds by event 12).
+ *   klepto       a bad card that helped: a shoplifter's detour from 3 tiles further was more time
+ *                in reach of security than his goods were worth. Now there is no extra reach, and
+ *                every theft gives the thief back `heal` of his full patience. Seeds 1-40: every
+ *                scripted player takes about half a refund more by event 12 and the plain ones lose
+ *                0.3 to 0.5 events sooner; the steady ones' ending barely moves (0.1 sooner).
  */
 export const DEALABLE = [
-  'litter', 'doubledip', 'preworkout', 'bde', 'hardy', 'hurry', 'clearance', 'shrinkflation',
+  'litter', 'doubledip', 'preworkout', 'bde', 'hardy', 'hurry', 'clearance', 'klepto', 'shrinkflation',
   'pissing', 'doorbuster', 'sensibleshoes', 'dryjanuary', 'retreat',
   'lootbox', 'asseenontv', 'regifting', 'offatruck', 'mallcop', 'pulledout', 'frail', 'slow',
   'staffdiscount', 'overtime', 'mopmike', 'restocking', 'firecode', 'happyhour',
   'convention', 'bulkbuy', 'flashmob', 'artisanal', 'premature', 'fathersday', 'payday', 'mallwalkers',
   'openbar', 'rentacop', 'sweatshop',
   // (The cards that change how shoppers behave, 0.3.01's second round.)
-  'freerange', 'offleash', 'spayed', 'eyesup', 'wrongway', 'slushie', 'warranty', 'supportdog',
+  'freerange', 'offleash', 'spayed', 'eyesup', 'wrongway', 'slushie', 'eightyproof', 'warranty', 'supportdog',
 ];
 
 /**
