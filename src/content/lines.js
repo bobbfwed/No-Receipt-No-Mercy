@@ -2149,6 +2149,19 @@ export const HOLIDAY_LINES = {
   },
 };
 
+/**
+ * What DEB says when a player lets go of her slider in the sound menu (0.3.03), so he hears the
+ * level he chose. Spoken only, never shown, so very short; taken in turn.
+ */
+export const SOUND_CHECK = [
+  'Testing. Still disappointed.',
+  'Louder? Needy.',
+  'Can you hear me now? Shame.',
+  'Turning me down will not help you.',
+  'Yes, this is my voice. No, it does not get sexier.',
+  'That is the level you pick? Typical.',
+];
+
 /** Names for buildings that may not be in BUILD yet (the director prefers BUILD's own name). */
 export const BUILDING_NAMES = { railgun: 'Barcode Laser', salesman: 'TV Salesman' };
 

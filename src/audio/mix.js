@@ -1,8 +1,16 @@
 // The master chain every sound goes through:
 //
-//   effects bus --\
-//                  >-- master (volume) -- trim -- compressor -- soft limiter --> speakers
-//   music bus ----/
+//   money ------\
+//   shoppers ----\
+//   store ------- >-- effects bus --\
+//   events ------/                   >-- master (volume) -- trim -- compressor -- soft limiter --> speakers
+//   voice ------/                    |
+//   music bus -- music (level) -----/
+//
+// Each group of effects (groups.js) has its own bus, whose gain is the player's level for it
+// (0.3.03), so moving a slider changes a sound that is already playing. The effects bus mutes
+// everything while the page is hidden; the music bus is where sound.js ducks the music (while DEB
+// talks, while the game is paused), and the music's own level comes after it, so they multiply.
 //
 // The compressor evens out pile-ups (twenty sales and a wave chime at once); the soft limiter after
 // it is a wave-shaper that leaves normal levels untouched and rounds anything louder off below
@@ -28,14 +36,30 @@ function limiterCurve() {
   return c;
 }
 
+/** The groups with a bus of their own (the same keys as GROUPS in groups.js). */
+const BUSES = ['money', 'shoppers', 'store', 'events', 'voice', 'music'];
+
+/** Glides a gain to `v` over 50 ms, so a slider moved while a sound plays does not click. */
+function glide(param, v, now) {
+  param.cancelScheduledValues(now);
+  param.setValueAtTime(param.value, now);
+  param.linearRampToValueAtTime(v, now + 0.05);
+}
+
 /**
  * Builds the chain into `out` (default: the speakers).
- * Returns { sfx, music, master, setVolume(v, now), disconnect() }; connect effects to `sfx` and the
- * music to `music`.
+ * Returns { sfx, music, buses, master, setVolume(v, now), setLevel(group, v, now), disconnect() }.
+ * Connect each effect to its group's bus (`buses.money`...; `sfx` itself skips the group levels)
+ * and the music to `music`. `levels` gives each bus its starting level (default 1).
  */
-export function createChain(ctx, out = ctx.destination, volume = 1) {
+export function createChain(ctx, out = ctx.destination, volume = 1, levels = {}) {
   const sfx = ctx.createGain();
   const music = ctx.createGain();
+  const buses = {};
+  for (const g of BUSES) {
+    buses[g] = ctx.createGain();
+    buses[g].gain.value = Number.isFinite(levels[g]) ? levels[g] : 1;
+  }
   const master = ctx.createGain();
   master.gain.value = volume;
   const trim = ctx.createGain();
@@ -54,20 +78,24 @@ export function createChain(ctx, out = ctx.destination, volume = 1) {
   const limiter = ctx.createWaveShaper();
   limiter.curve = limiterCurve();
 
+  for (const g of BUSES) if (g !== 'music') buses[g].connect(sfx);
   sfx.connect(master);
-  music.connect(master);
+  music.connect(buses.music).connect(master);
   master.connect(trim).connect(comp).connect(pre).connect(limiter).connect(out);
 
-  const nodes = [sfx, music, master, trim, comp, pre, limiter];
+  const nodes = [sfx, music, ...Object.values(buses), master, trim, comp, pre, limiter];
   return {
     sfx,
     music,
+    buses,
     master,
     /** Glides the master volume (0..1) to `v` over 50 ms so slider moves do not crackle. */
     setVolume(v, now = ctx.currentTime) {
-      master.gain.cancelScheduledValues(now);
-      master.gain.setValueAtTime(master.gain.value, now);
-      master.gain.linearRampToValueAtTime(v, now + 0.05);
+      glide(master.gain, v, now);
+    },
+    /** Glides one group's level (0..1) the same way. */
+    setLevel(group, v, now = ctx.currentTime) {
+      if (buses[group]) glide(buses[group].gain, v, now);
     },
     disconnect() {
       for (const n of nodes) {

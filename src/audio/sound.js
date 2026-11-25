@@ -9,23 +9,43 @@
 //                           upgrade, rebuild, chat; and the deal of the cards (0.3.01): cardDeal,
 //                           cardIn {side, i}, cardSlot {i}, cardHand
 //                           (opts: passed to the effect, as the simulation's events are)
-//   sound.get(key) / sound.set(key, value)   'sfx', 'music', 'voice' (booleans), 'volume' (0..1)
+//   sound.get(key) / sound.set(key, value)   levels 0..1 (0.3.03): 'volume' (the master) and the
+//                           groups 'money', 'shoppers', 'store', 'events', 'music', 'voice' (see
+//                           groups.js). get('sfx') is true while any of the four effect groups is
+//                           above 0, and set('sfx', false) turns those four off, as the old switch did.
+//   sound.on(group)         can this group (or 'sfx') be heard at all: its level and the master above 0
+//   sound.toggle(key)       the speaker mark beside a slider: 0, or back to its last level above 0
+//   sound.preview(group)    a short sample of the group at its level (one at a time), for the menu
 //   sound.destroy()
 //
 // Before unlock(), and in browsers without Web Audio or speech synthesis, every call is silent and
 // harmless. The effects themselves live in effects.js (one table) and shoppers.js, how crowds of
 // the same sound are thinned out in crowd.js, the music in music.js, the master chain in mix.js
 // and DEB's voice in speech.js.
-import { SOUNDS } from './effects.js';
+import { SOUNDS, GROUP_OF } from './effects.js';
 import { musicBar, BAR, LOOP_BARS } from './music.js';
 import { createChain } from './mix.js';
 import { createDebVoice } from './speech.js';
 import { hashText, built } from './synth.js';
 import { createGate } from './crowd.js';
+import { readSettings, settingsToSave, setLevel, toggleLevel, isOn, GROUP_KEYS } from './groups.js';
+import { SOUND_CHECK } from '../content/lines.js';
 import { maxIn } from '../sim/index.js';
 
 const STORE_KEY = 'returnsDept.sound';
-const DEFAULTS = { sfx: true, music: true, voice: true, volume: 0.7 };
+/** The four effect groups the old "Sound effects" switch stood for (get/set 'sfx'). */
+const SFX_GROUPS = ['money', 'shoppers', 'store', 'events'];
+/**
+ * What the menu plays when a slider is let go, so the player hears the level he set: an effect and
+ * its options per group. (Music has none: it is heard anyway. DEB also says a line of SOUND_CHECK.)
+ */
+const SAMPLES = {
+  money: ['kerching', {}],
+  shoppers: ['left', { k: 'karen' }],
+  store: ['spray', {}],
+  events: ['waveStart', {}],
+  voice: ['deb', { mood: 'smug' }],
+};
 
 /** Interface sounds play() accepts. */
 const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']);
@@ -63,21 +83,18 @@ function isTop(e) {
   } catch { return false; }
 }
 
+/** The settings saved in this browser (old saves with three on/off switches are read too). */
 function loadSettings() {
-  const s = { ...DEFAULTS };
   try {
     const raw = globalThis.localStorage && globalThis.localStorage.getItem(STORE_KEY);
-    const saved = raw ? JSON.parse(raw) : null;
-    if (saved && typeof saved === 'object') {
-      for (const k of ['sfx', 'music', 'voice']) if (typeof saved[k] === 'boolean') s[k] = saved[k];
-      if (Number.isFinite(saved.volume)) s.volume = Math.max(0, Math.min(1, saved.volume));
-    }
-  } catch { /* storage blocked or corrupt: use the defaults */ }
-  return s;
+    return readSettings(raw ? JSON.parse(raw) : null);
+  } catch {
+    return readSettings(null); // storage blocked or corrupt: use the defaults
+  }
 }
 
 function saveSettings(s) {
-  try { globalThis.localStorage && globalThis.localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+  try { globalThis.localStorage && globalThis.localStorage.setItem(STORE_KEY, JSON.stringify(settingsToSave(s))); } catch { /* ignore */ }
 }
 
 export function createSound() {
@@ -115,9 +132,13 @@ export function createSound() {
    * it has not been heard lately; how.gain: an extra level factor.
    */
   function fire(name, opts = {}, how = {}) {
-    if (destroyed || !running() || !settings.sfx || hidden) return;
+    if (destroyed || !running() || hidden) return;
     const s = SOUNDS[name];
     if (!s) return;
+    // A group turned down to 0 (or the master) costs nothing: nothing is built, and it takes no
+    // turn at the crowd gate, so the groups still on are thinned exactly as before.
+    const group = GROUP_OF[name] || 'events';
+    if (!isOn(settings, group)) return;
     const now = ctx.currentTime;
     if (name === 'deb' && now - lastBigAt < 1) return; // let the chime / fanfare be heard
     const g = gate.admit(name, now, { vip: VIP.has(name), sub: how.sub, shapes: s.shapes });
@@ -125,7 +146,7 @@ export function createSound() {
     if (BIG.has(name)) lastBigAt = now;
     try {
       const before = built.nodes;
-      const end = s.play(ctx, chain.sfx, g.at + 0.01, { seed: g.seed, ...opts, level: g.level * (how.gain ?? 1) });
+      const end = s.play(ctx, chain.buses[group], g.at + 0.01, { seed: g.seed, ...opts, level: g.level * (how.gain ?? 1) });
       gate.started(name, end, built.nodes - before);
     } catch { /* a sound must never break the game */ }
     if (g.merge) fire(g.merge);
@@ -244,14 +265,20 @@ export function createSound() {
     if (!m) return;
     const text = String(m.text ?? '');
     fire('deb', { mood: m.mood, seed: hashText(text) });
-    if (settings.voice && unlocked && !hidden && !destroyed) {
-      speech.say(text, settings.volume, { onStart: () => setDuck(true), onEnd: () => setDuck(false) });
-    }
+    if (isOn(settings, 'voice') && unlocked && !hidden && !destroyed) speak(text);
+  }
+
+  /** DEB speaks a line at the master volume times her own level, ducking the music meanwhile. */
+  function speak(text) {
+    speech.say(text, settings.volume * settings.voice, { onStart: () => setDuck(true), onEnd: () => setDuck(false) });
   }
 
   // ------------------------------------------------------------------ music
 
-  /** The music's level: lowered while DEB talks, and further while the game is paused. */
+  /**
+   * The music's duck: lowered while DEB talks, and further while the game is paused. (The player's
+   * own level for the music is the next gain along, chain.buses.music, so the two multiply.)
+   */
   const musicLevel = () => (talking ? DUCK : 1) * (paused ? PAUSED : 1);
 
   /** Moves the music toward its level, with this time constant (seconds). */
@@ -324,7 +351,8 @@ export function createSound() {
 
   /** Starts or stops the music to match the settings, the page visibility and the context. */
   function updateMusic() {
-    const want = settings.music && running() && !hidden && !destroyed;
+    // (Turned down to 0, the music is not scheduled at all, so it costs nothing.)
+    const want = isOn(settings, 'music') && running() && !hidden && !destroyed;
     if (want && !music) startMusic();
     else if (!want && music) stopMusic();
   }
@@ -337,8 +365,9 @@ export function createSound() {
     const p = chain.sfx.gain;
     p.cancelScheduledValues(now);
     p.setValueAtTime(p.value, now);
-    p.linearRampToValueAtTime(settings.sfx && !hidden ? 1 : 0, now + 0.05);
+    p.linearRampToValueAtTime(hidden ? 0 : 1, now + 0.05);
     chain.setVolume(settings.volume, now);
+    for (const g of GROUP_KEYS) chain.setLevel(g, settings[g], now);
   }
 
   function onVisibility() {
@@ -359,7 +388,7 @@ export function createSound() {
     try {
       if (!ctx) {
         ctx = new AC({ latencyHint: 'interactive' });
-        chain = createChain(ctx, ctx.destination, settings.volume);
+        chain = createChain(ctx, ctx.destination, settings.volume, settings);
         applyBuses();
         ctx.addEventListener && ctx.addEventListener('statechange', onState);
       }
@@ -381,26 +410,89 @@ export function createSound() {
   }
 
   function get(key) {
+    if (key === 'sfx') return SFX_GROUPS.some((k) => settings[k] > 0);
     return settings[key];
   }
 
-  function set(key, value) {
-    if (key === 'volume') {
-      const v = Number(value);
-      if (!Number.isFinite(v)) return;
-      settings.volume = Math.max(0, Math.min(1, v));
-    } else if (key === 'sfx' || key === 'music' || key === 'voice') {
-      settings[key] = !!value;
-    } else {
-      return;
-    }
+  /** After any level changed: save, move the buses, start or stop the music, hush DEB if muted. */
+  function changed() {
     saveSettings(settings);
     applyBuses();
     updateMusic();
-    if (key === 'voice' && !settings.voice) {
+    if (!isOn(settings, 'voice')) {
       speech.cancel();
       if (talking) setDuck(false);
     }
+  }
+
+  function set(key, value) {
+    if (typeof value === 'boolean') {
+      // The old on/off switches ('sfx' stood for every effect): on puts a group back to its last level.
+      const keys = key === 'sfx' ? SFX_GROUPS : key === 'music' || key === 'voice' ? [key] : null;
+      if (!keys) return;
+      for (const k of keys) setLevel(settings, k, value ? (settings.last[k] || 1) : 0);
+    } else if (!setLevel(settings, key, value)) {
+      return;
+    }
+    changed();
+  }
+
+  function toggle(key) {
+    const v = toggleLevel(settings, key);
+    changed();
+    return v;
+  }
+
+  // ------------------------------------------------------------------ samples for the menu
+
+  let sample = null; // { out, timer, spoke } while a sample from preview() is playing
+  let checkLine = 0;
+
+  /** Cuts the sample that is playing short (quickly, without a click). */
+  function stopSample() {
+    if (!sample) return;
+    const s = sample;
+    sample = null;
+    clearTimeout(s.timer);
+    if (s.spoke) speech.cancel();
+    if (!s.out || !ctx) return;
+    try {
+      const now = ctx.currentTime;
+      s.out.gain.cancelScheduledValues(now);
+      s.out.gain.setValueAtTime(s.out.gain.value, now);
+      s.out.gain.linearRampToValueAtTime(0, now + 0.03);
+    } catch { /* ignore */ }
+    setTimeout(() => { try { s.out.disconnect(); } catch { /* ignore */ } }, 80);
+  }
+
+  /**
+   * Plays a short sample of one group at its level, through its own bus, so the player hears what
+   * he has just set. Only ever one at a time: a new one cuts the last one off. It skips the crowd
+   * gate (it is not a game event) but not the levels: a group at 0 plays nothing.
+   */
+  function preview(group) {
+    if (destroyed) return;
+    stopSample();
+    if (!isOn(settings, group)) return;
+    const pick = SAMPLES[group];
+    const s = { out: null, timer: 0, spoke: false };
+    if (group === 'voice' && unlocked && speech.available) {
+      speak(SOUND_CHECK[checkLine++ % SOUND_CHECK.length]);
+      s.spoke = true;
+    }
+    if (pick && ctx && chain && ctx.state !== 'closed') {
+      try {
+        s.out = ctx.createGain();
+        s.out.connect(chain.buses[group]);
+        const t = ctx.currentTime + 0.02;
+        const end = SOUNDS[pick[0]].play(ctx, s.out, t, { seed: (Math.random() * 2147483646) | 0, ...pick[1] });
+        s.timer = setTimeout(() => {
+          if (sample === s) sample = null;
+          try { s.out.disconnect(); } catch { /* ignore */ }
+        }, Math.max(0, end - t) * 1000 + 400);
+      } catch { /* a sound must never break the game */ }
+    }
+    sample = s;
   }
 
   function attach(ses) {
@@ -425,6 +517,7 @@ export function createSound() {
   function destroy() {
     if (destroyed) return;
     for (const off of unsubs.splice(0)) off();
+    stopSample();
     stopMusic();
     destroyed = true;
     speech.destroy();
@@ -438,5 +531,7 @@ export function createSound() {
     chain = null;
   }
 
-  return { attach, unlock, play, get, set, destroy };
+  const on = (group) => isOn(settings, group);
+
+  return { attach, unlock, play, get, set, on, toggle, preview, destroy };
 }

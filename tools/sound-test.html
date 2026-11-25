@@ -92,7 +92,8 @@
   addEventListener('unhandledrejection', (e) => showErr('ERROR: ' + (e.reason && e.reason.stack || e.reason)));
 </script>
 <script type="module">
-import { SOUNDS } from '../src/audio/effects.js';
+import { SOUNDS, GROUP_OF } from '../src/audio/effects.js';
+import { EFFECT_GROUPS } from '../src/audio/groups.js';
 import { musicBar, BAR, LOOP_BARS } from '../src/audio/music.js';
 import { createChain } from '../src/audio/mix.js';
 import { createSound } from '../src/audio/sound.js';
@@ -643,6 +644,46 @@ const mm = analyse(mx, 0, Math.round(seam * SR));
   ], problems));
 }
 
+// ------------------------------------------------------------------ sound groups (0.3.03)
+// Every effect follows one group's slider in the sound menu (GROUP_OF in effects.js), and each
+// group has its own bus in the chain. One effect per group (and the music) is rendered through its
+// bus at level 1, 0.5 and 0, at a low master volume so the compressor stays out of the way (it
+// would squash the halving); and once at level 1 straight into the effects bus, the way every
+// effect went before 0.3.03, which must come out the same.
+{
+  const names = Object.keys(SOUNDS);
+  const unknown = names.filter((n) => !EFFECT_GROUPS.includes(GROUP_OF[n]));
+  const count = EFFECT_GROUPS.map((g) => `${g} ${names.filter((n) => GROUP_OF[n] === g).length}`).join(', ');
+  check(unknown.length === 0, `every effect has a known group (${names.length} effects: ${count})${unknown.length ? '; none for ' + unknown.join(', ') : ''}`);
+  const ONE = { money: ['sale', { kind: 'box', seed: 3 }], shoppers: ['left', { k: 'karen', seed: 2 }], store: ['spray', { seed: 4 }], events: ['waveStart', {}], voice: ['deb', { mood: 'angry', seed: 9 }], music: null };
+  const VOL = 0.3;
+  const groupRender = (g, level, direct = false) => render(WARM + (g === 'music' ? BAR : 2), (ctx) => {
+    const ch = createChain(ctx, ctx.destination, VOL, { [g]: level });
+    if (g === 'music') musicBar(ctx, ch.music, WARM, 0);
+    else SOUNDS[ONE[g][0]].play(ctx, direct ? ch.sfx : ch.buses[g], WARM, ONE[g][1]);
+  });
+  // The level over the whole render (analyse() measures only where the sound is above a threshold,
+  // which a quieter copy crosses later and leaves sooner, so its RMS would not halve exactly).
+  const energy = (x) => { let e = 0; for (const v of x) e += v * v; return e; };
+  const rows = [];
+  for (const g of Object.keys(ONE)) {
+    const fullX = await groupRender(g, 1), halfX = await groupRender(g, 0.5);
+    const full = analyse(fullX), half = analyse(halfX);
+    const off = analyse(await groupRender(g, 0));
+    const ratio = energy(fullX) > 0 ? Math.sqrt(energy(halfX) / energy(fullX)) : 0;
+    const label = g === 'music' ? 'music' : `${g} (${ONE[g][0]})`;
+    check(off.peak < 1e-4, `${label} at 0: silent (peak ${off.peak.toExponential(1)})`);
+    check(ratio > 0.45 && ratio < 0.55, `${label} at 0.5: ${ratio.toFixed(3)} of its level at 1 (want 0.45 to 0.55; peak ${half.peak.toFixed(4)} / ${full.peak.toFixed(4)})`);
+    if (g !== 'music') {
+      const before = analyse(await groupRender(g, 1, true));
+      check(Math.abs(before.peak - full.peak) < 1e-6 && Math.abs(before.rms - full.rms) < 1e-6,
+        `${label} at 1 comes out exactly as it did without groups (peak ${full.peak.toFixed(5)} vs ${before.peak.toFixed(5)})`);
+    }
+    rows.push({ g, full: full.rms, half: half.rms, off: off.peak, ratio });
+  }
+  results.push({ name: 'groups', rows });
+}
+
 // ------------------------------------------------------------------ loudness relations
 {
   const fx = results.filter((r) => r.base);
@@ -795,7 +836,7 @@ async function liveSelfTest() {
     // and the merged crowd sounds borrow ahead; 230 leaves room for timing jitter.
     log(nodesSec < 230, `storm effects build ${Math.round(nodesSec)} audio nodes a second over 2 s (music not counted; limit 230)`);
     // 4. Music off: silence once the effects ring out; effects still work.
-    s.set('music', false);
+    s.set('music', 0);
     await wait(900);
     const offLvl = await level(600);
     log(offLvl < 0.003, `music off: speakers at ${offLvl.toFixed(4)}`);
@@ -817,14 +858,14 @@ async function liveSelfTest() {
     await wait(1200);
     log(counts.started - counts.ended === 0, `clean-up: ${counts.started} sources started, ${counts.ended} ended`);
     // 6. Music back on; then sfx off: storm is silent apart from the music.
-    s.set('music', true);
+    s.set('music', 1);
     await wait(800);
     const backLvl = await level(1500);
     log(backLvl > 0.01, `music back on: peak ${backLvl.toFixed(3)}`);
-    s.set('sfx', false);
+    for (const g of ['money', 'shoppers', 'store', 'events']) s.set(g, 0);
     const [noFx] = await Promise.all([level(1200), storm(1200)]);
-    log(noFx < musicLvl * 1.6, `sfx off during a storm: peak ${noFx.toFixed(3)} (music only)`);
-    s.set('sfx', true);
+    log(noFx < musicLvl * 1.6, `the four effect groups at 0 during a storm: peak ${noFx.toFixed(3)} (music only)`);
+    for (const g of ['money', 'shoppers', 'store', 'events']) s.set(g, 1);
     // 7. Hidden page: effects muted and music paused; back again when visible.
     fakeHidden = true; document.dispatchEvent(new Event('visibilitychange'));
     await wait(700);
@@ -845,14 +886,14 @@ async function liveSelfTest() {
     await wait(400);
     const sp = window.speechSynthesis;
     log(null, `speech: ${sp ? `${sp.getVoices().length} voices, speaking=${sp.speaking}` : 'not available'}`);
-    s.set('voice', false);
+    s.set('voice', 0);
     await wait(100);
-    log(!sp || !sp.speaking, 'voice off: speech cancelled');
-    s.set('voice', true);
+    log(!sp || !sp.speaking, 'voice at 0: speech cancelled');
+    s.set('voice', 1);
     // 10. Settings persisted, unsubscribe works, destroy closes the context.
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('returnsDept.sound')); } catch { /* ignore */ }
-    log(saved && saved.volume === 0.7 && saved.music === true, `settings saved: ${JSON.stringify(saved)}`);
+    log(saved && saved.volume === 0.7 && saved.music === 1 && !('sfx' in saved), `settings saved as levels: ${JSON.stringify(saved)}`);
     off();
     log(Object.values(hs).every((a) => a.length === 0), 'unsubscribe removed every handler');
     s.destroy(); s.destroy();
@@ -1057,20 +1098,15 @@ btn(modBox, 'late-wave storm (3 s)', () => {
 for (const name of ['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']) btn(modBox, 'play ' + name, () => sound.play(name));
 
 const setBox = document.getElementById('settings');
-for (const key of ['sfx', 'music', 'voice']) {
-  const l = document.createElement('label');
-  const cb = document.createElement('input');
-  cb.type = 'checkbox'; cb.checked = sound.get(key);
-  cb.onchange = () => { sound.unlock(); sound.set(key, cb.checked); };
-  l.append(cb, ' ' + key);
-  setBox.appendChild(l);
-}
-{
+// The levels (0.3.03): the master and one per group, as in the game's sound menu. Letting go of a
+// group's slider plays its sample, as the menu does.
+for (const key of ['volume', 'money', 'shoppers', 'store', 'events', 'music', 'voice']) {
   const l = document.createElement('label');
   const r = document.createElement('input');
-  r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = sound.get('volume');
-  r.oninput = () => sound.set('volume', Number(r.value));
-  l.append('volume ', r);
+  r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = sound.get(key);
+  r.oninput = () => { sound.unlock(); sound.set(key, Number(r.value)); };
+  r.onchange = () => { if (key !== 'volume') sound.preview(key); };
+  l.append(key + ' ', r, ' ');
   setBox.appendChild(l);
 }
 </script>

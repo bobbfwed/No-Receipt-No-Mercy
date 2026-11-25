@@ -3,6 +3,7 @@ import { TUNE, ROLES, SPEEDS, officePlayer, isEndless, bossTier, bossTitle } fro
 import { eventOf } from '../content/facts.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton, copyText } from './dom.js';
 import { createAutoSwitch } from './rebuild.js';
+import { GROUPS, DEFAULTS as DEFAULT_LEVELS } from '../audio/groups.js';
 
 const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
 /** How many steps the top bar can take to fit a short window (the .fit-N rules in style.css). */
@@ -284,36 +285,96 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
 }
 
 /**
- * The speaker button and its small menu: sound effects, music, DEB's voice, and volume.
- * @param {Object} sound the sound module (get/set settings, unlock)
+ * The speaker button and its menu (0.3.03): the overall Volume, then a slider for each group of
+ * sounds (money, shoppers, security and machines, announcements, music, DEB's voice). The speaker
+ * mark beside each row mutes it and brings back its last level; letting go of a slider plays a
+ * short sample of that group, so the player hears what he has set.
+ * The menu's text never changes (the marks and the percentages are drawn in CSS), because the top
+ * bar measures its own text to know when to fit itself again (fit() above).
+ * @param {Object} sound the sound module (get/set/toggle/preview, unlock)
  */
 function createSoundMenu(sound) {
-  const box = (key, text) => {
-    const input = h('input', { type: 'checkbox', checked: !!sound.get(key) });
-    input.addEventListener('change', () => { sound.unlock(); sound.set(key, input.checked); refresh(); });
-    return h('label', { class: 'snd-row' }, input, h('span', null, text));
-  };
-  const vol = h('input', { type: 'range', min: '0', max: '100', step: '5', 'aria-label': 'Volume', value: String(Math.round((sound.get('volume') ?? 0.7) * 100)) });
-  vol.addEventListener('input', () => { sound.unlock(); sound.set('volume', Number(vol.value) / 100); refresh(); });
+  const rows = [{ key: 'volume', label: 'Volume' }, ...GROUPS];
+  const pct = (key) => Math.round((Number(sound.get(key)) || 0) * 100);
+  const sync = [];
+
+  function row({ key, label }) {
+    const id = `snd-${key}`;
+    const slider = h('input', { type: 'range', id, min: '0', max: '100', step: '5', 'aria-label': label });
+    const val = h('span', { class: 'snd-val', 'aria-hidden': 'true' });
+    const mute = h('button', {
+      type: 'button', class: 'snd-mute', 'aria-label': `Mute ${label}`, 'aria-pressed': 'false',
+      title: `${label}: off, or back to where it was`,
+      onclick: () => {
+        sound.unlock();
+        sound.toggle(key);
+        refresh();
+        if (key !== 'volume') sound.preview(key);
+      },
+    });
+    slider.addEventListener('input', () => { sound.unlock(); sound.set(key, Number(slider.value) / 100); refresh(); });
+    // Let go (or a key press): one short sample of the group, at its new level.
+    slider.addEventListener('change', () => { if (key !== 'volume') sound.preview(key); });
+    sync.push(() => {
+      const n = pct(key);
+      if (slider.value !== String(n)) slider.value = String(n);
+      slider.setAttribute('aria-valuetext', `${n}%`);
+      val.dataset.v = `${n}%`;
+      setClass(el, 'is-off', n === 0);
+      mute.setAttribute('aria-pressed', String(n === 0));
+    });
+    const el = h('div', { class: `snd-row${key === 'volume' ? ' snd-master' : ''}` },
+      mute, h('label', { class: 'snd-name', for: id }, label), val, slider);
+    return el;
+  }
+
+  const reset = h('button', {
+    type: 'button', class: 'snd-reset', title: 'Every slider back to how the game came',
+    onclick: () => {
+      sound.unlock();
+      for (const { key } of rows) sound.set(key, DEFAULT_LEVELS[key]);
+      refresh();
+    },
+  }, 'Reset');
   const menu = h('div', { class: 'snd-menu hidden', role: 'group', 'aria-label': 'Sound settings' },
-    box('sfx', 'Sound effects'), box('music', 'Store music'), box('voice', "DEB's voice"),
-    h('label', { class: 'snd-row snd-vol' }, h('span', null, 'Volume'), vol));
+    rows.map(row), h('div', { class: 'snd-foot' }, reset));
   const btn = h('button', {
     type: 'button', class: 'btn-help btn-sound', 'aria-label': 'Sound settings', title: 'Sound settings', 'aria-expanded': 'false',
     onclick: (e) => {
       e.stopPropagation();
       sound.unlock();
-      const open = menu.classList.toggle('hidden') === false;
-      btn.setAttribute('aria-expanded', String(open));
+      setOpen(menu.classList.contains('hidden'));
     },
   });
+  function setOpen(open) {
+    setClass(menu, 'hidden', !open);
+    btn.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    refresh();
+    // A dropdown from the top bar must not run off the bottom of the window: it scrolls instead.
+    // (In the ☰ menu on a phone it sits in that menu's own scrolling list, so no limit is set.)
+    menu.style.maxHeight = '';
+    if (getComputedStyle(menu).position === 'absolute') {
+      const top = menu.getBoundingClientRect().top;
+      menu.style.maxHeight = `${Math.max(160, innerHeight - top - 8)}px`;
+    }
+  }
   function refresh() {
-    const silent = (!sound.get('sfx') && !sound.get('music') && !sound.get('voice')) || sound.get('volume') === 0;
-    btn.textContent = silent ? '🔇' : '🔊';
+    for (const f of sync) f();
+    const muted = !(sound.get('volume') > 0) || GROUPS.every(({ key }) => !(sound.get(key) > 0));
+    const icon = muted ? '🔇' : '🔊';
+    if (btn.textContent !== icon) btn.textContent = icon;
   }
   refresh();
   menu.addEventListener('click', (e) => e.stopPropagation());
-  addEventListener('click', () => { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); });
+  addEventListener('click', () => { if (!menu.classList.contains('hidden')) setOpen(false); });
+  // Escape closes the menu and gives the keyboard back to the speaker button.
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || menu.classList.contains('hidden')) return;
+    const inside = menu.contains(document.activeElement);
+    setOpen(false);
+    if (inside) btn.focus();
+  });
   return h('div', { class: 'hud-sound' }, btn, menu);
 }
 

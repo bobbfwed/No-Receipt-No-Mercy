@@ -99,7 +99,7 @@ Or by hand: run `node tools/serve.mjs`, then open http://localhost:5173/ in Chro
 - **The boss** walks in every fifth sales event, a little after the doors open: slow, very patient, and nothing slows or stops him. His pep talks give the shoppers around him patience back. If he reaches a till he counts as two refunds; drive him out and the store gets a bounty. He comes back with a grander title each time (Regional Manager, Area Director, Vice President of Returns, The CEO). A bar across the top of the floor shows his patience while he is in the store.
 - **The Car Park** is the one store with tills on two walls: the usual bank on the right and a second in the bottom wall. Shoppers walk to whichever is nearer, so lengthening one route sends the crowd to the other. Both banks must stay reachable: a building that would wall one off is refused. Its entrances in the bottom wall open last (for a sixth and seventh player), because they are close to the bottom tills.
 - **Play solo** starts a real game straight away.
-- The speaker button at the top right turns sound effects, music and DEB's voice on or off.
+- The speaker button at the top right sets the overall volume and, each with its own slider, money, shoppers, security and machines, announcements, the store music and DEB's voice (the speaker beside a slider turns that one off and back on).
 - To try multiplayer alone, open http://localhost:5173/tools/two-player.html : a host and a second player side by side.
 
 ## Play online with friends

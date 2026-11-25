@@ -1130,8 +1130,11 @@ body.dealing .pause-banner { z-index: 42; }
   z-index: 60;
   top: calc(100% + 0.5rem);
   right: 0;
-  width: 13rem;
-  padding: 0.5rem 0.7rem;
+  width: 16.5rem;
+  max-width: calc(100vw - 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.45rem 0.7rem 0.4rem;
   background: var(--paper);
   color: var(--ink);
   border: 0.15rem solid var(--line);
@@ -1140,10 +1143,61 @@ body.dealing .pause-banner { z-index: 42; }
   font-size: 0.88rem;
   font-weight: 700;
 }
-.snd-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0; cursor: pointer; }
-.snd-row input[type="checkbox"] { width: 1.05rem; height: 1.05rem; accent-color: var(--orange); }
-.snd-vol { justify-content: space-between; }
-.snd-vol input { width: 7.5rem; accent-color: var(--orange); }
+/* One row per level (0.3.03): the speaker mark on the left, the name and its percentage above the
+   slider. The mark and the percentage are drawn here, not written into the page, because the top
+   bar measures its own text (fit() in hud.js). */
+.snd-row {
+  display: grid;
+  grid-template-columns: 1.9rem 1fr auto;
+  grid-template-areas: "mute name val" "mute range range";
+  align-items: center;
+  column-gap: 0.4rem;
+  padding: 0.22rem 0;
+}
+.snd-row + .snd-row { border-top: 1px solid rgba(0, 0, 0, 0.1); }
+.snd-master { padding-bottom: 0.35rem; }
+.snd-master + .snd-row { border-top: 0.12rem solid var(--line); padding-top: 0.35rem; }
+.snd-name { grid-area: name; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.snd-master .snd-name { font-weight: 900; }
+.snd-val { grid-area: val; font-size: 0.78rem; color: #6b7280; font-variant-numeric: tabular-nums; }
+.snd-val::after { content: attr(data-v); }
+.snd-row input[type="range"] { grid-area: range; width: 100%; min-width: 0; margin: 0.1rem 0 0; accent-color: var(--orange); cursor: pointer; }
+.snd-mute {
+  grid-area: mute;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.snd-mute::before { content: "🔊"; }
+.snd-row.is-off .snd-mute::before { content: "🔇"; }
+.snd-row.is-off .snd-name, .snd-row.is-off .snd-val { opacity: 0.55; }
+.snd-mute:hover, .snd-mute:focus-visible { background: rgba(0, 0, 0, 0.08); }
+.snd-foot { display: flex; justify-content: flex-end; padding-top: 0.25rem; border-top: 1px solid rgba(0, 0, 0, 0.1); }
+.snd-reset {
+  padding: 0.15rem 0.2rem;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  font: inherit;
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* A finger needs bigger targets: a taller slider, a bigger mark, the Reset link a real button. */
+@media (pointer: coarse) {
+  .snd-row { grid-template-columns: 44px 1fr auto; padding: 0.3rem 0; }
+  .snd-mute { width: 44px; height: 44px; font-size: 1.25rem; }
+  .snd-row input[type="range"] { height: 32px; }
+  .snd-reset { min-height: 40px; padding: 0 0.8rem; }
+  /* (On the left: on a phone the map and home buttons float over the right of the ☰ menu.) */
+  .snd-foot { justify-content: flex-start; }
+}
 
 /* ---------------------------------------------------------------- choosing the store (menu) */
 

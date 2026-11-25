@@ -1344,5 +1344,40 @@ export const SOUNDS = {
   },
 };
 
+/**
+ * Which group's slider in the sound menu each effect follows (0.3.03; the groups are in groups.js).
+ * Every effect above must be here, once: test/sound-settings.test.js fails otherwise.
+ *   money     cash coming in or going out
+ *   shoppers  anything a shopper, baby, dog, puppy, kid, the crowd or the boss does or says
+ *   store     security working, and building, upgrading, removing, wrecking, rebuilding
+ *   events    the store's announcements, the cards being dealt, winning and losing, pause, reviews,
+ *             and the interface's own clicks and refusals
+ *   voice     DEB's robot blips, which go with her spoken voice
+ */
+export const GROUP_OF = {
+  // Money.
+  sale: 'money', kerching: 'money', escape: 'money', gave: 'money', bought: 'money',
+  // Shoppers. (A baby or a puppy at a till is a coin and a giggle or a yap, but it goes with the
+  // rest of its litter: past a handful they merge into `nursery` / `kennel`, which are shoppers.)
+  babyTill: 'shoppers', pupTill: 'shoppers',
+  left: 'shoppers', walkout: 'shoppers', slip: 'shoppers', grab: 'shoppers', sample: 'shoppers',
+  mess: 'shoppers', kid: 'shoppers', caught: 'shoppers', crawl: 'shoppers', bolt: 'shoppers',
+  pee: 'shoppers', flash: 'shoppers', fall: 'shoppers', kidtv: 'shoppers', shield: 'shoppers',
+  pep: 'shoppers', bossOut: 'shoppers', bossEscape: 'shoppers', pop: 'shoppers', nopop: 'shoppers',
+  waah: 'shoppers', nursery: 'shoppers', rip: 'shoppers', litter: 'shoppers', whimper: 'shoppers',
+  kennel: 'shoppers', drunk: 'shoppers', trail: 'shoppers', wrongway: 'shoppers', pet: 'shoppers',
+  // Security and machines.
+  spray: 'store', shot: 'store', rail: 'store', pitch: 'store', smash: 'store', upgraded: 'store',
+  rebuilt: 'store', place: 'store', remove: 'store', rotate: 'store', upgrade: 'store', rebuild: 'store',
+  // Announcements.
+  begun: 'events', ready: 'events', side: 'events', waveStart: 'events', waveEnd: 'events',
+  won: 'events', lost: 'events', endless: 'events', bossIn: 'events', release: 'events',
+  review: 'events', report: 'events', players: 'events', chat: 'events', select: 'events',
+  nope: 'events', click: 'events', tutorial: 'events', pause: 'events', unpause: 'events',
+  cardDeal: 'events', cardIn: 'events', cardSlot: 'events', cardHand: 'events',
+  // DEB.
+  deb: 'voice',
+};
+
 /** The same sounds as plain functions: sfx.sale(ctx, dest, t, opts). */
 export const sfx = Object.fromEntries(Object.entries(SOUNDS).map(([k, s]) => [k, s.play]));
