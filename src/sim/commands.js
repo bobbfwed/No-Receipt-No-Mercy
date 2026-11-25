@@ -12,7 +12,7 @@ import { buildPrice, freeTrack, boozeRoll } from './cards.js';
 const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'autoRebuild', 'endless']);
 
 /**
- * Commands that still work while the game is paused (0.3.01; state.pause). Everything else is
+ * Commands that still work while the game is paused (0.3.02; state.pause). Everything else is
  * refused with 'paused': nothing can be built, sold, upgraded, rebuilt, given or bought. The build
  * pause between sales events runs on a timer, and that timer stands still while the game is
  * paused; a pause that let players build would turn it into free building time and take the

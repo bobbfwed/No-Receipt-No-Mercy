@@ -157,7 +157,7 @@ export function startGame(session, {
   const bossBar = createBossBar(session);
   stage.append(bossBar.el);
 
-  // Paused (0.3.01): the floor dims and a banner says who stopped it and how to carry on. A click
+  // Paused (0.3.02): the floor dims and a banner says who stopped it and how to carry on. A click
   // on the banner carries on; the dimming lets clicks through to the floor.
   const pauseVeil = h('div', { class: 'pause-veil hidden', 'aria-hidden': 'true' });
   const pauseWho = h('span', { class: 'pb-who' });
@@ -448,7 +448,7 @@ export function startGame(session, {
   }
   requestAnimationFrame(frame);
 
-  // On a phone the building sheet covers the bottom of the floor (0.3.01). When a building is
+  // On a phone the building sheet covers the bottom of the floor (0.3.02). When a building is
   // tapped low on the screen, its reach (or the building itself) would be under the sheet, so as the
   // sheet opens the view moves up once, just far enough to show it above the sheet, as far as the
   // map's edge allows and never pushing the top of the reach off the floor; where that is not far
@@ -487,7 +487,7 @@ export function startGame(session, {
   }
 
   // On a big screen the strip of cards sits under the ON SHIFT panel, lined up with it and as wide,
-  // so the two read as one column (the owner, 0.3.01), and follows the panel down as it grows. If
+  // so the two read as one column (the owner, 0.3.02), and follows the panel down as it grows. If
   // that would cover an open entrance, a till, the boss bar or the small map, or run off the floor
   // (a tall panel in a big game), it goes beside the panel instead (sidePlace in cardart.js). On a
   // small screen it has a corner of its own, beside the players button (style.css).

@@ -53,7 +53,7 @@ const VARS = {
   backPassage: 'pw', stripMall: 'pw',
   // Version 0.3.01: the cards that change how shoppers behave.
   litter: 'pn', drunk: 'p', bought: 'pnk', trail: 'p', wrongway: 'p', pet: 'pn',
-  // Version 0.3.01: pausing and resuming the game.
+  // Version 0.3.02: pausing and resuming the game.
   paused: 'p', resumed: 'p',
 };
 
@@ -81,7 +81,7 @@ const AT_LEAST = {
   backPassage: 8, stripMall: 8,
   // Version 0.3.01: the cards that change how shoppers behave.
   litter: 8, drunk: 8, bought: 8, trail: 8, wrongway: 7, pet: 8,
-  // Version 0.3.01: pausing and resuming the game.
+  // Version 0.3.02: pausing and resuming the game.
   paused: 8, resumed: 4,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };

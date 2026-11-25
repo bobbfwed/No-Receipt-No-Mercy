@@ -1259,7 +1259,7 @@ export const SOUNDS = {
     },
   },
 
-  // The game paused and resumed (0.3.01): heard by every player, whoever pressed it.
+  // The game paused and resumed (0.3.02): heard by every player, whoever pressed it.
   pause: {
     about: 'Somebody paused the game: a record scratch back, then the turntable winding down to a stop (a low buzz sliding down to nothing), and a soft thunk.',
     max: 0.75,

@@ -392,7 +392,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const pk = panKey(e);
     if (pk) { held.add(pk); e.preventDefault(); return; }
     const lower0 = key.length === 1 ? key.toLowerCase() : key;
-    // P pauses the whole game for everyone, or carries on (0.3.01). Anyone may, Head Office too.
+    // P pauses the whole game for everyone, or carries on (0.3.02). Anyone may, Head Office too.
     if (lower0 === 'p') {
       e.preventDefault();
       if (!e.repeat) togglePause();

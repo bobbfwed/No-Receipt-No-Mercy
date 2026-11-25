@@ -1,4 +1,4 @@
-// Tests for pausing the game (0.3.01): the 'pause' command, what freezes, what is refused, and how
+// Tests for pausing the game (0.3.02): the 'pause' command, what freezes, what is refused, and how
 // sessions, saves and DEB behave while a game is paused. Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';

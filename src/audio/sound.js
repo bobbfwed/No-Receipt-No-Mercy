@@ -227,7 +227,7 @@ export function createSound() {
           break;
         case 'gave': fire('gave', { n: e.n }, { gain: mine(e.by) || mine(e.to) ? 1 : OTHERS }); break;
         case 'begun': fire('begun'); break;
-        // Somebody paused or resumed the game (0.3.01). The music follows by itself (pauseDuck).
+        // Somebody paused or resumed the game (0.3.02). The music follows by itself (pauseDuck).
         case 'pause': fire(e.on ? 'pause' : 'unpause'); pauseDuck(); break;
         case 'ready': fire('ready', { side: e.side }); break;
         case 'side': fire('side', { side: e.side }); break;
@@ -271,7 +271,7 @@ export function createSound() {
 
   /**
    * The store's muzak is the only sound that loops, and it sinks to a murmur while the game is
-   * paused (0.3.01). Asked on every pause event and every time the music is scheduled, so a game
+   * paused (0.3.02). Asked on every pause event and every time the music is scheduled, so a game
    * joined or resumed from a save while paused is quiet too.
    */
   function pauseDuck() {

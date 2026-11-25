@@ -1088,7 +1088,7 @@ export const LINES = {
     u('{n} grown adults cooing at a spaniel in a vest. The vest says SUPPORT. The dog says nothing. Best colleague you have.'),
     r('The dog has been petted more times today than {p} has in his whole adult life. It is not close. The dog is a virgin too.'),
   ],
-  // A player paused the game (0.3.01): the whole store freezes for everyone. {p} is the one who paused it.
+  // A player paused the game (0.3.02): the whole store freezes for everyone. {p} is the one who paused it.
   paused: [
     '{p} paused the store. Go on then, piss break. Wash your hands this time.',
     "Everything stops because {p} needs a minute. His mum's calling. She wants her basement back.",
@@ -1558,7 +1558,7 @@ export const NOPE = {
     'Not yet, {p}. Cards first, then you can play with your blocks. Mummy will tell you when.',
     u("Patience, {p}. Five cards. You can count to five. You've done it on one hand plenty of times."),
   ],
-  // The game is paused (0.3.01): nothing can be built, sold, upgraded or bought until someone resumes.
+  // The game is paused (0.3.02): nothing can be built, sold, upgraded or bought until someone resumes.
   paused: [
     "The game's paused, {p}. Nothing gets built until somebody presses play.",
     "Paused, {p}. You can't build in a frozen store. That's cheating, and cheating is my job.",

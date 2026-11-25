@@ -220,7 +220,7 @@ export function blockedRects(state, cam, w, h, top = 0, bottom = h, doors = stat
 }
 
 /**
- * Where the strip of cards goes on a big screen (0.3.01, the owner: "by/below the ON SHIFT
+ * Where the strip of cards goes on a big screen (0.3.02, the owner: "by/below the ON SHIFT
  * window"): under the players panel, lined up with its left edge, so the two read as one column.
  * When that would cover an entrance, a till or anything else in `rects`, or run off the floor, it
  * goes beside the panel instead: to its right, top-aligned; then lower down in that place (under

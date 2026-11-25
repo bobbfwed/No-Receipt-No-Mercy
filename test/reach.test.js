@@ -1,4 +1,4 @@
-// Tests for what the floor shows of a selected building's reach (0.3.01): src/render/reach.js.
+// Tests for what the floor shows of a selected building's reach (0.3.02): src/render/reach.js.
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';

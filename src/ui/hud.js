@@ -64,7 +64,7 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     onclick: () => session.send({ c: 'speed', n }),
   }, `${n}x`));
   const speed = h('div', { class: 'hud-speed', role: 'group', 'aria-label': 'Game speed' }, speedBtns);
-  // Pause (0.3.01): anyone may pause the whole store for everyone, and anyone may carry on. Two
+  // Pause (0.3.02): anyone may pause the whole store for everyone, and anyone may carry on. Two
   // bars while it runs, a play triangle while it is paused (drawn in CSS: .pz-icon).
   const pauseBtn = h('button', {
     type: 'button', class: 'btn-pause', 'aria-pressed': 'false', 'aria-label': 'Pause the game', title: PAUSE_TITLE,

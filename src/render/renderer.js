@@ -298,7 +298,7 @@ export function createRenderer(canvas, session) {
     F.bde = hasCard(s, 'bde');
     fx.handle(events, now, s);
 
-    // While the game is paused (0.3.01) the host's clock still runs its empty steps, so the fraction
+    // While the game is paused (0.3.02) the host's clock still runs its empty steps, so the fraction
     // between ticks keeps cycling; held at its last value, shoppers stand still instead of jogging
     // back and forth on the spot, and every animation that runs off F.time stops with them.
     if (!s.pause) heldAlpha = session.alpha();

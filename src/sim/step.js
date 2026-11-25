@@ -1809,7 +1809,7 @@ function stepShoppers(state, fields, sec, ev) {
 export function step(state) {
   const ev = [];
   if (state.phase === 'won' || state.phase === 'lost') return ev;
-  // Paused (0.3.01, the 'pause' command): nothing moves at all, the clock included, exactly as in
+  // Paused (0.3.02, the 'pause' command): nothing moves at all, the clock included, exactly as in
   // the lobby. A game paused for any number of steps and then resumed carries on exactly as if it
   // had never stopped; the build pause's timer, the deal and a dropped player's grace period wait.
   if (state.pause) return ev;

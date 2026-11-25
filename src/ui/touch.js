@@ -138,7 +138,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
   let measuredSig = '';
   let sheetOpen = false;
 
-  // The upgrade button the mouse is over, or that has keyboard focus (0.3.01): the renderer shows
+  // The upgrade button the mouse is over, or that has keyboard focus (0.3.02): the renderer shows
   // what a Range upgrade would reach while it is Range (view.track; see src/render/reach.js).
   // Listened for on the container, because the sheet replaces its buttons whenever what it shows
   // changes (right after an upgrade is bought, say) and a replaced button never says the mouse has

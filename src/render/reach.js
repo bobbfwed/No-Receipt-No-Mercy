@@ -1,4 +1,4 @@
-// What a selected building's reach looks like on the floor (0.3.01, the owner's request: "When
+// What a selected building's reach looks like on the floor (0.3.02, the owner's request: "When
 // upgrading ranges, the interface should show the new range when mousing over the option.
 // Otherwise, it should show the old range when clicked on a security building.").
 //

@@ -213,7 +213,7 @@ export const TOPICS = {
   trail: { note: true, gap: 30 },
   wrongway: { note: true, gap: 25 },
   pet: { note: true, gap: 35 },
-  // Somebody paused or resumed the game (0.3.01): one line each time, the first always, then fading
+  // Somebody paused or resumed the game (0.3.02): one line each time, the first always, then fading
   // like any note. Loud, because a pause and its resume often come at the same tick of play (the
   // clock stands still while paused), and the topic's gap, counted in ticks of play, keeps a player
   // pressing P over and over from getting a line every time.

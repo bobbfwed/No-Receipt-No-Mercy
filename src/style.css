@@ -406,7 +406,7 @@ kbd {
 .btn-speed:hover { background: #4b5563; }
 .btn-speed.on { background: var(--yellow); color: var(--ink); }
 
-/* Pause (0.3.01): a button of its own just before the speed buttons, the same height, colours and
+/* Pause (0.3.02): a button of its own just before the speed buttons, the same height, colours and
    corners. Two bars while the game runs; a play triangle, on orange, while it is paused. */
 .hud-clock { display: flex; align-items: center; gap: 0.3rem; flex: none; }
 .btn-pause {
@@ -1419,7 +1419,7 @@ body.dealing .pause-banner { z-index: 42; }
   .topbar.fit-4 { gap: 0.4rem; padding-inline: 0.6rem; }
   .topbar.fit-4 .hud-event { min-width: 11.5rem; }
   .topbar.fit-4 .btn-speed { min-width: 2.05rem; }
-  /* (The pause button, 0.3.01, narrows with the speed buttons here, and its gap closes. It is never
+  /* (The pause button, 0.3.02, narrows with the speed buttons here, and its gap closes. It is never
      dropped: pausing has no other button.) */
   .topbar.fit-4 .btn-pause { min-width: 2.05rem; }
   .topbar.fit-4 .hud-clock { gap: 0.2rem; }
@@ -2113,7 +2113,7 @@ body.dealing .pause-banner { z-index: 42; }
 .hs-tip b.is-odd small { color: #7e22ce; }
 .hs-tip p { margin: 0.15rem 0 0; }
 
-/* On a big screen (0.3.01) the strip sits in the left column under the ON SHIFT panel, as wide as
+/* On a big screen (0.3.02) the strip sits in the left column under the ON SHIFT panel, as wide as
    the panel (game.js places it and sets its width): HAND on a line of its own, the five slots in a
    row under it, each as big as the width allows (up to the size they had along the top). The top
    middle of the floor is left to the boss bar and the notices, which no longer move down for it,
