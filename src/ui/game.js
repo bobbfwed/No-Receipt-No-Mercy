@@ -16,6 +16,7 @@ import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { createDeal } from './deal.js';
 import { createHandStrip, handPanel, handRow } from './hand.js';
+import { createIncomePanel } from './income.js';
 import { handOf, blockedRects, sidePlace } from './cardart.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
@@ -199,6 +200,9 @@ export function startGame(session, {
   const strip = createHandStrip({ onOpen: openCards });
   stage.append(strip.el);
   const deal = createDeal(session, { strip, playSound });
+  // Income per minute (0.3.03): under the strip of cards (or the players panel), placed with it.
+  const income = createIncomePanel(session);
+  stage.append(income.el);
 
   // In training the lesson panel sits where the players list normally is.
   stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet, touchUi.aid);
@@ -324,7 +328,7 @@ export function startGame(session, {
   // ---- Drawing loop --------------------------------------------------------------------------------
   const touchWords = isTouch();
   let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false, wasBoss = false;
-  let dealFilled = Infinity, wasHand = false;
+  let dealFilled = Infinity, wasHand = false, wasIncome = false;
   let endEl = null; // the end screen, while it is up
   function frame(now) {
     if (dead) return;
@@ -369,6 +373,8 @@ export function startGame(session, {
     const handUp = strip.update(s, dealFilled);
     if (handUp !== wasHand) { wasHand = handUp; root.classList.toggle('has-hand', handUp); }
     dealFilled = deal.update(s);
+    const incomeUp = income.update(s);
+    if (incomeUp !== wasIncome) { wasIncome = incomeUp; root.classList.toggle('has-income', incomeUp); }
     placeStrip(s);
     // In the lobby the floor is drawn to the right of the panel, whole, so the store can be seen.
     const inLobby = lobby.update(s);
@@ -498,7 +504,11 @@ export function startGame(session, {
   // that would cover an open entrance, a till, the boss bar or the small map, or run off the floor
   // (a tall panel in a big game), it goes beside the panel instead (sidePlace in cardart.js). On a
   // small screen it has a corner of its own, beside the players button (style.css).
-  let stripKey = '';
+  // The INCOME panel (0.3.03) is the third in that column: under the strip (under the panel in a
+  // game without cards), as wide as the panel, or, when that would cover something, beside the one
+  // above it by the same rules (sidePlace). On a small screen it is a chip in the row at the top
+  // left, after the cards (placeChip).
+  let stripKey = '', stripPlaced = false;
   /** An element's box in CSS pixels from the floor's top left, or null if it is not showing. */
   const boxIn = (el, at) => {
     if (!el || !el.isConnected || !el.offsetWidth) return null;
@@ -506,7 +516,10 @@ export function startGame(session, {
     return { x: r.left - at.left, y: r.top - at.top, w: r.width, h: r.height };
   };
   function placeStrip(s) {
-    if (!wasHand || narrow()) { if (stripKey) { stripKey = ''; strip.place(null); root.classList.remove('hand-mid'); } return; }
+    const small = narrow();
+    if ((!wasHand || small) && stripPlaced) { stripPlaced = false; strip.place(null); root.classList.remove('hand-mid'); }
+    if (small) { stripKey = ''; placeChip(); return; }
+    if (!wasHand && !wasIncome) { if (stripKey) { stripKey = ''; income.place(null); } return; }
     const cam = renderer.cam;
     const at = stage.getBoundingClientRect();
     const W = stage.clientWidth, H = stage.clientHeight;
@@ -515,21 +528,54 @@ export function startGame(session, {
     const others = [wasBoss && bossBar.el, mapShown && mapBox, chat.el.querySelector('.chat-open'), chat.el.querySelector('.chat-form')]
       .map((el) => el && boxIn(el, at)).filter(Boolean);
     const sig = (b) => (b ? [b.x, b.y, b.w, b.h].map(Math.round).join(' ') : '-');
-    const key = [cam.x, cam.y, cam.zoom, W, H, sig(panel), others.map(sig).join('|'), s.gridVer, s.w, s.open].join();
+    const key = [cam.x, cam.y, cam.zoom, W, H, sig(panel), others.map(sig).join('|'), s.gridVer, s.w, s.open,
+      wasHand, wasIncome && income.el.offsetHeight].join();
     if (key === stripKey) return;
     stripKey = key;
-    // As wide as the panel; its height follows from that (the slots keep their shape).
-    const w = panel ? panel.w : strip.el.offsetWidth;
-    strip.place({ x: panel ? panel.x : 8, y: panel ? panel.y + panel.h + 8 : 8, w });
-    const h = strip.el.offsetHeight;
     // Only the entrances in use: a locked one is a wall until another player joins (s.open changes).
-    const rects = blockedRects(s, cam, W, H, 0, H, (s.doors || []).slice(0, s.open || 1))
-      .concat(others.map((b) => [b.x - 4, b.y - 4, b.x + b.w + 4, b.y + b.h + 4]));
-    const p = sidePlace(panel, { w, h }, { w: W, h: H }, rects);
-    strip.place({ x: p.x, y: p.y, w });
-    // Beside the panel at the top, it may reach the middle, where the notices drop down from: they
-    // move down out of its way, as they did when the strip sat in the middle.
-    root.classList.toggle('hand-mid', !p.below && p.y < 90);
+    const pad = (b) => [b.x - 4, b.y - 4, b.x + b.w + 4, b.y + b.h + 4];
+    const rects = blockedRects(s, cam, W, H, 0, H, (s.doors || []).slice(0, s.open || 1)).concat(others.map(pad));
+    let above = panel; // what the income panel goes under
+    if (wasHand) {
+      // As wide as the panel; its height follows from that (the slots keep their shape).
+      const w = panel ? panel.w : strip.el.offsetWidth;
+      strip.place({ x: panel ? panel.x : 8, y: panel ? panel.y + panel.h + 8 : 8, w });
+      stripPlaced = true;
+      const h = strip.el.offsetHeight;
+      const p = sidePlace(panel, { w, h }, { w: W, h: H }, rects);
+      strip.place({ x: p.x, y: p.y, w });
+      // Beside the panel at the top, it may reach the middle, where the notices drop down from: they
+      // move down out of its way, as they did when the strip sat in the middle.
+      root.classList.toggle('hand-mid', !p.below && p.y < 90);
+      above = { x: p.x, y: p.y, w, h };
+    }
+    if (wasIncome) {
+      const w = panel ? panel.w : above ? above.w : income.el.offsetWidth;
+      income.place({ x: above ? above.x : 8, y: above ? above.y + above.h + 8 : 8, w });
+      const h = income.el.offsetHeight;
+      // Nor over the players panel or the strip it follows.
+      const q = sidePlace(above, { w, h }, { w: W, h: H }, rects.concat([panel, above].filter(Boolean).map(pad)));
+      income.place({ x: q.x, y: q.y, w });
+    }
+  }
+
+  // On a small screen the income chip goes in the row at the top left, after the strip of cards
+  // (after the players button without cards), or, if the row has no room for it, on a second row
+  // under the players button.
+  function placeChip() {
+    if (!wasIncome) return;
+    const at = stage.getBoundingClientRect(), W = stage.clientWidth, gap = 5;
+    const pill = boxIn(players.el.querySelector('.players-pill'), at);
+    const cards = wasHand ? boxIn(strip.el.querySelector('.hand-strip'), at) : null;
+    const row = cards || pill;
+    if (!row) { income.place(null); return; }
+    const w = income.el.offsetWidth;
+    let x = row.x + row.w + gap, y = row.y;
+    if (x + w > W - gap) {
+      x = pill ? pill.x : row.x;
+      y = Math.max(pill ? pill.y + pill.h : 0, cards ? cards.y + cards.h : 0) + gap;
+    }
+    income.place({ x, y, h: row.h });
   }
 
   // For the test pages in tools/, which drive the game with made-up mouse and key events and

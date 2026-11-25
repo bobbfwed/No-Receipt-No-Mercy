@@ -254,6 +254,9 @@ export function skipBuild(state, ev) {
   const fields = [getField(state, NORMAL), getField(state, HOP), getField(state, SMASH)];
   const quiet = [];
   let cash = 0, sold = 0;
+  // These sales are paid in one tick, not over the time they stand for, so they stay out of the
+  // running total of goods sold (state.sales), which the interface reads as income per minute.
+  const sales = state.sales;
   for (let n = 0; n < left; n++) {
     for (let k = state.messes.length - 1; k >= 0; k--) {
       if (--state.messes[k][1] <= 0) state.messes.splice(k, 1);
@@ -262,6 +265,7 @@ export function skipBuild(state, ev) {
     for (const e of quiet) if (e.e === 'sale') { cash += e.v; sold++; }
     quiet.length = 0;
   }
+  if (sales === undefined) delete state.sales; else state.sales = sales;
   ev.push({ e: 'early', secs: Math.round(left / TICK_HZ), cash, sold });
 }
 
@@ -438,6 +442,8 @@ function offer(state, ti, kind, d, ev) {
     const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay * cardSell(state, kind)));
     bump(state, b.o, 'shipped');
     takings(state, v, b.o);
+    // The running total behind the income-per-minute panel (state.sales, 0.3.03).
+    state.sales = (state.sales || 0) + v;
     ev.push({ e: 'sale', i: ti, v, kind });
     return true;
   }

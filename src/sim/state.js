@@ -281,6 +281,14 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     storeReady: false,
     /** Totals for the current wave, shown in the performance review. */
     ws: { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0 },
+    /** (0.3.03) Dollars paid for goods reaching a Shipping Chute over the whole game, before they
+     *  are split: only `offer`'s sales as the game is played. Not the bonus at the end of a sales
+     *  event, a boss's bounty, a shopper buying at a stand (the warranty card), the restocking fee,
+     *  nor the factory's takings paid in one go when the doors open early (skipBuild leaves it as
+     *  it was). Never reset during a game; a new game starts at 0. Nothing in the rules reads it:
+     *  the interface turns it into the income-per-minute panel (src/ui/rate.js). Absent in a save
+     *  from before it existed, which reads as 0. */
+    sales: 0,
     /** @type {Player[]} */
     players: [],
     /** The player whose browser runs the game. Changes if the host leaves and another takes over. */
