@@ -108,7 +108,7 @@ test('0.4 loads no save from before it: such a save is not offered, and is throw
   const storage = fakeStorage();
   const s = game();
   assert.equal(s.v, STATE_VERSION);
-  assert.equal(STATE_VERSION, 5, 'version 5 since 0.4');
+  assert.equal(STATE_VERSION, 6, 'version 6 since 0.4.01');
   // A save of this version is offered and left alone.
   writeSave(s, { storage });
   assert.equal(dropOldSave({ storage }), null);

@@ -346,11 +346,12 @@ function blankBack(plan, design) {
 }
 
 /**
- * The version of the game state's shape and rules. 5 since 0.4, which moved the factory to The Back
- * and does not load older saves (the owner's decision): a save of any other version is not offered
+ * The version of the game state's shape and rules. 5 since 0.4, which moved the factory to The Back;
+ * 6 since 0.4.01 (Returns Drops lost their facing, Duct Tape went, players click through the deal).
+ * Older saves are not loaded (the owner's decision): a save of any other version is not offered
  * for resuming (readSave in src/ui/save.js), so there is nothing to bring up to date.
  */
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 /** Deterministic random number in [0, 1). The generator's state lives in the game state. */
 export function rand(state) {
