@@ -696,6 +696,34 @@ The owner's aim: make the game more its own, and make the factory decide who win
        - **What one Pepper Sprinkler firing flat out on Platinum Spite and Cola takes:** Platinum Cola makes it fire 2.14 times as often (4.3 shots a second), and every shot uses one use of each, so it eats 12.8 units of each a minute, 25.7 in all. That is 25.7 junk a minute (two thirds of one Returns Drop at level 0, which gives 40) and about 13 Rebranders side by side (25.7 x 4 / 60 = 1.7 for the first step, 3.4 for the second, 6.9 for the third: 2 + 4 + 7), costing $195, plus about one machine of each. A Forklift Turret flat out on Platinum: 15.5 units of each a minute. Security does not fire flat out all event: firing a third of the time, fifteen key buildings take about 115 units a minute, nearly all the junk of the Outlet's three drops at level 0, and about fifty Rebranders ($750). Within reach of a person by the middle of a game. Left for the owner to judge by playing: the levers are `BACK.rebrandSecs` (4, 8, 16 seconds) and the Rebrander's price.
      - `node tools/readme.mjs` has been run since (the README's event pay, the Rebrander's price and the Dad's first event), and the README test passes. The handbook's shopper order now follows the rules (`SHOPPER_ORDER` in `src/content/facts.js`, done by the words worker).
 
+## Version 0.4.01: fixes after the owner's first play of 0.4 (owner's requests of 2026-11-27, built the same day, not yet played by a person)
+
+The owner played 0.4.00 and sent these, most of them one at a time while the work was under way. The contract for all of it is `docs/architecture.md`, section "The Back", marked 0.4.01.
+
+- **Belts are laid as a line.** Press on a tile, drag, release: the shortest route with the fewest turns (`planLine` in `src/sim/line.js`, one `line` command), going round pillars and machines, cut short where the player's cash runs out. A line that crosses a straight belt turns that belt into an Overpass. A single click still places one belt.
+- **A part placed on a plain belt replaces it** (Splitter, Overpass, Unpaid Intern, machines, Rebrander, Clearance Bin), for the part's price less what the belt cost.
+- **The Returns Drop has no direction.** It shares its junk evenly between everything touching it that will take junk, passing over a backed-up side, like a Splitter. Its total rate is unchanged.
+- **Duct Tape and the Tape Winder are gone.** Every security building can be reinforced for cash as Crate Stacks are: 8 levels, the first costing one eighth of the building's price (at least $10), each 1.6 times the last (owner's choice of the three offered).
+- **Wet Floor Signs take nothing from The Back.** Four cash upgrades at $30, 60, 120, 240, worth the old upgrade levels 2, 3, 5, 6 (so the top is what Premium gave, and it never runs out). No Dumbwaiter under a sign, so it can sit over belts, and it can no longer carry Razor Wire.
+- **Live Razor Wire is a wall to ordinary shoppers too.** They walk round it and do not use it up; only dads walk into it and use it. Every check that keeps the store open counts all planned wire as a wall, so wire arriving later can never seal it.
+- **Clearance Bin pay doubled** (`BACK.binPay` 0.2, 0.5, 1, 2).
+- **Cards:** each shows half a second less (6.5 s), and clicking the card on show brings the next one once every connected player has clicked (owner's choice), never sooner than a second after it appeared.
+- **Interface:** a red lamp on the Dumbwaiter of a building that has a wire direction and no wire; on a phone the view can travel past the map's edges far enough to pull the edge rows clear of the interface; Q puts down whatever is held or selected; razor wire drawn thin and see-through; the Unpaid Intern is animated; items slide through a Splitter.
+- **Dropped by the owner:** "a wired building should itself block dads". It already did: the wire covers the building's own tiles and the three beyond.
+- **Open with the owner:** "security buildings should not start with material inside". Nothing stocks a building when it is placed or rebuilt; the only free stock is the Mall Cop Academy card (two units each of Store Brand Spite, Cola and Cord, once per tile) and the `?demo=1` layout. Waiting for him to say whether the card should change.
+
+### Decisions made on the owner's behalf in 0.4.01
+- Ordinary shoppers do not use wire up. Gym bros go round live wire; runaway children ignore it.
+- Wet Floor upgrade prices and levels as above; a sign cannot carry wire.
+- An L-shaped belt line leaves the start tile along the axis the drag first moved.
+- A belt replaced by a part or an Overpass is credited at what it cost, in full.
+- Old saved games are thrown away again (`STATE_VERSION` 6), with the existing message.
+- The phone margin applies to touch screens only; a PC keeps the old camera limit.
+
+### Balance after 0.4.01 (`node tools/balance.mjs --table`, eight seeds, average sales event lost in, nothing retuned)
+- Normal, one player: nothing 3.0, floor 7.9, honest 10.1, keen 14.3 (was 12.3). Keen's gain, step by step: 12.6 after tape went and reinforcing came, 13.9 after the doubled Bin pay and parts replacing belts, 14.3 after wire walled off ordinary shoppers.
+- Hard: 6.5 / 7.4 (was 7.8) / 8.4. Two players: 7.6 / 11.6 / 12.6, unchanged.
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
