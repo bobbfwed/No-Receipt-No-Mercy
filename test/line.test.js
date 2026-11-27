@@ -265,13 +265,16 @@ test('money: the line is cut before the first step he cannot pay for', () => {
   assert.deepEqual(line(s, 6, 5, 9, 5), { ok: false, why: 'cash' });
   assert.equal(JSON.stringify(s), before);
 
-  // Before an Overpass: two belts, then the crossing he cannot afford.
+  // Before an Overpass: two belts, then the crossing he cannot afford. The belt right before the
+  // crossing goes too, or it would point into the side of the line it was to cross and merge into it.
   const t = blank(2 * BUILD.conv.cost + 5);
   col(t, 5, 2, 9, S);
   const q = planLine(t, 0, ix(t, 3, 5), ix(t, 9, 5), 0);
-  assert.equal(q.steps.length, 2);
+  assert.equal(q.steps.length, 1);
   assert.equal(q.cut, true);
+  assert.equal(q.cost, BUILD.conv.cost);
   assert.equal(line(t, 3, 5, 9, 5).ok, true);
+  assert.equal(at(t, 4, 5), 0, 'nothing beside the line it would cross');
   assert.equal(at(t, 5, 5).k, 'conv', 'the belt it would cross is untouched');
   assert.equal(at(t, 5, 5).d, S);
 });
@@ -417,4 +420,30 @@ test('random crossings: every Overpass a line makes keeps the crossed line runni
     }
   }
   assert.ok(crossings > 500, `${crossings} crossings`);
+});
+
+test('a line cut short by cash never ends pointing into the side of a belt it was to cross (0.4.01)', () => {
+  // A Spite Still at (5, 8) facing east, a straight line north up column 10; $10: four belts, not
+  // the Overpass.
+  const s = blank(10);
+  lay(s, 5, 8, 'still', E);
+  for (let y = 3; y <= 12; y++) lay(s, 10, y, 'conv', N);
+  const r = line(s, 5, 8, 15, 8);
+  assert.deepEqual(r, { ok: true, n: 3, cost: 3 * BUILD.conv.cost, cut: true });
+  assert.equal(at(s, 9, 8), 0);
+  assert.equal(at(s, 8, 8).d, E);
+  assert.equal(beltShape(s, ix(s, 10, 8)), 0, 'the north line is not fed from the side');
+  // Two crossings side by side: affording the first but not the second takes both back, and the
+  // belt before them.
+  const t = blank(4 * BUILD.conv.cost + (BUILD.over.cost - BUILD.conv.cost) + 1);
+  lay(t, 5, 8, 'still', E);
+  for (let y = 3; y <= 12; y++) { lay(t, 10, y, 'conv', N); lay(t, 11, y, 'conv', S); }
+  const p = planLine(t, 0, ix(t, 5, 8), ix(t, 15, 8), 0);
+  assert.equal(p.cut, true);
+  assert.deepEqual(p.steps.map((st) => st.i % t.w), [6, 7, 8]);
+  // Nothing left at all: refused.
+  const u = blank(BUILD.over.cost);
+  for (let y = 3; y <= 12; y++) lay(u, 7, y, 'conv', N);
+  u.players[0].cash = BUILD.conv.cost;
+  assert.deepEqual(line(u, 6, 8, 15, 8), { ok: false, why: 'cash' });
 });

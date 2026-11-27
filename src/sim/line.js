@@ -212,8 +212,7 @@ export function planLine(state, pid, from, to, axis) {
   if (new Set(route).size !== route.length) return no('blocked');
 
   const beltPrice = buildPrice(state, 'conv');
-  const steps = [];
-  let cost = 0, cut = false;
+  const all = [];
   for (let n = 0; n < route.length; n++) {
     const i = route[n], d = ways[n], p = back[i];
     let step;
@@ -226,10 +225,16 @@ export function planLine(state, pid, from, to, axis) {
       else step = { i, k: 'over', d, cost: backPrice(state, 'over', i), cross: true };
     } else if (p.d === d) step = { i, k: 'conv', d, cost: 0, keep: true };
     else step = { i, k: 'conv', d, cost: 0, turn: true };
-    if (step.cost > 0 && cost + step.cost > player.cash) { cut = true; break; }
-    cost += step.cost;
-    steps.push(step);
+    all.push(step);
   }
+  // Paid for in route order, stopping before the first step he cannot pay for.
+  let cost = 0, kept = 0;
+  while (kept < all.length && (all[kept].cost <= 0 || cost + all[kept].cost <= player.cash)) cost += all[kept++].cost;
+  const cut = kept < all.length;
+  // (A line cut short right before a belt it was to cross would point into that belt's side and
+  // merge into it: the steps before such a crossing go too, as many as it takes.)
+  if (cut) while (kept > 0 && all[kept].cross) cost -= all[--kept].cost;
+  const steps = all.slice(0, kept);
   if (cut && !steps.some((st) => st.cost > 0)) return no('cash');
   return { steps, cost, cut, why: null };
 }
