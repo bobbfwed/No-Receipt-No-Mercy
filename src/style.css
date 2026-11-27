@@ -3580,3 +3580,17 @@ html, body { overscroll-behavior: none; }
 .deal-next { position: relative; z-index: 1; margin: 0 0 0.5rem; min-height: 1.3em; font-weight: 800; color: #fde68a; text-align: center; }
 .deal-next:empty { visibility: hidden; }
 /* ==== end of 0.4.01 input and deal ==== */
+
+/* ==== 0.4.01 drawing and words (sheet) ==== */
+/* (0.4.01) Every security building now has REINFORCE beside Remove, and the wire picker on the same
+   row: on a phone's compact sheet each button's price goes under its name and the buttons may
+   shrink to their words, so the row fits (or drops below the picker) instead of running out of the sheet. */
+@media (max-width: 1099px), (max-height: 559px) {
+  .touch-sheet.compact > .ts-btns { flex: 1 1 11rem; flex-wrap: nowrap; }
+  /* (No narrower than its words: a row that cannot fit beside the wire picker drops below it.) */
+  .touch-sheet.compact .ts-btn { flex: 1 1 auto; min-width: max-content; flex-direction: column; gap: 0; padding: 0.15rem 0.35rem; }
+  .touch-sheet.compact .ts-btn.ts-more { min-width: max-content; }
+  .touch-sheet.compact .ts-btn b { font-size: 0.82rem; }
+  .touch-sheet.compact .ts-btn small, .touch-sheet.compact .ts-btn .ts-cost { font-size: 0.7rem; }
+}
+/* ==== end of 0.4.01 drawing and words ==== */
