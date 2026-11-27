@@ -344,3 +344,77 @@ test('host and client plan and lay the same line from the same state', () => {
   for (let t = 0; t < 200; t++) { stepBack(s); stepBack(c); }
   assert.equal(JSON.stringify(s), JSON.stringify(c));
 });
+
+test('an Overpass put into the tail of a line keeps that line running its own way, all four ways round (0.4.01)', () => {
+  // [line direction, its tiles, the tail, the crossing line's ends]
+  const cases = [
+    [N, [[10, 3], [10, 8]], [10, 8], [5, 8, 15, 8]],
+    [S, [[10, 3], [10, 8]], [10, 3], [5, 3, 15, 3]],
+    [E, [[3, 8], [8, 8]], [3, 8], [3, 4, 3, 12]],
+    [W, [[3, 8], [8, 8]], [8, 8], [8, 4, 8, 12]],
+  ];
+  for (const [d, [[x0, y0], [x1, y1]], [tx, ty], [a, b, c, e]] of cases) {
+    const s = blank();
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) lay(s, x, y, 'conv', d);
+    at(s, tx, ty).it.push(JUNK, 100);
+    assert.equal(line(s, a, b, c, e).ok, true);
+    assert.equal(at(s, tx, ty).k, 'over');
+    const dirs = overpassDirs(s, ix(s, tx, ty));
+    assert.equal(dirs[d & 1], d, `a line running ${d}: its lane runs the same way`);
+    // The item rides on the way the line runs, onto the next belt of the old line.
+    for (let t = 0; t < 12; t++) stepBack(s);
+    const nx = tx + DX[d], ny = ty + DY[d];
+    assert.ok(at(s, nx, ny).it.includes(JUNK), `${d}: the item went on along the old line`);
+  }
+  // Placing an Overpass on such a tail by hand does the same.
+  const h = blank();
+  h.phase = 'build';
+  for (let y = 3; y <= 8; y++) lay(h, 10, y, 'conv', N);
+  assert.ok(applyCommand(h, 0, { c: 'place', k: 'over', x: 10, y: 8, f: 1 }).ok);
+  assert.equal(overpassDirs(h, ix(h, 10, 8))[1], N);
+});
+
+test('two Overpasses in a row at the tail of a line both keep its direction (0.4.01)', () => {
+  const s = blank();
+  for (let x = 3; x <= 10; x++) lay(s, x, 8, 'conv', W);
+  assert.equal(line(s, 10, 4, 10, 12).ok, true);
+  assert.equal(line(s, 9, 4, 9, 12).ok, true);
+  assert.equal(at(s, 9, 8).k, 'over');
+  assert.equal(at(s, 10, 8).k, 'over');
+  assert.equal(overpassDirs(s, ix(s, 9, 8))[0], W);
+  assert.equal(overpassDirs(s, ix(s, 10, 8))[0], W);
+  assert.equal(overpassDirs(s, ix(s, 10, 8))[1], S, 'the new lines run their own way');
+  at(s, 10, 8).a.push(JUNK, 50);
+  const [west, south] = flow(s, [[10, 4, S, 21]], [[3, 8], [10, 12]], 200);
+  assert.deepEqual(west, [JUNK]);
+  assert.deepEqual(south, [21]);
+});
+
+test('random crossings: every Overpass a line makes keeps the crossed line running its own way (0.4.01)', () => {
+  let r = 99;
+  const rnd = (n) => { r = (Math.imul(r, 1103515245) + 12345) >>> 0; return (r >>> 8) % n; };
+  let crossings = 0;
+  for (let trial = 0; trial < 300; trial++) {
+    const s = blank();
+    const ways = new Map();
+    // Straight north-south lines in random columns (some side by side), each one way, of random
+    // length, ending anywhere round row 7, where the new line will cross.
+    for (let k = 0; k < 6; k++) {
+      const x = 4 + rnd(20), d = rnd(2) ? N : S, y1 = 7 + rnd(6);
+      const y0 = Math.min(2 + rnd(6), y1 - 1); // (never a lone belt: any way is fine for one)
+      if (ways.has(x)) continue;
+      ways.set(x, d);
+      for (let y = y0; y <= y1; y++) lay(s, x, y, 'conv', d);
+    }
+    const res = line(s, 2, 7, 27, 7);
+    assert.equal(res.ok, true);
+    for (const [x, d] of ways) {
+      const p = at(s, x, 7);
+      if (p.k !== 'over') continue;
+      crossings++;
+      assert.equal(overpassDirs(s, ix(s, x, 7))[1], d, `trial ${trial}: column ${x} kept running ${d}`);
+      assert.equal(overpassDirs(s, ix(s, x, 7))[0], E, `trial ${trial}: the new line runs east at ${x}`);
+    }
+  }
+  assert.ok(crossings > 500, `${crossings} crossings`);
+});

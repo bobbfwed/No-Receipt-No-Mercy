@@ -177,10 +177,26 @@ function sendsToward(p, dir) {
 }
 
 /**
+ * Whether part p, on the tile an Overpass lane would hand into travelling in direction dir, takes
+ * from it and carries the flow on that way (0.4.01, for overpassLanes): a belt running that way, a
+ * Splitter facing that way, a machine or Rebrander from any side but its front, a Clearance Bin or a
+ * Dumbwaiter from anywhere.
+ */
+function leadsAway(p, dir) {
+  if (!p) return false;
+  if (p.k === 'conv' || p.k === 'split') return p.d === dir;
+  if (p.k === 'bin' || p.k === 'lift') return true;
+  return makes(p) && dir !== ((p.d + 2) & 3);
+}
+
+/**
  * Which way each Overpass lane runs, for every Overpass tile: od[2i] its east-west lane a (0 east
  * or 2 west), od[2i + 1] its north-south lane b (1 south or 3 north). A row of Overpasses side by
  * side is one long lane, so it is decided once for the whole row by what is at its two ends: it
- * runs the way the part feeding it sends, and east (south) when both ends or neither feed it.
+ * runs the way the part feeding it sends, and east (south) when both ends feed it. When neither
+ * does (0.4.01), the way it leads out decides (leadsAway: a belt carrying on along the axis, or a
+ * part that takes from it), so an Overpass put into the tail of a line keeps the line's direction;
+ * east (south) only when that does not decide either.
  */
 function overpassLanes(back, W, H) {
   const od = new Int8Array(back.length * 2);
@@ -195,7 +211,14 @@ function overpassLanes(back, W, H) {
       while (j >= 0 && back[j] && back[j].k === 'over') { row.push(j); j = nb(W, H, j, fwd); }
       const fromBack = prev >= 0 && sendsToward(back[prev], fwd);
       const fromFront = j >= 0 && sendsToward(back[j], rev);
-      const dir = fromFront && !fromBack ? rev : fwd;
+      let dir = fromFront && !fromBack ? rev : fwd;
+      // (0.4.01) Nothing feeds either end (the tail of a line an Overpass was put into, by hand or by
+      // the line command): the way it leads out decides, so the line keeps its direction. Only when
+      // neither end does is it east (south).
+      if (!fromBack && !fromFront) {
+        const toFront = j >= 0 && leadsAway(back[j], fwd), toBack = prev >= 0 && leadsAway(back[prev], rev);
+        if (toBack && !toFront) dir = rev;
+      }
       for (const t of row) od[t * 2 + axis] = dir;
     }
   }
