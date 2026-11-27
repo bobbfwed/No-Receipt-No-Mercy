@@ -872,3 +872,22 @@ test('refusals: the same rules, and a refusal does not repeat straight away', ()
   }
   assert.ok(same < 20, `the same refusal twice running ${same} times in 200`);
 });
+
+test('a quick removal is only joked about on the floor it was placed on (0.4: The Back is a floor of its own)', () => {
+  const removedLines = (name) => new Set(LINES.removed.map((l) => fill(textOf(l), { p: name })));
+  const run = (placedOn, removedOn) => {
+    const state = game('Dave');
+    state.phase = 'build';
+    state.tick = 100 * TICK_HZ;
+    // (The kind has no lines of its own for being placed, so DEB has not just spoken when it goes.)
+    const director = createDirector(() => 0);
+    director.handle([{ e: 'placed', k: 'conv', x: 4, y: 4, d: 0, by: 0, ...(placedOn ? { f: 1 } : {}) }], state);
+    state.tick += TICK_HZ;
+    const out = says(director.handle([{ e: 'removed', k: 'conv', x: 4, y: 4, by: 0, owner: 0, ...(removedOn ? { f: 1 } : {}) }], state));
+    return out.some((t) => removedLines('Dave').has(t));
+  };
+  assert.equal(run(0, 0), true, 'placed and removed on the shop floor: the joke');
+  assert.equal(run(1, 1), true, 'placed and removed in The Back: the joke');
+  assert.equal(run(1, 0), false, 'a Back part placed, a shop building removed above it: no joke');
+  assert.equal(run(0, 1), false, 'a shop building placed, a Back part removed under it: no joke');
+});

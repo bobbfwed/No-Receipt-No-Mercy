@@ -254,7 +254,7 @@ export function createDirector(random = Math.random) {
   let jabbed = -1; // wave after which DEB last considered an unprompted go at a friend
   let heralded = -1; // wave after which DEB last announced a coming Midnight Release
   const nearSaid = new Set(); // shares of the refund limit already warned about
-  const lastPlaced = new Map(); // "x,y" -> { tick, by }
+  const lastPlaced = new Map(); // "x,y,floor" -> { tick, by } (floor 0 the shop, 1 The Back)
   const met = new Set(); // kinds of shopper DEB has already introduced
   const metSuper = new Set(); // and the super versions
   let bossNow = 0; // the tier of this wave's boss, 0 if none (pep talks do not say)
@@ -671,13 +671,15 @@ export function createDirector(random = Math.random) {
         } else say(out, state, 'sale', LINES.sale);
         break;
       case 'placed': {
-        lastPlaced.set(`${e.x},${e.y}`, { tick: state.tick, by: e.by });
+        // Keyed by floor too (0.4): a part laid in The Back and a shop building removed from the
+        // tile above it are different things, and that is no "changed his mind" joke.
+        lastPlaced.set(`${e.x},${e.y},${e.f | 0}`, { tick: state.tick, by: e.by });
         const bank = own(LINES.placed, e.k);
         if (bank) say(out, state, `placed:${e.k}`, bank, {}, { pid: state.players[e.by] ? e.by : undefined });
         break;
       }
       case 'removed': {
-        const was = lastPlaced.get(`${e.x},${e.y}`);
+        const was = lastPlaced.get(`${e.x},${e.y},${e.f | 0}`);
         const pid = state.players[e.by] ? e.by : undefined;
         if (e.owner !== e.by && state.players[e.owner]?.on) {
           say(out, state, 'removedOther', LINES.removedOther, {}, { pid, mood: 'angry' });
