@@ -44,7 +44,7 @@
 import {
   BUILD, BACK, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, statsOf, levelOf,
   levelIn, tracksOf, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
-  carriesWire, reinforceCost, canReinforce,
+  carriesWire, reinforceCost, canReinforce, backPrice,
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
@@ -658,6 +658,8 @@ export function createRenderer(canvas, session) {
     if (def.rot) {
       drawOutArrow(ctx, d, i, F, buildingSprites);
     }
+    // (0.4.01) Another part on a plain belt replaces it, for its price less what the belt cost.
+    if (ok && here && here.k === 'conv' && tool !== 'conv') tagOver(`SWAPS THE BELT: $${backPrice(s, tool, i)}`, px + T / 2, py, '#bbf7d0');
   }
 
   /** What a refused belt line says over its end tile, by planLine's reason. */
