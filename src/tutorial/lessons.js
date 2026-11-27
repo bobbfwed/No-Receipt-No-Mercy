@@ -1,5 +1,6 @@
-// The training shift: a guided, hands-on walk through every building. No DOM here, so a test can
-// play the whole tutorial from Node and prove that each step can be completed.
+// The training shift: a guided, hands-on walk through the shop floor, The Back and the shoppers who
+// cheat. No DOM here, so a test can play the whole tutorial from Node and prove that each step can
+// be completed.
 //
 // Each step has:
 //   title, text   what the panel shows (plain instructions; `text` is a list of paragraphs). The
@@ -9,45 +10,66 @@
 //                 from the bar onto its tile); without it, `text` goes through content/touch.js
 //   quip, mood    what DEB says in her speech bubble when the step starts: what to do, and at most
 //                 one short joke after it (none in a lesson that teaches a control for the first time)
-//   tool          the build-bar button to highlight, if any
-//   marks(s, f)   tiles to highlight on the floor that still need attention; each says what it wants
-//                 there (k, d, fix), which the training arrow follows (src/tutorial/target.js)
+//   tool          the build-bar button to highlight, if any (a function (s, f) for a step whose
+//                 second half needs another button)
+//   marks(s, f)   tiles to highlight that still need attention; each says what it wants there, which
+//                 the training arrow follows (src/tutorial/target.js):
+//                   k, d      the building or part wanted on the tile, and its facing
+//                   f         1: the tile is in The Back (0.4); left out, the shop floor
+//                   fix       'rebuild': wreckage that the Rebuild button puts back
+//                   del       the part on the tile is to be taken out (Remove)
+//                   wd        the wire direction the building there should have (the Wire tool)
+//                   r         the reinforcement the Crate Stack there should have (the Reinforce tool)
+//                   act       'more': the Returns Drop's MORE JUNK, on its card
+//   view(s)       the floor the player should be looking at once nothing is marked (0.4: the arrow
+//                 points at the floor switch until he is), or undefined for either
+//   doors(s)      false while opening the doors would show nothing yet (the arrow waits instead)
 //   wave          shoppers lined up for when the player opens the doors (see waveSpec in the sim)
 //   done(s, f)    true once the player has done what was asked (f = facts gathered this step)
 //   hint(s, f)    a one-line nudge for where the player is right now, or null
-//   solve(s)      the commands that complete the step (used by tests, Skip, and ?step= jumps)
+//   solve(s)      the commands that complete the step (used by tests, Skip, and ?step= jumps); the
+//                 extra command { c: 'view', f } is not the game's: it looks at that floor
 //   after(s)      commands that finish the step once its wave is over (tests and jumps send them)
 //   manual        the step is only an explanation; it ends when the player presses Next
-//   part2         the first step of part 2, "The difficult customers" (the panel can jump to it)
-// `tool` may also be a function (s, f) => tool, for a step whose second half needs another button.
+//   part2         the first step of part 2, The Back (the panel can jump to it)
 //
-// What the shift covers (0.3.03, the owner's request: "only a few different shoppers, just to show
-// that there's variation ... it should show all buildings"): every building on the shop floor is
-// placed by the player at least once, and the Rebuild and Remove tools are each used; the only
-// shoppers sent in are Coupon Clippers (super ones in the super shopper and Barcode Laser lessons),
-// Dads (Dads on a Mission among them) and a Gym Bro. test/tutorial.test.js holds it to both.
-// (0.4: the shop floor's factory is gone, and with it the lessons on its machines. The maze is now
-// Crate Stacks and security, so the Barcode Laser moved to the end of part 1, aimed down the queue
-// of a crowd. Since 0.4's dads stage dads walk straight through every building, so part 2 shows
-// them walking across the store and the forklift getting one of two Dads on a Mission; Razor
-// Wire, which really stops them, and the lessons on The Back, where supplies are made, are still
-// to come.)
+// What the shift covers (0.4, stage 6). Part 1, the shop floor: a wall of Crate Stacks, the route
+// that can never be blocked, every security building (each placed by the player), Remove, super
+// shoppers and the dads walking straight through it all. Part 2, The Back: Tab, a Returns Drop, a
+// Spite Still, belts into a Dumbwaiter, an Unpaid Intern, a Splitter (the Overpass and the Clearance
+// Bin in words), a building running dry, the Rebrander. Part 3: Razor Wire (the Wire tool, planned
+// and live, the two dad routes, a Barb Bender), Gym Bros with Rebuild, reinforced crates (Duct Tape
+// in words), and money (event pay, the speed bonus, MORE JUNK). The only shoppers sent in are Coupon
+// Clippers (super ones in the Barcode Laser lesson), Dads and Gym Bros; test/tutorial.test.js holds
+// it to that, and checks every claim the lessons make against the rules on several seeds.
 //
-// Facts gathered during a step (f): nopes (refusals by reason), waveStarts, waveEnds, and counts of
-// what the shoppers did: slip (a dad slipped), watched (a shopper stopped to watch the TV Salesman),
-// beam (the most shoppers one Barcode Laser beam hit), smashed (a gym bro wrecked something;
-// smashedCrate for crate stacks), rebuilt (the Rebuild button put something back).
-import { queueTrainingWave, setTrainingCash, TUNE, BUILD, sizeOf } from '../sim/index.js';
+// Facts gathered during a step (f): floor (the floor looked at now), nopes (refusals by reason),
+// waveStarts, waveEnds, and counts of what happened: slip, watched, beam (the most shoppers one
+// Barcode Laser beam hit), smashed and smashedCrate, rebuilt, made (supplies a machine or Rebrander
+// finished) and spite (Bottled Spite among them), stocked (units sent up a Dumbwaiter), outs (stock
+// that ran out, as 'tile:track'), turned (dads Razor Wire turned away and charged for).
+import {
+  queueTrainingWave, setTrainingCash, addTrainingDrops, TUNE, BUILD, BACK, TICK_HZ, sizeOf, wireLive, unitsIn, stockCap,
+  dropTicks, makeTicks, rebrandTicks, dropUpCost, reinforceCost, itemType, usesPer,
+} from '../sim/index.js';
+import { tierRows, fmt } from '../content/facts.js';
 
 const S = 1; // facing south (down)
+const E = 0, W = 2, N = 3;
 const FACING = ['right', 'down', 'left', 'up'];
 const at = (s, x, y) => s.grid[y * s.w + x];
+const atB = (s, x, y) => (s.back ? s.back[y * s.w + x] : 0);
 const is = (s, x, y, k, d) => { const b = at(s, x, y); return !!b && b.k === k && (d === undefined || b.d === d); };
+const isB = (s, x, y, k, d) => { const p = atB(s, x, y); return !!p && p.k === k && (d === undefined || p.d === d); };
 const place = (k, x, y, d = 0) => ({ c: 'place', k, x, y, d });
+const placeB = (k, x, y, d = 0) => ({ c: 'place', k, x, y, d, f: 1 });
 const remove = (x, y) => ({ c: 'remove', x, y });
+const removeB = (x, y) => ({ c: 'remove', x, y, f: 1 });
+const view = (f) => ({ c: 'view', f });
 
-// Where things go was chosen by playing each lesson across many random seeds (see
-// test/tutorial.test.js): the claims in each lesson's text hold whatever the seed.
+// ---- Where things go --------------------------------------------------------------------------
+// Chosen by playing each lesson across many random seeds (see test/tutorial.test.js): the claims in
+// each lesson's text hold whatever the seed.
 /** The wall of Crate Stacks down column 10, from the top of the store to one tile off the bottom. */
 const WALL = Array.from({ length: 13 }, (_, n) => [10, 1 + n]);
 /** The one tile left open at the bottom of the wall: the gap every shopper walks through. */
@@ -65,34 +87,87 @@ const SALESMAN = [4, 13];
 const SALES_SPRINKLER = [5, 12];
 /** The TV Salesman lesson's crowd: more than the gap gets through without him (the tests check). */
 const SALES_CROWD = 30;
-// The super shopper lesson's third Sprinkler, beside the Free Samples, where the shoppers who stop
-// for a sample stand in its spray. (Until 0.4 the lesson had the player buy damage upgrades for the
-// Sprinklers at the gap instead; bought upgrades are gone.)
-const SUPER_SPRINKLER = [7, 13];
-// Its super Coupon Clippers (Extreme Couponers): more than the layout gets through without the third
-// Sprinkler, never more than it gets through with it (the tests check every seed).
-const SUPER_CLIPPERS = 8;
-const SUPER_WORD = 'eight';
 // The Barcode Laser: three tiles standing up and down above column 6, facing down. Everyone comes in
 // along row 7 and turns down column 6 to the gap, and a crowd backs up along it at the TV Salesman
 // and the samples, so its beam (10 tiles: rows 7 to 16) runs down the whole queue.
 const LASER = [6, 4];
-// Its crowd of Extreme Couponers: more than the layout gets through without it, none with it.
+// With it, a third Sprinkler beside the Free Samples, where the shoppers who stop for a sample stand
+// in its spray (until 0.4 a lesson of its own, on super shoppers): without it, super shoppers get
+// past the laser and the gap (the tests check every seed).
+const SUPER_SPRINKLER = [7, 13];
+// Its crowd of Extreme Couponers (super Coupon Clippers): more than the layout gets through without
+// it, none with it.
 const LASER_CROWD = 30;
 const LASER_WORD = 'thirty';
-// The Forklift Turret: its circle (6 tiles) covers the whole way down column 6 and along the bottom
-// row to the gap.
+// The Forklift Turret: its circle (6 tiles) covers the whole way down column 6, the dads' straight
+// line across the store, and the way down to the gap. Its Dumbwaiter is fed in part 2.
 const FORKLIFT = [8, 9];
-// The dads lesson: ordinary dads, then Dads on a Mission at the back. They walk straight through
-// the maze (0.4), so most of them reach a till; the Dads on a Mission all do (the tests check
-// every seed).
-const DADS_FRONT = 5, DADS_BACK = 3;
-// The forklift lesson's Dads on a Mission: both get through without it, one with it.
-const MISSION_DADS = 2;
+/** The dads who meet it: ordinary ones, then Dads on a Mission. Most walk straight through. */
+const DAD_WAVE = [{ k: 'dad', n: 4, gap: 0.35, at: 0 }, { k: 'dad', n: 2, gap: 0.35, at: 1.4, sup: 2 }];
+const DAD_COUNT = 'six';
 // By the entrance: shoppers coming in must walk round these, a gym bro walks through one.
 const DOOR_CRATES = [[2, 7], [2, 8], [1, 9]];
+
+// The Back (0.4). The training game has no map, so no Returns Drops of its own: the shift puts down
+// two (addTrainingDrops), where the lessons need them. The first stands under the top of the crate
+// wall, facing down: its junk goes down column 10 (nothing in The Back is under the shop's crates),
+// through a Spite Still and on down to the gap Sprinkler's Dumbwaiter, the line every lesson of
+// part 2 adds to. The second stands left of the Forklift's tile, for its Razor Wire.
+const DROP = [10, 2, S];
+const WIRE_DROP = [6, 9, E];
+export const TRAINING_DROPS = [DROP, WIRE_DROP];
+const JUNK_BELT = [10, 3];
+const STILL = [10, 4];
+/** The line from the Still down to the gap Sprinkler's Dumbwaiter (10, 13). */
+const LINE = Array.from({ length: 8 }, (_, n) => [10, 5 + n]);
+// The Unpaid Intern stands left of the line at the Forklift's height, facing it: he takes Spite off
+// the belt behind him (10, 9) and hands it to the Forklift's Dumbwaiter (8, 9).
+const INTERN = [9, 9];
+// The Splitter takes the last belt's place above the gap Sprinkler: its front feeds that one, its
+// left side a belt down into the second Sprinkler (9, 13).
+const SPLITTER = [10, 12];
+const BRANCH = [9, 12];
+// Running dry: the belt the Intern takes from comes out, so nothing reaches the Forklift. (A cut
+// further up would leave the belts below it full, which would feed it for another minute.) A
+// Forklift holds a minute of shooting, so its crowd comes one a second for a minute (the tests
+// check that it runs dry on every seed, and that it does not with the line whole).
+const CUT = [10, 9];
+const DRY_WAVE = [{ k: 'clipper', n: 60, gap: 1, at: 0 }];
+const DRY_CROWD = 60;
+// Then the Rebrander goes in the belt above the cut, and the cut belt goes back: the Store Brand
+// waiting further up the line goes through it, and the Forklift, empty, fills up with Name Brand.
+const REBRANDER = [10, 8];
+/** The Barb Bender, between the second drop and the Forklift's Dumbwaiter, facing it. */
+const BENDER = [7, 9];
+/** The Forklift's wire: north, across the dads' straight line. */
+const WIRE_DIR = N;
+
 /** What removing something gives back, as the Remove button says it ("75% back"). */
-const BACK = `${Math.round(TUNE.sellBack * 100)}%`;
+const BACK_SHARE = `${Math.round(TUNE.sellBack * 100)}%`;
+
+// ---- Numbers from the rules (never typed in: the tuning changes) ------------------------------
+const secs = (t) => fmt(t / TICK_HZ);
+const JUNK_SECS = secs(dropTicks(0, {}));
+const MAKE_SECS = secs(makeTicks({}));
+const REBRAND_SECS = [1, 2, 3].map((t) => secs(rebrandTicks({}, t)));
+const CAP = stockCap(null);
+const hit = (k, tier) => fmt(tierRows(k, 'dmg')[tier].dmg);
+const FORK_SHOTS = usesPer('forklift', 'dmg', 1);
+const WIRE_TURNS = usesPer('forklift', 'wire', 1);
+const TAPE_HITS = usesPer('forklift', 'dur', 1);
+const money = (v) => `$${Math.round(v).toLocaleString('en-US')}`;
+const MORE_JUNK = money(dropUpCost(0));
+const REINFORCE_FIRST = money(reinforceCost({ k: 'crate', r: 0 }));
+const REINFORCE_MAX = BUILD.crate.reinforce.max;
+const HITS_WORD = ['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? String(TUNE.smashMax);
+
+// The Back's hotkeys, as its build bar numbers them (BACK_GROUPS in src/ui/input.js: what moves
+// things, then what makes them, in the order of BUILD; keys 1 to 9, 0 and -).
+const BACK_ORDER = [
+  ...Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed && !BUILD[k].supply && k !== 'rebrand'),
+  ...Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed && (BUILD[k].supply || k === 'rebrand')),
+];
+const KEY = (k) => ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'][BACK_ORDER.indexOf(k)] || '';
 
 /**
  * Marks for a list of [x, y, kind, facing, label] wanted buildings that are not correctly in place
@@ -101,6 +176,17 @@ const BACK = `${Math.round(TUNE.sellBack * 100)}%`;
 function wanted(s, list) {
   const out = [];
   for (const [x, y, k, d, label] of list) if (!is(s, x, y, k, d)) out.push(d === undefined ? { x, y, label, k } : { x, y, label, k, d });
+  return out;
+}
+
+/**
+ * The same for parts wanted in The Back (each mark has f: 1). A few tiles side by side would have
+ * their captions on top of each other: only the first still to do keeps its caption then.
+ */
+function wantedB(s, list) {
+  const out = [];
+  for (const [x, y, k, d, label] of list) if (!isB(s, x, y, k, d)) out.push(d === undefined ? { x, y, f: 1, label, k } : { x, y, f: 1, label, k, d });
+  if (out.length <= 3) for (let n = 1; n < out.length; n++) out[n].label = '';
   return out;
 }
 
@@ -113,6 +199,15 @@ function tileHint(s, x, y, k, d, name) {
     // (One way for both a mouse and a finger: the building's card. content/touch.js words it for a finger.)
     return `The ${name}'s arrow must point ${FACING[d]}. Put down what you are holding (Esc, or click its button again), click the ${name}, and click ⟳ Rotate on its card until the arrow points ${FACING[d]}.`;
   }
+  return null;
+}
+
+/** The same for a part in The Back (they have no card: right-click takes one out). */
+function backHint(s, x, y, k, d, name) {
+  const p = atB(s, x, y);
+  if (!p) return null;
+  if (p.k !== k) return `Something else is on the highlighted tile in The Back. Right-click the highlighted part to take it out, then put the ${name} there.`;
+  if (d !== undefined && p.d !== d) return `The ${name}'s arrow must point ${FACING[d]}. Point at it with nothing held and press R to turn it.`;
   return null;
 }
 
@@ -184,8 +279,27 @@ const openDoorsHint = (s, f) => (f.waveEnds ? null
 const watchHint = (watch) => (s, f) => (f.waveEnds ? null
   : s.phase === 'wave' ? watch : 'Press OPEN THE DOORS at the top of the screen.');
 
-/** The closing word on The Back, the floor under the shop (0.4), for the last lesson. */
-const THE_BACK = 'One floor down is The Back: there your belts and machines turn returned junk into the supplies that make security stronger.';
+/** A nudge to the floor a lesson wants looked at, or null if the player is there. */
+const floorHint = (f, want) => (f.floor === want ? null
+  : want ? 'Press Tab (or CHECK IN THE BACK, bottom right of the floor) to go down to The Back.'
+    : 'Press Tab (or BACK TO THE FLOOR, bottom right of the floor) to go back up to the shop.');
+
+// ---- What the lessons check -------------------------------------------------------------------
+const stockOf = (s, [x, y], track = 'dmg') => { const b = at(s, x, y); return b && b.s && b.s[track] ? b.s[track] : null; };
+const forklift = (s) => at(s, ...FORKLIFT);
+/** Some of the Forklift's Spite is Name Brand or better (its pip shows the brand it works at, the oldest). */
+const forkBranded = (s) => { const r = stockOf(s, FORKLIFT); return !!r && r.some((v, n) => n % 2 === 0 && v >= 2); };
+const dropAt = (s) => atB(s, DROP[0], DROP[1]);
+/** Any supply anywhere downstream of the Still: on the line, in a part, or stocked. */
+const spiteSeen = (s) => {
+  const p = atB(s, ...STILL);
+  if (p && p.out && itemType(p.out) === 1) return true;
+  return LINE.some(([x, y]) => { const q = atB(s, x, y); return q && q.it && q.it.some((c, n) => n % 2 === 0 && itemType(c) === 1); });
+};
+const cutDone = (s) => !atB(s, ...CUT);
+/** The Forklift full of Store Brand Spite: Name Brand cannot go up until it has fired some. */
+const forkFull = (s) => { const b = forklift(s); return !!b && b.k === 'forklift' && unitsIn(b, 'dmg', s) >= stockCap(s); };
+const doorCratesDone = (s) => DOOR_CRATES.every(([x, y]) => is(s, x, y, 'crate') && (at(s, x, y).r | 0) >= 1);
 
 export const STEPS = [
   {
@@ -193,9 +307,8 @@ export const STEPS = [
     manual: true,
     text: [
       'Do this: read this, then press Next. Every lesson starts with a line like this one, and the big yellow arrow points at what to press.',
-      'Shoppers come in through the ENTRANCE on the left and walk to the tills on the right. Every shopper who reaches a till takes a refund out of your cash. In a real game, 20 refunds closes the store.',
-      'Your job is to make them suffer on the way. Shoppers cannot walk through Crate Stacks or security (dads can, as part 2 shows), so whatever you build is the maze they have to walk, and your security wears them down along it until they give up and leave.',
-      'This training shift walks you through every building on the shop floor. You cannot lose here, and money is free.',
+      'Shoppers come in through the ENTRANCE on the left and walk to the tills on the right. Each one who reaches a till takes a refund out of your cash, and in a real game too many refunds close the store.',
+      'Whatever you build on the shop floor is the maze they walk, and your security wears down their patience along it until they storm off. Under the shop is The Back, where junk becomes the supplies that make security stronger. You cannot lose here, and money is free.',
     ],
     quip: "I'm DEB from HR, and I'm training you today. Read the lesson, do what it says, then press Next.",
     done: () => false,
@@ -205,14 +318,12 @@ export const STEPS = [
     title: 'Build the maze: Crate Stacks',
     tool: 'crate',
     text: [
-      'Do this: click Crates (or press 1), then press the mouse button on the first highlighted tile, drag straight down to the last one, and let go. A Crate Stack lands on every tile you drag over: a wall from the top of the store to one tile off the bottom.',
-      'A Crate Stack is the cheapest wall there is: it blocks shoppers (all but dads) and does nothing else.',
-      'The yellow dashed line on the floor is the route shoppers will walk from the doors to the tills, drawn whenever you build. Watch it bend round your wall as it goes up: a longer route gives your security more time to work on them.',
+      'Do this: click Crates (or press 1), then press the mouse button on the first highlighted tile, drag straight down to the last one, and let go. A Crate Stack lands on every tile you drag over.',
+      'A Crate Stack is the cheapest wall there is: it blocks shoppers (all but dads) and does nothing else. The yellow dashed line is the route shoppers will walk: watch it bend round your wall. A longer route gives your security more time.',
     ],
     touch: [
-      'Do this: tap Crates in the bar, then tap each of the highlighted tiles in turn, from the top one down: a wall from the top of the store to one tile off the bottom.',
-      'A Crate Stack is the cheapest wall there is: it blocks shoppers (all but dads) and does nothing else. (A building can also be dragged out of the bar onto its tile: it rides above your finger so you can see where it lands.)',
-      'The yellow dashed line on the floor is the route shoppers will walk from the doors to the tills, drawn whenever you build. Watch it bend round your wall as it goes up: a longer route gives your security more time to work on them.',
+      'Do this: tap Crates in the bar, then tap each of the highlighted tiles in turn, from the top one down.',
+      'A Crate Stack is the cheapest wall there is: it blocks shoppers (all but dads) and does nothing else. The yellow dashed line is the route shoppers will walk: watch it bend round your wall. A longer route gives your security more time. (A building can also be dragged out of the bar onto its tile: it rides above your finger.)',
     ],
     quip: 'Crates down the highlighted column. The construction equivalent of a shrug: you two will get on.',
     marks: (s) => wanted(s, WALL.map(([x, y], n) => [x, y, 'crate', undefined, n === 0 ? 'From here' : n === WALL.length - 1 ? 'to here' : ''])),
@@ -227,11 +338,11 @@ export const STEPS = [
     title: 'You can never block the route completely',
     tool: 'crate',
     text: [
-      'Do this: try to put a Crate in the highlighted gap at the bottom of your wall. It will be refused: shoppers must always have a way through, so you can never close the route completely.',
+      'Do this: try to put a Crate in the highlighted gap at the bottom of your wall. It will be refused: shoppers must always have a way through.',
       'A one-tile gap is the best you can do, and it is exactly where security belongs.',
     ],
     touch: [
-      'Do this: try to drag Crates onto the highlighted gap at the bottom of your wall. It will be refused: shoppers must always have a way through, so you can never close the route completely.',
+      'Do this: try to drag Crates onto the highlighted gap at the bottom of your wall. It will be refused: shoppers must always have a way through.',
       'A one-tile gap is the best you can do, and it is exactly where security belongs.',
     ],
     quip: "Try a crate in the gap. You'll be refused. I enjoy saying no to you.",
@@ -244,14 +355,14 @@ export const STEPS = [
     tool: 'sprinkler',
     wave: [{ k: 'clipper', n: 3, gap: 1, at: 0 }],
     text: [
-      'Do this: right-click the highlighted Crate Stack at the bottom of your wall to remove it, then click Sprinkler (or press 2), click the same tile, and press OPEN THE DOORS at the top. Three Coupon Clippers are waiting to come in.',
-      `Security blocks shoppers too, so it can be part of your wall, right where it does the most good: over the gap. Removing something gives back ${BACK} of what it cost (the Remove tool in the bar does the same as a right-click).`,
-      'A Pepper Sprinkler hits everyone within about 2 tiles, twice a second. Shoppers do not have health. They have patience, the bar above their heads. Security wears it down, and when it runs out they storm off and you keep your cash. The circle round a Sprinkler shows its reach.',
+      'Do this: right-click the highlighted Crate Stack at the bottom of your wall to remove it, then click Sprinkler (or press 2), click the same tile, and press OPEN THE DOORS at the top.',
+      `Security blocks shoppers too, so it can be part of your wall, right over the gap. Removing something gives back ${BACK_SHARE} of what it cost (the Remove tool in the bar does the same as a right-click).`,
+      'A Pepper Sprinkler hits everyone within about 2 tiles, twice a second. Shoppers have patience, the bar over their heads: when it runs out they storm off and you keep your cash.',
     ],
     touch: [
-      'Do this: tap the highlighted Crate Stack at the bottom of your wall (tap DROP first if you are still holding Crates) and tap ✕ Remove on the card that opens, then drag Sprinkler from the bar onto the same tile and tap OPEN THE DOORS at the top. Three Coupon Clippers are waiting to come in.',
-      `Security blocks shoppers too, so it can be part of your wall, right where it does the most good: over the gap. Removing something gives back ${BACK} of what it cost.`,
-      'A Pepper Sprinkler hits everyone within about 2 tiles, twice a second. Shoppers do not have health. They have patience, the bar above their heads. Security wears it down, and when it runs out they storm off and you keep your cash. The circle round a Sprinkler shows its reach.',
+      'Do this: tap the highlighted Crate Stack at the bottom of your wall (tap DROP first if you are still holding Crates) and tap ✕ Remove on the card that opens, then drag Sprinkler from the bar onto the same tile and tap OPEN THE DOORS at the top.',
+      `Security blocks shoppers too, so it can be part of your wall, right over the gap. Removing something gives back ${BACK_SHARE} of what it cost.`,
+      'A Pepper Sprinkler hits everyone within about 2 tiles, twice a second. Shoppers have patience, the bar over their heads: when it runs out they storm off and you keep your cash.',
     ],
     quip: 'Take out the bottom crate, put a Sprinkler there, then OPEN THE DOORS. Three Coupon Clippers are waiting outside.',
     marks: (s) => wanted(s, [[...GAP_SPRINKLER, 'sprinkler', undefined, is(s, ...GAP_SPRINKLER, 'crate') ? 'Right-click to remove' : 'Sprinkler']]),
@@ -266,12 +377,12 @@ export const STEPS = [
     // (One Sprinkler alone lets some of these ten through, whatever the seed: see the tests.)
     wave: [{ k: 'clipper', n: 10, gap: 0.1, at: 0 }],
     text: [
-      'Do this: click Wet Floor (or press 5) and put it in the gap, put a second Sprinkler (press 2) on the highlighted tile beside the first, then press OPEN THE DOORS for ten Coupon Clippers. A Wet Floor Sign halves the speed of shoppers who walk over it, so they spend twice as long in the spray.',
-      'Ten Coupon Clippers in a bunch are more than one Sprinkler can wear down before they are past it. The sign does not block the route, so it can sit right in the gap.',
+      'Do this: click Wet Floor (or press 5) and put it in the gap, put a second Sprinkler (press 2) on the highlighted tile beside the first, then press OPEN THE DOORS for ten Coupon Clippers.',
+      'A Wet Floor Sign halves the speed of shoppers who walk over it, so they spend twice as long in the spray. It does not block the route, so it can sit right in the gap.',
     ],
     touch: [
-      'Do this: drag Wet Floor from the bar into the gap and a second Sprinkler onto the highlighted tile beside the first, then tap OPEN THE DOORS for ten Coupon Clippers. A Wet Floor Sign halves the speed of shoppers who walk over it, so they spend twice as long in the spray.',
-      'Ten Coupon Clippers in a bunch are more than one Sprinkler can wear down before they are past it. The sign does not block the route, so it can sit right in the gap.',
+      'Do this: drag Wet Floor from the bar into the gap and a second Sprinkler onto the highlighted tile beside the first, then tap OPEN THE DOORS for ten Coupon Clippers.',
+      'A Wet Floor Sign halves the speed of shoppers who walk over it, so they spend twice as long in the spray. It does not block the route, so it can sit right in the gap.',
     ],
     quip: 'Wet Floor in the gap, a second Sprinkler beside the first, then open the doors. A yellow plastic sign is about to outperform you.',
     marks: (s) => wanted(s, [[...GAP, 'wetfloor', undefined, 'Wet Floor Sign'], [...SIDE_SPRINKLER, 'sprinkler', undefined, 'Sprinkler']]),
@@ -285,12 +396,12 @@ export const STEPS = [
     tool: 'samples',
     wave: [{ k: 'clipper', n: 16, gap: 0.2, at: 0 }],
     text: [
-      'Do this: click Samples (or press 6) and put Free Samples on the highlighted tile, then press OPEN THE DOORS for a bigger crowd. Coupon Clippers within about 2 tiles of it stop for 2 seconds to eat, standing still in your sprinklers\' reach.',
-      'Not every shopper stops for a free sample: dads, for one, walk straight past.',
+      'Do this: click Samples (or press 6) and put Free Samples on the highlighted tile, then press OPEN THE DOORS for a bigger crowd.',
+      'Coupon Clippers within about 2 tiles of it stop for 2 seconds to eat, standing still in your sprinklers\' reach. Dads walk straight past.',
     ],
     touch: [
-      'Do this: drag Samples from the bar onto the highlighted tile, then tap OPEN THE DOORS for a bigger crowd. Coupon Clippers within about 2 tiles of it stop for 2 seconds to eat, standing still in your sprinklers\' reach.',
-      'Not every shopper stops for a free sample: dads, for one, walk straight past.',
+      'Do this: drag Samples from the bar onto the highlighted tile, then tap OPEN THE DOORS for a bigger crowd.',
+      'Coupon Clippers within about 2 tiles of it stop for 2 seconds to eat, standing still in your sprinklers\' reach. Dads walk straight past.',
     ],
     quip: "Free Samples on the highlighted tile, then open the doors. Cheese on a stick: it's how I'd trap all of you.",
     marks: (s) => wanted(s, [[...SAMPLES, 'samples', undefined, 'Free Samples']]),
@@ -304,14 +415,12 @@ export const STEPS = [
     // (Without him the gap lets some of these through, whatever the seed: see the tests.)
     wave: [{ k: 'clipper', n: SALES_CROWD, gap: 0.1, at: 0 }],
     text: [
-      `Do this: click Salesman (or press 7) and click the top-left one of the four highlighted tiles, put a Sprinkler (press 2) on the tile just above him, then press OPEN THE DOORS for ${SALES_CROWD} Coupon Clippers. Shoppers who come near him may stop to watch his knife demonstration, standing in that Sprinkler's spray.`,
-      'His reach is about 4½ tiles. A crowd this big swamps your gap, because a Sprinkler only sprays four shoppers at a time: the ones he holds up reach the gap later, a few at a time, instead of all together. Now and then one hurries past him instead, faster for a few seconds.',
-      'He takes two tiles by two. Even a dad stops for him now and then (one in five), though more of them hurry past faster (three in ten), so put security round his stand, where they stop, not after it.',
+      `Do this: click Salesman (or press 7) and click the top-left one of the four highlighted tiles, put a Sprinkler (press 2) on the tile just above him, then press OPEN THE DOORS for ${SALES_CROWD} Coupon Clippers.`,
+      'Shoppers who come near him may stop to watch his knife demonstration, standing in that Sprinkler\'s spray; now and then one hurries past instead. A crowd this big swamps your gap: the ones he holds up reach it later, a few at a time.',
     ],
     touch: [
-      `Do this: drag Salesman from the bar onto the four highlighted tiles and Sprinkler onto the tile just above him, then tap OPEN THE DOORS for ${SALES_CROWD} Coupon Clippers. Shoppers who come near him may stop to watch his knife demonstration, standing in that Sprinkler's spray.`,
-      'His reach is about 4½ tiles. A crowd this big swamps your gap, because a Sprinkler only sprays four shoppers at a time: the ones he holds up reach the gap later, a few at a time, instead of all together. Now and then one hurries past him instead, faster for a few seconds.',
-      'He takes two tiles by two. Even a dad stops for him now and then (one in five), though more of them hurry past faster (three in ten), so put security round his stand, where they stop, not after it.',
+      `Do this: drag Salesman from the bar onto the four highlighted tiles and Sprinkler onto the tile just above him, then tap OPEN THE DOORS for ${SALES_CROWD} Coupon Clippers.`,
+      'Shoppers who come near him may stop to watch his knife demonstration, standing in that Sprinkler\'s spray; now and then one hurries past instead. A crowd this big swamps your gap: the ones he holds up reach it later, a few at a time.',
     ],
     quip: 'Salesman on the four highlighted tiles, a Sprinkler above him, then open the doors. Knives on TV: the only thing in this store sharper than you.',
     marks: (s) => [
@@ -326,120 +435,273 @@ export const STEPS = [
     solve: () => [place('salesman', ...SALESMAN), place('sprinkler', ...SALES_SPRINKLER), { c: 'start' }],
   },
   {
-    title: 'Super shoppers',
-    tool: 'sprinkler',
-    wave: [{ k: 'clipper', n: SUPER_CLIPPERS, gap: 0.6, at: 0, sup: SUPER_CLIPPERS }],
-    text: [
-      `Do this: put a third Sprinkler (press 2) on the highlighted tile beside the Free Samples, then press OPEN THE DOORS. As they are, your two Sprinklers at the gap cannot stop the ${SUPER_WORD} Extreme Couponers (super Coupon Clippers: faster, with two and a half times the patience) waiting outside. The ones who stop for a sample will stand in its spray.`,
-      'Later in a real game, SUPER versions of every shopper turn up. They are bigger, marked in gold, far more patient, and take a double refund.',
-      'In a real game your security also gets stronger: supplies made in The Back, the floor under the shop, go up to it and make it hit harder, fire faster and reach further while they last. The number on a building is the level it is working at.',
-    ],
-    touch: [
-      `Do this: drag Sprinkler from the bar onto the highlighted tile beside the Free Samples, then tap OPEN THE DOORS. As they are, your two Sprinklers at the gap cannot stop the ${SUPER_WORD} Extreme Couponers (super Coupon Clippers: faster, with two and a half times the patience) waiting outside. The ones who stop for a sample will stand in its spray.`,
-      'Later in a real game, SUPER versions of every shopper turn up. They are bigger, marked in gold, far more patient, and take a double refund.',
-      'In a real game your security also gets stronger: supplies made in The Back, the floor under the shop, go up to it and make it hit harder, fire faster and reach further while they last. The number on a building is the level it is working at.',
-    ],
-    quip: "A third Sprinkler by the samples, then open the doors. Extreme Couponers: they'd sell their own mothers for 10% off, and she'd be reduced to clear.",
-    mood: 'smug',
-    marks: (s) => wanted(s, [[...SUPER_SPRINKLER, 'sprinkler', undefined, 'Sprinkler']]),
-    done: (s, f) => is(s, ...SUPER_SPRINKLER, 'sprinkler') && f.waveEnds >= 1,
-    hint: (s, f) => tileHint(s, ...SUPER_SPRINKLER, 'sprinkler', undefined, 'Sprinkler')
-      || (is(s, ...SUPER_SPRINKLER, 'sprinkler') ? openDoorsHint(s, f) : null),
-    solve: () => [place('sprinkler', ...SUPER_SPRINKLER), { c: 'start' }],
-  },
-  {
     title: 'Aim down the line: the Barcode Laser',
-    tool: 'railgun',
+    tool: (s) => (is(s, ...LASER, 'railgun', S) ? 'sprinkler' : 'railgun'),
     // (Without it the layout lets some of these through, whatever the seed: see the tests.)
     wave: [{ k: 'clipper', n: LASER_CROWD, gap: 0.15, at: 0, sup: LASER_CROWD }],
     text: [
-      `Do this: click Laser (or press 4), press R until the arrow on the preview points DOWN, click the top one of the three highlighted tiles, then press OPEN THE DOORS for ${LASER_WORD} Extreme Couponers. The laser only fires the way its arrow points.`,
-      `Everyone comes in single file and turns down this column on the way to the gap, and a crowd backs up along it at the TV Salesman and the samples. The Barcode Laser's beam goes straight out of the end its arrow points to, 10 tiles, through everything in the way, and hits every shopper on that line at once. Without it, your gap cannot take ${LASER_CROWD} of them.`,
-      'It is slow to reload, so it wants a queue, not a straggler: the first one in sets it off alone, and the next beam takes most of the queue behind her. It is three tiles long and expensive, and once built it only turns end for end (⟳ Rotate on its card), so turn it before you place it.',
+      `Do this: click Laser (or press 4), press R until the arrow on the preview points DOWN, and click the top one of the three highlighted tiles. Put a third Sprinkler (press 2) beside the Free Samples, then press OPEN THE DOORS for ${LASER_WORD} Extreme Couponers.`,
+      'Its beam goes straight out of the end its arrow points to, 10 tiles, through everything, and hits every shopper on that line at once. It is slow to reload, so it wants a queue: everyone turns down this column on the way to the gap. Once built it only turns end for end, so turn it before you place it.',
+      'Extreme Couponers are SUPER Coupon Clippers. Later in a real game every kind of shopper has a super version: bigger, marked in gold, far more patient, and it takes a double refund.',
     ],
     touch: [
-      `Do this: tap Laser in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, then tap the top one of the three highlighted tiles. Then tap OPEN THE DOORS for ${LASER_WORD} Extreme Couponers. The laser only fires the way its arrow points.`,
-      `Everyone comes in single file and turns down this column on the way to the gap, and a crowd backs up along it at the TV Salesman and the samples. The Barcode Laser's beam goes straight out of the end its arrow points to, 10 tiles, through everything in the way, and hits every shopper on that line at once. Without it, your gap cannot take ${LASER_CROWD} of them.`,
-      'It is slow to reload, so it wants a queue, not a straggler: the first one in sets it off alone, and the next beam takes most of the queue behind her. It is three tiles long and expensive, and once built it only turns end for end, so turn it before you place it.',
+      `Do this: tap Laser in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, then tap the top one of the three highlighted tiles. Drag a third Sprinkler beside the Free Samples, then tap OPEN THE DOORS for ${LASER_WORD} Extreme Couponers.`,
+      'Its beam goes straight out of the end its arrow points to, 10 tiles, through everything, and hits every shopper on that line at once. It is slow to reload, so it wants a queue: everyone turns down this column on the way to the gap. Once built it only turns end for end, so turn it before you place it.',
+      'Extreme Couponers are SUPER Coupon Clippers. Later in a real game every kind of shopper has a super version: bigger, marked in gold, far more patient, and it takes a double refund.',
     ],
-    quip: "Laser at the top of the highlighted column, arrow down, then open the doors. Thirty Extreme Couponers in a queue, like your mum's on payday.",
+    quip: "Laser at the top of the column, arrow down, a Sprinkler by the samples, open the doors. Thirty Extreme Couponers in a queue, like your mum's on payday.",
     mood: 'smug',
-    marks: (s) => wantedBig(s, ...LASER, 'railgun', S, 'Laser, arrow down'),
-    done: (s, f) => is(s, ...LASER, 'railgun', S) && f.waveEnds >= 1,
-    hint: (s, f) => bigHint(s, ...LASER, 'railgun', S, 'Laser')
-      || (is(s, ...LASER, 'railgun', S) ? watchHint('Watch the beam go down the queue.')(s, f) : null),
-    solve: () => [place('railgun', ...LASER, S), { c: 'start' }],
-  },
-
-  // ---- Part 2: the difficult customers --------------------------------------------------------
-  {
-    title: 'Part 2: The difficult customers',
-    manual: true,
-    part2: true,
-    text: [
-      'Do this: read this, then press Next. Part 1 was the buildings, tried out on the plainest shopper there is. Part 2 is two shoppers who play by their own rules: Dads and Gym Bros. Each has a trick that gets past an ordinary defence, and each trick has an answer.',
-      'Your layout from part 1 stays, and the lessons have you add to it. One building is still to come, the Forklift Turret, and it is made for dads, who walk straight through your maze.',
-    ],
-    quip: "Part 2: the shoppers who cheat. Dads and Gym Bros. Neither of them reads instructions either, so you'll get on.",
-    mood: 'smug',
-    done: () => false,
-    solve: () => [],
+    marks: (s) => [...wantedBig(s, ...LASER, 'railgun', S, 'Laser, arrow down'), ...wanted(s, [[...SUPER_SPRINKLER, 'sprinkler', undefined, 'Sprinkler']])],
+    done: (s, f) => is(s, ...LASER, 'railgun', S) && is(s, ...SUPER_SPRINKLER, 'sprinkler') && f.waveEnds >= 1,
+    hint: (s, f) => bigHint(s, ...LASER, 'railgun', S, 'Laser') || tileHint(s, ...SUPER_SPRINKLER, 'sprinkler', undefined, 'Sprinkler')
+      || (is(s, ...LASER, 'railgun', S) && is(s, ...SUPER_SPRINKLER, 'sprinkler') ? watchHint('Watch the beam go down the queue.')(s, f) : null),
+    solve: () => [place('railgun', ...LASER, S), place('sprinkler', ...SUPER_SPRINKLER), { c: 'start' }],
   },
   {
-    title: 'Dads',
-    wave: [
-      { k: 'dad', n: DADS_FRONT, gap: 0.35, at: 0 },
-      { k: 'dad', n: DADS_BACK, gap: 0.35, at: DADS_FRONT * 0.35, sup: DADS_BACK },
-    ],
-    text: [
-      'Do this: press OPEN THE DOORS and watch eight dads come in, in single file. A dad wants to get through the line and go home: he walks fast, never stops for Free Samples, and strides straight over Wet Floor Signs (now and then one slips and lies there stunned). Pepper spray bothers him less than most, too.',
-      "A dad walks straight through your Crate Stacks and security, the shortest way to the tills: nothing you have built is in his way. Only the store's walls stop him, and Razor Wire, which is made in The Back. His patience drains by itself every second he is in the store, but the short way leaves it little time. Watch most of these eight walk straight across the store to a till.",
-      'The three at the back are Dads on a Mission, super dads: two and a half times the patience, it drains half as fast, and they never slip. They walk out with a double refund, $50 each, and leave a five-star review.',
-    ],
-    quip: "Open the doors and count the dads. Eight of them, each told his wife 'two minutes'.",
-    mood: 'smug',
-    done: (s, f) => f.waveEnds >= 1,
-    hint: watchHint('Watch the three at the back of the line.'),
-    solve: () => [{ c: 'start' }],
-  },
-  {
-    title: 'Stopping dads: the Forklift Turret',
+    title: 'Dads, and the Forklift Turret',
     tool: 'forklift',
-    wave: [{ k: 'dad', n: MISSION_DADS, gap: 0.35, at: 0, sup: MISSION_DADS }],
+    wave: DAD_WAVE,
     text: [
-      'Do this: click Forklift (or press 3), click the highlighted tile, then press OPEN THE DOORS for two more Dads on a Mission. A Forklift Turret hits one shopper hard from 6 tiles away, always the one nearest the tills.',
-      "A dad with patience to burn needs big hits, one at a time, for as long as you can keep them coming. So a forklift goes where its circle covers a long stretch of the way they walk: this one covers a long stretch of the dads' straight line across the store as well as the way down to the gap.",
-      'Without it both of them walk out with a refund; with it, it gets one of the two. Each dad who reaches a till takes his refund and leaves a five-star review. Stopping dads for good takes Razor Wire from The Back.',
+      `Do this: click Forklift (or press 3), click the highlighted tile, then press OPEN THE DOORS for ${DAD_COUNT} dads.`,
+      'A dad wants to get through the line and go home. He walks fast, in single file, never stops for samples, and walks straight through your Crate Stacks and security: only the store\'s walls stop him, and Razor Wire, which part 3 shows you. His patience drains by itself every second he is inside.',
+      'A Forklift Turret hits one shopper hard from 6 tiles away. This one covers the dads\' straight line across the store: it gets some of them, and the rest walk out with a refund and a smug review. The two at the back are Dads on a Mission, super dads.',
     ],
     touch: [
-      'Do this: drag Forklift from the bar onto the highlighted tile, then tap OPEN THE DOORS for two more Dads on a Mission. A Forklift Turret hits one shopper hard from 6 tiles away, always the one nearest the tills.',
-      "A dad with patience to burn needs big hits, one at a time, for as long as you can keep them coming. So a forklift goes where its circle covers a long stretch of the way they walk: this one covers a long stretch of the dads' straight line across the store as well as the way down to the gap.",
-      'Without it both of them walk out with a refund; with it, it gets one of the two. Each dad who reaches a till takes his refund and leaves a five-star review. Stopping dads for good takes Razor Wire from The Back.',
+      `Do this: drag Forklift from the bar onto the highlighted tile, then tap OPEN THE DOORS for ${DAD_COUNT} dads.`,
+      'A dad wants to get through the line and go home. He walks fast, in single file, never stops for samples, and walks straight through your Crate Stacks and security: only the store\'s walls stop him, and Razor Wire, which part 3 shows you. His patience drains by itself every second he is inside.',
+      'A Forklift Turret hits one shopper hard from 6 tiles away. This one covers the dads\' straight line across the store: it gets some of them, and the rest walk out with a refund and a smug review. The two at the back are Dads on a Mission, super dads.',
     ],
-    quip: "Forklift on the highlighted tile, then open the doors. Waste his time. You're good at that; I've seen your timesheets.",
+    quip: "Forklift on the highlighted tile, then open the doors. Six dads, each told his wife 'two minutes'.",
+    mood: 'smug',
     marks: (s) => wanted(s, [[...FORKLIFT, 'forklift', undefined, 'Forklift']]),
     done: (s, f) => is(s, ...FORKLIFT, 'forklift') && f.waveEnds >= 1,
     hint: (s, f) => tileHint(s, ...FORKLIFT, 'forklift', undefined, 'Forklift')
-      || (is(s, ...FORKLIFT, 'forklift') ? watchHint('Watch the forklift pick them off on the way down.')(s, f) : null),
+      || (is(s, ...FORKLIFT, 'forklift') ? watchHint('Watch the dads walk straight through your buildings.')(s, f) : null),
     solve: () => [place('forklift', ...FORKLIFT), { c: 'start' }],
+  },
+
+  // ---- Part 2: The Back --------------------------------------------------------------------------
+  {
+    title: 'Downstairs: The Back',
+    part2: true,
+    view: 1,
+    text: [
+      'Do this: press Tab (or CHECK IN THE BACK, bottom right of the floor) to go down to The Back, the floor under the shop.',
+      `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, onto whatever in front of it will take it.`,
+      'The dashed boxes are the Dumbwaiters under your security. Down here belts and machines turn junk into supplies and send them up. Tab takes you back up.',
+    ],
+    touch: [
+      'Do this: tap CHECK IN THE BACK (bottom right of the floor) to go down to The Back, the floor under the shop.',
+      `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, onto whatever in front of it will take it.`,
+      'The dashed boxes are the Dumbwaiters under your security. Down here belts and machines turn junk into supplies and send them up. The same button takes you back up.',
+    ],
+    quip: 'Down to The Back, where the junk goes.',
+    marks: (s, f) => (f.floor === 1 ? [] : [{ x: DROP[0], y: DROP[1], f: 1, label: 'Returns Drop' }]),
+    done: (s, f) => f.floor === 1,
+    // (No hint: the Do this line says exactly what the hint would.)
+    solve: () => [view(1)],
+  },
+  {
+    title: 'Junk into a Spite Still',
+    tool: (s) => (isB(s, ...STILL, 'still') ? 'conv' : 'still'),
+    view: 1,
+    text: [
+      `Do this: click Spite Still (or press ${KEY('still')}), press R until its arrow points DOWN, and click the highlighted tile. Then click Belt (or press ${KEY('conv')}) and drag from the tile under the Returns Drop onto the Still.`,
+      `A Spite Still boils a piece of junk down into a unit of Bottled Spite every ${MAKE_SECS} seconds. It takes junk at its back and sides and puts the Spite out of its front, the way its arrow points. A belt carries anything put on it, the way its arrow points.`,
+    ],
+    touch: [
+      'Do this: tap Spite Still in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, and tap the highlighted tile. Then tap Belt and drag your finger from the tile under the Returns Drop onto the Still.',
+      `A Spite Still boils a piece of junk down into a unit of Bottled Spite every ${MAKE_SECS} seconds. It takes junk at its back and sides and puts the Spite out of its front, the way its arrow points. A belt carries anything put on it, the way its arrow points.`,
+    ],
+    quip: 'A Spite Still, arrow down, then a belt from the drop into it. Garbage in, spite out. Like your marriage.',
+    marks: (s) => (s.back ? wantedB(s, [[...STILL, 'still', S, 'Spite Still, arrow down'], [...JUNK_BELT, 'conv', S, 'Belt']]) : []),
+    done: (s, f) => f.spite >= 1 || spiteSeen(s),
+    hint: (s, f) => floorHint(f, 1) || backHint(s, ...STILL, 'still', S, 'Spite Still') || backHint(s, ...JUNK_BELT, 'conv', S, 'Belt')
+      || (isB(s, ...STILL, 'still', S) && isB(s, ...JUNK_BELT, 'conv', S) ? 'Watch the junk go into the Still.' : null),
+    solve: () => [view(1), placeB('still', ...STILL, S), placeB('conv', ...JUNK_BELT, S)],
+  },
+  {
+    title: 'Spite up the Dumbwaiter',
+    tool: 'conv',
+    view: (s) => (stockOf(s, GAP_SPRINKLER) ? 0 : 1),
+    text: [
+      'Do this: click Belt and drag from the highlighted tile under the Still all the way down onto the gap Sprinkler\'s Dumbwaiter. When the Spite gets there, press Tab to go back up and look at the Sprinkler.',
+      `Whatever a belt carries into a Dumbwaiter goes up to the building above. It keeps up to ${CAP} units of each supply it takes, and its pips light up in that supply's colour. Bottled Spite makes it hit harder: Store Brand takes a Sprinkler's hit from ${hit('sprinkler', 0)} to ${hit('sprinkler', 1)}.`,
+    ],
+    touch: [
+      'Do this: tap Belt and drag your finger from the highlighted tile under the Still all the way down onto the gap Sprinkler\'s Dumbwaiter. When the Spite gets there, tap BACK TO THE FLOOR and look at the Sprinkler.',
+      `Whatever a belt carries into a Dumbwaiter goes up to the building above. It keeps up to ${CAP} units of each supply it takes, and its pips light up in that supply's colour. Bottled Spite makes it hit harder: Store Brand takes a Sprinkler's hit from ${hit('sprinkler', 0)} to ${hit('sprinkler', 1)}.`,
+    ],
+    quip: 'Belt it all the way down to the gap Sprinkler, then go up and look.',
+    marks: (s) => wantedB(s, LINE.map(([x, y], n) => [x, y, 'conv', S, n === 0 ? 'From here' : n === LINE.length - 1 ? 'into the Sprinkler' : ''])),
+    done: (s, f) => !!stockOf(s, GAP_SPRINKLER) && f.floor === 0,
+    hint: (s, f) => {
+      for (const [x, y] of LINE) { const h = backHint(s, x, y, 'conv', S, 'Belt'); if (h) return h; }
+      if (!stockOf(s, GAP_SPRINKLER)) {
+        if (f.floor !== 1) return floorHint(f, 1);
+        return LINE.every(([x, y]) => isB(s, x, y, 'conv', S)) ? 'Watch the Spite ride down the line.' : null;
+      }
+      return floorHint(f, 0);
+    },
+    solve: () => [view(1), ...LINE.map(([x, y]) => placeB('conv', x, y, S)), view(0)],
+  },
+  {
+    title: 'An Unpaid Intern',
+    tool: 'intern',
+    view: 1,
+    text: [
+      `Do this: press Tab, click Intern (or press ${KEY('intern')}), press R until his arrow points LEFT, and click the highlighted tile beside the line. He stocks the Forklift Turret from the same belt.`,
+      `An Unpaid Intern takes off the belt behind him only what the tile in front of him wants, and hands it over; the rest rides on. One unit of Spite lasts the Forklift ${FORK_SHOTS} shots, and Store Brand takes its hit from ${hit('forklift', 0)} to ${hit('forklift', 1)}.`,
+    ],
+    touch: [
+      'Do this: tap CHECK IN THE BACK, tap Intern in the bar, tap the rotate button at the end of the bar until his arrow points LEFT, and tap the highlighted tile beside the line. He stocks the Forklift Turret from the same belt.',
+      `An Unpaid Intern takes off the belt behind him only what the tile in front of him wants, and hands it over; the rest rides on. One unit of Spite lasts the Forklift ${FORK_SHOTS} shots, and Store Brand takes its hit from ${hit('forklift', 0)} to ${hit('forklift', 1)}.`,
+    ],
+    quip: "An Unpaid Intern beside the line, facing the Forklift. He works for exposure. Like your OnlyFans.",
+    mood: 'smug',
+    marks: (s) => wantedB(s, [[...INTERN, 'intern', W, 'Intern, arrow left']]),
+    done: (s) => !!stockOf(s, FORKLIFT),
+    hint: (s, f) => floorHint(f, 1) || backHint(s, ...INTERN, 'intern', W, 'Intern'),
+    solve: () => [view(1), placeB('intern', ...INTERN, W)],
+  },
+  {
+    title: 'Share a line: the Splitter',
+    tool: (s) => (isB(s, ...SPLITTER, 'split') ? 'conv' : 'split'),
+    view: 1,
+    text: [
+      `Do this: right-click the highlighted belt above the gap Sprinkler to take it out, put a Splitter there (press ${KEY('split')}) with its arrow DOWN, then lay one belt from the tile left of it down into the second Sprinkler.`,
+      'A Splitter deals what comes in behind it to its front, left and right in turn, skipping a way that is full: one line now stocks both Sprinklers.',
+      `Two more parts for later. An Overpass (press ${KEY('over')}) lets two lines cross without mixing. A Clearance Bin (press ${KEY('bin')}) takes anything from any side and pays pennies for supplies: end a line that carries leftovers in one, so nothing nobody wants blocks it.`,
+    ],
+    touch: [
+      'Do this: tap Remove in the bar, then tap the highlighted belt above the gap Sprinkler, to take it out. Put a Splitter there with its arrow DOWN, then tap Belt and drag one belt from the tile left of it down into the second Sprinkler.',
+      'A Splitter deals what comes in behind it to its front, left and right in turn, skipping a way that is full: one line now stocks both Sprinklers.',
+      'Two more parts for later. An Overpass lets two lines cross without mixing. A Clearance Bin takes anything from any side and pays pennies for supplies: end a line that carries leftovers in one, so nothing nobody wants blocks it.',
+    ],
+    quip: 'Swap that belt for a Splitter, arrow down, and run a belt to the second Sprinkler.',
+    marks: (s) => wantedB(s, [[...SPLITTER, 'split', S, 'Splitter, arrow down'], [...BRANCH, 'conv', S, 'Belt']]),
+    done: (s) => isB(s, ...SPLITTER, 'split', S) && !!stockOf(s, SIDE_SPRINKLER),
+    hint: (s, f) => floorHint(f, 1)
+      || (isB(s, ...SPLITTER, 'conv') ? 'The belt is still there. Right-click the highlighted belt to take it out, then put the Splitter in its place.' : null)
+      || backHint(s, ...SPLITTER, 'split', S, 'Splitter') || backHint(s, ...BRANCH, 'conv', S, 'Belt'),
+    solve: () => [view(1), removeB(...SPLITTER), placeB('split', ...SPLITTER, S), placeB('conv', ...BRANCH, S)],
+  },
+  {
+    title: 'Running dry',
+    wave: DRY_WAVE,
+    view: (s) => (cutDone(s) ? 0 : 1),
+    text: [
+      `Do this: right-click the highlighted belt (the one the Intern takes from) to take it out, press Tab to go back up, and press OPEN THE DOORS for ${DRY_CROWD} Coupon Clippers, one a second. Watch the Forklift Turret (5x at the top speeds it up).`,
+      `Every shot uses up stock. A unit of Spite lasts the Forklift ${FORK_SHOTS} shots and it holds ${CAP}, about a minute of shooting. With its belt gone nothing replaces them, and when the last is used a red OUT OF SPITE pops up over it: it is back to its plain self until more comes up. Kept fed, a building refills between shoppers.`,
+    ],
+    touch: [
+      `Do this: tap Remove in the bar, then tap the highlighted belt (the one the Intern takes from), to take it out. Tap BACK TO THE FLOOR and tap OPEN THE DOORS for ${DRY_CROWD} Coupon Clippers, one a second. Watch the Forklift Turret (5x at the top speeds it up).`,
+      `Every shot uses up stock. A unit of Spite lasts the Forklift ${FORK_SHOTS} shots and it holds ${CAP}, about a minute of shooting. With its belt gone nothing replaces them, and when the last is used a red OUT OF SPITE pops up over it: it is back to its plain self until more comes up. Kept fed, a building refills between shoppers.`,
+    ],
+    quip: 'Cut the Intern\'s belt, go up, open the doors and watch the Forklift run dry. Performance anxiety: you know it well.',
+    mood: 'smug',
+    marks: (s) => (cutDone(s) ? [] : [{ x: CUT[0], y: CUT[1], f: 1, label: 'Take this out', del: true }]),
+    done: (s, f) => f.outs.some((o) => o.endsWith(':dmg')) && f.waveEnds >= 1,
+    hint: (s, f) => {
+      if (f.waveEnds && !f.outs.some((o) => o.endsWith(':dmg'))) return cutDone(s) ? 'Nothing ran dry that time. Press OPEN THE DOORS again.' : 'Nothing ran dry: the Forklift was still fed. Right-click the highlighted belt to take it out.';
+      if (!cutDone(s)) return floorHint(f, 1) || 'Right-click the highlighted belt to take it out.';
+      return floorHint(f, 0) || watchHint('Watch for OUT OF SPITE over the Forklift.')(s, f);
+    },
+    solve: () => [view(1), removeB(...CUT), view(0), { c: 'start' }],
+  },
+  {
+    title: 'A better label: the Rebrander',
+    tool: (s) => (isB(s, ...REBRANDER, 'rebrand', S) ? 'conv' : 'rebrand'),
+    // (Only if the Forklift has filled up with Store Brand again: once it fires some, Name Brand goes up.)
+    wave: DRY_WAVE,
+    view: (s) => (isB(s, ...REBRANDER, 'rebrand', S) && isB(s, ...CUT, 'conv', S) ? 0 : 1),
+    doors: (s) => forkFull(s) && !forkBranded(s),
+    text: [
+      `Do this: press Tab, right-click the highlighted belt above the gap to take it out, put a Rebrander there (press ${KEY('rebrand')}) with its arrow DOWN, and lay the belt back in the gap. Then go up and watch the Forklift fill up again.`,
+      `A Rebrander puts a better label on any supply that goes through it, one brand up a pass: Store Brand, Name Brand, Premium, Platinum. Each pass is slower (${REBRAND_SECS.join(', ')} seconds a unit). Name Brand Spite takes the Forklift's hit to ${hit('forklift', 2)} (Store Brand: ${hit('forklift', 1)}), and the ring round its pip turns bronze; silver and gold are the next two.`,
+    ],
+    touch: [
+      'Do this: tap CHECK IN THE BACK, tap Remove in the bar, then tap the highlighted belt above the gap, to take it out. Put a Rebrander there with its arrow DOWN, and drag a belt back into the gap. Then go up and watch the Forklift fill up again.',
+      `A Rebrander puts a better label on any supply that goes through it, one brand up a pass: Store Brand, Name Brand, Premium, Platinum. Each pass is slower (${REBRAND_SECS.join(', ')} seconds a unit). Name Brand Spite takes the Forklift's hit to ${hit('forklift', 2)} (Store Brand: ${hit('forklift', 1)}), and the ring round its pip turns bronze; silver and gold are the next two.`,
+    ],
+    quip: 'A Rebrander in the line, arrow down, and the belt back. Same junk, fancier label, higher price. Your dating profile.',
+    mood: 'smug',
+    marks: (s) => wantedB(s, [[...REBRANDER, 'rebrand', S, 'Rebrander, arrow down'], [...CUT, 'conv', S, 'Belt']]),
+    done: (s) => forkBranded(s),
+    hint: (s, f) => {
+      if (isB(s, ...REBRANDER, 'conv')) return floorHint(f, 1) || 'The belt is still there. Right-click the highlighted belt to take it out, then put the Rebrander in its place.';
+      if (!isB(s, ...REBRANDER, 'rebrand', S)) return floorHint(f, 1) || backHint(s, ...REBRANDER, 'rebrand', S, 'Rebrander');
+      if (!isB(s, ...CUT, 'conv', S)) return floorHint(f, 1) || backHint(s, ...CUT, 'conv', S, 'Belt') || 'Lay a belt back in the gap, down into the line.';
+      if (forkFull(s)) return 'The Forklift filled up with Store Brand. Press OPEN THE DOORS: once it has fired some, Name Brand goes up.';
+      return floorHint(f, 0) || 'Name Brand is on its way up. Watch the Forklift\'s pip.';
+    },
+    solve: () => [view(1), removeB(...REBRANDER), placeB('rebrand', ...REBRANDER, S), placeB('conv', ...CUT, S), view(0)],
+  },
+
+  // ---- Part 3: dads, gym bros, money --------------------------------------------------------------
+  {
+    title: 'Razor Wire: pick a direction',
+    tool: 'wire',
+    view: 0,
+    text: [
+      'Do this: click Wire in the bar (or press Z), then click the Forklift Turret once. Its wire now points north, up the screen.',
+      `A building with a wire direction covers its own tiles and the ${BACK.wireReach} beyond it that way, and while it holds Razor Wire no dad can step on them. This one has none yet, so its wire is only planned (dashed), and the floor shows two routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with it.`,
+      'Click again to turn it round; a direction that would wall the dads in is skipped.',
+    ],
+    touch: [
+      'Do this: tap Wire in the bar, then tap the Forklift Turret once. Its wire now points north, up the screen.',
+      `A building with a wire direction covers its own tiles and the ${BACK.wireReach} beyond it that way, and while it holds Razor Wire no dad can step on them. This one has none yet, so its wire is only planned (dashed), and the floor shows two routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with it.`,
+      'Tap again to turn it round; a direction that would wall the dads in is skipped.',
+    ],
+    quip: 'The Wire tool on the Forklift, once: its wire points north.',
+    marks: (s) => {
+      if (!is(s, ...FORKLIFT, 'forklift')) return wanted(s, [[...FORKLIFT, 'forklift', undefined, 'Forklift']]);
+      return forklift(s).wd === WIRE_DIR ? [] : [{ x: FORKLIFT[0], y: FORKLIFT[1], k: 'forklift', wd: WIRE_DIR, label: 'Wire it north' }];
+    },
+    done: (s) => is(s, ...FORKLIFT, 'forklift') && forklift(s).wd === WIRE_DIR,
+    hint: (s, f) => floorHint(f, 0) || tileHint(s, ...FORKLIFT, 'forklift', undefined, 'Forklift')
+      || (is(s, ...FORKLIFT, 'forklift') && forklift(s).wd !== undefined ? `Its wire points ${['east', 'south', 'west', 'north'][forklift(s).wd]}. Click it again until it points north.` : null),
+    solve: () => [view(0), { c: 'wire', x: FORKLIFT[0], y: FORKLIFT[1], d: WIRE_DIR }],
+  },
+  {
+    title: 'Razor Wire: the Barb Bender',
+    tool: 'bender',
+    wave: DAD_WAVE,
+    view: (s) => (isB(s, ...BENDER, 'bender', E) ? 0 : 1),
+    text: [
+      `Do this: press Tab, click Bender (or press ${KEY('bender')}), press R until its arrow points RIGHT, and click the highlighted tile between the second Returns Drop and the Forklift's Dumbwaiter. Then go back up and press OPEN THE DOORS for ${DAD_COUNT} dads.`,
+      `With Razor Wire in it the Forklift's wire is live. A dad walks into it, is turned away and goes round, under the Forklift's fire. Each dad turned away uses one: a unit of Store Brand turns away ${WIRE_TURNS}, Platinum many more. When it runs out the wire is only planned again, and dads walk straight through.`,
+    ],
+    touch: [
+      `Do this: tap CHECK IN THE BACK, tap Bender in the bar, tap the rotate button at the end of the bar until its arrow points RIGHT, and tap the highlighted tile between the second Returns Drop and the Forklift's Dumbwaiter. Then go back up and tap OPEN THE DOORS for ${DAD_COUNT} dads.`,
+      `With Razor Wire in it the Forklift's wire is live. A dad walks into it, is turned away and goes round, under the Forklift's fire. Each dad turned away uses one: a unit of Store Brand turns away ${WIRE_TURNS}, Platinum many more. When it runs out the wire is only planned again, and dads walk straight through.`,
+    ],
+    quip: "A Barb Bender, arrow right, then open the doors. Razor wire for dads: it's like a vasectomy for their schedule.",
+    mood: 'smug',
+    marks: (s) => wantedB(s, [[...BENDER, 'bender', E, 'Barb Bender, arrow right']]),
+    done: (s, f) => !!forklift(s) && wireLive(forklift(s)) && f.waveEnds >= 1 && f.turned >= 1,
+    hint: (s, f) => {
+      if (!isB(s, ...BENDER, 'bender', E)) return floorHint(f, 1) || backHint(s, ...BENDER, 'bender', E, 'Barb Bender');
+      if (!forklift(s) || !wireLive(forklift(s))) return 'Wait for the Razor Wire to reach the Forklift.';
+      if (f.waveEnds && !f.turned) return 'No dad walked into the wire. Press OPEN THE DOORS again.';
+      return floorHint(f, 0) || watchHint('Watch the dads walk into the wire and turn away.')(s, f);
+    },
+    solve: () => [view(1), placeB('bender', ...BENDER, E), view(0), { c: 'start' }],
   },
   {
     title: 'Gym Bros',
     tool: (s, f) => (f.waveEnds && s.rubble.length ? 'rebuild' : 'crate'),
+    view: 0,
     wave: [{ k: 'gymbro', n: 1, gap: 1, at: 0 }],
     text: [
       'Do this: put Crates (press 1) on the three highlighted tiles by the entrance, then OPEN THE DOORS for one Gym Bro. He walks straight through crates instead of round them.',
-      'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, for half of what you paid for it.',
-      'A Gym Bro smashes any Crate Stack in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a sprinkler, a sample table, a sign. Each thing you build survives one hit in a sales event (more for the biggest security); Duct Tape from The Back soaks up more.',
-      `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that Duct Tape soaks up still uses one of his.`,
-      'The money goes the moment you press. The building goes back when nothing is in the way, and every new wreck needs another press.',
+      'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back what he wrecked, for half of what you paid for it.',
+      `He smashes any Crate Stack in his way, and now and then something else he passes. He has only ${HITS_WORD} hits in him a visit and needs ${TUNE.smashWait} seconds to get his breath back after each; while he rests he walks round like anyone else. The money for a rebuild goes the moment you press, and the building goes back when nothing is in the way.`,
     ],
     touch: [
       'Do this: drag Crates from the bar onto the three highlighted tiles by the entrance, then tap OPEN THE DOORS for one Gym Bro. He walks straight through crates instead of round them.',
-      'Do this: when he has gone, tap the Rebuild button in the bar to put back everything he wrecked, for half of what you paid for it.',
-      'A Gym Bro smashes any Crate Stack in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a sprinkler, a sample table, a sign. Each thing you build survives one hit in a sales event (more for the biggest security); Duct Tape from The Back soaks up more.',
-      `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that Duct Tape soaks up still uses one of his.`,
-      'The money goes the moment you tap. The building goes back when nothing is in the way, and every new wreck needs another tap.',
+      'Do this: when he has gone, tap the Rebuild button in the bar to put back what he wrecked, for half of what you paid for it.',
+      `He smashes any Crate Stack in his way, and now and then something else he passes. He has only ${HITS_WORD} hits in him a visit and needs ${TUNE.smashWait} seconds to get his breath back after each; while he rests he walks round like anyone else. The money for a rebuild goes the moment you tap, and the building goes back when nothing is in the way.`,
     ],
     quip: 'Crates by the entrance, open the doors, then press Rebuild for whatever he smashes.',
     mood: 'angry',
@@ -455,6 +717,7 @@ export const STEPS = [
     },
     done: (s, f) => f.waveEnds >= 1 && f.smashedCrate >= 1 && !s.rubble.length && DOOR_CRATES.every(([x, y]) => is(s, x, y, 'crate')),
     hint: (s, f) => {
+      if (f.floor !== 0) return floorHint(f, 0);
       if (s.phase === 'wave') return 'Watch him smash through the crates, then get his breath back.';
       if (f.waveEnds && s.rubble.length) return 'Press B (or the Rebuild button in the build bar) to put back what he wrecked.';
       for (const [x, y] of DOOR_CRATES) { const h = tileHint(s, x, y, 'crate', undefined, 'Crate'); if (h) return h; }
@@ -462,30 +725,80 @@ export const STEPS = [
       if (f.waveEnds && !f.smashedCrate) return 'He never reached a crate. Press OPEN THE DOORS to send him in again.';
       return f.waveEnds ? null : 'Now press OPEN THE DOORS at the top of the screen.';
     },
-    solve: () => [...DOOR_CRATES.map(([x, y]) => place('crate', x, y)), { c: 'start' }],
+    solve: () => [view(0), ...DOOR_CRATES.map(([x, y]) => place('crate', x, y)), { c: 'start' }],
     after: () => [{ c: 'rebuild' }],
+  },
+  {
+    title: 'Reinforce the crates',
+    tool: (s, f) => (f.waveEnds && s.rubble.length ? 'rebuild' : 'reinforce'),
+    view: 0,
+    wave: [{ k: 'gymbro', n: 1, gap: 1, at: 0 }],
+    text: [
+      'Do this: click Reinforce in the bar (or press U), click each of the three crates by the entrance once, then press OPEN THE DOORS for another Gym Bro.',
+      `Each level is one more gym bro hit a Crate Stack takes in a sales event, up to ${REINFORCE_MAX} levels (${REINFORCE_FIRST} for the first, more for each after). Security soaks up hits with Duct Tape from The Back instead: each roll it holds takes ${TAPE_HITS === 1 ? 'a hit' : `${TAPE_HITS} hits`} for it at Store Brand, more at the better brands.`,
+    ],
+    touch: [
+      'Do this: tap Reinforce in the bar, tap each of the three crates by the entrance once, then tap OPEN THE DOORS for another Gym Bro.',
+      `Each level is one more gym bro hit a Crate Stack takes in a sales event, up to ${REINFORCE_MAX} levels (${REINFORCE_FIRST} for the first, more for each after). Security soaks up hits with Duct Tape from The Back instead: each roll it holds takes ${TAPE_HITS === 1 ? 'a hit' : `${TAPE_HITS} hits`} for it at Store Brand, more at the better brands.`,
+    ],
+    quip: 'Reinforce the three crates by the door, then let the next meathead in.',
+    mood: 'smug',
+    marks: (s) => {
+      if (s.phase === 'wave') return [];
+      const out = s.rubble.map(({ i }, n) => ({ x: i % s.w, y: (i / s.w) | 0, label: n ? '' : 'Wrecked', fix: 'rebuild' }));
+      for (const [x, y] of DOOR_CRATES) {
+        if (out.some((m) => m.x === x && m.y === y)) continue;
+        if (!is(s, x, y, 'crate')) out.push({ x, y, label: '', k: 'crate' });
+        else if ((at(s, x, y).r | 0) < 1) out.push({ x, y, label: out.length ? '' : 'Reinforce', k: 'crate', r: 1 });
+      }
+      return out;
+    },
+    done: (s, f) => f.waveEnds >= 1 && doorCratesDone(s) && !s.rubble.length,
+    hint: (s, f) => {
+      if (f.floor !== 0) return floorHint(f, 0);
+      if (s.phase === 'wave') return 'Watch him hit a reinforced crate, and the crate hold.';
+      if (s.rubble.length) return 'Press B (or the Rebuild button in the build bar) to put back what he wrecked.';
+      if (!doorCratesDone(s)) return 'Click each highlighted crate once with Reinforce (press U).';
+      return f.waveEnds ? null : 'Now press OPEN THE DOORS at the top of the screen.';
+    },
+    solve: () => [view(0), ...DOOR_CRATES.map(([x, y]) => ({ c: 'reinforce', x, y })), { c: 'start' }],
+    after: () => [{ c: 'rebuild' }],
+  },
+  {
+    title: 'Money, and MORE JUNK',
+    view: 1,
+    text: [
+      'Do this: press Tab, click the first Returns Drop (with nothing held), and press MORE JUNK on its card.',
+      'Your money comes from beating sales events: each one pays its event pay (shared evenly when you play with friends), plus a speed bonus for clearing the floor fast once the last shopper is in (the EVENT PAY panel shows it draining). Boss bounties and the Clearance Bin\'s pennies come on top. Refunds come out of it.',
+      `It buys buildings on both floors, and MORE JUNK: a Returns Drop that puts out junk faster, for good (${MORE_JUNK} for the first level). More junk is more supplies.`,
+    ],
+    touch: [
+      'Do this: tap CHECK IN THE BACK, tap the first Returns Drop with nothing picked, and tap MORE JUNK on its card.',
+      'Your money comes from beating sales events: each one pays its event pay (shared evenly when you play with friends), plus a speed bonus for clearing the floor fast once the last shopper is in (the EVENT PAY panel shows it draining). Boss bounties and the Clearance Bin\'s pennies come on top. Refunds come out of it.',
+      `It buys buildings on both floors, and MORE JUNK: a Returns Drop that puts out junk faster, for good (${MORE_JUNK} for the first level). More junk is more supplies.`,
+    ],
+    quip: 'Down to the Returns Drop and buy MORE JUNK. Spending money on garbage: finally, something you have experience in.',
+    mood: 'smug',
+    marks: (s) => ((dropAt(s) && dropAt(s).lv >= 1) ? [] : [{ x: DROP[0], y: DROP[1], f: 1, label: 'Returns Drop', act: 'more' }]),
+    done: (s) => !!s.back && s.back.some((p) => p && p.k === 'drop' && p.lv >= 1),
+    hint: (s, f) => floorHint(f, 1) || 'Click the Returns Drop with nothing held, then MORE JUNK on its card.',
+    solve: () => [view(1), { c: 'dropUp', x: DROP[0], y: DROP[1] }],
   },
   {
     title: 'Training complete',
     manual: true,
     last: true,
     text: [
-      'Do this: press Play a real game when you are ready, or stay here and practise for as long as you like. Pick any button in the build bar to see what it does and how to use it.',
-      'That is every building on the shop floor. In a real game, cash is limited, each player has his own (every sales event he survives pays him, more if the floor is cleared fast; refunds are split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
-      'The real store has many more kinds of shopper than these three, each with its own trick, and the Employee Handbook lists them all: press ? at the top right, then 📖 Employee Handbook.',
-      'A real store is bigger than this one. Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. With friends, each of you gets your own entrance to look after.',
-      'P, or the pause button beside the speed buttons at the top, stops the store for everyone; 1x to 5x set how fast it runs.',
-      'A good opening: a wall of Crate Stacks with one gap, sprinklers and a wet floor sign at the gap, and a forklift covering the long way down to it. Then more forklifts along the rest of the route, and a Barcode Laser down the longest straight stretch of it.',
-      `${THE_BACK} Press Tab, or CHECK IN THE BACK at the top, to go down there and back.`,
+      'Do this: press Play a real game when you are ready, or stay and practise as long as you like.',
+      'A real game is 20 sales events with a short build break between them, in a bigger store with a Returns Drop or more per player. Cash is limited, each player has his own, refunds are split, and the shoppers get more patient every event.',
+      'There are many more kinds of shopper than these three. The Employee Handbook lists them all, with every building, part, supply and brand: press ? at the top right, then 📖 Employee Handbook.',
+      'Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. P pauses; 1x to 5x set the speed.',
     ],
     touch: [
-      'Do this: tap Play a real game when you are ready, or stay here and practise for as long as you like. Hold your finger on any button in the build bar to see what it does and how to use it.',
-      'That is every building on the shop floor. In a real game, cash is limited, each player has his own (every sales event he survives pays him, more if the floor is cleared fast; refunds are split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
-      'The real store has many more kinds of shopper than these three, each with its own trick, and the Employee Handbook lists them all: tap ? at the top right (under ☰ on a phone), then 📖 Employee Handbook.',
-      'A real store is bigger than this one. Drag the floor with nothing picked to move the view, pinch with two fingers to zoom, tap MAP to see the whole floor and HOME to go back to your entrance. With friends, each of you gets your own entrance to look after.',
-      'The pause button beside the speed buttons (under ☰ on a phone) stops the store for everyone; 1x to 5x set how fast it runs.',
-      'A good opening: a wall of Crate Stacks with one gap, sprinklers and a wet floor sign at the gap, and a forklift covering the long way down to it. Then more forklifts along the rest of the route, and a Barcode Laser down the longest straight stretch of it.',
-      `${THE_BACK} Tap CHECK IN THE BACK at the top to go down there and back.`,
+      'Do this: tap Play a real game when you are ready, or stay and practise as long as you like.',
+      'A real game is 20 sales events with a short build break between them, in a bigger store with a Returns Drop or more per player. Cash is limited, each player has his own, refunds are split, and the shoppers get more patient every event.',
+      'There are many more kinds of shopper than these three. The Employee Handbook lists them all, with every building, part, supply and brand: tap ? at the top right (under ☰ on a phone), then 📖 Employee Handbook.',
+      'Drag the floor with nothing picked to move the view, pinch to zoom, tap MAP to see the whole floor and HOME to go back to your entrance. The pause button and 1x to 5x are beside the clock (under ☰ on a phone).',
     ],
     quip: "Training complete. Press Play a real game when you're ready. You've met the minimum standard. Briefly, and from below.",
     mood: 'smug',
@@ -494,27 +807,38 @@ export const STEPS = [
   },
 ];
 
-/** Where part 2, "The difficult customers", starts. */
+/** Where part 2, The Back, starts. */
 export const PART_TWO = STEPS.findIndex((st) => st.part2);
 
 const freshFacts = () => ({
-  nopes: {}, waveStarts: 0, waveEnds: 0,
+  floor: 0, nopes: {}, waveStarts: 0, waveEnds: 0,
   slip: 0, watched: 0, beam: 0, smashed: 0, smashedCrate: 0, rebuilt: 0,
+  made: 0, spite: 0, stocked: 0, outs: [], turned: 0,
 });
 /** Simulation events that are simply counted into the facts of the same name. */
-const COUNTED = new Set(['slip']);
+const COUNTED = new Set(['slip', 'stocked']);
 
 /**
  * Runs the training shift on a host session whose game was created with { training: true }.
  * @param {Object} session a HostSession
  * @param {Object} [o]
  * @param {() => void} [o.onChange] called whenever the step changes
+ * @param {() => number} [o.floor] the floor the player is looking at (0 the shop, 1 The Back; it
+ *   is not in the game's state). Left out (tests), the floor the `view` commands last chose.
+ * @param {(f: number) => void} [o.setFloor] looks at a floor, for Skip and ?step= jumps
  */
-export function createTutorial(session, { onChange = () => {} } = {}) {
+export function createTutorial(session, { onChange = () => {}, floor = null, setFloor = null } = {}) {
   let index = -1;
   let facts = freshFacts();
   /** Result of the most recent wave, shown at the top of the next step. */
   let lastWave = null;
+  let looking = 0; // the floor the `view` commands chose (when nobody tells us)
+  const floorNow = () => (floor ? (floor() ? 1 : 0) : looking);
+  // (The training game has no map, so no Returns Drops: the lessons on The Back put down their own,
+  // before anything is drawn.)
+  if (session.state) addTrainingDrops(session.state, TRAINING_DROPS);
+  /** The facts, with the floor as it is now. */
+  const now = () => { facts.floor = floorNow(); return facts; };
 
   const offFx = session.on('fx', (events) => {
     for (const e of events) {
@@ -523,6 +847,9 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
       if (e.e === 'rail') facts.beam = Math.max(facts.beam, e.n);
       if (e.e === 'smash') { facts.smashed++; if (e.k === 'crate') facts.smashedCrate++; }
       if (e.e === 'rebuilt') facts.rebuilt += e.n;
+      if (e.e === 'made') { facts.made++; if (itemType(e.c) === 1) facts.spite++; }
+      if (e.e === 'stockOut') facts.outs.push(`${e.i}:${e.t}`);
+      if (e.e === 'turned' && !e.free) facts.turned++;
       if (e.e === 'waveStart') facts.waveStarts++;
       if (e.e === 'waveEnd') {
         facts.waveEnds++;
@@ -530,7 +857,7 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
         // The doors were opened before the lesson was ready (or the shoppers did not show what
         // the lesson is about): line the same shoppers up again so the player can have another go.
         const st = STEPS[index];
-        if (st && st.wave && !st.done(session.state, facts) && !(st.after && session.state.rubble.length)) {
+        if (st && st.wave && !st.done(session.state, now()) && !(st.after && session.state.rubble.length)) {
           queueTrainingWave(session.state, st.wave);
         }
       }
@@ -552,12 +879,25 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
   }
 
   /**
+   * Carries out one of a lesson's solve() commands: a game command goes to the session; the
+   * training shift's own { c: 'view', f } looks at that floor. Returns the session's answer.
+   */
+  function act(cmd) {
+    if (cmd && cmd.c === 'view') {
+      looking = cmd.f ? 1 : 0;
+      if (setFloor) setFloor(looking);
+      return { ok: true };
+    }
+    return session.send(cmd);
+  }
+
+  /**
    * Sends a command for autoplay. A refusal normally reaches the facts as a 'nope' message; when
    * the screen has kept those quiet (jumping ahead from the panel), it is counted from the answer.
    */
   function sendCounted(cmd) {
     const before = Object.values(facts.nopes).reduce((a, b) => a + b, 0);
-    const r = session.send(cmd);
+    const r = act(cmd);
     if (r && r.ok === false && Object.values(facts.nopes).reduce((a, b) => a + b, 0) === before) {
       facts.nopes[r.why] = (facts.nopes[r.why] || 0) + 1;
     }
@@ -566,7 +906,7 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
   /** Sends a step's `after` commands once its wave is over, a single time. */
   function finish(st, sent) {
     if (!sent && st.after && facts.waveEnds && session.state.phase === 'build') {
-      for (const cmd of st.after(session.state)) session.send(cmd);
+      for (const cmd of st.after(session.state)) act(cmd);
       return true;
     }
     return sent;
@@ -578,33 +918,38 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
     get step() { return STEPS[index]; },
     get lastWave() { return lastWave; },
     /** What has happened during the current step (see the list at the top of this file). */
-    get facts() { return facts; },
+    get facts() { return now(); },
+    /** The floor the player is looking at, as the lessons see it. */
+    get floor() { return floorNow(); },
     /** The build-bar button the current step points at, or null. */
     tool() {
       const st = STEPS[index];
       if (!st || !st.tool) return null;
-      return typeof st.tool === 'function' ? st.tool(session.state, facts) : st.tool;
+      return typeof st.tool === 'function' ? st.tool(session.state, now()) : st.tool;
     },
     /** True once the current step's task is done (never for explanation-only steps). */
     check() {
       const st = STEPS[index];
-      return !!st && !st.manual && st.done(session.state, facts);
+      return !!st && !st.manual && st.done(session.state, now());
     },
+    /** Every tile the step marks, on both floors (each with f: 1 if it is in The Back). */
     marks() {
       const st = STEPS[index];
-      return st && st.marks ? st.marks(session.state, facts) : [];
+      return st && st.marks ? st.marks(session.state, now()) : [];
     },
     hint() {
       const st = STEPS[index];
-      return (st && st.hint && st.hint(session.state, facts)) || null;
+      return (st && st.hint && st.hint(session.state, now())) || null;
     },
+    /** Carries out one command the way the lessons' solve() lists them (see act). */
+    act,
     start() { enter(0); },
     next() { if (index < STEPS.length - 1) enter(index + 1); },
     back() { if (index > 0) enter(index - 1); },
     /** Does the current step for the player, then moves on. Waves are not waited for. */
     skip() {
       const st = STEPS[index];
-      for (const cmd of st.solve(session.state)) if (cmd.c !== 'start') session.send(cmd);
+      for (const cmd of st.solve(session.state)) if (cmd.c !== 'start') act(cmd);
       api.next();
     },
     /**
@@ -620,12 +965,12 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
         for (const cmd of st.solve(session.state)) sendCounted(cmd);
         if (!st.manual) {
           let sent = false;
-          for (let n = 0; n < 240 && !st.done(session.state, facts); n++) { // up to 2 minutes
+          for (let n = 0; n < 240 && !st.done(session.state, now()); n++) { // up to 2 minutes
             sent = finish(st, sent);
             session.fastForward(15);
           }
           finish(st, sent);
-          if (!st.done(session.state, facts)) stuck.push(index);
+          if (!st.done(session.state, now())) stuck.push(index);
         }
         // Only the lesson it stops at gets DEB's line: the others are history.
         enter(index + 1, index + 1 < target);
@@ -641,3 +986,4 @@ export function createTutorial(session, { onChange = () => {} } = {}) {
   };
   return api;
 }
+

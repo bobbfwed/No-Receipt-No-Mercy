@@ -26,10 +26,16 @@ const RULES = [
   [/Click or drag over buildings\. Right-clicking does the same without picking this tool\./g, 'Tap a building to remove it, or slide your finger onto it and lift. Tapping a building with nothing picked also offers Remove.'],
   // The Wire tool's card (0.4): a tap steps the wire round, and round to off.
   [/ Right-click takes it off\./g, ' Tapping on round to off takes it off, or tap the building with nothing picked and use its card.'],
+  // The training shift in The Back (0.4): the floor switch, and parts, which have no card on a
+  // finger, so they come out with the Remove tool and go down again the right way round.
+  [/\b[Pp]ress Tab \(or ([A-Z ]+), bottom right of the floor\)/g, 'Tap $1 (bottom right of the floor)'],
+  [/[Rr]ight-click the highlighted (\w+) to take it out/g, 'Tap Remove in the bar, then tap the highlighted $1, to take it out'],
+  [/Point at it with nothing held and press R to turn it\./g, 'Tap Remove in the bar, tap it, and place it again the right way round.'],
   [/Right-click it to remove it/g, 'Tap it and choose Remove'],
   [/Right-click to remove/g, 'Tap, then Remove'],
-  // "(or press 2)", "(press 7)": the number keys (and - and =, the Laser's and the Salesman's).
-  [/ \((?:or )?press [\d=-]\)/g, ''],
+  // "(or press 2)", "(press 7)": the number keys (and - and =, the Laser's and the Salesman's), and
+  // since 0.4 the letters of the Wire and Reinforce tools: "(or press Z)", "(press U)".
+  [/ \((?:or )?press [\dA-Z=-]\)/g, ''],
   // What is left: single words.
   [/\bclicking\b/g, 'tapping'], [/\bClicking\b/g, 'Tapping'],
   [/\bclick\b/g, 'tap'], [/\bClick\b/g, 'Tap'],

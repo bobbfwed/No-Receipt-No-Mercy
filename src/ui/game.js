@@ -113,7 +113,7 @@ export function startGame(session, {
   bar.el.append(touchUi.bar);
   const deb = createDeb();
   const training = tutorial && session.isHost
-    ? createTutorialPanel(session, { onExit, highlight: bar.highlight, playSound })
+    ? createTutorialPanel(session, { onExit, highlight: bar.highlight, playSound, floor: () => input.floor, setFloor: (f) => input.setFloor(f) })
     : null;
 
   // A small map of the whole store, for maps too big to see at once. Click it to jump there.
@@ -223,7 +223,7 @@ export function startGame(session, {
   const pointer = training ? createPointer({
     root, canvas, renderer, input, selected: () => touchUi.selected, target: (ui) => training.arrow(ui), touch: isTouch, marks: () => training.marks(), card: bar.info,
   }) : null;
-  if (sound) sound.attach(session);
+  if (sound) sound.attach(session, { floor: () => input.floor });
   // Safari zooms the page with two fingers whatever CSS says; the floor has its own pinch.
   const noPageZoom = (e) => e.preventDefault();
   document.addEventListener('gesturestart', noPageZoom);

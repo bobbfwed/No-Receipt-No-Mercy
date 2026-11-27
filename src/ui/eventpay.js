@@ -182,7 +182,7 @@ export function createPayPanel(session, { prefs: pf = prefs() } = {}) {
     const rule = `Speed bonus: the clock starts once the event's last shopper is in. Clear the floor within ${TUNE.speedBest} s for the full ${money(v.max)}; it drains to nothing at ${mmss(v.par)}${v.par > TUNE.speedPar ? ' (a boss event: twice the usual par)' : ''}. Scaled by the share of shoppers stopped rather than refunded.`;
     const now = [
       office ? `You are Head Office: this is what each of the store's players gets for beating your shoppers. Make them slow.`
-        : ways > 1 ? `Beat the sales event and each of the ${ways} store players on shift gets the whole ${money(v.pay)}, not a share of it.`
+        : ways > 1 ? `Beat the sales event and each of the ${ways} store players on shift gets ${money(v.pay)}: the store's pay grows with its crowd and is shared evenly.`
           : `Beat the sales event and the whole ${money(v.pay)} is yours.`,
       rule,
       'Opening the doors early just opens them: The Back does nothing in the time you skip.',

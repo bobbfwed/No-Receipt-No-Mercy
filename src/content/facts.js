@@ -5,13 +5,18 @@ import {
   SHOPPERS, SUPERS, BUILD, TUNE, SETTINGS, TICK_HZ, waveSpec, statsOf, priceOf,
   tracksOf, usesPer, BACK, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
   patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize, eventPay, speedPar,
-  makeTicks, rebrandTicks, stockCap, dropUpCost, SUPPLY_TRACKS, reinforceCost,
+  makeTicks, rebrandTicks, stockCap, dropUpCost, SUPPLY_TRACKS, reinforceCost, takesSupply, itemCode,
 } from '../sim/index.js';
 import { EDGE_HELP } from './help.js';
 import { TIER_NAMES, SUPPLIES, stockTracks, junkPerMinute } from './supplies.js';
 
-/** The order shoppers are listed in: the order they first turn up. */
-export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'trader', 'flasher', 'preggo', 'cosplay'];
+/**
+ * The order shoppers are listed in: the order they first turn up, worked out from the rules (the
+ * event a kind first comes in is tuned: 0.4 moved the dads' first line), kinds that first come in
+ * the same event in the order below.
+ */
+export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'trader', 'flasher', 'preggo', 'cosplay']
+  .map((k, n) => [k, n]).sort((a, b) => (firstWave(a[0]) || 99) - (firstWave(b[0]) || 99) || a[1] - b[1]).map(([k]) => k);
 /** The shop floor's buildings: the one plain wall, then the security (together, every SHOP_KINDS). */
 export const WALL_ORDER = ['crate'];
 export const SECURITY_ORDER = ['sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman'];
@@ -138,6 +143,8 @@ export function payFacts(difficulty = SETTINGS.defaults.difficulty) {
   const game = { difficulty };
   return {
     base: TUNE.payBase, step: TUNE.payStep, pay: (n) => eventPay(game, n),
+    // What each of n store players gets, as a share of what one player alone would (0.4, stage 7).
+    each: (n) => (1 + TUNE.crowdPerPlayer * (Math.max(1, n) - 1)) / Math.max(1, n),
     share: TUNE.speedShare, best: TUNE.speedBest, par: speedPar(1), bossPar: speedPar(TUNE.bossEvery),
   };
 }
@@ -148,8 +155,10 @@ export function payFacts(difficulty = SETTINGS.defaults.difficulty) {
  */
 export function payText(difficulty = SETTINGS.defaults.difficulty) {
   const p = payFacts(difficulty);
-  return `Money comes from beating sales events: each one pays every store player the whole amount, not a share (${money(p.pay(1))} for the first, ${money(p.pay(10))} for the tenth, ${money(p.pay(20))} for the twentieth). `
-    + `On top comes a speed bonus of up to ${pct(p.share)} of that: its clock starts when the event's last shopper has come in, and clearing the floor within ${p.best} seconds earns all of it, draining to nothing at ${p.par} seconds (${p.bossPar} in a boss event). `
+  // (0.4, stage 7: the store's pay grows with its crowd and is shared evenly; with ${p.each(n)} the
+  // share each of n players gets.)
+  return `Money comes from beating sales events (${money(p.pay(1))} for the first, ${money(p.pay(10))} for the tenth, ${money(p.pay(20))} for the twentieth, playing alone). With friends the store's pay grows with its bigger crowd and is shared evenly: each of two players gets ${pct(p.each(2))} of that, each of three ${pct(p.each(3))}. `
+    + `On top comes a speed bonus of up to ${pct(p.share)} of the event pay: its clock starts when the event's last shopper has come in, and clearing the floor within ${p.best} seconds earns all of it, draining to nothing at ${p.par} seconds (${p.bossPar} in a boss event). `
     + `It is scaled by the share of that event's shoppers stopped rather than refunded. Opening the doors early just opens them: The Back does nothing in the time skipped.`;
 }
 
@@ -473,4 +482,62 @@ export function tierFacts() {
  */
 export function unitFacts() {
   return SECURITY_ORDER.map((k) => ({ k, name: BUILD[k].name, uses: usesPer(k, 'dmg', 1), per: BUILD[k].tower ? 'shots' : 'shoppers' }));
+}
+
+/**
+ * How the whole game works (0.4, stage 6), in short sections for the Employee Handbook's first
+ * tab and the README: [{ id, title, text }], every number from the rules (a game without cards, on
+ * that difficulty). Written once here so the handbook and the README cannot tell two stories.
+ */
+export function howItWorks(difficulty = SETTINGS.defaults.difficulty) {
+  const p = payFacts(difficulty);
+  const tiers = tierFacts();
+  const units = unitFacts();
+  const rf = BUILD.crate.reinforce;
+  const turns = BACK.wireTurns.slice(1);
+  const ups = [];
+  for (let lv = 0; lv < 2; lv++) ups.push(money(dropUpCost(lv)));
+  const sup = Math.min(...Object.values(SHOPPERS).map((d) => d.sup.from));
+  return [
+    {
+      id: 'store', title: 'The store',
+      text: `Shoppers come in through the entrances (one per player) and walk to the tills. Each one who gets there takes a refund out of your cash; ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more for each extra player) and the store closes. A game is ${SETTINGS.defaults.waves} sales events unless the host picks another length, with a ${TUNE.buildSecs}-second build break between them (OPEN THE DOORS starts the next one early). From sales event ${sup} every kind of shopper has a gold super version, and every ${TUNE.bossEvery}th event the boss walks in too.`,
+    },
+    {
+      id: 'floor', title: 'The shop floor: the maze',
+      text: `Crate Stacks (${money(BUILD.crate.cost)}) and security block shoppers, so whatever you build is the route they walk: make it long and make it hurt. You can never block it completely. Security wears down patience until shoppers storm out empty-handed; Wet Floor Signs, Free Samples and the TV Salesman hold them in reach for longer. Each security building has a Dumbwaiter under it, which is how The Back stocks it.`,
+    },
+    {
+      id: 'back', title: 'The Back: the factory under the shop',
+      text: `Tab (or the floor switch) takes you down. Same grid, same walls, and nothing down there gets in a shopper's way. Returns Drops, put down by the store, cough up returned junk (${fmt(junkPerMinute(0))} pieces a minute each). Belts carry anything, ${fmt(laneSpeed())} tiles a second, the way their arrows point. A machine turns a piece of junk into a unit of supply every ${fmt(secs(makeTicks(PLAIN)))} seconds and puts it out of its front. A belt that runs into a Dumbwaiter sends what it carries up to the building above, which holds up to ${stockCap(null)} units of each supply it takes. An Unpaid Intern lifts what the tile in front of him wants off a passing belt, a Splitter shares one line between up to three, an Overpass lets two lines cross, and a Clearance Bin at the end of a line takes the leftovers for pennies so nothing jams.`,
+    },
+    {
+      id: 'supplies', title: 'Supplies and brands',
+      text: `Bottled Spite (Spite Still) makes security hit harder, Rage Cola (Cola Cannery) fire faster, Extension Cord (Cord Spooler) reach further; Duct Tape (Tape Winder) soaks up gym bro hits, and Razor Wire (Barb Bender) stops dads. The machines make ${tiers[0].name}. A Rebrander puts any supply up a brand, slower each time: ${tiers.slice(1).map((t) => `${t.name} in ${fmt(t.secs)} s`).join(', ')}. For Spite, Cola and Cord the brands count as ${tiers.map((t) => `+${t.level}`).join(', ')} levels; a ring round the pip shows the brand (bronze, silver, gold).`,
+    },
+    {
+      id: 'stock', title: 'Stock, and running dry',
+      text: `Stock is used up as a building works: a unit of Spite, Cola or Cord lasts ${units.map((u) => `${u.name} ${u.uses} ${u.per}`).join(', ')}, whatever its brand. A building that is not working keeps what it has, so a fed one refills between shoppers and between events. When a supply runs out a red OUT OF ... bubble pops up over it and it is back to as built. The pips over a building show what it holds; zoomed out, a green disc means everything it takes is stocked, amber some, a red ring none. A building wrecked or removed loses its stock.`,
+    },
+    {
+      id: 'dads', title: 'Dads and Razor Wire',
+      text: `Dads walk straight through every building; only the store's walls and live Razor Wire stop them. Pick up Wire (Z) and click a security building to give it a wire direction: it then covers its own tiles and the ${BACK.wireReach} beyond them that way. While it holds Razor Wire the wire is live, and a dad walks into it, is turned away and goes round; each wire charges a dad once, and a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads by brand. With no wire in stock it is only planned (dashed) and stops nobody${takesSupply({ k: 'forklift' }, itemCode(5, 1)) ? '' : '; a building takes Razor Wire only once it has a direction'}. The floor shows two blue routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with every planned wire stocked. A wire that would wall the dads in is refused.`,
+    },
+    {
+      id: 'gym', title: 'Gym bros, crates and rebuilding',
+      text: `A gym bro smashes through Crate Stacks and now and then something else he passes: ${TUNE.smashMax} hits a visit, with ${TUNE.smashWait} seconds' rest after each, while he walks round like anyone else. Reinforce (U) a crate for one more hit a sales event per level, up to ${rf.max} levels (${money(reinforceCost({ k: 'crate', r: 0 }))} for the first). Security soaks hits with Duct Tape instead (${tiers.map((t) => t.tape).join(', ')} hits a roll, by brand). Rebuild (B) puts a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it; the money goes at once and the building as soon as nothing is in the way.`,
+    },
+    {
+      id: 'thieves', title: 'Thieves',
+      text: `Shoppers who stop for free samples help themselves to stock as they walk past a building: one unit at a time, from the supply it holds most of, and stand there gloating for ${fmt(TUNE.grabSecs)} s. Card Traders, at a Midnight Release, rip out the best brand there is. Crates hold nothing worth stealing.`,
+    },
+    {
+      id: 'money', title: 'Money',
+      text: `${payText(difficulty)} Boss bounties and a Clearance Bin's pennies come on top. Each player has his own cash; the event pay is shared evenly, and so is everything else, refunds included. Money buys buildings on both floors and MORE JUNK: a Returns Drop's card sells levels that make it faster for good (${ups.join(', then ')}, and so on).`,
+    },
+    {
+      id: 'cards', title: 'The cards',
+      text: 'A game from the menu is dealt five cards before the first build break: two that screw you, two that help, one just weird. They change the rules for the whole game (prices, pay, how shoppers behave, how The Back works); the HAND panel shows them. The numbers in this handbook are for a game without cards.',
+    },
+  ];
 }

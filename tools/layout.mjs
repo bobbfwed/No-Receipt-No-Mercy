@@ -65,8 +65,12 @@ export const SITUATIONS = [
   { name: 'building held', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&hold=sprinkler&hover=12,9', max: 0.40 },
   { name: 'sheet open', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&select=9,8', max: 0.45 },
   { name: 'The Back', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&back=1', max: 0.30 },
+  // (The training shift's steps, 0-based: 5 Free Samples, 8 the Forklift and the dads, 10 the
+  // Spite Still in The Back, 16 the Wire tool; tests/tutorial.test.js holds the lesson list.)
   { name: 'training: Free Samples', url: '?tutorial=1&step=5', before: [pick('samples')], marks: true, max: 0.40 },
-  { name: 'training: Forklift', url: '?tutorial=1&step=11', before: [pick('forklift')], marks: true, max: 0.40 },
+  { name: 'training: Forklift', url: '?tutorial=1&step=8', before: [pick('forklift')], marks: true, max: 0.40 },
+  { name: 'training: The Back', url: '?tutorial=1&step=10', before: [pick('still')], marks: true, max: 0.40 },
+  { name: 'training: Wire', url: '?tutorial=1&step=16', before: [pick('wire')], marks: true, max: 0.40 },
 ];
 
 /** What floats over the floor, by selector (each element found is one piece). */

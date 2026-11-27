@@ -1,7 +1,7 @@
 // Tests for DEB's lines and the director that picks them. Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createDirector, TALK } from '../src/content/director.js';
+import { createDirector, TALK, jammedBelt, STARVED_SECS, NO_BACK_FROM, BACK_QUIET } from '../src/content/director.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, NOPE, FRIENDS,
   SHOPPER_NOUNS, fill, textOf, weightOf, choose, placeholders, friendOf, nopeLine,
@@ -59,6 +59,10 @@ const VARS = {
   stockOut: 'pk', speedFull: 'pnm', speedNone: 'pnm',
   // Version 0.4 (stage 4b): Razor Wire turning a dad away, and the first wire to go live.
   turned: 'p', wireLive: 'p',
+  // Version 0.4 (stage 6): The Back's firsts and troubles, wire running out, crates, MORE JUNK.
+  firstBelt: 'p', firstMachine: 'pk', firstStocked: 'pks', firstRebrand: 'p', firstPlatinum: 'ps',
+  jam: 'p', dropIdle: 'p', noBack: 'pw', binning: 'p', backHide: 'p', starved: 'pks', platStolen: 'pks',
+  wireRush: 'pk', dadUnwired: 'p', crateTop: 'p', speedStreak: 'pnm', moreJunk: 'pn',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -91,6 +95,10 @@ const AT_LEAST = {
   speedFull: 5, speedNone: 5,
   // Version 0.4 (stage 4b): Razor Wire.
   turned: 6, wireLive: 4,
+  // Version 0.4 (stage 6).
+  firstBelt: 6, firstMachine: 6, firstStocked: 6, firstRebrand: 6, firstPlatinum: 6, jam: 6, dropIdle: 6,
+  noBack: 6, binning: 6, backHide: 6, starved: 6, platStolen: 6, wireRush: 6, dadUnwired: 6, crateTop: 6,
+  speedStreak: 6, moreJunk: 6,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
@@ -916,11 +924,12 @@ test('a quick removal is only joked about on the floor it was placed on (0.4: Th
     const state = game('Dave');
     state.phase = 'build';
     state.tick = 100 * TICK_HZ;
-    // (The kind has no lines of its own for being placed, so DEB has not just spoken when it goes.)
+    // (The kind has no lines of its own for being placed, so DEB has not just spoken when it goes;
+    // a Clearance Bin, since the first belt of a game has a line, 0.4 stage 6.)
     const director = createDirector(() => 0);
-    director.handle([{ e: 'placed', k: 'conv', x: 4, y: 4, d: 0, by: 0, ...(placedOn ? { f: 1 } : {}) }], state);
+    director.handle([{ e: 'placed', k: 'bin', x: 4, y: 4, d: 0, by: 0, ...(placedOn ? { f: 1 } : {}) }], state);
     state.tick += TICK_HZ;
-    const out = says(director.handle([{ e: 'removed', k: 'conv', x: 4, y: 4, by: 0, owner: 0, ...(removedOn ? { f: 1 } : {}) }], state));
+    const out = says(director.handle([{ e: 'removed', k: 'bin', x: 4, y: 4, by: 0, owner: 0, ...(removedOn ? { f: 1 } : {}) }], state));
     return out.some((t) => removedLines('Dave').has(t));
   };
   assert.equal(run(0, 0), true, 'placed and removed on the shop floor: the joke');
@@ -936,10 +945,166 @@ test('a theft names the supply and the building it came from; a rip names the br
   const i = 5 * state.w + 5;
   const grabbed = says(createDirector(() => 0).handle([{ e: 'grab', x: 1, y: 1, i, t: 'spd', tier: 2 }], state))[0];
   assert.ok(LINES.grab.some((l) => fill(textOf(l), { p: 'Dave', k: 'Forklift Turret', s: 'Rage Cola' }) === grabbed), grabbed);
-  const ripped = says(createDirector(() => 0).handle([{ e: 'rip', x: 1, y: 1, sup: 0, n: 0, i, t: 'dmg', tier: 4 }], state))[0];
-  assert.ok(LINES.rip.some((l) => fill(textOf(l), { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Bottled Spite' }) === ripped), ripped);
+  // (Premium here: a Platinum unit stolen has lines of its own, 0.4 stage 6.)
+  const ripped = says(createDirector(() => 0).handle([{ e: 'rip', x: 1, y: 1, sup: 0, n: 0, i, t: 'dmg', tier: 3 }], state))[0];
+  assert.ok(LINES.rip.some((l) => fill(textOf(l), { p: 'Dave', k: 'Forklift Turret', s: 'Premium Bottled Spite' }) === ripped), ripped);
   // Lines that need the building or the supply are left out when the event does not say.
   for (const e of [{ e: 'grab', x: 1, y: 1 }, { e: 'rip', x: 1, y: 1, n: 3 }, { e: 'grab', i: 9999, t: 'toString', tier: 9 }]) {
     for (const t of says(createDirector(() => 0).handle([e], state))) assert.ok(!/\{\w\}|undefined/.test(t), t);
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// The Back (0.4, stage 6)
+
+/** A game with store players Dave and Steve, in sales event n, with money to build. */
+function backGame(n = 1) {
+  const state = game('Dave', 'Steve');
+  state.wave = n;
+  state.players.forEach((pl) => { pl.cash = 1e6; });
+  return state;
+}
+/** True if `said` (a list of texts) holds a line of `bank` filled with one of these sets of values. */
+const holds = (said, bank, ...varsList) => said.some((s) => bank.some((l) => varsList.some((v) => s === fill(textOf(l), v))));
+
+test('The Back: its firsts are each said once a game, never in training', () => {
+  const firsts = [
+    [{ e: 'placed', x: 3, y: 3, k: 'conv', d: 0, by: 0, f: 1 }, LINES.firstBelt],
+    [{ e: 'placed', x: 4, y: 3, k: 'still', d: 0, by: 0, f: 1 }, LINES.firstMachine],
+    [{ e: 'placed', x: 5, y: 3, k: 'rebrand', d: 0, by: 0, f: 1 }, LINES.firstRebrand],
+  ];
+  const director = createDirector(() => 0);
+  const state = backGame();
+  for (const [e, bank] of firsts) {
+    state.tick += 60 * TICK_HZ;
+    const said = says(director.handle([e], state));
+    assert.ok(holds(said, bank, { p: 'Dave', k: 'Spite Still' }), said.join(' | '));
+    state.tick += 60 * TICK_HZ;
+    assert.deepEqual(says(director.handle([e], state)), [], e.k + ': only the first');
+  }
+  // The first supply to go up a Dumbwaiter names the building and the supply; the first Platinum
+  // names what it is.
+  assert.ok(applyCommand(state, 0, { c: 'place', k: 'sprinkler', x: 12, y: 5, d: 0 }).ok);
+  state.tick += 60 * TICK_HZ;
+  const up = says(director.handle([{ e: 'stocked', i: 5 * state.w + 12, c: 21 }], state));
+  assert.ok(holds(up, LINES.firstStocked, { p: 'Dave', k: 'Pepper Sprinkler', s: 'Rage Cola' }), up.join(' | '));
+  state.tick += 60 * TICK_HZ;
+  assert.deepEqual(says(director.handle([{ e: 'made', i: 4, c: 13 }], state)), [], 'Premium is not Platinum');
+  const plat = says(director.handle([{ e: 'made', i: 4, c: 14 }], state));
+  assert.ok(holds(plat, LINES.firstPlatinum, { p: 'Dave', s: 'Platinum Bottled Spite' }, { p: 'Steve', s: 'Platinum Bottled Spite' }), plat.join(' | '));
+  // Not a word of it in training.
+  const tr = createGame({ seed: 1, training: true });
+  addPlayer(tr, 'Dave');
+  const quiet = createDirector(() => 0);
+  for (const [e] of firsts) assert.deepEqual(quiet.handle([e], tr), []);
+  assert.deepEqual(quiet.handle([{ e: 'made', i: 4, c: 14 }], tr), []);
+});
+
+test('The Back: a belt jammed solid is spotted, and a line that is only backed up is not', () => {
+  const state = backGame();
+  const at = (x, y) => y * state.w + x;
+  // A full belt running into bare floor: jammed.
+  state.back[at(5, 5)] = { k: 'conv', o: 1, d: 0, it: [1, 220, 1, 140, 1, 60] };
+  assert.equal(jammedBelt(state), 1);
+  // Into a Spite Still: junk is what it takes, so that line is only waiting.
+  state.back[at(6, 5)] = { k: 'still', o: 0, d: 0, n: 2, t: 10, out: 0 };
+  assert.equal(jammedBelt(state), -1);
+  // Spite at the front, into the Still: it will never take it.
+  state.back[at(5, 5)].it[0] = 11;
+  assert.equal(jammedBelt(state), 1);
+  // Into a Clearance Bin: never jammed.
+  state.back[at(6, 5)] = { k: 'bin', o: 0 };
+  assert.equal(jammedBelt(state), -1);
+  // Not full: not jammed solid.
+  state.back[at(6, 5)] = 0;
+  state.back[at(5, 5)].it = [11, 220];
+  assert.equal(jammedBelt(state), -1);
+  // DEB says so, naming the belt's owner (in a pause, once its first seconds are over).
+  state.back[at(5, 5)].it = [1, 220, 1, 140, 1, 60];
+  state.phase = 'build';
+  state.phaseT = 40 * TICK_HZ;
+  state.tick += 60 * TICK_HZ;
+  const director = createDirector(() => 0);
+  assert.deepEqual(says(director.idle(state)), [], 'not as the pause starts');
+  state.tick += (BACK_QUIET + 1) * TICK_HZ;
+  const said = says(director.idle(state));
+  assert.ok(holds(said, LINES.jam, { p: 'Steve' }), said.join(' | '));
+});
+
+test('The Back: a building starved of a supply for a minute, and a player with nothing down there, get a word', () => {
+  const director = createDirector(() => 0);
+  const state = backGame(NO_BACK_FROM);
+  assert.ok(applyCommand(state, 0, { c: 'place', k: 'forklift', x: 12, y: 5, d: 0 }).ok);
+  const i = 5 * state.w + 12;
+  state.phase = 'build';
+  state.phaseT = 40 * TICK_HZ;
+  // Steve has a belt in The Back; Dave has nothing there, so he hears about it once.
+  assert.ok(applyCommand(state, 1, { c: 'place', k: 'conv', x: 20, y: 2, d: 0, f: 1 }).ok);
+  state.tick += 60 * TICK_HZ;
+  assert.deepEqual(says(director.idle(state)), [], 'not as the pause starts');
+  state.tick += (BACK_QUIET + 1) * TICK_HZ;
+  const told = says(director.idle(state));
+  assert.ok(holds(told, LINES.noBack, { p: 'Dave', w: NO_BACK_FROM }), told.join(' | '));
+  state.tick += 200 * TICK_HZ;
+  assert.ok(!holds(says(director.idle(state)), LINES.noBack, { p: 'Dave', w: NO_BACK_FROM }), 'once');
+  // The forklift ran out of Spite; a minute later, still empty: starved.
+  state.tick += 60 * TICK_HZ;
+  director.handle([{ e: 'stockOut', i, t: 'dmg' }], state);
+  state.tick += (STARVED_SECS - 5) * TICK_HZ;
+  assert.ok(!holds(says(director.idle(state)), LINES.starved, { p: 'Dave', k: 'Forklift Turret', s: 'Bottled Spite' }), 'not yet');
+  state.tick += 10 * TICK_HZ;
+  const starved = says(director.idle(state));
+  assert.ok(holds(starved, LINES.starved, { p: 'Dave', k: 'Forklift Turret', s: 'Bottled Spite' }), starved.join(' | '));
+  // Restocked in time: nothing.
+  director.handle([{ e: 'stockOut', i, t: 'spd' }], state);
+  state.grid[i].s = { spd: [1, 6] };
+  state.tick += (STARVED_SECS + 5) * TICK_HZ;
+  assert.ok(!holds(says(director.idle(state)), LINES.starved, { p: 'Dave', k: 'Forklift Turret', s: 'Rage Cola' }));
+});
+
+test('The Back: wire running out with dads in the store, a dad through with no wire, and someone downstairs during refunds', () => {
+  const state = backGame(5);
+  assert.ok(applyCommand(state, 0, { c: 'place', k: 'forklift', x: 12, y: 5, d: 0 }).ok);
+  const i = 5 * state.w + 12;
+  state.phase = 'wave';
+  state.shoppers.push({ k: 'dad', id: 1, x: 3, y: 7 });
+  state.tick += 60 * TICK_HZ;
+  const rush = says(createDirector(() => 0).handle([{ e: 'stockOut', i, t: 'wire' }], state));
+  assert.ok(holds(rush, LINES.wireRush, { p: 'Dave', k: 'Forklift Turret' }), rush.join(' | '));
+  // No dads about: the ordinary line.
+  state.shoppers = [];
+  const calm = says(createDirector(() => 0).handle([{ e: 'stockOut', i, t: 'wire' }], state));
+  assert.ok(holds(calm, LINES.stockOut.wire, { p: 'Dave', k: 'Forklift Turret' }), calm.join(' | '));
+  // A dad through a store with no live wire.
+  const dad = says(createDirector(() => 0).handle([{ e: 'escape', k: 'dad', sup: 0, n: 1 }], state));
+  assert.ok(holds(dad, LINES.dadUnwired, { p: 'Dave' }, { p: 'Steve' }), dad.join(' | '));
+  // Steve laying belts while a shopper gets a refund.
+  const director = createDirector(() => 0);
+  director.handle([{ e: 'placed', x: 3, y: 3, k: 'split', d: 0, by: 1, f: 1 }], state);
+  state.tick += 2 * TICK_HZ;
+  const hide = says(director.handle([{ e: 'escape', k: 'hunter', sup: 0, n: 1 }], state));
+  assert.ok(holds(hide, LINES.backHide, { p: 'Steve' }), hide.join(' | '));
+});
+
+test('The Back: crates at the top level, MORE JUNK, a stolen Platinum unit and a speed bonus streak', () => {
+  const state = backGame(5);
+  assert.ok(applyCommand(state, 0, { c: 'place', k: 'forklift', x: 12, y: 5, d: 0 }).ok);
+  const i = 5 * state.w + 12;
+  const one = (e) => says(createDirector(() => 0).handle([e], state));
+  state.tick += 60 * TICK_HZ;
+  assert.equal(one({ e: 'reinforce', x: 1, y: 1, r: 3, by: 0, paid: 26 }).length, 0, 'not at level 3');
+  assert.ok(holds(one({ e: 'reinforce', x: 1, y: 1, r: 8, by: 0, paid: 268 }), LINES.crateTop, { p: 'Dave' }));
+  assert.ok(holds(one({ e: 'dropUp', x: 1, y: 1, lv: 2, by: 1, paid: 240 }), LINES.moreJunk, { p: 'Steve', n: 2 }));
+  assert.ok(holds(one({ e: 'grab', x: 1, y: 1, i, t: 'dmg', tier: 4 }), LINES.platStolen, { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Bottled Spite' }));
+  assert.ok(holds(one({ e: 'rip', x: 1, y: 1, n: 0, i, t: 'spd', tier: 4 }), LINES.platStolen, { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Rage Cola' }));
+  // A Name Brand grab is an ordinary theft.
+  assert.ok(holds(one({ e: 'grab', x: 1, y: 1, i, t: 'dmg', tier: 2 }), LINES.grab, { p: 'Dave', k: 'Forklift Turret', s: 'Bottled Spite' }, { p: 'Steve', k: 'Forklift Turret', s: 'Bottled Spite' }));
+  // Three full speed bonuses in a row: the third is a streak; a miss ends it.
+  const director = createDirector(() => 0);
+  const end = (speed) => { state.tick += 300 * TICK_HZ; return says(director.handle([{ e: 'waveEnd', wave: state.wave, pay: 300, speed, took: 5 }], state)); };
+  const streak = (said, m) => holds(said, LINES.speedStreak, { p: 'Dave', n: 150, m }, { p: 'Steve', n: 150, m });
+  assert.ok(!streak(end(150), 1) && !streak(end(150), 2));
+  assert.ok(streak(end(150), 3), 'the third in a row');
+  end(0);
+  assert.ok(!streak(end(150), 1), 'a missed bonus ends the streak');
 });

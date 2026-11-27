@@ -3,7 +3,9 @@
 // are no audio files.
 //
 //   const sound = createSound();
-//   sound.attach(session)   listen to 'fx', 'say', 'review', 'report', 'players'; returns an unsubscribe
+//   sound.attach(session, { floor })   listen to 'fx', 'say', 'review', 'report', 'players'; returns an
+//                           unsubscribe. floor() (0.4): the floor looked at, 1 for The Back, where
+//                           a unit made or sent up is heard, and a part placed clunks differently
 //   sound.unlock()          call from a click or key press: browsers only allow audio after one
 //   sound.play(name, opts)  interface sounds: select, place, remove, rotate, nope, click, tutorial,
 //                           rebuild, chat; and the deal of the cards (0.3.01): cardDeal,
@@ -30,6 +32,7 @@ import { hashText, built } from './synth.js';
 import { createGate } from './crowd.js';
 import { readSettings, settingsToSave, setLevel, toggleLevel, isOn, GROUP_KEYS } from './groups.js';
 import { SOUND_CHECK } from '../content/lines.js';
+import { TUNE } from '../sim/index.js';
 
 const STORE_KEY = 'returnsDept.sound';
 /** The four effect groups the old "Sound effects" switch stood for (get/set 'sfx'). */
@@ -46,8 +49,8 @@ const SAMPLES = {
   voice: ['deb', { mood: 'smug' }],
 };
 
-/** Interface sounds play() accepts. */
-const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'rebuild', 'chat']);
+/** Interface sounds play() accepts. (0.4: laying a wire and reinforcing a crate have their own.) */
+const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'rebuild', 'chat', 'wireLay', 'reinforce']);
 // The deal of the cards (0.3.01): played by the deal screen from the state (src/ui/deal.js).
 for (const n of ['cardDeal', 'cardIn', 'cardSlot', 'cardHand']) UI_SOUNDS.add(n);
 
@@ -155,6 +158,9 @@ export function createSound() {
   }
 
   const mine = (id) => !!session && id === session.me;
+  /** The floor this player looks at (0.4), from attach(); the shop floor if nobody said. */
+  let viewFloor = null;
+  const backView = () => { try { return !!viewFloor && viewFloor() === 1; } catch { return false; } };
 
   /** One tick of simulation events from the session. */
   function onFx(list) {
@@ -221,9 +227,16 @@ export function createSound() {
         // Razor Wire (0.4): a dad turned away by it clangs off the steel. Laying a wire and
         // reinforcing a crate: the interface plays its own sound for whoever did it (input.js), so
         // only the other players hear these from the event.
-        case 'turned': fire('smash', { k: 'crate', left: 1 }, { sub: 'hit' }); break;
-        case 'wire': if (!mine(e.by)) fire('rotate', {}, { gain: OTHERS }); break;
-        case 'reinforce': if (!mine(e.by)) fire('place', {}, { gain: OTHERS }); break;
+        // (0.4, stage 6: the twang of his own; until then the small clang of a building hit.)
+        case 'turned': fire('wireSnag', { free: e.free ? 1 : 0 }); break;
+        case 'wire': if (!mine(e.by)) fire('wireLay', {}, { gain: OTHERS }); break;
+        case 'reinforce': if (!mine(e.by)) fire('reinforce', { r: e.r | 0 }, { gain: OTHERS }); break;
+        // The Back (0.4, stage 6). A unit finished and a unit sent up are only heard while The Back
+        // is on screen (they happen all the time); running dry is heard from either floor.
+        case 'made': if (backView()) fire('made', { tier: e.c % 10 }); break;
+        case 'stocked': if (backView()) fire('stocked'); break;
+        case 'stockOut': fire('stockOut', { t: e.t }); break;
+        case 'dropUp': fire('moreJunk', { lv: e.lv | 0 }); break;
         // left > 0: the building took a hit and stands (the small clang); 0: destroyed (the wreck).
         case 'smash': fire('smash', { k: e.k, left: e.left | 0 }, { sub: e.left > 0 ? 'hit' : e.k }); break;
         case 'rebuilt':
@@ -240,7 +253,12 @@ export function createSound() {
         case 'ready': fire('ready', { side: e.side }); break;
         case 'side': fire('side', { side: e.side }); break;
         case 'waveStart': fire('waveStart', { dads: e.dads | 0, boss: e.boss | 0 }); break;
-        case 'waveEnd': if (!won) fire('waveEnd'); break;
+        case 'waveEnd':
+          if (won) break;
+          fire('waveEnd');
+          // (0.4) The pay, with the speed bonus as a share of the most there was.
+          if (e.pay > 0) fire('payout', { share: e.speed > 0 ? e.speed / (e.pay * TUNE.speedShare) : 0 });
+          break;
         case 'won': fire('won'); break;
         case 'lost': fire('lost'); break;
         default: break; // placed / removed: the interface plays its own build sounds
@@ -393,6 +411,8 @@ export function createSound() {
   function play(name, opts) {
     if (!UI_SOUNDS.has(name)) return;
     if (name === 'rebuild' && heardAlready('ui', name)) return;
+    // (0.4, stage 6) A part put down in The Back clunks on concrete instead.
+    if (name === 'place' && backView()) name = 'placeBack';
     fire(name, opts && typeof opts === 'object' ? opts : {});
   }
 
@@ -482,9 +502,16 @@ export function createSound() {
     sample = s;
   }
 
-  function attach(ses) {
+  /**
+   * @param {Object} ses the session
+   * @param {Object} [o]
+   * @param {() => number} [o.floor] the floor this player is looking at (0.4: 1 is The Back), for
+   *   the sounds only heard down there
+   */
+  function attach(ses, { floor = null } = {}) {
     if (!ses || typeof ses.on !== 'function') return () => {};
     session = ses; // for session.me: whose rebuild or gift an event is
+    viewFloor = typeof floor === 'function' ? floor : null;
     const offs = [
       ses.on('fx', onFx),
       ses.on('say', onSay),

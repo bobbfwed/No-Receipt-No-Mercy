@@ -32,9 +32,10 @@
 //   TALK.holidayBoss of the time), and once each build pause DEB may tell a holiday joke (the
 //   'holiday' topic), which fades over the game like any other joke. With no holiday, none of it.
 import {
-  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle, wireMap,
+  TICK_HZ, TUNE, BUILD, BACK, DIRS, SUPERS, MAP_SIZES, JUNK, SUPPLY_TRACKS, teamCash, officePlayer, isEndless, bossTier, bossTitle,
+  wireMap, itemType, itemTier,
 } from '../sim/index.js';
-import { SUPPLIES, TIER_NAMES } from './supplies.js';
+import { SUPPLIES, TIER_NAMES, stockTracks } from './supplies.js';
 import { releaseNo, releaseSize, shareCount } from '../sim/index.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, FRIENDS,
@@ -226,7 +227,87 @@ export const TOPICS = {
   // always said, once.
   turned: { note: true, gap: 40 },
   wireLive: { must: true },
+  // The Back (0.4, stage 6). The firsts are each said once a game (the first chance DEB gets);
+  // the rest are notes that fade like any other, with long gaps, since a factory can misbehave all
+  // game. None of them in the training shift, which does its own talking.
+  firstBelt: { note: true, important: true },
+  firstMachine: { note: true, important: true },
+  firstStocked: { note: true, important: true },
+  firstRebrand: { note: true, important: true },
+  firstPlatinum: { note: true, important: true },
+  jam: { note: true, gap: 90 },
+  dropIdle: { note: true, gap: 150 },
+  noBack: { note: true, important: true, gap: 60 },
+  binning: { note: true, gap: 120 },
+  backHide: { note: true, gap: 90 },
+  starved: { note: true, gap: 75 },
+  platStolen: { note: true, gap: 30 },
+  wireRush: { note: true, important: true, gap: 30 },
+  dadUnwired: { note: true, gap: 60 },
+  crateTop: { joke: true, gap: 30 },
+  speedStreak: { note: true, important: true },
+  moreJunk: { joke: true, gap: 20 },
 };
+
+/** How long a building may stay out of a supply before DEB calls it starved (seconds of play). */
+export const STARVED_SECS = 60;
+/** How soon after laying or lifting a part in The Back a refund counts as him hiding down there. */
+export const HIDE_SECS = 6;
+/** Every this many seconds, DEB weighs what went into Clearance Bins against what went upstairs. */
+export const BIN_WINDOW = 30;
+/** The sales event from which a player with nothing in The Back gets told (once). */
+export const NO_BACK_FROM = 3;
+/** Seconds into a build pause before DEB brings up The Back (see backIdle). */
+export const BACK_QUIET = 8;
+/** Full speed bonuses in a row that make a streak. */
+export const STREAK = 3;
+
+/** The tile next to tile i in direction d, or -1 off the map. */
+function ahead(state, i, d) {
+  const x = (i % state.w) + DIRS[d & 3][0], y = ((i / state.w) | 0) + DIRS[d & 3][1];
+  return x < 0 || y < 0 || x >= state.w || y >= state.h ? -1 : y * state.w + x;
+}
+
+/**
+ * Whether the part on tile j can ever take item `code` (0.4): the rules' own wants() says whether it
+ * takes it now; this says whether it ever could, so a line that is only backed up (a full
+ * Dumbwaiter, a busy machine) is not called jammed. A building takes a supply only on a track it
+ * has, and Razor Wire only with a wire direction.
+ */
+function canEverTake(state, j, code) {
+  const q = state.back[j];
+  if (!q) return false;
+  switch (q.k) {
+    case 'conv': case 'over': case 'split': case 'intern': case 'bin': return true;
+    case 'lift': {
+      const b = state.grid[q.a];
+      const track = SUPPLY_TRACKS[itemType(code)];
+      if (!b || code === JUNK || !track) return false;
+      return stockTracks(b.k).includes(track) && (track !== 'wire' || b.wd !== undefined);
+    }
+    case 'rebrand': return code !== JUNK && itemTier(code) < 4;
+    case 'drop': return false;
+    default: return !!BUILD[q.k]?.supply && code === JUNK;
+  }
+}
+
+/**
+ * A belt jammed solid (0.4): full, its front item at the end, and what it runs into (a wall, the
+ * edge, bare floor, or a part) will never take that item. Returns the belt's owner, or -1 if no
+ * belt is jammed. Exported for the tests.
+ */
+export function jammedBelt(state) {
+  const back = state.back;
+  if (!back) return -1;
+  for (let i = 0; i < back.length; i++) {
+    const p = back[i];
+    if (!p || p.k !== 'conv' || p.it.length < 6 || p.it[1] < BACK.end) continue;
+    const j = ahead(state, i, p.d);
+    if (j >= 0 && state.tiles[j] !== '#' && canEverTake(state, j, p.it[0])) continue;
+    return p.o;
+  }
+  return -1;
+}
 
 /** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
 const BOSS_BANKS = ['manager', 'director', 'vp', 'ceo'];
@@ -269,6 +350,67 @@ export function createDirector(random = Math.random) {
   let pauseWave = -1, pauseFrom = 0; // the build pause idle() last saw start, and its tick
   let holidayTried = -1; // the build pause in which a holiday joke was last tried
   let wireSaid = false, wireVer = -1; // the first live Razor Wire (0.4): said yet, and the layout last looked at
+  // The Back (0.4, stage 6).
+  const firsts = new Set(); // the "first" topics already said this game
+  const outs = new Map(); // "anchor:track" -> tick a building ran out of that supply
+  const backAt = new Map(); // player id -> tick he last laid or lifted a part in The Back
+  const toldNoBack = new Set(); // players told they have nothing in The Back
+  let bins = 0, ups = 0, binFrom = 0; // supplies binned and sent up since binFrom
+  let streak = 0; // full speed bonuses in a row
+  let backPause = -1, backPauseFrom = 0; // the build pause backIdle last saw start, and its tick
+
+  /** A "first" topic, said at the first chance DEB gets (once a game; never in training). */
+  function first(out, state, topic, bank, vars, o) {
+    if (state.training || firsts.has(topic)) return;
+    if (say(out, state, topic, bank, vars, o)) firsts.add(topic);
+  }
+
+  /**
+   * Looked at once a second (idle): a belt jammed solid, a building starved of a supply for a
+   * minute, a player with nothing in The Back by event NO_BACK_FROM, a Returns Drop going to waste,
+   * and the supplies going into Clearance Bins rather than upstairs.
+   */
+  function backIdle(out, state) {
+    if (state.training || !state.back || (state.phase !== 'build' && state.phase !== 'wave')) return;
+    // In a build pause, only in a quiet stretch of it: not its first seconds (the review, a coming
+    // Midnight Release, a holiday joke) and not its last half minute (the friends' jabs, the
+    // ten-second warning).
+    if (state.phase === 'build') {
+      if (backPause !== state.wave) { backPause = state.wave; backPauseFrom = state.tick; }
+      if (state.tick - backPauseFrom < BACK_QUIET * TICK_HZ || !(state.phaseT > TALK.holidayLast * TICK_HZ)) return;
+    }
+    const owner = jammedBelt(state);
+    if (owner >= 0 && say(out, state, 'jam', LINES.jam, {}, { pid: state.players[owner] ? owner : undefined, mood: 'angry' })) return;
+    for (const [key, at] of outs) {
+      const [ai, track] = key.split(':');
+      const b = state.grid[Number(ai)];
+      if (!b || !own(SUPPLIES, track) || (b.s && b.s[track])) { outs.delete(key); continue; }
+      if (state.tick - at < STARVED_SECS * TICK_HZ) continue;
+      outs.delete(key);
+      if (say(out, state, 'starved', LINES.starved, { k: thing(b.k), s: SUPPLIES[track].name }, { pid: state.players[b.o] ? b.o : undefined, mood: 'angry' })) return;
+    }
+    if (state.tick - binFrom >= BIN_WINDOW * TICK_HZ) {
+      const bad = bins >= 8 && bins > 2 * ups;
+      bins = 0; ups = 0; binFrom = state.tick;
+      if (bad && say(out, state, 'binning', LINES.binning, {}, { mood: 'angry' })) return;
+    }
+    if (state.phase !== 'build' || !(state.wave >= 2)) return;
+    const store = state.players.filter((pl) => pl.on && pl.side !== 'office');
+    const parts = new Map();
+    for (const q of state.back) if (q && q.o !== undefined && !BUILD[q.k]?.fixed) parts.set(q.o, (parts.get(q.o) || 0) + 1);
+    if (state.wave >= NO_BACK_FROM) {
+      const lazy = store.find((pl) => !parts.get(pl.id) && !toldNoBack.has(pl.id));
+      if (lazy && say(out, state, 'noBack', LINES.noBack, { w: state.wave }, { pid: lazy.id, mood: 'angry' })) { toldNoBack.add(lazy.id); return; }
+    }
+    if (store.length && store.every((pl) => parts.get(pl.id))) {
+      for (let i = 0; i < state.back.length; i++) {
+        const q = state.back[i];
+        if (!q || q.k !== 'drop') continue;
+        const j = ahead(state, i, q.d);
+        if (j >= 0 && state.tiles[j] !== '#' && !state.back[j]) { say(out, state, 'dropIdle', LINES.dropIdle, {}, {}); return; }
+      }
+    }
+  }
 
   /**
    * The first Razor Wire to go live in a game gets a line (0.4). Wire goes live when stock reaches a
@@ -512,6 +654,28 @@ export function createDirector(random = Math.random) {
     }
   }
 
+  /** A thief took a Platinum unit (0.4): its own lines. True if DEB said one. */
+  function platinum(out, state, e, b) {
+    if (state.training || e.tier !== 4 || !b) return false;
+    const sup = own(SUPPLIES, e.t);
+    if (!sup) return false;
+    return say(out, state, 'platStolen', LINES.platStolen, { k: thing(b.k), s: `${TIER_NAMES[4]} ${sup.name}` }, { pid: state.players[b.o] ? b.o : undefined, mood: 'angry' });
+  }
+
+  /**
+   * A shopper got his refund (0.4): a dad while no Razor Wire in the store is live, or anyone while
+   * a player is down in The Back laying parts.
+   */
+  function backEscape(out, state, e) {
+    if (state.training || state.phase !== 'wave') return;
+    if (e.k === 'dad' && state.grid && !wireMap(state).live.some((a) => a >= 0)
+      && say(out, state, 'dadUnwired', LINES.dadUnwired, {}, { mood: 'angry' })) return;
+    for (const [pid, at] of backAt) {
+      if (state.tick - at > HIDE_SECS * TICK_HZ || !state.players[pid]?.on) continue;
+      if (say(out, state, 'backHide', LINES.backHide, {}, { pid, mood: 'angry' })) return;
+    }
+  }
+
   function handleOne(out, state, e) {
     switch (e.e) {
       case 'waveStart': {
@@ -641,6 +805,7 @@ export function createDirector(random = Math.random) {
         if (e.k === 'baby' || e.k === 'pup') break;
         escapes.push(state.tick);
         escapes = escapes.filter((t) => state.tick - t < 6 * TICK_HZ);
+        backEscape(out, state, e);
         if (e.k === 'boss') {
           const tier = tierOf(e.tier) || bossNow || 1;
           const vars = { k: titleOf(tier), n: e.n > 0 ? e.n : undefined, m: e.refund > 0 ? Math.round(e.refund) : undefined };
@@ -661,6 +826,7 @@ export function createDirector(random = Math.random) {
       case 'grab': {
         // What was taken, and from what (0.4: stock from a security building).
         const b = Number.isInteger(e.i) ? state.grid[e.i] : null;
+        if (platinum(out, state, e, b)) break;
         say(out, state, 'grab', LINES.grab, { k: b ? thing(b.k) : undefined, s: own(SUPPLIES, e.t)?.name }, { mood: 'smug' });
         break;
       }
@@ -671,11 +837,21 @@ export function createDirector(random = Math.random) {
         // Keyed by floor too (0.4): a part laid in The Back and a shop building removed from the
         // tile above it are different things, and that is no "changed his mind" joke.
         lastPlaced.set(`${e.x},${e.y},${e.f | 0}`, { tick: state.tick, by: e.by });
+        if (e.f) {
+          // The Back's firsts (0.4, stage 6), and who is down there (see backEscape).
+          if (state.players[e.by]) backAt.set(e.by, state.tick);
+          const pid = state.players[e.by] ? e.by : undefined;
+          if (e.k === 'conv') first(out, state, 'firstBelt', LINES.firstBelt, {}, { pid, mood: 'smug' });
+          else if (e.k === 'rebrand') first(out, state, 'firstRebrand', LINES.firstRebrand, {}, { pid, mood: 'smug' });
+          else if (own(BUILD, e.k)?.supply) first(out, state, 'firstMachine', LINES.firstMachine, { k: thing(e.k) }, { pid, mood: 'smug' });
+          break;
+        }
         const bank = own(LINES.placed, e.k);
         if (bank) say(out, state, `placed:${e.k}`, bank, {}, { pid: state.players[e.by] ? e.by : undefined });
         break;
       }
       case 'removed': {
+        if (e.f && state.players[e.by]) backAt.set(e.by, state.tick);
         const was = lastPlaced.get(`${e.x},${e.y},${e.f | 0}`);
         const pid = state.players[e.by] ? e.by : undefined;
         if (e.owner !== e.by && state.players[e.owner]?.on) {
@@ -689,9 +865,38 @@ export function createDirector(random = Math.random) {
         const b = Number.isInteger(e.i) ? state.grid[e.i] : null;
         const bank = own(LINES.stockOut, e.t);
         if (!bank || !b || !thing(b.k)) break;
-        say(out, state, 'stockOut', bank, { k: thing(b.k) }, { pid: state.players[b.o] ? b.o : undefined, mood: 'angry' });
+        if (!state.training) outs.set(`${e.i}:${e.t}`, state.tick);
+        const pid = state.players[b.o] ? b.o : undefined;
+        // Razor Wire running out with dads in the store is worse news than any other running dry.
+        if (e.t === 'wire' && !state.training && state.phase === 'wave' && state.shoppers.some((s) => s.k === 'dad')
+          && say(out, state, 'wireRush', LINES.wireRush, { k: thing(b.k) }, { pid, mood: 'angry' })) break;
+        say(out, state, 'stockOut', bank, { k: thing(b.k) }, { pid, mood: 'angry' });
         break;
       }
+      // The Back (0.4, stage 6): the first supply to go up, the first Platinum, bins against upstairs.
+      case 'stocked': {
+        ups++;
+        const b = Number.isInteger(e.i) ? state.grid[e.i] : null;
+        const sup = own(SUPPLIES, SUPPLY_TRACKS[itemType(e.c)]);
+        if (b && sup) first(out, state, 'firstStocked', LINES.firstStocked, { k: thing(b.k), s: sup.name }, { pid: state.players[b.o] ? b.o : undefined, mood: 'smug' });
+        break;
+      }
+      case 'made': {
+        if (itemTier(e.c) < 4) break;
+        const sup = own(SUPPLIES, SUPPLY_TRACKS[itemType(e.c)]);
+        const p = Number.isInteger(e.i) && state.back ? state.back[e.i] : null;
+        if (sup) first(out, state, 'firstPlatinum', LINES.firstPlatinum, { s: `${TIER_NAMES[4]} ${sup.name}` }, { pid: p && state.players[p.o] ? p.o : undefined, mood: 'smug' });
+        break;
+      }
+      case 'binned':
+        bins++;
+        break;
+      case 'reinforce':
+        if (!state.training && e.r >= BUILD.crate.reinforce.max) say(out, state, 'crateTop', LINES.crateTop, {}, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
+        break;
+      case 'dropUp':
+        if (!state.training) say(out, state, 'moreJunk', LINES.moreJunk, { n: e.lv > 0 ? e.lv : undefined }, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
+        break;
       case 'pee':
         say(out, state, 'pee', LINES.pee, { k: thing(e.k) }, { mood: 'angry' });
         break;
@@ -725,7 +930,10 @@ export function createDirector(random = Math.random) {
         if (e.pay > 0) {
           const full = Math.round(e.pay * TUNE.speedShare);
           const vars = { n: Math.round(e.speed), m: Number.isFinite(e.took) ? Math.round(e.took) : undefined };
-          if (e.speed > 0 && e.speed >= full) say(out, state, 'speedFull', LINES.speedFull, vars, { mood: 'smug' });
+          // (A third full bonus in a row, or more, is a streak: its own lines, with {m} the run.)
+          streak = e.speed > 0 && e.speed >= full ? streak + 1 : 0;
+          if (streak >= STREAK) say(out, state, 'speedStreak', LINES.speedStreak, { n: vars.n, m: streak }, { mood: 'smug' });
+          else if (streak) say(out, state, 'speedFull', LINES.speedFull, vars, { mood: 'smug' });
           else if (!(e.speed > 0)) say(out, state, 'speedNone', LINES.speedNone, vars, { mood: 'angry' });
         }
         break;
@@ -743,6 +951,7 @@ export function createDirector(random = Math.random) {
         // A head count reads badly for one, so it is only given for two or more. {s} is what he
         // ripped out ("Platinum Bottled Spite"), {k} the building it came from.
         const b = Number.isInteger(e.i) ? state.grid[e.i] : null;
+        if (platinum(out, state, e, b)) break;
         const sup = own(SUPPLIES, e.t), tier = own(TIER_NAMES, e.tier);
         say(out, state, 'rip', LINES.rip, {
           n: e.n >= 2 ? e.n : undefined, k: b ? thing(b.k) : undefined, s: sup && tier ? `${tier} ${sup.name}` : undefined,
@@ -789,6 +998,7 @@ export function createDirector(random = Math.random) {
       const out = [];
       // (Wire can go live in any phase, with no event: see firstWire.)
       if (state.phase === 'build' || state.phase === 'wave') firstWire(out, state);
+      if (!out.length) backIdle(out, state);
       if (out.length || state.phase !== 'build' || !(state.phaseT > 0)) return out;
       // A holiday joke, at most once a pause. It comes first so that it notes when the pause
       // started; it never speaks in the pause's first seconds (TALK.holidayDelay), which is when

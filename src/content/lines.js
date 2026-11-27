@@ -58,7 +58,7 @@ export const LINES = {
     "A line of {n} dads. Don't bother with free samples. These men haven't been tempted by anything but a nap since 2014.",
     '{n} dads, single file, like ducks with back problems.',
     "Dad line: {n}. They won't fight you. They'll just sigh until someone dies.",
-    '{n} dads coming through. The only thing that stops a dad is time. Waste his.',
+    '{n} dads coming through. Only a wall or live razor wire stops a dad. Everything else just wastes his time. Waste it.',
     "{n} dads. They don't browse. They don't stop. They mutter \"'scuse me\" at your crate stacks and keep going.",
     'Dad line, {n} strong. Your maze is not a wall to these men. It is a mild inconvenience, like their children.',
     "{n} dads inbound. Every one of them said \"it's the principle of the thing\" in the car.",
@@ -147,7 +147,7 @@ export const LINES = {
     "Kid's out of the cart. {p} knows all about things getting loose when nobody's supervising.",
     "Kid's loose. She won't get a penny back without him, so she's going after him. Make it a long chase.",
     'A toddler has escaped. Mom is no longer a customer. She is a heat-seeking missile in leggings.',
-    "Runaway child, straight through your machines, {p}. He'll wait for her further on. Kids always wait just out of reach.",
+    "Runaway child, straight through your buildings, {p}. He'll wait for her further on. Kids always wait just out of reach.",
     u('Kid loose. The cart is empty. The mother is shouting his full name. Middle name included. Someone is in trouble.'),
     u('A small boy is sprinting through the store. The first thing in this building working at full speed.'),
     r("The kid's out. He'll stop near the end and wait for her, the way you all waited outside the bar for your dads. History, {p}. It repeats."),
@@ -1065,6 +1065,177 @@ export const LINES = {
     "Live razor wire on the shop floor. HR has concerns. I am HR. I've decided I love it.",
     u("Wire's live, {p}. You've finally built something that stops men doing what they want. Your wife must be so proud."),
   ],
+
+  // ---- The Back (0.4, stage 6). Not in the training shift, which does its own talking. ----------
+  // The first belt anybody lays in The Back this game: said once. {p} who laid it.
+  firstBelt: [
+    "{p} laid the first belt in The Back. It moves junk from one place to another. He's been training for this his whole career.",
+    'First conveyor belt of the day, {p}. Two tiles a second. Still faster than you on a Monday.',
+    "{p} found the basement and put a belt in it. Every man's dream: a basement full of things that go round.",
+    "A belt, {p}. It carries garbage from where it lands to where it's useful. Like your mother did with you.",
+    "The Back has its first belt. {p} stood and watched it go round for a full minute. I timed him. I'm putting it in his file.",
+    u('{p} laid a conveyor belt. Somewhere, a man in a hard hat who has never met you just felt very tired.'),
+    r("{p}'s first belt. He's down there in the basement, in the dark, lining things up and watching them move. HR has no policy on this. HR is writing one now."),
+  ],
+  // The first supply machine anybody builds this game: said once. {k} the machine, {p} who built it.
+  firstMachine: [
+    "{p} built a {k}. Junk goes in, something useful comes out. It's the opposite of {p}'s digestion.",
+    "A {k}, {p}. Our first piece of real industry. Don't touch it. Don't name it. Don't marry it.",
+    "{p} built a {k}. It turns returned crap into ammunition. I've been trying to do that with this staff for years.",
+    'First machine in The Back: a {k}, courtesy of {p}. It works harder than him already. It has been switched on for two seconds.',
+    "The {k} is running. {p} looks like a man who just got a vasectomy reversal: proud, nervous, and pointing it at things.",
+    u("{p} built a {k}. Feed it junk. It's like feeding you, {p}, except something good comes out the other end."),
+    r("A {k}, {p}. You've built a machine that turns trash into weapons. Every divorced dad's garage, finally industrialised."),
+  ],
+  // The first unit of supply to reach a security building this game: said once. {k} the building,
+  // {s} the supply, {p} the building's owner.
+  firstStocked: [
+    "{s} just came up the Dumbwaiter into the {k}. Look at the pip light up, {p}. That's what joy looks like. You won't know it.",
+    'The {k} got its first unit of {s}, {p}. It is stronger now. That makes one of you.',
+    "First delivery: {s}, straight up into the {k}. It went up a hole in the floor. {p}, I know you're giggling. Stop it.",
+    "The {k} is stocked with {s}. Something in this store is finally on the juice, {p}, and for once it isn't you.",
+    "{s} has arrived at the {k}. {p}, the supply chain works. It's the only chain in this store that does.",
+    u("A unit of {s} went up into the {k}. The Dumbwaiter is the best-performing employee here, {p}. It's a box on a rope."),
+    r("{s}, up from The Back and into the {k}. {p} built a working supply chain. Corporate wants to know who really did it."),
+  ],
+  // The first Rebrander anybody builds this game: said once. {p} who built it.
+  firstRebrand: [
+    "{p} built a Rebrander. Same junk, fancier label, higher price. The entire retail industry in one box.",
+    "A Rebrander, {p}. It takes Store Brand and calls it Name Brand. You've done the same with your dating profile.",
+    "{p}'s Rebrander is running. Nothing about the stuff changes except the sticker, and somehow it works better. Like Viagra. Allegedly.",
+    'The first Rebrander. {p} has discovered marketing. God help us.',
+    "{p} built a Rebrander. It's slower every tier, like your stamina, but at least it gets somewhere.",
+    u("A Rebrander, {p}. If it could relabel you, it would have to start below Store Brand. There's no tier for 'clearance'."),
+  ],
+  // The first unit of Platinum anything this game: said once. {s} what it is ("Platinum Rage Cola"), {p} anyone.
+  firstPlatinum: [
+    "{s}. Platinum. Three rebrands deep. {p}, it's the most polished thing in this store, and I've seen your head.",
+    'First {s} of the game. Gold ring and everything. {p}, this is the closest you will get to jewellery that is not from a vending machine.',
+    'The Back just made {s}. Three trips through the Rebrander. {p}, it has had more work done than a Real Housewife.',
+    "{s} is rolling off the line. Top shelf. Good enough for corporate. Too good for you, {p}.",
+    u('Platinum. {s}. {p}, do not let a card trader near it. They will lick it.'),
+    r("{s}. Nothing in this store has ever been Platinum before. Not the stock, not the staff, and certainly not {p}'s credit rating."),
+  ],
+  // A belt's front item cannot go anywhere and the belt behind it is full (0.4: junk into a
+  // Dumbwaiter, a supply nobody takes, a belt running into nothing). {p} the belt's owner.
+  jam: [
+    "{p}, one of your belts is jammed solid. Something nobody wants is sat at the end, and the whole line is waiting behind it. Classic {p}.",
+    "Belt jam in The Back, {p}. Put a Clearance Bin at the end. It's like a colon: things have to come out somewhere.",
+    "{p}'s line is backed up. Nothing moves. Very much your digestive system after a Chinese buffet.",
+    "There's a belt downstairs going nowhere, {p}. It's full, it's stuck, and it's taking it out on everything behind it. Remind you of anyone?",
+    "{p}, your belt runs into something that will never take what's on it. End the line in a Clearance Bin, or turn it. Do something.",
+    u("Jam in The Back. {p}'s belt is constipated. A Clearance Bin is the laxative. Go."),
+    u("{p}, your line's stuck. The junk at the front wants to leave. I know the feeling. I've wanted to leave since you were hired."),
+    r("One of {p}'s belts has been stuck so long the junk on it has applied for a pension. End it in a bin, {p}. Let it go. Let something go, for once."),
+  ],
+  // A Returns Drop with nothing in front of it, everybody having built something in The Back
+  // (junk going nowhere). {p} anyone.
+  dropIdle: [
+    'There is a Returns Drop down there with nothing under it, {p}. Junk is piling up in the ceiling. One more piece and it comes through.',
+    "One of the Returns Drops has nowhere to put its junk, {p}. It's a free supply line and you're ignoring it. Like your doctor.",
+    "{p}, a Returns Drop is going to waste. Free junk, no belt. You're leaving money on the table, which is the only place you ever leave anything.",
+    "Somebody put a belt in front of that Returns Drop before the ceiling clogs. Nobody likes clogged, {p}. Ask your plumber.",
+    u("A whole Returns Drop is backing up, {p}. Junk is free. You won't take free junk. Your ex would be amazed you've got standards now."),
+    u("{p}, there's a drop down there doing nothing. Like you at a family barbecue."),
+  ],
+  // A store player who has built nothing in The Back by the third sales event or so. {p} that player.
+  noBack: [
+    "{p}, you haven't built a single thing in The Back. Tab. It's one key. You found the porn folder with less help.",
+    "Sales event {w} and {p} still hasn't been downstairs. Your security is running on air and good intentions. Mostly air.",
+    "{p}, The Back is where the supplies come from. You're defending a store with empty guns, like a man at a bachelor party with his wallet at home.",
+    "Nothing in The Back from {p}. Not a belt, not a bin. Press Tab, {p}. Downstairs. Where the grown-ups work.",
+    "{p}, your security is fighting naked. Go downstairs and feed it something. Spite, Cola, anything. It's starving and so are your numbers.",
+    u("Still nothing in The Back from {p}. He's scared of basements. Something happened at a sleepover. We don't talk about it."),
+    r("{p} has not set foot in The Back all game. I checked. I put a camera down there. It's just junk and a lonely Returns Drop asking where Daddy went."),
+  ],
+  // Most of the store's supplies are going into a Clearance Bin instead of up a Dumbwaiter. {p} anyone.
+  binning: [
+    "Everything is going in the bin, {p}. You built a supply line to the rubbish. Some men make art. You make landfill.",
+    "{p}, the Clearance Bin is getting more supplies than your security. It's eating well. Your sprinklers aren't.",
+    "That's a lot of Spite going in the bin. Pennies each, {p}. You're basically pawning your own ammunition.",
+    'The bin is your best-stocked building, {p}. Congratulations on feeding a hole in the floor.',
+    "{p}, nobody upstairs is getting fed. It's all going in the Clearance Bin. Check your Interns. Check your belts. Check your life choices.",
+    u('The Clearance Bin is full of good stuff, {p}. Your buildings get the scraps. Like your kids at Christmas.'),
+  ],
+  // A store player laying parts in The Back while shoppers are taking refunds upstairs. {p} that player.
+  backHide: [
+    "{p}, they're taking refunds upstairs while you play with belts in the basement. Tab. Now.",
+    '{p} is in The Back laying belts while the tills ring. Hiding downstairs during a crisis. Very dad of you.',
+    "Refunds going out, {p}, and you're down there arranging junk. Your priorities have the shape of a midlife crisis.",
+    "{p}, the shop floor is on fire, metaphorically, and you're in the basement with your conveyor belts. That's where they find men like you.",
+    "Shoppers at the tills and {p} is downstairs. He says it's 'supply chain work'. I've heard 'working late' before too.",
+    u("{p} is hiding in The Back during a sales event. Like a husband in the shed during a baby shower."),
+    r("While {p} was in the basement fiddling with an Unpaid Intern, the shop floor handed out refunds like it was Christmas. That sentence goes in your file exactly as I said it."),
+  ],
+  // A security building has been out of a supply for a long while (a minute of play). {k} the
+  // building, {s} the supply, {p} its owner.
+  starved: [
+    "{p}'s {k} has had no {s} for a minute. It's not security any more. It's decor.",
+    "The {k} has been starved of {s} for ages, {p}. That building is running on vibes. Vibes don't stop Karens.",
+    "{p}, your {k} ran out of {s} a minute ago and nothing's come since. Check the belt. Check the Intern. Check your pulse.",
+    "Still no {s} for the {k}, {p}. It's like your sex life: you know it should be happening, you just can't work out why it isn't.",
+    'The {k} is starving, {p}. No {s} for a minute. Feed it or bury it.',
+    u("{p}'s {k} has been on an empty tank of {s} so long it's started a GoFundMe."),
+  ],
+  // A thief walked off with a Platinum unit (a grab or a Card Trader's rip). {s} what ("Platinum
+  // Bottled Spite"), {k} the building, {p} its owner.
+  platStolen: [
+    "Somebody just walked off with {s} from the {k}, {p}. Three rebrands of work, gone in a coat pocket.",
+    "{s}, stolen. The good stuff. {p}, that's like someone stealing the steak and leaving you the parsley.",
+    "A thief took {s} out of your {k}, {p}. You spent longer rebranding it than you've spent on your marriage.",
+    'There goes {s}. Platinum. Top shelf. Out the door in a reusable shopping bag. {p}, lock your good stuff up.',
+    "The {k} just lost {s} to a shoplifter, {p}. He'll sell it on Facebook Marketplace next to a used treadmill.",
+    u('{s}, nicked. {p}, the only Platinum thing you had, and a man in a fleece just walked off with it.'),
+    r("Someone stole {s} from the {k}. Do you know how long that took to make, {p}? Longer than you lasted at your last three jobs combined."),
+  ],
+  // A building's Razor Wire ran out while dads were in the store (instead of the usual stockOut
+  // line for wire). {k} the building, {p} its owner.
+  wireRush: [
+    "The {k} just ran out of wire mid-rush, {p}. The dads behind it are free. They're walking straight for the tills, like they smelled a urinal.",
+    'Wire gone on the {k}, with dads still in the store. {p}, you just opened the gate in the middle of a stampede.',
+    "{p}'s fence is out of wire, and there are dads in the building. Here they come. Cargo shorts at full sail.",
+    "No more wire on the {k}, {p}, and the line is still coming. Feed it more, or start practising your apology.",
+    "Out of razor wire with dads on the floor, {p}. That's like running out of condoms halfway through. Somebody's getting through.",
+    u("The {k}'s wire ran dry and the dads noticed straight away. They notice nothing else. Not birthdays. Not lumps. Just gaps in a fence."),
+  ],
+  // A dad got his refund while no Razor Wire in the store is live. {p} anyone. Planned wire with
+  // nothing in it gets its own words where it fits.
+  dadUnwired: [
+    'A dad just walked straight through your store to a till, {p}. No live wire anywhere. Your fence is a rumour.',
+    "That dad didn't even slow down, {p}. No razor wire, no reason to. Barb Bender. The Back. Go.",
+    "Dad refund. {p}, you've got buildings, and dads walk through buildings. Only razor wire stops them. You have none live.",
+    "Another dad through. Your wire is either not there or not stocked, {p}. Either way it's as much use as a screen door on a submarine.",
+    "{p}, a dad just strolled through your security like it was a hologram. It is, to him. Get some wire live.",
+    u("A dad got his refund. {p}, a dashed line on the floor is a plan, not a fence. Feed the wire."),
+    r("A dad walked from the door to the till in a straight line, through four buildings, and never broke stride. He's been doing that through family dinners for years. Razor Wire, {p}. Live."),
+  ],
+  // A Crate Stack reinforced to its top level. {p} who paid for it.
+  crateTop: [
+    "{p} has reinforced a Crate Stack to the top level. It's now the hardest thing in this store. Including anything of {p}'s.",
+    "Max-level crate, {p}. You spent real money making a box tougher. That's the most commitment you've shown to anything.",
+    "{p}'s crate is fully reinforced. Yellow and black stripes and everything. A gym bro will look at it, sigh, and go round.",
+    'Top-level crate from {p}. Riveted, bolted, braced. Built like a brick shithouse, by a man who has never been in one.',
+    "{p} maxed out a crate. It can take more hits than his self-esteem. Which is a low bar, but it's a crate.",
+    u("{p} has put more steel in a cardboard box than in his spine. Fully reinforced, {p}. The crate thanks you. Nobody else does."),
+  ],
+  // A full speed bonus for the third sales event in a row (or more). {n} the bonus, {m} how many in a row, {p} anyone.
+  speedStreak: [
+    "{m} full speed bonuses in a row. ${n} this time. {p}, I'm getting suspicious. Are you on something? Can I have some?",
+    "That's {m} events running, full bonus every time. ${n} each. Fast, clean, no refunds. Who are you and what did you do with {p}?",
+    "Full bonus again: ${n}. {m} in a row. {p}, you're on a streak. Don't get cocky. You got cocky in 2011 and look what happened.",
+    "{m} perfect events. Corporate is asking if we've changed staff. I said no, the same idiots, just quicker. ${n} each.",
+    u("Another full speed bonus, {m} in a row. {p}, if you were this quick in the bedroom you'd... actually, you are, aren't you."),
+    r("{m} full bonuses on the trot. I've run the numbers. Statistically this is a miracle. Theologically it's worse. ${n}, {p}. Don't spend it on scratch cards."),
+  ],
+  // Someone paid for MORE JUNK at a Returns Drop. {n} its new level, {p} who paid.
+  moreJunk: [
+    "{p} just paid for more junk. Paid. For junk. He's been doing that on eBay for years, this is just more honest.",
+    '{p} bought MORE JUNK for a Returns Drop. Level {n}. More garbage, faster. Like his diet.',
+    "More junk on order, {p}. Most men want less junk in their lives. You want it delivered.",
+    '{p} upgraded a Returns Drop to level {n}. Junk is now pouring in faster than his ex-wife\'s lawyer\'s letters.',
+    "{p} spent money to get more returns. In any other business that's called failure. Here it's called strategy. God help us.",
+    u("MORE JUNK, says {p}, waving his wallet. It's the most enthusiastic I've ever seen him about anything that wasn't a buffet."),
+  ],
 };
 
 /**
@@ -1074,12 +1245,12 @@ export const LINES = {
  */
 export const INTRO = {
   clipper: 'New today: Coupon Clippers. Lots of them, fast, and each one easily discouraged. Like your exes.',
-  mom: 'New today: moms with kids. The kid gets away once and runs straight through your machines, and she sprints round the maze after him. No kid, no refund. And she will not stop for your samples.',
+  mom: 'New today: moms with kids. The kid gets away once and runs straight through your buildings, and she sprints round the maze after him. No kid, no refund. And she will not stop for your samples.',
   teen: "New today: teenagers. They spill slushies that slow everyone else down. Don't thank them. They hate that.",
   karen: 'New today: Karens. Security near one works at half speed, because she is asking it for the manager.',
   blind: 'New today: a man with a guide dog. Pepper spray makes the dog bolt, so sprinklers speed him UP. Use forklifts.',
   scooter: 'New today: mobility scooters. Nothing slows them. Not wet floors, not free samples, not shame.',
-  gymbro: 'New today: gym bros. They walk through crate stacks and wreck whatever is next to them: crates first, your machines when the mood takes them. A couple of hits and they need a sit-down. Still more stamina than {p}. Stop them early.',
+  gymbro: 'New today: gym bros. They walk through crate stacks and wreck whatever is next to them: crates first, your security when the mood takes them. A couple of hits and they need a sit-down. Still more stamina than {p}. Stop them early.',
   dog: 'New today: stray dogs. One cocks his leg on your security and it switches off for a few seconds. Get rid of him before he finds a sprinkler he likes.',
   cosplay: 'New today: cosplayers. His huge costume soaks up shots meant for the shoppers next to him. Twenty years of being ignored, and now everyone wants to stand near him.',
   flasher: 'New today: the exhibitionist. A woman in a bathrobe. When she opens it, dads and teenagers stop dead to stare. She is on your side. Put your security where she works.',
@@ -1198,7 +1369,7 @@ export const ESCAPE_REVIEWS = {
     [1, 'Lost my son. Found him. Got my refund. Nobody offered to help, they just watched.'],
     [1, "Free samples? I haven't sat down since 2019."],
     [1, 'My child licked a wet floor sign. Nobody stopped him. One star, and a tetanus shot.'],
-    [1, 'My child ran straight through a machine. Machine is fine. Child is fine. I am not fine.'],
+    [1, 'My child ran straight through a pepper sprinkler. Sprinkler is fine. Child is fine. I am not fine.'],
     [1, 'Sprinted the whole maze in sandals. Got my refund. I deserve a medal and a large wine.'],
     [1, 'The staff watched my child run off and did nothing. Like his father.'],
     [1, 'Refund done. Kid back in the cart. Nobody spoke to me for forty minutes, which, honestly, was the highlight of my month.', U],
@@ -1476,7 +1647,7 @@ export const NOPE = {
     u("Occupied. Like the men's room after {p}'s lunch."),
   ],
   shopper: [
-    "There's a customer standing there. Dropping a machine on him is 'assault', apparently.",
+    "There's a customer standing there. Dropping a building on him is 'assault', apparently.",
     "Someone's standing there, {p}. Wait for him to move. He will. They all leave in the end.",
     u("You can't build on a shopper, {p}. I asked legal. They sent a very long email and a picture of a crying lawyer."),
   ],

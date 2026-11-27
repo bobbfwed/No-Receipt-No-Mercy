@@ -9,7 +9,7 @@ import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP, HOW_WIRE, HOW_REINF
 import {
   SHOPPER_ORDER, WALL_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
   tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST,
-  paceText, edgeFacts, payText, wireText, reinforceText,
+  paceText, edgeFacts, payText, wireText, reinforceText, howItWorks,
 } from '../content/facts.js';
 import { releaseWaves } from '../content/facts.js';
 import { trackName, SUPPLIES } from '../content/supplies.js';
@@ -21,8 +21,9 @@ import { shopperPortrait } from './portrait.js';
 import { HOLIDAY_INFO, outfitText } from '../content/holidays.js';
 import { cardsNote } from '../content/cards.js';
 
-// (0.4: The Back has its own tab; the Crate Stack is with the shop floor's security.)
-const TABS = [['shoppers', 'Known offenders'], ['security', 'Shop floor'], ['back', 'The Back']];
+// (0.4: The Back has its own tab; the Crate Stack is with the shop floor's security. Stage 6: the
+// first tab says how the whole game works, in a page, before the reference tabs.)
+const TABS = [['guide', 'How it works'], ['shoppers', 'Known offenders'], ['security', 'Shop floor'], ['back', 'The Back']];
 const pct = (m) => `${Math.round(m * 100)}%`;
 const table = (cls, head, rows) => h('div', { class: 'hb-scroll' }, h('table', { class: `hb-table ${cls}` },
   h('thead', null, h('tr', null, head.map((t) => h('th', null, t)))),
@@ -209,7 +210,7 @@ function suppliesCard() {
   const list = (names) => names.join(', ');
   const say = (s) => {
     if (s.track === 'dur') return `From the ${s.maker}. Each use soaks up one gym bro hit instead of the building taking it (it still counts as one of his hits). Taken by ${list(s.takers)}.`;
-    if (s.track === 'wire') return `From the ${s.maker}. The one thing that stops a dad. ${wireText()}. Every Dumbwaiter takes it (${list(s.takers)}).`;
+    if (s.track === 'wire') return `From the ${s.maker}. The one thing that stops a dad. ${wireText()}. Taken by any security building with a wire direction (${list(s.takers)}); one without a direction takes none.`;
     if (s.track === 'dmg') return `From the ${s.maker}. More damage from a gun; on the others more of whatever they do (a slipperier sign, a longer free sample, a better pitch). Taken by ${list(s.takers)}.`;
     return `From the ${s.maker}. More ${s.gives}. Taken by ${list(s.takers)}.`;
   };
@@ -286,9 +287,13 @@ export function handbook({ state = null, onClose }) {
   function show(id) {
     for (const t of tabs) { const on = t.dataset.tab === id; t.classList.toggle('on', on); t.setAttribute('aria-selected', String(on)); }
     const game = state ? 'this game' : 'a standard game';
-    if (id === 'shoppers') {
+    if (id === 'guide') {
+      note.textContent = `How the store works, in one page. The numbers are for ${game} on ${ctx.name} difficulty, without cards; the other tabs have every shopper, building and part in full.`;
+      body.replaceChildren(h('article', { class: 'hb-card hb-wide hb-guide' },
+        ...howItWorks(ctx.difficulty).flatMap((s) => [h('h3', null, s.title), h('p', null, worded(s.text))])));
+    } else if (id === 'shoppers') {
       note.textContent = `Numbers are for ${game}: ${ctx.name} difficulty, ${lengthText(ctx.waves).toLowerCase()}, ${ctx.players} player${ctx.players > 1 ? 's' : ''}. `
-        + `Half as many shoppers come as used to, and they get tougher faster as the sales events go on: up to double the patience by event ${TUNE.patienceFull}. `
+        + `They get tougher as the sales events go on: up to double the patience by event ${TUNE.patienceFull}. `
         + `After event ${TUNE.surgeFrom} it stops being polite: every event brings ${fmt((TUNE.surgeHp - 1) * 100)}% more patience and ${fmt((TUNE.surgeCrowd - 1) * 100)}% more shoppers than the last, compounding, until your lazy-ass maze folds. `
         + `Every shopper's patience grows each sales event: ×${fmt(toughnessAt(2))} in the second, ×${fmt(toughnessAt(10))} by the tenth, ×${fmt(toughnessAt(20))} by the twentieth, ×${fmt(toughnessAt(LONGEST))} by event ${LONGEST}${ctx.waves > 0 ? '' : `, ×${fmt(toughnessAt(LONGEST + 10))} by event ${LONGEST + 10}`}. `
         + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds do not grow from event to event. ${paceText()} A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
@@ -315,7 +320,7 @@ export function handbook({ state = null, onClose }) {
       note, cardLine, body));
   const card = el.firstChild;
   el.addEventListener('click', (e) => { if (e.target === el) onClose(); });
-  show('shoppers');
+  show('guide');
   setTimeout(() => close.focus(), 50);
   return el;
 }

@@ -38,7 +38,9 @@ test('README.md shows the current version, every store design, The Back and ever
   // The Back (0.4): every part and every supply, by name.
   for (const k of BACK_ORDER) assert.ok(readme.includes(`**${BUILD[k].name}**`), BUILD[k].name);
   for (const s of Object.values(SUPPLIES)) assert.ok(readme.includes(`**${s.name}**`), s.name);
-  assert.equal(Object.keys(generated()).length, 4);
+  assert.equal(Object.keys(generated()).length, 5);
+  // (0.4, stage 6) How the game works, as the Employee Handbook's first tab says it.
+  assert.ok(readme.includes('**Dads and Razor Wire.**') && readme.includes('**Stock, and running dry.**'));
 });
 
 test('the handbook covers every shopper and building, on both floors', () => {

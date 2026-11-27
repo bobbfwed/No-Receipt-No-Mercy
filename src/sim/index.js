@@ -26,7 +26,7 @@ export {
 } from './cards.js';
 export { getBackField } from './path.js';
 // The Back (0.4): the floor under the shop and its belt engine.
-export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, overpassDirs, beltShape, feedsInto, takesFrom } from './back.js';
+export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, overpassDirs, beltShape, feedsInto, takesFrom, addTrainingDrops } from './back.js';
 export { makeDrops } from './maps.js';
 // The Back's supplies (0.4, stage 3): stock on the security buildings, Dumbwaiters, the dropUp price.
 export { SUPPLY_TRACKS, STOCK_TRACKS, usesPer, unitsIn, usesIn, takesSupply, addStock, useStock, useWork, syncLifts, stockCap, makeTicks, rebrandTicks } from './back.js';

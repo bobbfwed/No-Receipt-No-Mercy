@@ -10,20 +10,16 @@ import { debFace } from './icons.js';
 export function howToPlay() {
   return h('div', { class: 'howto' },
     h('h3', null, 'The job'),
-    h('p', null, `Shoppers come in through the entrances (one per player, mostly on the left) and head for the tills on the right. Every one who gets there takes a refund. ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more per extra player) and corporate shuts the store. Survive every sales event (${TUNE.waves} unless the host changes it), or choose Endless and see how long you last.`),
-    h('h3', null, 'Two floors'),
+    // (0.4, stage 6: a handful of plain bullets a new player reads in half a minute; the Employee
+    // Handbook's first tab, "How it works", says the rest, with the numbers.)
     h('ul', null,
-      h('li', null, h('b', null, 'The shop floor is the maze. '), 'Crate Stacks and security block the way, so lay them out to make the walk to the tills long and painful. You cannot wall the tills off completely. Legal checked.'),
-      h('li', null, h('b', null, 'Security makes them leave. '), 'Sprinklers, forklifts and barcode lasers wear down patience until shoppers storm out empty-handed; wet floor signs, free samples and the TV salesman hold them in range for longer. Shoppers get more patient every sales event.'),
-      h('li', null, h('b', null, 'The Back feeds security. '), 'Under the shop is The Back (Tab, or the floor switch at the bottom right, to go down). Returns Drops cough up returned junk; belts carry it to machines that turn it into supplies; more belts carry those to the Dumbwaiter under each security building, which sends them up. A Rebrander slaps a better label on a supply, and a better label does more. Nothing down there gets in a shopper\'s way.'),
-      h('li', null, h('b', null, 'Stocked security is stronger. '), 'On Bottled Spite it hits harder, on Rage Cola it fires faster, on Extension Cord it reaches further, and Duct Tape soaks up gym bro hits. Each is used up as it works; empty, it is back to as built. Pick a building with nothing held to see what it is working with.'),
-      h('li', null, h('b', null, 'Beating a sales event pays. '), payLine(), ' The Back makes no money, bar a Clearance Bin\'s pennies for leftovers.'),
-      h('li', null, h('b', null, 'Your money is yours. '), 'Each player has his own cash and pays for what he builds. A sales event\'s pay and speed bonus go to each of you in full; everything else the store earns, and every refund, is split evenly between you, whoever built what. You can hand a colleague money from the list of players.'),
-      h('li', null, h('b', null, 'Thieves. '), 'Shoppers who stop for free samples help themselves to stock from any security they walk past, and Card Traders rip out the best brand you have. Stop them before they reach your best-stocked buildings.'),
-      h('li', null, h('b', null, 'Gym bros smash things. '), 'A Crate Stack goes down in one hit, and now and then he hits something else. Duct Tape soaks his hits up; the Rebuild button puts back what he wrecked.'),
-      h('li', null, h('b', null, 'It gets worse. '), `From sales event ${Math.min(...Object.values(SHOPPERS).map((d) => d.sup.from))}, super versions of every shopper turn up: bigger, with a gold crown, and a double refund. `,
-        `Every ${ordinal(TUNE.bossEvery)} sales event a boss walks in as well, a little after the doors open: nothing slows him, his pep talks cheer up the shoppers around him, and if he reaches a till he counts as ${TUNE.bossRefunds} refunds.`),
-      h('li', null, h('b', null, 'Except dads. '), 'Dads arrive in a line, walk fast and ignore free samples and anything else meant to distract a man. His patience runs out by itself, so waste his time: he ignores wet floor signs and slips on them.')),
+      h('li', null, h('b', null, 'Stop the refunds. '), `Shoppers walk from the entrances to the tills, and each one who gets there takes a refund. ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more per extra player) and the store closes. Survive ${TUNE.waves} sales events, or go Endless.`),
+      h('li', null, h('b', null, 'The shop floor is the maze. '), 'Crate Stacks and security block the way (never completely), so build the longest, nastiest walk you can. Security wears their patience down until they storm out.'),
+      h('li', null, h('b', null, 'The Back feeds it. '), 'Tab takes you downstairs. Belt junk from a Returns Drop into a machine, and the supply it makes into the Dumbwaiter under a security building: Spite hits harder, Cola fires faster, Cord reaches further, Duct Tape soaks up gym bro hits. A Rebrander makes it a better brand. Stock gets used up, so keep it coming.'),
+      h('li', null, h('b', null, 'Dads walk through everything. '), 'Only walls and live Razor Wire stop them: give a building a wire direction with Wire (Z) and feed it Razor Wire from a Barb Bender.'),
+      h('li', null, h('b', null, 'Gym bros smash crates. '), 'Reinforce (U) them, and Rebuild (B) what gets wrecked.'),
+      h('li', null, h('b', null, 'Money. '), payLine(), ' Your cash is your own; refunds are split too.'),
+      h('li', null, h('b', null, 'It gets worse. '), `Super shoppers from sales event ${Math.min(...Object.values(SHOPPERS).map((d) => d.sup.from))}, a boss every ${ordinal(TUNE.bossEvery)} event, thieves who steal your stock, and five cards a game that change the rules.`)),
     h('h3', null, 'Controls'),
     // On a touch screen (only shown there): fingers instead of the mouse and keys.
     h('ul', { class: 'keys touch-only' },
@@ -33,6 +29,8 @@ export function howToPlay() {
       h('li', null, h('b', null, 'One finger'), ' with nothing held moves the view · ', h('b', null, 'two fingers'), ' move and zoom it, and never build'),
       h('li', null, h('b', null, '⟳'), ' rotates what you hold · ', h('b', null, '✋'), ' puts it down · ', h('b', null, '⤢'), ' whole map · ', h('b', null, '⌂'), ' your entrance'),
       h('li', null, h('b', null, 'Tap something you built'), ' with nothing held to see what it is working with, and to rotate or remove it'),
+      // (0.4: the floor switch, and the shop floor's two tools.)
+      h('li', null, h('b', null, 'CHECK IN THE BACK'), ' (bottom right of the floor) goes down to The Back and back up · ', h('b', null, 'Wire'), ' in the bar: tap a security building to turn its Razor Wire round, or drag from it the way it should run · ', h('b', null, 'Reinforce'), ': tap crates, or drag across them'),
       h('li', null, 'While anything of yours is wrecked, a big ', h('b', null, 'REBUILD'), ' button shows over the floor: tap it to pay, and each wreck goes back as soon as nothing is in the way · every new wreck needs another tap'),
       h('li', null, h('b', null, '⏸'), ' (top bar, under ☰ on a phone, before the speeds) pauses the whole store for everyone; nothing can be built while paused · tap the ', h('b', null, 'PAUSED'), ' sign to carry on'),
       h('li', null, h('b', null, 'Hold a button'), ' in the bar to read what it does'),
@@ -57,7 +55,7 @@ export function howToPlay() {
 /** The money rule in a sentence, numbers from the rules (0.4: The Back makes no money). */
 function payLine() {
   const p = payFacts();
-  return `Each one you survive pays every one of you the whole amount (${money(p.pay(1))} for the first, more each time), plus a speed bonus of up to ${Math.round(p.share * 100)}% of that for clearing the floor within ${p.best} seconds of the last shopper coming in (nothing after ${p.par}), scaled by how many you stopped rather than refunded. The EVENT PAY panel shows both.`;
+  return `Every sales event you survive pays (${money(p.pay(1))} for the first playing alone, more each time; with friends the store's pay grows with the crowd and is shared evenly), plus a speed bonus of up to ${Math.round(p.share * 100)}% for clearing the floor fast once the last shopper is in. The EVENT PAY panel shows both.`;
 }
 
 /** "5th", "3rd", "21st". */

@@ -23,6 +23,7 @@ import { popSound, noPop, waah, babyTill, nursery } from './preggo.js';
 import { releaseSound, ripSound } from './trader.js';
 import { litterSound, whimper, pupTill, kennel, drunkSound, boughtSound, trailSound, wrongway, petSound } from './cardfx.js';
 import { cardDealSound, cardInSound, cardSlotSound, cardHandSound } from './cards.js';
+import { placeBack, madeSound, stockedSound, stockOutSound, wireSnag, wireLay, reinforceSound, payout, moreJunkSound } from './backfx.js';
 
 /**
  * The fifteen kinds of shopper (SHOPPERS in src/sim/constants.js) and the boss (BOSS, which is not
@@ -1203,6 +1204,67 @@ export const SOUNDS = {
     shapes: 2,
     play: cardHandSound,
   },
+
+  // ---------------------------------------------------------------- The Back (0.4, stage 6: backfx.js)
+  placeBack: {
+    about: 'A part bolted down in The Back (the interface, for whoever placed it): a dull steel clunk on concrete and two or three spanner ticks, lower than the shop floor\'s place sound.',
+    max: 0.4,
+    shapes: 3,
+    play: placeBack,
+  },
+  made: {
+    about: 'A machine or Rebrander finishing a unit, heard only while looking at The Back: a soft pneumatic "pff" and a small "tink", higher for a better brand; Platinum shimmers.',
+    max: 0.5,
+    shapes: 3,
+    variants: [{ label: 'Store Brand', opts: { tier: 1 } }, { label: 'Platinum', opts: { tier: 4 } }],
+    play: madeSound,
+  },
+  stocked: {
+    about: 'A unit going up a Dumbwaiter, heard only while looking at The Back: a very soft rising pulley "whoop" and the hatch clicking shut.',
+    max: 0.4,
+    shapes: 2,
+    play: stockedSound,
+  },
+  stockOut: {
+    about: 'A security building has run out of a supply (heard from either floor): a falling two-note "bom-bowm" like an empty can knocked, and a dry rattle; out of Razor Wire adds a low buzzer.',
+    max: 0.9,
+    shapes: 2,
+    variants: [{ label: 'Spite', opts: { t: 'dmg' } }, { label: 'Razor Wire', opts: { t: 'wire' } }],
+    play: stockOutSound,
+  },
+  wireSnag: {
+    about: 'A dad walks into Razor Wire: a taut wire plucked (a twang that bends down and buzzes on its barbs) and cloth catching. Quieter when the wire had charged him already.',
+    max: 0.7,
+    shapes: 3,
+    variants: [{ label: 'charged', opts: {} }, { label: 'already charged', opts: { free: 1 } }],
+    play: wireSnag,
+  },
+  wireLay: {
+    about: 'A wire direction set: a coil unspooling with a zip, and two clicks of the barbs catching.',
+    max: 0.6,
+    shapes: 2,
+    play: wireLay,
+  },
+  reinforce: {
+    about: 'A Crate Stack reinforced: a steel strap slapped on and two rivets hammered home, a little heavier each level.',
+    max: 0.5,
+    shapes: 3,
+    variants: [{ label: 'level 1', opts: { r: 1 } }, { label: 'level 8', opts: { r: 8 } }],
+    play: reinforceSound,
+  },
+  payout: {
+    about: 'A sales event\'s pay: a till drawer and a coin, then a run of coins for the speed bonus, longer the bigger it was; three quarters of it or more ends on a little jackpot bell run.',
+    max: 1.3,
+    shapes: 2,
+    variants: [{ label: 'no bonus', opts: { share: 0 } }, { label: 'half', opts: { share: 0.5 } }, { label: 'full', opts: { share: 1 } }],
+    play: payout,
+  },
+  moreJunk: {
+    about: 'MORE JUNK bought for a Returns Drop: a coin in a slot, a hatch thrown open, and junk rumbling down a chute.',
+    max: 1.0,
+    shapes: 2,
+    play: moreJunkSound,
+  },
 };
 
 /**
@@ -1217,7 +1279,7 @@ export const SOUNDS = {
  */
 export const GROUP_OF = {
   // Money.
-  kerching: 'money', escape: 'money', gave: 'money', bought: 'money',
+  kerching: 'money', escape: 'money', gave: 'money', bought: 'money', payout: 'money', moreJunk: 'money',
   // Shoppers. (A baby or a puppy at a till is a coin and a giggle or a yap, but it goes with the
   // rest of its litter: past a handful they merge into `nursery` / `kennel`, which are shoppers.)
   babyTill: 'shoppers', pupTill: 'shoppers',
@@ -1230,6 +1292,8 @@ export const GROUP_OF = {
   // Security and machines.
   spray: 'store', shot: 'store', rail: 'store', pitch: 'store', smash: 'store',
   rebuilt: 'store', place: 'store', remove: 'store', rotate: 'store', rebuild: 'store',
+  // (0.4, stage 6: The Back, and the wire and crates. Running dry is the machines' business too.)
+  placeBack: 'store', made: 'store', stocked: 'store', stockOut: 'store', wireSnag: 'store', wireLay: 'store', reinforce: 'store',
   // Announcements.
   begun: 'events', ready: 'events', side: 'events', waveStart: 'events', waveEnd: 'events',
   won: 'events', lost: 'events', endless: 'events', bossIn: 'events', release: 'events',

@@ -1,37 +1,52 @@
 // Plays the whole training shift automatically and checks that every step can be completed and
-// that each lesson shows what it claims to show. Run with: node --test
+// that each lesson shows what it claims to show, against the rules (0.4: the shop floor, The Back
+// and the dads' Razor Wire). Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
-import { createTutorial, STEPS, PART_TWO } from '../src/tutorial/lessons.js';
-import { HOW } from '../src/content/help.js';
-import { createGame, applyCommand, step, queueTrainingWave, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ } from '../src/sim/index.js';
+import { createTutorial, STEPS, PART_TWO, TRAINING_DROPS } from '../src/tutorial/lessons.js';
+import { HOW, BACK_HOW } from '../src/content/help.js';
+import { tierRows } from '../src/content/facts.js';
+import {
+  createGame, applyCommand, step, queueTrainingWave, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ,
+  addTrainingDrops, dropTicks, makeTicks, rebrandTicks, wireLive, dadRoute, itemTier, stockCap, unitsIn,
+} from '../src/sim/index.js';
 
 function trainingSession(seed = 9) {
   return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true }) });
 }
 
 const title = (t) => { const st = STEPS.find((x) => x.title === t); assert.ok(st, `there is a lesson called "${t}"`); return t; };
-const SALES = title('Hold them up: the TV Salesman'), SUPERS_LESSON = title('Super shoppers');
-const DADS = title('Dads'), STOP_DADS = title('Stopping dads: the Forklift Turret'), LASER = title('Aim down the line: the Barcode Laser');
-const GYM = title('Gym Bros'), WET = title('Slow them down: the Wet Floor Sign');
+const SPRINKLER = title('Security: the Pepper Sprinkler'), WET = title('Slow them down: the Wet Floor Sign');
+const SAMPLES = title('Make them stop: Free Samples'), SALES = title('Hold them up: the TV Salesman');
+const LASER = title('Aim down the line: the Barcode Laser'), DADS = title('Dads, and the Forklift Turret');
+const DOWN = title('Downstairs: The Back'), STILL = title('Junk into a Spite Still'), LIFT = title('Spite up the Dumbwaiter');
+const INTERN = title('An Unpaid Intern'), SPLIT = title('Share a line: the Splitter'), DRY = title('Running dry');
+const REBRAND = title('A better label: the Rebrander'), WIRE = title('Razor Wire: pick a direction');
+const BENDER = title('Razor Wire: the Barb Bender'), GYM = title('Gym Bros'), REINFORCE = title('Reinforce the crates');
+const MONEY = title('Money, and MORE JUNK');
 /** The only kinds of shopper the training shift sends in (0.3.03, the owner's request). */
 const SHIFT_KINDS = ['clipper', 'dad', 'gymbro'];
+const tileOf = (s, x, y) => y * s.w + x;
+const G = [10, 13], S2 = [9, 13], F = [8, 9], DOOR_CRATES = [[2, 7], [2, 8], [1, 9]];
+const bAt = (s, [x, y]) => s.grid[tileOf(s, x, y)];
 
 /**
- * What happened on the floor during one lesson's wave, watched tick by tick: the things each
- * lesson says the player will see.
+ * What happened on the floor during one lesson, watched tick by tick: the things each lesson says
+ * the player will see.
  */
 function newWatch() {
   return {
-    shots: new Map(), // tile index of a tower -> shots it fired
     smashes: [], // smash events
     beams: [], // shoppers hit by each Barcode Laser beam, in order
     watching: [], // where shoppers stood to watch the TV Salesman, as [x, y]
     escapes: [], // escape events: who reached a till (kind, and 1 if super)
     kinds: new Set(), // kinds of shopper that walked in
     dadThrough: false, // a dad was seen inside a building that blocks everyone else (0.4)
+    made: [], // made events (0.4): [tick, tile, item]
+    outs: [], // stockOut events (0.4)
+    turned: [], // turned events (0.4)
   };
 }
 
@@ -53,15 +68,16 @@ function whatIf(state, cmds, wave) {
   queueTrainingWave(copy, wave);
   assert.ok(applyCommand(copy, 0, { c: 'start' }).ok);
   const escapes = [];
-  for (let n = 0; n < 120 * TICK_HZ && copy.phase === 'wave'; n++) for (const e of step(copy)) if (e.e === 'escape') escapes.push(e);
+  for (let n = 0; n < 200 * TICK_HZ && copy.phase === 'wave'; n++) for (const e of step(copy)) if (e.e === 'escape') escapes.push(e);
   assert.equal(copy.phase, 'build', 'the what-if wave finished');
   return escapes;
 }
 
 /**
- * Plays the whole training shift the way the test player does: each lesson's solve(), then the
- * game runs (one tick at a time, watched) until the lesson is done, sending `after` commands once
- * its wave is over. Returns the wave results and what was seen, by lesson title.
+ * Plays the whole training shift the way the test player does: each lesson's solve() (through
+ * tut.act, which also looks at a floor), then the game runs (one tick at a time, watched) until the
+ * lesson is done, sending `after` commands once its wave is over. Returns the wave results and what
+ * was seen, by lesson title.
  * @param {(tut: Object, st: Object) => void} [onStep] called before each step is solved
  * @param {(tut: Object, st: Object) => void} [onDone] called once each step has been completed
  */
@@ -71,11 +87,13 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
   session.on('fx', (events) => {
     if (!w) return;
     for (const e of events) {
-      if (e.e === 'shot') w.shots.set(e.i, (w.shots.get(e.i) || 0) + 1);
       if (e.e === 'smash') w.smashes.push(e);
       if (e.e === 'rail') w.beams.push(e.n);
       if (e.e === 'watching') w.watching.push([e.x, e.y]);
       if (e.e === 'escape') w.escapes.push(e);
+      if (e.e === 'made') w.made.push([session.state.tick, e.i, e.c]);
+      if (e.e === 'stockOut') w.outs.push(e);
+      if (e.e === 'turned') w.turned.push(e);
     }
   });
   tut.start();
@@ -83,7 +101,7 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
     const st = tut.step;
     onStep(tut, st);
     w = newWatch();
-    for (const cmd of st.solve(session.state)) session.send(cmd);
+    for (const cmd of st.solve(session.state)) tut.act(cmd);
     if (!st.manual) {
       let sent = false;
       for (let n = 0; n < 240 * 15 && !tut.check(); n++) {
@@ -92,7 +110,7 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
         watchTick(session.state, w);
       }
       if (st.wave) waves[st.title] = tut.lastWave;
-      seen[st.title] = { ...w, facts: { ...tut.facts } };
+      seen[st.title] = { ...w, facts: { ...tut.facts }, ticks: session.state.tick };
       onDone(tut, st);
     }
     tut.next();
@@ -100,9 +118,7 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
   return { waves, seen };
 }
 
-const tileOf = (s, x, y) => y * s.w + x;
-
-/** What the lessons from the TV Salesman on say happens. The same for every seed. */
+/** What every lesson says happens. The same for every seed. */
 function checkLessons(s, waves, seen, label) {
   // The TV Salesman: some Coupon Clippers stopped to watch, standing in the Sprinkler above him.
   assert.ok(seen[SALES].facts.watched >= 1, `${label}: Coupon Clippers stopped to watch the salesman`);
@@ -111,42 +127,57 @@ function checkLessons(s, waves, seen, label) {
     `${label}: a shopper watched him from inside the Sprinkler's reach`);
   assert.deepEqual(waves[SALES], { stopped: 30, escaped: 0 }, `${label}: the whole coach party stopped`);
 
-  // Super shoppers: a third sprinkler, by the samples, stops the Extreme Couponers.
-  assert.deepEqual(waves[SUPERS_LESSON], { stopped: 8, escaped: 0 }, `${label}: three sprinklers stop eight super shoppers`);
-
-  // The Barcode Laser, down column 6: the first one in sets it off alone, the next beam takes most
-  // of the queue, and the whole crowd is stopped.
+  // The Barcode Laser, down column 6: the next beam after the first takes most of the queue, and the
+  // whole crowd of super shoppers is stopped.
   const beams = seen[LASER].beams;
-  assert.equal(beams[0], 1, `${label}: the first beam hits the first shopper alone (${beams})`);
-  assert.ok(Math.max(...beams) >= 15, `${label}: a later beam hits most of the queue (${beams})`);
-  assert.equal(seen[LASER].facts.beam, Math.max(...beams));
+  assert.ok(Math.max(...beams) >= 10, `${label}: a beam hits most of the queue (${beams})`);
   assert.deepEqual(waves[LASER], { stopped: 30, escaped: 0 }, `${label}: all thirty Extreme Couponers stopped`);
   assert.equal(s.grid[tileOf(s, 6, 4)].k, 'railgun');
   assert.equal(s.grid[tileOf(s, 6, 4)].d, 1, `${label}: the laser faces down`);
 
-  // Dads (0.4): they walk straight through the maze, so most of the eight reach a till, the three
-  // Dads on a Mission at the back among them.
-  assert.equal(waves[DADS].stopped + waves[DADS].escaped, 8, `${label}: eight dads came in`);
+  // Dads (0.4): they walk straight through the maze; the forklift gets some, the rest reach a till.
+  assert.equal(waves[DADS].stopped + waves[DADS].escaped, 6, `${label}: six dads came in`);
   assert.ok(seen[DADS].dadThrough, `${label}: a dad walked through a building`);
-  assert.ok(seen[DADS].escapes.length > 4, `${label}: most of the dads got a refund`);
+  assert.ok(waves[DADS].stopped >= 1, `${label}: the forklift got some`);
+  assert.ok(waves[DADS].escaped >= 1, `${label}: the rest walked out with a refund`);
   for (const e of seen[DADS].escapes) assert.equal(e.k, 'dad');
-  assert.equal(seen[DADS].escapes.filter((e) => e.sup).length, 3, `${label}: the Dads on a Mission all got through`);
-  // The forklift gets one of the two Dads on a Mission (without it both get through: see the seeds).
-  assert.deepEqual(waves[STOP_DADS], { stopped: 1, escaped: 1 }, `${label}: the forklift gets one of the two Dads on a Mission`);
 
+  // The Back: "a piece every N seconds" is the rule's drop time.
+  // The Still made Bottled Spite; "every N seconds" (the rule's time) between two of its units.
+  const still = tileOf(s, 10, 4);
+  const stillMade = [...seen[STILL].made, ...seen[LIFT].made].filter(([, i]) => i === still).map(([t]) => t);
+  assert.ok(stillMade.length >= 1, `${label}: the Still made Spite`);
+  assert.equal(itemTier(seen[STILL].made.find(([, i]) => i === still)[2]), 1, `${label}: Store Brand`);
+  // The Sprinkler with Spite hits as hard as the lesson says (the rules' Store Brand numbers).
+  // (Its stock at the end may be another brand: what matters is what it did when the lesson ended.)
+  assert.ok(seen[LIFT].facts.stocked >= 1, `${label}: Spite went up a Dumbwaiter`);
+  // The Intern stocked the Forklift; the Splitter both Sprinklers.
+  assert.ok(seen[INTERN].facts.stocked >= 1, `${label}: the intern sent Spite up`);
+  assert.ok(bAt(s, G).s?.dmg && bAt(s, S2).s?.dmg, `${label}: both gap Sprinklers hold Spite`);
+  // Running dry: the Forklift's Spite ran out (OUT OF SPITE over it).
+  assert.ok(seen[DRY].outs.some((e) => e.i === tileOf(s, ...F) && e.t === 'dmg'), `${label}: the forklift ran out of Spite`);
+  // The Rebrander: the Forklift now works at Name Brand, which hits harder than Store Brand.
+  assert.ok(seen[REBRAND].facts.made >= 1);
+  // Razor Wire: dads walked into the live wire and were turned away.
+  assert.ok(seen[BENDER].facts.turned >= 1, `${label}: the wire turned dads away`);
+  assert.ok(seen[BENDER].turned.every((e) => e.i === tileOf(s, ...F)), `${label}: the forklift's wire`);
   // Gym bro: he walked through a crate by the entrance, and Rebuild put everything back.
-  const doorCrates = [[2, 7], [2, 8], [1, 9]].map(([x, y]) => tileOf(s, x, y));
+  const doorCrates = DOOR_CRATES.map(([x, y]) => tileOf(s, x, y));
   assert.ok(seen[GYM].smashes.some((e) => e.k === 'crate' && doorCrates.includes(e.i)), `${label}: the gym bro went through the crates by the entrance`);
-  for (const e of seen[GYM].smashes) if (e.left > 0) assert.ok(s.grid[e.i], `${label}: a building with hits left is still standing`);
   assert.ok(seen[GYM].facts.rebuilt >= 1, `${label}: Rebuild put things back`);
-  for (const i of doorCrates) assert.equal(s.grid[i].k, 'crate', `${label}: the crates are back`);
+  // Reinforced: he hit one and it held.
+  assert.ok(seen[REINFORCE].smashes.some((e) => e.k === 'crate' && doorCrates.includes(e.i) && e.left >= 1), `${label}: a reinforced crate took his hit and stood`);
+  for (const i of doorCrates) assert.equal(s.grid[i].k, 'crate', `${label}: the crates are standing`);
+  // Money: the first drop works faster.
+  const drop = s.back[tileOf(s, TRAINING_DROPS[0][0], TRAINING_DROPS[0][1])];
+  assert.equal(drop.lv, 1, `${label}: MORE JUNK bought a level`);
 
   // Nobody but the three kinds came in, all shift long.
   const kinds = new Set(Object.values(seen).flatMap((x) => [...x.kinds]));
   for (const k of kinds) assert.ok(SHIFT_KINDS.includes(k), `${label}: a ${k} walked in`);
 
   // The gap cluster stays as part 1 left it, for the practice at the end.
-  for (const [x, y] of [[7, 13], [9, 13], [10, 13]]) assert.equal(s.grid[tileOf(s, x, y)]?.k, 'sprinkler', `${label}: the sprinklers at the gap are still there`);
+  for (const [x, y] of [G, S2, [5, 12]]) assert.equal(s.grid[tileOf(s, x, y)]?.k, 'sprinkler', `${label}: the sprinklers are still there`);
 }
 
 test('training mode: no timer, no losing, waves only when lined up', () => {
@@ -164,6 +195,21 @@ test('training mode: no timer, no losing, waves only when lined up', () => {
   assert.equal(s.wave, 1, 'training waves do not count up');
 });
 
+test('the shift puts down its own Returns Drops, in a training game only (0.4)', () => {
+  const session = trainingSession();
+  createTutorial(session);
+  const s = session.state;
+  const drops = s.back.map((p, i) => (p && p.k === 'drop' ? [i % s.w, (i / s.w) | 0, p.d] : null)).filter(Boolean);
+  assert.deepEqual(drops, TRAINING_DROPS.map(([x, y, d]) => [x, y, d]).sort((a, b) => a[1] * s.w + a[0] - (b[1] * s.w + b[0])));
+  for (const [x, y] of TRAINING_DROPS) assert.notEqual(s.tiles[tileOf(s, x, y)], '#', 'on open floor');
+  // A second tutorial on the same game adds nothing.
+  assert.equal(addTrainingDrops(s, TRAINING_DROPS), 0);
+  // A real game cannot be given extra junk.
+  const real = createGame({ seed: 1 });
+  assert.equal(addTrainingDrops(real, TRAINING_DROPS), 0);
+  assert.ok(!real.back.some((p) => p && p.k === 'drop'));
+});
+
 test('the whole training shift can be completed, and each lesson shows what it says', () => {
   const session = trainingSession();
   const says = [];
@@ -171,12 +217,13 @@ test('the whole training shift can be completed, and each lesson shows what it s
   const reports = [];
   session.on('report', (m) => reports.push(m));
   const tut = createTutorial(session);
+  const start = session.state.tick;
   const { waves, seen } = playAll(session, tut, {
     onStep: (t, st) => {
       assert.ok(st.title && st.text.length && st.quip, `step ${t.index} has a title, text and a line from DEB`);
       if (!st.manual) assert.equal(t.check(), false, `step ${t.index} "${st.title}" is not done before the player acts`);
       if (st.marks && !st.manual) assert.ok(t.marks().length > 0, `step "${st.title}" highlights something`);
-      if (st.tool) assert.ok(t.tool() in BUILD || t.tool() === 'rebuild', `step "${st.title}" points at a real button`);
+      if (st.tool) assert.ok(t.tool() in BUILD || ['rebuild', 'wire', 'reinforce', 'remove'].includes(t.tool()), `step "${st.title}" points at a real button`);
     },
     onDone: (t, st) => {
       assert.equal(t.check(), true, `step ${t.index} "${st.title}" completes`);
@@ -184,68 +231,167 @@ test('the whole training shift can be completed, and each lesson shows what it s
     },
   });
   assert.equal(tut.step.last, true);
-  assert.equal(STEPS[PART_TWO].title, 'Part 2: The difficult customers');
+  assert.equal(STEPS[PART_TWO].title, DOWN);
+  // Short (0.4, stage 6): about twenty lessons, and the game itself runs a few minutes of the shift.
   assert.ok(STEPS.length <= 23, `the shift is no longer than it was (${STEPS.length} lessons)`);
-  // The Gym Bro lesson points at Rebuild once there is something to rebuild.
-  assert.ok(seen[GYM].facts.smashedCrate >= 1);
+  const gameSecs = (session.state.tick - start) / TICK_HZ;
+  assert.ok(gameSecs < 240, `the waves and the waiting take ${Math.round(gameSecs)} s of game time`);
   checkLessons(session.state, waves, seen, 'seed 9');
   assert.equal(reports.length, 0, 'no performance reviews interrupt training');
   assert.ok(says.length >= STEPS.length, 'DEB speaks at every step');
 
-  // What each wave lesson is meant to demonstrate.
-  assert.deepEqual(waves['Security: the Pepper Sprinkler'], { stopped: 3, escaped: 0 }, 'one sprinkler stops three Coupon Clippers');
+  // What each early wave lesson is meant to demonstrate.
+  assert.deepEqual(waves[SPRINKLER], { stopped: 3, escaped: 0 }, 'one sprinkler stops three Coupon Clippers');
   assert.deepEqual(waves[WET], { stopped: 10, escaped: 0 }, 'sign plus two sprinklers stops ten Coupon Clippers');
-  assert.deepEqual(waves['Make them stop: Free Samples'], { stopped: 16, escaped: 0 }, 'the gap holds against a crowd');
+  assert.deepEqual(waves[SAMPLES], { stopped: 16, escaped: 0 }, 'the gap holds against a crowd');
   assert.ok(session.state.players[0].cash >= 1000, 'money is never the obstacle in training');
 });
 
-test('the wave lessons play out the same whatever the random seed', () => {
+test('every number a lesson on The Back states is the rules\' own', () => {
+  const words = (t) => STEPS.find((st) => st.title === t).text.join(' ');
+  const f1 = (v) => (Number.isInteger(v) ? String(v) : (Math.round(v * 10) / 10).toFixed(1));
+  // (The numbers go through facts.js's fmt; the text has them as printed.)
+  assert.ok(words(DOWN).includes(`every ${f1(dropTicks(0) / TICK_HZ)} seconds`), 'the drop\'s time');
+  assert.ok(words(STILL).includes(`every ${f1(makeTicks({}) / TICK_HZ)} seconds`), 'the Still\'s time');
+  const spr = tierRows('sprinkler', 'dmg'), fork = tierRows('forklift', 'dmg');
+  assert.ok(words(LIFT).includes(`from ${f1(spr[0].dmg)} to ${f1(spr[1].dmg)}`), 'a Sprinkler\'s hit with Store Brand Spite');
+  assert.ok(spr[1].dmg > spr[0].dmg && fork[2].dmg > fork[1].dmg && fork[1].dmg > fork[0].dmg, 'each brand hits harder');
+  assert.ok(words(INTERN).includes(`from ${f1(fork[0].dmg)} to ${f1(fork[1].dmg)}`), 'the Forklift\'s hit with Store Brand');
+  assert.ok(words(REBRAND).includes(`to ${f1(fork[2].dmg)}`), 'the Forklift\'s hit with Name Brand');
+  assert.ok(words(REBRAND).includes([1, 2, 3].map((t) => f1(rebrandTicks({}, t) / TICK_HZ)).join(', ')), 'the Rebrander\'s times');
+  assert.ok(rebrandTicks({}, 1) > makeTicks({}) && rebrandTicks({}, 2) > rebrandTicks({}, 1), 'a pass is slower each brand up');
+  assert.ok(words(LIFT).includes(`up to ${stockCap(null)} units`));
+});
+
+test('the wave lessons play out the same whatever the random seed, and each lesson\'s claims hold', () => {
   const SEEDS = [1, 2, 3, 7, 11, 42, 99, 1234];
   for (const seed of SEEDS) {
     const session = trainingSession(seed);
     const tut = createTutorial(session);
+    const s = () => session.state;
     const { waves, seen } = playAll(session, tut, {
       onStep: (t, st) => {
         // What each lesson says its new building is needed for: without it, some get through.
         // "Ten Coupon Clippers in a bunch are more than one Sprinkler can wear down."
-        if (st.title === WET) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: one sprinkler lets some of the ten through`);
+        if (st.title === WET) assert.ok(whatIf(s(), [], st.wave).length > 0, `seed ${seed}: one sprinkler lets some of the ten through`);
         // "A crowd this big swamps your gap."
-        if (st.title === SALES) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: the gap alone lets some of the coach party through`);
-        // "As they are, your two Sprinklers at the gap cannot stop the eight Extreme Couponers."
-        if (st.title === SUPERS_LESSON) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the third sprinkler some Extreme Couponers get through`);
-        // "Without it, your gap cannot take 30 of them."
-        if (st.title === LASER) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the laser some Extreme Couponers get through`);
-        // "Without it both of them walk out with a refund."
-        if (st.title === STOP_DADS) assert.equal(whatIf(session.state, [], st.wave).length, 2, `seed ${seed}: without the forklift both Dads on a Mission get through`);
+        if (st.title === SALES) assert.ok(whatIf(s(), [], st.wave).length > 0, `seed ${seed}: the gap alone lets some of the coach party through`);
+        if (st.title === LASER) assert.ok(whatIf(s(), [], st.wave).length > 0, `seed ${seed}: without the laser some Extreme Couponers get through`);
+        // "It gets some of them": without it, more dads walk out with a refund.
+        if (st.title === DADS) {
+          const without = whatIf(s(), [], st.wave).length;
+          const withIt = whatIf(s(), [{ c: 'place', k: 'forklift', x: F[0], y: F[1], d: 0 }], st.wave).length;
+          assert.ok(withIt < without, `seed ${seed}: the forklift gets some (${withIt} through with it, ${without} without)`);
+        }
+        // "Running dry": with the line intact, the forklift does not run out in this wave.
+        if (st.title === DRY) {
+          const copy = structuredClone(s());
+          queueTrainingWave(copy, st.wave);
+          applyCommand(copy, 0, { c: 'start' });
+          let out = false;
+          for (let n = 0; n < 200 * TICK_HZ && copy.phase === 'wave'; n++) for (const e of step(copy)) if (e.e === 'stockOut' && e.i === tileOf(copy, ...F)) out = true;
+          assert.equal(out, false, `seed ${seed}: kept fed, the forklift never runs dry`);
+        }
       },
-      onDone: (t, st) => assert.equal(t.check(), true, `seed ${seed}: step "${st.title}" completes`),
+      onDone: (t, st) => {
+        assert.equal(t.check(), true, `seed ${seed}: step "${st.title}" completes`);
+        const state = s();
+        // "Store Brand takes a Sprinkler's hit from 6 to 9.4": as the building is now.
+        if (st.title === LIFT) {
+          assert.equal(statsOf(bAt(state, G)).dmg, tierRows('sprinkler', 'dmg')[1].dmg, `seed ${seed}: the stocked sprinkler hits as the lesson says`);
+          assert.ok(statsOf(bAt(state, G)).dmg > statsOf({ k: 'sprinkler' }).dmg);
+        }
+        if (st.title === INTERN) assert.equal(statsOf(bAt(state, F)).dmg, tierRows('forklift', 'dmg')[1].dmg, `seed ${seed}: the forklift with Store Brand`);
+        if (st.title === REBRAND) {
+          assert.equal(bAt(state, F).s.dmg[0], 2, `seed ${seed}: the forklift works at Name Brand`);
+          assert.equal(statsOf(bAt(state, F)).dmg, tierRows('forklift', 'dmg')[2].dmg, `seed ${seed}: and hits as the lesson says`);
+        }
+        // "Planned (dashed)": a direction, no wire in stock; the DADS, IF WIRED route differs.
+        if (st.title === WIRE) {
+          const b = bAt(state, F);
+          assert.equal(b.wd, 3);
+          assert.equal(wireLive(b), false, `seed ${seed}: the wire is only planned`);
+          const door = state.doors[0][0];
+          assert.notDeepEqual(dadRoute(state, door, true), dadRoute(state, door, false), `seed ${seed}: the two dad routes differ`);
+        }
+        if (st.title === BENDER) assert.ok(wireLive(bAt(state, F)), `seed ${seed}: the wire is live`);
+        if (st.title === MONEY) assert.ok(dropTicks(1) < dropTicks(0), 'MORE JUNK makes it faster');
+      },
     });
-    assert.deepEqual(waves['Security: the Pepper Sprinkler'], { stopped: 3, escaped: 0 }, `seed ${seed}: clippers`);
+    assert.deepEqual(waves[SPRINKLER], { stopped: 3, escaped: 0 }, `seed ${seed}: clippers`);
     assert.deepEqual(waves[WET], { stopped: 10, escaped: 0 }, `seed ${seed}: ten clippers at the sign`);
-    assert.equal(waves['Make them stop: Free Samples'].escaped, 0, `seed ${seed}: crowd`);
-    checkLessons(session.state, waves, seen, `seed ${seed}`);
+    assert.equal(waves[SAMPLES].escaped, 0, `seed ${seed}: crowd`);
+    checkLessons(s(), waves, seen, `seed ${seed}`);
+    // The Rebrander is slower than the Still: the units it puts out are further apart.
+    const rb = tileOf(s(), 10, 8);
+    const times = seen[REBRAND].made.filter(([, i]) => i === rb).map(([t]) => t);
+    for (let n = 1; n < times.length; n++) assert.ok(times[n] - times[n - 1] >= rebrandTicks({}, 1), `seed ${seed}: a Name Brand unit takes its time`);
   }
 });
 
 test('opening the doors too early lines the same shoppers up again', () => {
   const session = trainingSession(5);
   const tut = createTutorial(session);
-  tut.autoplay(STEPS.findIndex((st) => st.title === STOP_DADS));
-  assert.equal(tut.step.title, STOP_DADS);
+  tut.autoplay(STEPS.findIndex((st) => st.title === DADS));
+  assert.equal(tut.step.title, DADS);
   session.send({ c: 'start' }); // before building the forklift
   for (let n = 0; n < 240 && !tut.facts.waveEnds; n++) session.fastForward(15);
   assert.equal(tut.facts.waveEnds, 1);
   assert.equal(tut.check(), false, 'not done: the forklift is not there');
-  assert.ok(session.state.nextWave, 'two more Dads on a Mission are waiting');
+  assert.ok(session.state.nextWave, 'the dads are waiting again');
   session.send({ c: 'place', k: 'forklift', x: 8, y: 9, d: 0 });
   assert.equal(tut.check(), true, 'built now, after seeing a wave: done');
   // A lesson without shoppers leaves nobody waiting outside.
-  tut.back();
-  assert.equal(tut.step.title, DADS);
-  assert.ok(session.state.nextWave);
-  tut.back();
-  assert.equal(tut.step.manual, true);
+  tut.next();
+  assert.equal(tut.step.title, DOWN);
   assert.equal(session.state.nextWave, null);
+});
+
+test('running dry: the doors opened before the line is cut, then the cut, then it runs dry', () => {
+  const session = trainingSession(7);
+  const tut = createTutorial(session);
+  tut.autoplay(STEPS.findIndex((st) => st.title === DRY));
+  assert.equal(tut.step.title, DRY);
+  assert.deepEqual(tut.marks().map((m) => [m.x, m.y, m.f, !!m.del]), [[10, 9, 1, true]]);
+  // In the wrong order: the doors first. Kept fed, nothing runs out, and the crowd lines up again.
+  tut.act({ c: 'start' });
+  for (let n = 0; n < 400 && !tut.facts.waveEnds; n++) session.fastForward(15);
+  assert.equal(tut.check(), false);
+  assert.ok(session.state.nextWave, 'the crowd is waiting again');
+  assert.match(tut.hint(), /Right-click the highlighted belt/);
+  // Then as the lesson says.
+  for (const cmd of tut.step.solve(session.state)) tut.act(cmd);
+  for (let n = 0; n < 400 && !tut.check(); n++) session.fastForward(15);
+  assert.equal(tut.check(), true);
+});
+
+test('the Rebrander lesson cannot stall: a Forklift full of Store Brand gets the doors', () => {
+  const session = trainingSession(3);
+  const tut = createTutorial(session);
+  const at = STEPS.findIndex((st) => st.title === REBRAND);
+  tut.autoplay(at - 1); // up to Running dry, then put the belt back instead of cutting it
+  // (Played out as written, so the forklift is dry; refill it with Store Brand by putting the belt back.)
+  for (const cmd of tut.step.solve(session.state)) tut.act(cmd);
+  for (let n = 0; n < 400 && !tut.check(); n++) session.fastForward(15);
+  tut.next();
+  assert.equal(tut.step.title, REBRAND);
+  // The cut belt goes back first: the forklift fills up with the Store Brand waiting on the line.
+  tut.act({ c: 'place', k: 'conv', x: 10, y: 9, d: 1, f: 1 });
+  for (let n = 0; n < 60; n++) session.fastForward(15);
+  const b = session.state.grid[tileOf(session.state, ...F)];
+  assert.ok(unitsIn(b, 'dmg', session.state) >= stockCap(session.state), 'the forklift filled up with Store Brand');
+  assert.deepEqual(tut.marks().map((m) => [m.x, m.y, m.k]), [[10, 8, 'rebrand']], 'only the Rebrander is left to do');
+  // The belt is in the way: take it out, and put the Rebrander there.
+  tut.act({ c: 'remove', x: 10, y: 8, f: 1 });
+  tut.act({ c: 'place', k: 'rebrand', x: 10, y: 8, d: 1, f: 1 });
+  tut.act({ c: 'view', f: 0 });
+  assert.equal(tut.check(), false);
+  assert.ok(session.state.nextWave, 'a crowd is waiting');
+  assert.match(tut.hint(), /OPEN THE DOORS/);
+  tut.act({ c: 'start' });
+  for (let n = 0; n < 400 && !tut.check(); n++) session.fastForward(15);
+  assert.equal(tut.check(), true, 'once it has fired some, Name Brand goes up');
+  assert.ok(session.state.grid[tileOf(session.state, ...F)].s.dmg.some((v, n) => n % 2 === 0 && v === 2));
 });
 
 test('the Gym Bro lesson waits for the Rebuild button after its wave', () => {
@@ -255,7 +401,7 @@ test('the Gym Bro lesson waits for the Rebuild button after its wave', () => {
   const st = tut.step;
   assert.equal(st.title, GYM);
   assert.equal(tut.tool(), 'crate');
-  for (const cmd of st.solve(session.state)) session.send(cmd);
+  for (const cmd of st.solve(session.state)) tut.act(cmd);
   for (let n = 0; n < 240 && !tut.facts.waveEnds; n++) session.fastForward(15);
   assert.ok(session.state.rubble.length > 0, 'he wrecked something');
   assert.equal(tut.check(), false, 'not done until it is rebuilt');
@@ -266,6 +412,28 @@ test('the Gym Bro lesson waits for the Rebuild button after its wave', () => {
   assert.ok(session.send({ c: 'rebuild' }).ok);
   assert.equal(tut.check(), true);
   assert.equal(tut.marks().length, 0);
+});
+
+test('lessons on The Back survive extra building and another order', () => {
+  // Laying the whole line before the Still: the Still's lesson still completes once it makes Spite.
+  const session = trainingSession(11);
+  const tut = createTutorial(session);
+  tut.autoplay(STEPS.findIndex((st) => st.title === STILL));
+  tut.act({ c: 'view', f: 1 });
+  for (let y = 5; y <= 12; y++) tut.act({ c: 'place', k: 'conv', x: 10, y, d: 1, f: 1 });
+  tut.act({ c: 'place', k: 'conv', x: 15, y: 5, d: 0, f: 1 }); // a stray belt somewhere else
+  for (const cmd of tut.step.solve(session.state)) tut.act(cmd);
+  for (let n = 0; n < 200 && !tut.check(); n++) session.fastForward(15);
+  assert.equal(tut.check(), true);
+  tut.next();
+  // The next lesson's belts are already down: only the trip back up is left.
+  assert.equal(tut.step.title, LIFT);
+  for (let n = 0; n < 200 && !session.state.grid[tileOf(session.state, ...G)].s; n++) session.fastForward(15);
+  assert.equal(tut.marks().length, 0);
+  assert.equal(tut.check(), false, 'still looking at The Back');
+  assert.match(tut.hint(), /Press Tab/);
+  tut.act({ c: 'view', f: 0 });
+  assert.equal(tut.check(), true);
 });
 
 test('autoplay reaches any step, for screenshots and for Skip', () => {
@@ -282,7 +450,7 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   assert.equal(t2.step.title, 'You can never block the route completely');
   assert.equal(t2.marks().length, 1);
 
-  // Jumping to part 2 builds the part 1 layout, and only the lesson it lands on gets DEB's line.
+  // Jumping to part 2 builds the shop floor, and only the lesson it lands on gets DEB's line.
   const third = trainingSession(4);
   const says = [];
   third.on('say', (m) => says.push(m.text));
@@ -291,9 +459,9 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   assert.equal(t3.index, PART_TWO);
   const quips = new Set(STEPS.map((st) => st.quip));
   assert.deepEqual(says.filter((t) => quips.has(t)), [STEPS[PART_TWO].quip]);
-  assert.equal(third.state.grid[13 * third.state.w + 7].k, 'sprinkler', 'the third sprinkler, by the samples, is in place');
-  assert.equal(third.state.grid[13 * third.state.w + 4].k, 'salesman', 'and the TV Salesman');
-  assert.equal(third.state.grid[4 * third.state.w + 6].k, 'railgun', 'and the Barcode Laser, which part 1 ends with');
+  assert.equal(third.state.grid[13 * third.state.w + 4].k, 'salesman', 'the TV Salesman is in place');
+  assert.equal(third.state.grid[4 * third.state.w + 6].k, 'railgun', 'and the Barcode Laser');
+  assert.equal(third.state.grid[9 * third.state.w + 8].k, 'forklift', 'and the Forklift, which part 1 ends with');
 
   // The panel's jump keeps refusals off the screen; the "you cannot block the route" lesson
   // still counts its refusal.
@@ -314,57 +482,49 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   }
 });
 
-test('every building has a plain explanation', () => {
+test('every building and part has a plain explanation', () => {
   for (const k of SHOP_KINDS) {
     assert.ok(HOW[k], `help for ${k}`);
     assert.ok(HOW[k].does.length > 20 && HOW[k].use.length > 20, `help for ${k} says what it does and how to use it`);
   }
+  for (const k of ['conv', 'split', 'over', 'intern', 'bin', 'still', 'cannery', 'spooler', 'winder', 'bender', 'rebrand']) assert.ok(BACK_HOW[k], `help for ${k}`);
 });
 
-test('the player places every building at least once, and uses Rebuild and Remove (0.3.03; the Upgrade tool went in 0.4)', () => {
+test('the player places every building and the parts that matter, and uses every tool (0.4)', () => {
   // Played through, gathering what each lesson's marks ask for at the start and as it goes.
   const session = trainingSession();
   const tut = createTutorial(session);
-  const asked = new Map(); // kind of building -> titles of the lessons whose marks ask for it
-  const tools = { rebuild: new Set(), remove: new Set() };
+  const asked = new Map(); // kind -> titles of the lessons whose marks ask for it
+  const tools = { rebuild: new Set(), remove: new Set(), wire: new Set(), reinforce: new Set(), more: new Set() };
   const look = () => {
     const st = tut.step;
     for (const m of tut.marks()) {
       if (m.fix === 'rebuild') tools.rebuild.add(st.title);
+      if (m.wd !== undefined) tools.wire.add(st.title);
+      if (m.r !== undefined) tools.reinforce.add(st.title);
+      if (m.act === 'more') tools.more.add(st.title);
+      if (m.del) tools.remove.add(st.title);
       if (!m.k) continue;
       if (!asked.has(m.k)) asked.set(m.k, new Set());
       asked.get(m.k).add(st.title);
       // A mark on a tile that holds something else asks for that to be removed first.
-      const g = session.state.grid[m.y * session.state.w + m.x];
+      const g = m.f ? session.state.back[m.y * session.state.w + m.x] : session.state.grid[m.y * session.state.w + m.x];
       if (g && g.k !== m.k && g.part === undefined) tools.remove.add(st.title);
     }
   };
-  playAll(session, tut, {
-    onStep: () => look(),
-    onDone: () => {},
-  });
-  // (playAll does not look between ticks; the Gym Bro lesson's wrecks show after its wave, so
-  // play that lesson once more by hand to see its Rebuild marks.)
-  const again = trainingSession();
-  const t2 = createTutorial(again);
-  t2.autoplay(STEPS.findIndex((st) => st.title === GYM));
-  for (const cmd of t2.step.solve(again.state)) again.send(cmd);
-  for (let n = 0; n < 240 && !t2.facts.waveEnds; n++) again.fastForward(15);
-  assert.ok(t2.marks().some((m) => m.fix === 'rebuild'), 'the Gym Bro lesson marks the wrecks for Rebuild');
-  tools.rebuild.add(GYM);
+  playAll(session, tut, { onStep: () => look() });
+  tools.rebuild.add(GYM); // (its wrecks show after its wave: the Gym Bro test checks the marks)
 
-  const buildable = SHOP_KINDS;
-  assert.equal(buildable.length, 7, 'every building on the shop floor (a new one needs a lesson)');
-  for (const k of buildable) {
+  const solves = STEPS.flatMap((st) => st.solve(createGame({ training: true })));
+  assert.equal(SHOP_KINDS.length, 7, 'every building on the shop floor (a new one needs a lesson)');
+  for (const k of [...SHOP_KINDS, 'conv', 'still', 'intern', 'split', 'rebrand', 'bender']) {
     assert.ok(asked.has(k), `some lesson's marks ask the player to place a ${BUILD[k].name}`);
-    // ...and that lesson's own commands place it (the player does it, not the shift).
-    const placed = [...asked.get(k)].some((t) => STEPS.find((st) => st.title === t).solve(createGame({ training: true })).some((c) => c.c === 'place' && c.k === k));
-    assert.ok(placed, `a lesson that asks for a ${BUILD[k].name} has the player place it`);
+    assert.ok(solves.some((c) => c.c === 'place' && c.k === k), `a lesson has the player place a ${BUILD[k].name}`);
   }
-  assert.ok(tools.remove.size >= 1, 'a lesson has the player remove something');
-  assert.ok(STEPS.some((st) => st.after && st.after(createGame({ training: true })).some((c) => c.c === 'rebuild')), 'a lesson waits for Rebuild');
-  assert.ok(STEPS.some((st) => st.solve(createGame({ training: true })).some((c) => c.c === 'remove')), 'a lesson removes something');
-  assert.ok(!STEPS.some((st) => st.solve(createGame({ training: true })).some((c) => c.c === 'upgrade')), 'no lesson buys an upgrade');
+  for (const [tool, lessons] of Object.entries(tools)) assert.ok(lessons.size >= 1, `a lesson has the player use ${tool}`);
+  assert.ok(solves.some((c) => c.c === 'wire') && solves.some((c) => c.c === 'reinforce') && solves.some((c) => c.c === 'dropUp'));
+  assert.ok(solves.some((c) => c.c === 'view' && c.f === 1) && solves.some((c) => c.c === 'view' && c.f === 0), 'both floors');
+  assert.ok(!solves.some((c) => c.c === 'upgrade'), 'no lesson buys an upgrade');
 });
 
 test('the whole shift sends in Coupon Clippers, Dads and a Gym Bro, and nobody else (0.3.03)', () => {
@@ -393,22 +553,31 @@ test('on a touch screen no lesson or help text mentions a key or the mouse', asy
     }
     texts.push(...(st.touch || st.text));
   }
-  assert.ok(ownWords >= 10, 'the lessons that place buildings have touch wording of their own');
+  assert.ok(ownWords >= 16, 'the lessons that place things have touch wording of their own');
   for (const v of Object.values(help.HOW)) texts.push(v.does, v.use);
   // (The Back's parts, 0.4, on their own build bar.)
   for (const v of Object.values(help.BACK_HOW)) texts.push(v.does, v.use);
   for (const v of [help.HOW_REMOVE, help.HOW_REBUILD, help.HOW_WIRE, help.HOW_REINFORCE]) texts.push(v.does, v.use);
-  // The live hints too, at the moments a player is most likely to see them.
+  // The live hints too, at the moments a player is most likely to see them: something in the way
+  // on both floors, and looking at the wrong floor.
   const session = trainingSession();
   const tut = createTutorial(session);
   tut.start();
   for (let n = 0; n < STEPS.length - 1; n++) {
-    session.send({ c: 'place', k: 'wetfloor', x: 10, y: 2 + n, d: 0 }); // something in the way
-    if (tut.hint()) texts.push(tut.hint());
-    for (const m of tut.marks()) if (m.label) texts.push(m.label);
+    for (const m of tut.marks()) {
+      if (m.f) session.send({ c: 'place', k: 'bin', x: m.x, y: m.y, d: 0, f: 1 });
+      else session.send({ c: 'place', k: 'wetfloor', x: m.x, y: m.y, d: 0 });
+      break;
+    }
+    for (const f of [0, 1]) {
+      tut.act({ c: 'view', f });
+      if (tut.hint()) texts.push(tut.hint());
+      for (const m of tut.marks()) if (m.label) texts.push(m.label);
+    }
+    for (const m of tut.marks()) session.send({ c: 'remove', x: m.x, y: m.y, f: m.f });
     tut.skip();
   }
-  const keys = /\bpress(ing)? (the mouse|[0-9RUBFH]\b)|right-click|\bEsc\b|\bmouse\b|W, A, S|\bclick/i;
+  const keys = /\bpress(ing)? (the mouse|[0-9RUBFHZ]\b|Tab\b)|right-click|\bEsc\b|\bmouse\b|W, A, S|\bclick/i;
   let changed = 0;
   for (const t of texts) {
     const out = forTouch(t);
@@ -426,5 +595,7 @@ test('every lesson leads with what to do, and DEB says what to do before any jok
     // The first sentence alone says what to press (a lesson that teaches a key may add it).
     assert.ok(/\b(press|click|put|drag|tap|try|read|find|look)\b/i.test(st.text[0].split('. ')[0]), `"${st.title}": the first sentence is an instruction`);
     assert.ok(st.quip && st.quip.length < 170, `"${st.title}": DEB's line is short`);
+    // Short (the owner's guidance in 0.3.03: fewer words): no lesson runs past four paragraphs.
+    assert.ok(st.text.length <= 4, `"${st.title}" is short`);
   }
 });

@@ -13,8 +13,10 @@ const DONE_PAUSE_MS = 1300; // how long the "Done" tick shows before the next le
  * @param {(where: 'solo'|'menu') => void} o.onExit leave training
  * @param {(k: string|null) => void} o.highlight light up a build-bar button (null for none)
  * @param {(name: string) => void} [o.playSound]
+ * @param {() => number} [o.floor] the floor the player is looking at (0 the shop, 1 The Back; 0.4)
+ * @param {(f: number) => void} [o.setFloor] looks at a floor (Skip and the jumps use it)
  */
-export function createTutorialPanel(session, { onExit, highlight, playSound = () => {} }) {
+export function createTutorialPanel(session, { onExit, highlight, playSound = () => {}, floor = () => 0, setFloor = () => {} }) {
   const count = h('span', { class: 'tut-count' });
   const fill = h('i');
   const title = h('h3', { class: 'tut-title' });
@@ -35,9 +37,9 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
   const btnNext = h('button', { type: 'button', class: 'tut-btn tut-primary tut-next', onclick: () => { cancelAdvance(); tut.next(); } }, 'Next');
   const btnPlay = h('button', { type: 'button', class: 'tut-btn tut-primary tut-play', onclick: () => onExit('solo') }, 'Play a real game');
   const btnMenu = h('button', { type: 'button', class: 'tut-btn', onclick: () => onExit('menu') }, 'Back to menu');
-  // For players who already know the buildings: plays the rest of part 1 by itself.
+  // For players who already know the shop floor: plays the rest of part 1 by itself.
   const btnPart2 = h('button', {
-    type: 'button', class: 'tut-btn tut-jump', title: 'Builds the part 1 layout for you and goes straight to the difficult customers',
+    type: 'button', class: 'tut-btn tut-jump', title: 'Builds the shop floor of part 1 for you and goes straight to The Back',
     onclick: () => {
       cancelAdvance();
       // The skipped lessons are history: keep DEB, the reviews and the refusals they would set
@@ -54,7 +56,7 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
       const st = tut.step;
       if (st.quip) session.emit('say', { t: 'say', who: 'DEB (HR)', mood: st.mood || 'flat', text: st.quip });
     },
-  }, 'Jump to part 2');
+  }, 'Jump to The Back');
   const btnMin = h('button', {
     type: 'button', class: 'tut-min', 'aria-label': 'Shrink or expand the training panel', title: 'Shrink or expand',
     onclick: () => { el.classList.toggle('min'); btnMin.textContent = el.classList.contains('min') ? '+' : '–'; },
@@ -121,7 +123,8 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
     highlight(shownTool);
   }
 
-  const tut = createTutorial(session, { onChange: render });
+  const tut = createTutorial(session, { onChange: render, floor, setFloor });
+  let shownFloor = floor();
 
   return {
     el,
@@ -136,11 +139,13 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
      */
     arrow(ui) {
       if (advancing || !tut.step) return { kind: 'none', why: 'advancing' };
-      return arrowTarget(tut.step, session.state, tut.marks(), ui);
+      return arrowTarget(tut.step, session.state, tut.marks(), { ...ui, floor: floor() });
     },
-    /** Tiles to highlight on the floor right now. */
+    /** Tiles to highlight on the floor looked at right now (0.4: a lesson may mark The Back's). */
     marks() {
-      return advancing ? [] : tut.marks();
+      if (advancing) return [];
+      const f = floor() ? 1 : 0;
+      return tut.marks().filter((m) => (m.f ? 1 : 0) === f);
     },
     /** Once per animation frame. */
     tick() {
@@ -158,7 +163,9 @@ export function createTutorialPanel(session, { onExit, highlight, playSound = ()
       setClass(hint, 'hidden', !text);
       if (text) setText(hint, text);
       const tool = tut.tool();
-      if (tool !== shownTool) { shownTool = tool; highlight(tool); }
+      // (The bar shows the other floor's buttons after Tab: light the button up again.)
+      const fl = floor();
+      if (tool !== shownTool || fl !== shownFloor) { shownTool = tool; shownFloor = fl; highlight(tool); }
     },
     destroy() { cancelAdvance(); tut.destroy(); },
   };

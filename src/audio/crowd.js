@@ -137,6 +137,16 @@ export const RULES = {
   rotate: { gap: 0.03, delay: 0 }, click: { gap: 0.03, delay: 0 }, select: { gap: 0.04, delay: 0 }, place: { gap: 0.04, delay: 0 },
   remove: { gap: 0.04, delay: 0 }, nope: { gap: 0.15, delay: 0 }, tutorial: { gap: 0.2, delay: 0 }, chat: { gap: 0.12, delay: 0 },
   rebuild: { gap: 0.2, delay: 0 },
+  // The Back (0.4, stage 6). A busy factory finishes a unit and sends one up several times a
+  // second: those two are background (`common`), spaced well apart and few at once, and only played
+  // while The Back is on screen. Running dry is a warning: spaced, but not background. A dad
+  // snagging on wire comes in bursts at a fence. The rest are one person's doing.
+  made: { gap: 0.3, soft: 2, per: 1, common: true, delay: 0 },
+  stocked: { gap: 0.35, soft: 2, per: 1, common: true, delay: 0 },
+  stockOut: { gap: 1.2, soft: 1, per: 1, delay: 0.3 },
+  wireSnag: { gap: 0.15, soft: 2, per: 2 },
+  placeBack: { gap: 0.04, delay: 0 }, wireLay: { gap: 0.05, delay: 0 }, reinforce: { gap: 0.06, delay: 0 },
+  payout: { gap: 1, delay: 0 }, moreJunk: { gap: 0.3, delay: 0 },
 };
 
 /** The level of one play when `n` of the same sound were asked for in the last second. */

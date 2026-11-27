@@ -11,7 +11,8 @@
 </head>
 <body>
 <!--
-  A test page: opens the training shift and plays part 1 (every lesson up to "Jump to part 2") with
+  A test page: opens the training shift and plays part 1, the shop floor (every lesson up to "Jump
+  to The Back", which tools/tutorial-test-2.html plays on from), with
   made-up mouse and keyboard events, exactly as a new player would be told to: number keys to pick
   the tool, R to rotate, click or drag on the highlighted tiles, right-click to remove, and the OPEN
   THE DOORS button. It reports the lesson reached. If the tutorial's instructions were wrong or a
@@ -70,13 +71,15 @@
     key('7', 'Digit7'); click(4, 13); key('2', 'Digit2'); click(5, 12);
     await doors();
     if (!await stepDone('salesman and sprinkler, thirty clippers', 60000)) return;
-    key('2', 'Digit2'); click(7, 13);
-    await doors();
-    if (!await stepDone('third sprinkler, eight super clippers', 40000)) return;
     key('4', 'Digit4'); key('r'); click(6, 4);                   // the laser, turned once to face down
+    key('2', 'Digit2'); click(7, 13);                            // and a third sprinkler by the samples
     key('Escape', 'Escape');
     await doors();
-    if (!await stepDone('laser facing down, thirty super clippers', 60000)) return;
+    if (!await stepDone('laser facing down and a third sprinkler, thirty super clippers', 60000)) return;
+    key('3', 'Digit3'); click(8, 9);                             // the forklift, then six dads
+    key('Escape', 'Escape');
+    await doors();
+    if (!await stepDone('forklift; six dads walked through the maze', 40000)) return;
     log('DONE: reached ' + lesson());
   });
 </script>

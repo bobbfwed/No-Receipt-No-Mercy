@@ -18,7 +18,7 @@ import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, BUILD, TUNE, BACK, mapSize } from '..
 import { SHOPPER_HELP, SUPER_HELP, BOSS_HELP, BACK_HOW } from '../src/content/help.js';
 import {
   SHOPPER_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, bossFacts, fmt, paceText, edgeText, releaseText,
-  supplyFacts, tierFacts, payText,
+  supplyFacts, tierFacts, payText, howItWorks,
 } from '../src/content/facts.js';
 import { versionText } from '../src/version.js';
 
@@ -74,12 +74,15 @@ export function generated() {
     '',
     '| Supply | Made by | What it does upstairs |',
     '|---|---|---|',
-    ...supplyFacts().map((s) => `| **${s.name}** | ${s.maker} | ${s.track === 'dur' ? 'Each use soaks up one gym bro hit' : s.track === 'wire' ? 'Stops dads: a security building given a wire direction keeps them off its tiles and the ' + BACK.wireReach + ' beyond it that way while it holds wire' : `More ${s.gives}`} (${s.takers.length === SECURITY_ORDER.length ? 'every security building' : s.takers.join(', ')}) |`),
+    ...supplyFacts().map((s) => `| **${s.name}** | ${s.maker} | ${s.track === 'dur' ? 'Each use soaks up one gym bro hit' : s.track === 'wire' ? 'Stops dads: a security building given a wire direction keeps them off its tiles and the ' + BACK.wireReach + ' beyond it that way while it holds wire' : `More ${s.gives}`} (${s.track === 'wire' ? 'every security building with a wire direction' : s.takers.length === SECURITY_ORDER.length ? 'every security building' : s.takers.join(', ')}) |`),
     '',
     `Every supply comes in four brands. The machines make ${tiers[0].name}; each pass through a Rebrander puts it up one: ${tiers.slice(1).map((t, i) => `${t.name} in ${fmt(t.secs)} s from ${tiers[i].name}`).join(', ')}. A better brand does more: Bottled Spite, Rage Cola and Extension Cord count as ${tiers.map((t) => `+${t.level}`).join(', ')} levels, a roll of Duct Tape soaks up ${tiers.map((t) => t.tape).join(', ')} hits, and a unit of Razor Wire turns away ${tiers.map((t) => t.wire).join(', ')} dads.`,
   ].join('\n');
 
-  return { version, maps, back, shoppers };
+  // How the game works (0.4, stage 6), section by section: the Employee Handbook's first tab.
+  const howto = howItWorks().map((s) => `**${s.title}.** ${s.text}`).join('\n\n');
+
+  return { version, howto, maps, back, shoppers };
 }
 
 /** README text with the generated parts put in. */

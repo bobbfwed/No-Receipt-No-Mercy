@@ -165,8 +165,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     }
     if (did === 'place' || did === 'remove') playSound(did);
     // (0.4: everyone else hears these from the event, sound.js; this player at once, as for a build.)
-    if (did === 'wire') playSound('rotate');
-    if (did === 'reinforce') playSound('place');
+    // (0.4, stage 6: their own sounds, sound.js; until then the rotate ratchet and the place sound.)
+    if (did === 'wire') playSound('wireLay');
+    if (did === 'reinforce') playSound('reinforce');
     // A Rebuild press that only paid for wrecks that must wait builds nothing yet: its own sound
     // comes with the rebuildHeld event (sound.js). The host knows at once. A joined player hears
     // nothing back, so he plays it only when his own copy of the state says the press can order

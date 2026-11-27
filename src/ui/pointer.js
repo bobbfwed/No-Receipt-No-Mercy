@@ -183,6 +183,9 @@ export const CONTROL_SPOTS = {
   // (The sheet's buttons carry no names of their own: Rotate is the one that is not Remove.)
   spin: { sel: '.touch-sheet .ts-btn:not(.ts-remove)', sides: ANY },
   remove: { sel: '.touch-sheet .ts-remove', sides: ANY },
+  // (0.4) The floor switch at the bottom right of the floor (Tab), and a Returns Drop's MORE JUNK.
+  floor: { sel: '.floor-switch', sides: ['above', 'left', 'aboveleft', 'below'] },
+  more: { sel: '.touch-sheet .ts-more', sides: ANY },
 };
 /** Groups of buttons whose other buttons the arrow keeps clear of when it points at one of them. */
 const GROUPS = '.touch-sheet, .tut-foot, .bb-touch, .touch-pad, .hud-phase, .bb-btns';
