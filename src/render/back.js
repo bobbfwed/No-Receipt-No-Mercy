@@ -20,7 +20,7 @@ import { TILE, INK, C, rr, paint, box, circle, line, label, text, hazard, makeSp
 import { drawBeltTile, SP } from './buildings.js';
 import { stockMark, useMarks, markRadius, drawMark, drawMarkLamp } from './marks.js';
 import { createPaintBudget, createSpriteCache } from './spritecache.js';
-import { matchLane, createGlides, ease, progress } from './glide.js';
+import { matchLane, createGlides, ease, progress, glidePoint } from './glide.js';
 
 const T = TILE, HALF = T / 2, TAU = Math.PI * 2;
 const ROT = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
@@ -33,6 +33,16 @@ const ITEM = 24;
 const PART = 80;
 /** Chevron steps per chevron spacing, as in the belt sprites (buildings.js). */
 const PHASES = 8;
+/** How far an item rides on a belt in a tick, in world pixels. */
+const BELT_PX = (STEP * TILE) / SUB;
+/**
+ * An item crossing a part (0.4.01: into and out of a Splitter, out of a Returns Drop or a machine)
+ * moves this many times belt speed: the rules move it across in a tick or two, so the drawing lags
+ * a little behind and catches up, never more than MAX_GLIDE ticks.
+ */
+const TRANSIT = 1.5, MAX_GLIDE = 12;
+/** Where a Splitter holds its item, and where the belt feeding it ends, behind its middle. */
+const HOLD_AT = 6, IN_AT = TILE * (1.5 - END / SUB);
 /** How long a Clearance Bin's "+$" floats, in milliseconds. */
 const FLOAT_MS = 1300;
 
@@ -719,13 +729,15 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
       let wx = lx, wy = ly;
       if (d === 1) { wx = -ly; wy = lx; } else if (d === 2) { wx = -lx; wy = -ly; } else if (d === 3) { wx = ly; wy = -lx; }
       let ix = cx + wx, iy = cy + wy - 1;
-      // An item that has just come on from the side (or from an intern's hand) slides in from there.
-      if (gliding && tile >= 0) {
+      // An item that has just come on from the side, from an intern's hand or out of a part slides
+      // in from there (only tiles with a glide started lately are searched: cheap with many items).
+      if (gliding && tile >= 0 && marks[tile] && t - (marks[tile] - 1) <= MAX_GLIDE + 1) {
         const r = glides.find(tile, it[k], p0, s.tick, STEP);
         if (r) {
-          const e = ease(progress(r, t));
-          ix = r.x0 + (ix - r.x0) * e;
-          iy = r.y0 + (iy - r.y0) * e;
+          glidePoint(r, progress(r, t), ix, iy, pt);
+          ix = pt[0]; iy = pt[1];
+          // Still crossing the part it came out of: drawn over it, after the parts.
+          if (r.late && nLate < LATE) { lateCode[nLate] = it[k]; lateXY[2 * nLate] = ix; lateXY[2 * nLate + 1] = iy; nLate++; continue; }
         }
       }
       item(ctx, it[k], ix, iy);
@@ -737,7 +749,15 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
   // a tile), interns [tick + 1, held code, hold time]. 0 for the tick means never seen.
   const MAXI = 6, SNAP = 2 + 2 * MAXI;
   let snap = new Int32Array(0), hands = new Int32Array(0);
-  const glides = createGlides(48);
+  const glides = createGlides(160);
+  // Per tile, the game tick + 1 of the last glide started there (so a belt with none skips the
+  // search); per Splitter tile, the item it last showed in its hand and where: [code, x, y].
+  let marks = new Int32Array(0), shown = new Float64Array(0);
+  const pt = [0, 0];
+  // Items still crossing a part, drawn after the parts (up to LATE a frame).
+  const LATE = 96;
+  const lateCode = new Int32Array(LATE), lateXY = new Float64Array(2 * LATE);
+  let nLate = 0;
   const fresh = new Int32Array(MAXI + 2);
   /** Interns who handed something over this tick: their tiles (up to 32 a tick on screen). */
   const gave = new Int32Array(32);
@@ -745,15 +765,63 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
   /** Below this zoom (CSS pixels a tile) a glide would be a pixel or two: none are started. */
   const GLIDE_ZOOM = 14;
 
-  /** Starts a record: from (x0, y0) to (x1, y1), at game tick t0. */
+  /** Starts a record: from (x0, y0) to (x1, y1), at game tick t0. Returns it, for more settings. */
   function startGlide(kind, tile, code, pos, x0, y0, x1, y1, t0) {
     const r = glides.take(t0);
     r.kind = kind; r.tile = tile; r.code = code; r.pos = pos;
     r.x0 = x0; r.y0 = y0; r.x1 = x1; r.y1 = y1;
+    if (tile >= 0 && tile < marks.length) marks[tile] = t0 + 1;
+    return r;
+  }
+
+  /**
+   * A glide through a part (0.4.01): at about TRANSIT times belt speed, as long as its path of
+   * `dist` world pixels needs (never more than MAX_GLIDE ticks), at an even pace, drawn over parts.
+   */
+  function transit(r, dist) {
+    r.len = Math.max(2, Math.min(MAX_GLIDE, Math.round(dist / (BELT_PX * TRANSIT))));
+    r.lin = 1; r.late = 1;
+    return r;
   }
 
   /** True if the part on tile j swallows what is handed to it (a Dumbwaiter or a Clearance Bin). */
   const sink = (s, j) => { const q = j >= 0 ? s.back[j] : 0; return !!q && (q.k === 'lift' || q.k === 'bin'); };
+  /** True if the part on tile j works on what is handed to it (a machine or a Rebrander). */
+  const maker = (s, j) => { const q = j >= 0 ? s.back[j] : 0; return !!q && (q.k === 'rebrand' || !!MACHINE_ID[q.k]); };
+
+  /**
+   * Where an item put out by the part on tile j (code `code`) was last seen, for its glide onto the
+   * belt it went to: a Splitter's hand (where it was shown, or the end of the belt that fed it) with
+   * the Splitter's middle to bend round; a Returns Drop's chute; a machine's or a Rebrander's front,
+   * where its product waits. Into o = [x, y, cx, cy, curve]; false for anything else.
+   */
+  function outOf(s, j, code, o) {
+    const q = j >= 0 ? s.back[j] : 0;
+    if (!q) return false;
+    const x = (j % s.w) * T + HALF, y = ((j / s.w) | 0) * T + HALF;
+    if (q.k === 'split') {
+      const b = j * 3;
+      if (shown[b] === code) { o[0] = shown[b + 1]; o[1] = shown[b + 2]; } else {
+        o[0] = x - AHEAD_X[q.d] * IN_AT; o[1] = y - AHEAD_Y[q.d] * IN_AT - 1;
+      }
+      o[2] = x; o[3] = y - 1; o[4] = 1;
+      return true;
+    }
+    if (q.k === 'drop') { o[0] = x; o[1] = y - 4; o[4] = 0; return true; }
+    if (q.k === 'rebrand' || MACHINE_ID[q.k]) { o[0] = x + AHEAD_X[q.d] * 13; o[1] = y + AHEAD_Y[q.d] * 13 - 1; o[4] = 0; return true; }
+    return false;
+  }
+  const src = [0, 0, 0, 0, 0];
+
+  /** Starts the glide of an item (on belt tile i at pos, now at about (tx, ty)) out of part j. */
+  function glideOut(s, i, code, pos, j, tx, ty, tick) {
+    if (!outOf(s, j, code, src)) return false;
+    const r = startGlide(0, i, code, pos, src[0], src[1], 0, 0, tick);
+    const dist = src[4] ? Math.hypot(src[2] - src[0], src[3] - src[1]) + Math.hypot(tx - src[2], ty - src[3]) : Math.hypot(tx - src[0], ty - src[1]);
+    transit(r, dist);
+    if (src[4]) { r.curve = 1; r.cx = src[2]; r.cy = src[3]; }
+    return true;
+  }
 
   /**
    * Once per tick: compares the visible interns and belts with what they held when last seen, and
@@ -761,7 +829,10 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
    */
   function spot(s, vis, F) {
     const back = s.back, W = s.w, n = back.length;
-    if (snap.length !== n * SNAP) { snap = new Int32Array(n * SNAP); hands = new Int32Array(n * 3); glides.clear(); }
+    if (snap.length !== n * SNAP) {
+      snap = new Int32Array(n * SNAP); hands = new Int32Array(n * 3); marks = new Int32Array(n); shown = new Float64Array(n * 3);
+      glides.clear();
+    }
     const tick = s.tick;
     const on = F.zoom >= GLIDE_ZOOM;
     nGave = 0;
@@ -804,25 +875,56 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
               startGlide(0, i, code, pos, (from % W) * T + HALF + HAND[q.d][0], ((from / W) | 0) * T + HALF + HAND[q.d][1], 0, 0, tick);
               continue;
             }
+            // Come on from behind: out of the part behind (a Splitter, a Returns Drop, a machine),
+            // from where it was last seen; off another belt it moved on as usual.
+            if (pos <= STEP * dt + 1) {
+              const f = pos / SUB - 0.5;
+              glideOut(s, i, code, pos, nb(s, x, y, (d + 2) & 3), cx + AHEAD_X[d] * f * T, cy + AHEAD_Y[d] * f * T - 1, tick);
+              continue;
+            }
             // Too far along to have come on from behind: from a side that feeds it.
-            if (pos <= STEP * dt + 1) continue;
             const l = (d + 3) & 3, r = (d + 1) & 3;
             const fl = sendsInto(s, nb(s, x, y, l), r), fr = sendsInto(s, nb(s, x, y, r), l);
             if (!fl && !fr) continue;
             const side = fl && fr ? ((pos + code) & 1 ? l : r) : fl ? l : r;
+            if (glideOut(s, i, code, pos, nb(s, x, y, side), cx, cy - 1, tick)) continue;
             startGlide(0, i, code, pos, cx + AHEAD_X[side] * HALF, cy + AHEAD_Y[side] * HALF - 1, 0, 0, tick);
           }
-          // The front item went on into a Dumbwaiter or a Bin: it drops in.
-          if (left > 0 && sink(s, nb(s, x, y, d))) {
-            const j = nb(s, x, y, d);
+          // The front item went on into a Dumbwaiter or a Bin (it drops in), a machine or a Rebrander
+          // (it goes in at the side it came), or a Splitter (it slides on into the Splitter's hand).
+          const j = nb(s, x, y, d);
+          if (left > 0 && j >= 0) {
             const ex = cx + AHEAD_X[d] * (END / SUB - 0.5) * T, ey = cy + AHEAD_Y[d] * (END / SUB - 0.5) * T - 1;
-            startGlide(1, j, snap[b + 2], 0, ex, ey, (j % W) * T + HALF, ((j / W) | 0) * T + HALF + 4, tick);
+            const jx = (j % W) * T + HALF, jy = ((j / W) | 0) * T + HALF;
+            if (sink(s, j)) startGlide(1, j, snap[b + 2], 0, ex, ey, jx, jy + 4, tick);
+            else if (maker(s, j)) startGlide(1, j, snap[b + 2], 0, ex, ey, jx - AHEAD_X[d] * 8, jy - AHEAD_Y[d] * 8, tick);
+            else if (back[j] && back[j].k === 'split' && back[j].d === d) {
+              const hx = jx - AHEAD_X[d] * HOLD_AT, hy = jy - AHEAD_Y[d] * HOLD_AT - 1;
+              transit(startGlide(2, j, snap[b + 2], 0, ex, ey, hx, hy, tick), Math.hypot(hx - ex, hy - ey));
+            }
           }
         }
         snap[b] = tick + 1;
         const m = Math.min(MAXI, it.length >> 1);
         snap[b + 1] = m;
         for (let k = 0; k < 2 * m; k++) snap[b + 2 + k] = it[k];
+      }
+    }
+    if (!on) return;
+    // A Splitter that let go of what it showed in its hand (empty now, or holding one that came in
+    // this tick) straight into a machine, a Rebrander, a Bin or a Dumbwaiter: it goes in there, the
+    // way it took last (r). (Onto a belt, the belt's own glide above takes it from the hand.)
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
+        const p = back[i];
+        if (!p || p.k !== 'split' || !shown[i * 3]) continue;
+        const r = p.h ? glides.held(i, p.h) : null;
+        if (p.h && !(r && r.t0 === tick)) continue;
+        const d = p.d, way = p.r === 0 ? d : p.r === 1 ? (d + 3) & 3 : (d + 1) & 3;
+        const j = nb(s, x, y, way);
+        if (!(sink(s, j) || maker(s, j))) continue;
+        const jx = (j % W) * T + HALF, jy = ((j / W) | 0) * T + HALF;
+        startGlide(1, j, shown[i * 3], 0, shown[i * 3 + 1], shown[i * 3 + 2], jx - AHEAD_X[way] * 6, jy - AHEAD_Y[way] * 6, tick).len = 7;
       }
     }
   }
@@ -906,8 +1008,15 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
         switch (p.k) {
           case 'split':
             stamp(ctx, part(SPLIT, p.d), cx, cy);
-            // What it holds, on the input side of the plate.
-            if (p.h) item(ctx, p.h, cx - AHEAD_X[p.d] * 10, cy - AHEAD_Y[p.d] * 10 - 1);
+            if (p.h) {
+              // What it holds, on the input side of the plate: still sliding in off the belt, or
+              // waiting there while every way out is backed up.
+              let hx = cx - AHEAD_X[p.d] * HOLD_AT, hy = cy - AHEAD_Y[p.d] * HOLD_AT - 1;
+              const r = gliding ? glides.held(i, p.h) : null;
+              if (r) { glidePoint(r, progress(r, t), r.x1, r.y1, pt); hx = pt[0]; hy = pt[1]; }
+              item(ctx, p.h, hx, hy);
+              if (shown.length > i * 3) { shown[i * 3] = p.h; shown[i * 3 + 1] = hx; shown[i * 3 + 2] = hy; }
+            } else if (shown.length > i * 3) shown[i * 3] = 0;
             break;
           case 'over': {
             const db = overpassDirs(s, i)[1];
@@ -937,6 +1046,9 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
         }
       }
     }
+    // Items still crossing the part they came out of, over the parts.
+    for (let k = 0; k < nLate; k++) item(ctx, lateCode[k], lateXY[2 * k], lateXY[2 * k + 1]);
+    nLate = 0;
     if (gliding) drawSinks(ctx, t);
     if (withFloats && floats.length) drawFloats(ctx, s, now);
     return n;

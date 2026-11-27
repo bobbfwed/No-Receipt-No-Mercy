@@ -80,3 +80,32 @@ test("the Unpaid Intern's swing: from the belt behind him to the tile in front, 
     }
   }
 });
+
+test('a glide through a part: its own length, an even pace, a curve round the part, and the hold it came from', async () => {
+  const { createGlides, glidePoint, progress, lengthOf, GLIDE_TICKS } = await import('../src/render/glide.js');
+  const g = createGlides(4);
+  const r = g.take(100);
+  Object.assign(r, { kind: 0, tile: 7, code: 11, pos: 0, x0: 0, y0: 0 });
+  assert.equal(lengthOf(r), GLIDE_TICKS, 'a plain glide keeps the kind length');
+  r.len = 10; r.lin = 1; r.curve = 1; r.cx = 20; r.cy = 0;
+  assert.equal(progress(r, 105), 0.5);
+  const out = [0, 0];
+  assert.deepEqual(glidePoint(r, 0, 20, 20, out), [0, 0], 'starts where it was last seen');
+  assert.deepEqual(glidePoint(r, 1, 20, 20, out), [20, 20], 'ends where the belt has it');
+  // Even pace, bending round (20, 0): never a jump between two close moments.
+  let last = glidePoint(r, 0, 20, 20, [0, 0]).slice();
+  for (let u = 0.05; u <= 1.0001; u += 0.05) {
+    const p = glidePoint(r, u, 20, 20, out);
+    assert.ok(Math.hypot(p[0] - last[0], p[1] - last[1]) < 3.5, `at ${u.toFixed(2)}`);
+    last = p.slice();
+  }
+  g.expire(109);
+  assert.ok(r.on, 'still on before its own length is up');
+  g.expire(110);
+  assert.ok(!r.on, 'off once it is');
+  // A Splitter's hand: the newest hold of that item on that tile.
+  const a = g.take(200); Object.assign(a, { kind: 2, tile: 3, code: 11 });
+  const b = g.take(205); Object.assign(b, { kind: 2, tile: 3, code: 11 });
+  assert.equal(g.held(3, 11), b);
+  assert.equal(g.held(3, 12), null);
+});

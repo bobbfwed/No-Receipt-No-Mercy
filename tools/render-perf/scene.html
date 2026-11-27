@@ -27,6 +27,8 @@
     live=1         keep the game running at 1x as it is drawn (0: frozen at that moment)
     seek=glide     (with live=0) step on until an item is gliding onto a belt (sink: dropping into a
                    Dumbwaiter or Bin), then freeze a tick and a half into it
+    seek=split     (with live=0; 0.4.01) step on until the Splitter on tile at=x,y (or the first)
+                   takes an item (the nth=N th), then step=N half-ticks more, drawing each: frames of the crossing
 -->
 </head>
 <body>
@@ -86,7 +88,25 @@ const view = {
 };
 const live = q.get('live') !== '0';
 const seek = q.get('seek');
-if (seek) {
+if (seek === 'split') {
+  // (0.4.01) Frame by frame through an item crossing a Splitter: step on, drawing every tick, until
+  // the Splitter on tile at=x,y (or the first) takes an item into its hand; then step=N more
+  // half-ticks, drawing each, and freeze there. Pages with step=0, 1, 2 ... are consecutive frames.
+  const at = (q.get('at') || '').split(',').map(Number);
+  const i = at.length === 2 ? at[1] * s.w + at[0] : s.back.findIndex((p) => p && p.k === 'split');
+  // (nth=N: the Nth item it takes, counting each change of what it holds.)
+  for (let n = 0, was = s.back[i]?.h, left = num('nth', 1); n < 3000; n++) {
+    play(); acc = 0; renderer.draw(view);
+    const h = s.back[i]?.h;
+    if (h && h !== was && --left <= 0) break;
+    was = h;
+  }
+  for (let k = 0; k < num('step', 0); k++) {
+    acc += 0.5;
+    if (acc >= 1) { play(); acc -= 1; }
+    renderer.draw(view);
+  }
+} else if (seek) {
   // Step on, a tick at a time (drawing each, so The Back notices what jumped), until a glide of
   // the kind asked for is under way; then one more tick, and freeze half a tick on.
   const kind = seek === 'sink' ? 1 : 0;
