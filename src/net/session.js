@@ -182,6 +182,8 @@ export function checksum(s) {
     // (Its wire's direction and a crate's reinforcement, 0.4: only where there are any.)
     if (b.wd !== undefined) { mix(0x5744); mix(b.wd); }
     if (b.r) { mix(0x5246); mix(b.r); mix(b.c); }
+    // (What was spent on it where a card or a level changed that, 0.4.01: selling and rebuilding read it.)
+    else if (b.c !== undefined) { mix(0x4343); dec(b.c); }
     // (A Wet Floor Sign's cash upgrades, 0.4.01: only where there are some.)
     if (b.u) { mix(0x5547); mix(b.u); mix(b.c); }
     // (Its stock from The Back, 0.4: every run's tier and uses, track by track in a fixed order.
@@ -218,6 +220,9 @@ export function checksum(s) {
       if (p.q) for (let k = 0; k < p.q.length; k++) { n++; codes += p.q[k] * wt; }
       if (p.out) { n++; codes += p.out * wt; }
       parts += ((p.h | 0) * 7 + (p.r | 0) * 3 + (p.t | 0) * 5 + (p.lv | 0) * 11 + (p.d | 0) + (p.n | 0) * 17) * wt;
+      // (Who owns it and what was spent on it, 0.4.01: a part laid on a belt, backPrice, and selling
+      // it back read them. Whole dollars, and a part bought at its plain price has no `c`.)
+      parts += (((p.o ?? -1) + 1) * 19 + (p.c | 0) * 23) * wt;
     }
     mix(s.backVer); mix(n); mix(pos % 0x7fffffff); mix(codes % 0x7fffffff); mix(parts % 0x7fffffff);
   }

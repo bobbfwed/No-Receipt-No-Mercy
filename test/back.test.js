@@ -1021,9 +1021,19 @@ test('a busy Back survives a copy through JSON and plays on identically; the che
     p[f] = (p[f] | 0) + 1;
     assert.notEqual(checksum(s), was, `${k}.${f}`);
     Object.assign(p, saved);
+    if (!(f in saved)) delete p[f];
     assert.equal(checksum(s), was);
   };
-  for (const [k, f] of [['split', 'h'], ['split', 'r'], ['intern', 'h'], ['intern', 't'], ['drop', 't'], ['drop', 'lv']]) change(k, f);
+  for (const [k, f] of [['split', 'h'], ['split', 'r'], ['intern', 'h'], ['intern', 't'], ['drop', 't'], ['drop', 'lv'],
+    // (0.4.01: who owns a part and what was spent on it.)
+    ['conv', 'o'], ['conv', 'c'], ['split', 'c'], ['drop', 'r']]) change(k, f);
+  // And a shop building's spent amount where it has one (0.4.01).
+  const g = createGame({ seed: 2 });
+  addPlayer(g, 'Dave');
+  applyCommand(g, 0, { c: 'place', k: 'sprinkler', x: 5, y: 5 });
+  const sum = checksum(g);
+  g.grid[5 * g.w + 5].c = 72;
+  assert.notEqual(checksum(g), sum, 'a sprinkler bought for less');
 });
 
 test('step runs The Back in the build pause and in sales events; opening early does not run it ahead (0.4)', () => {
