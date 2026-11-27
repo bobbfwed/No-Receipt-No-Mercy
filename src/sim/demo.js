@@ -2,7 +2,8 @@
 // option so the game can be looked at without building anything by hand.
 import { applyCommand } from './commands.js';
 import { makeDrops } from './maps.js';
-import { newDrop } from './back.js';
+import { newDrop, takesSupply, addStock } from './back.js';
+import { BUILD } from './constants.js';
 
 const E = 0, S = 1, W = 2, N = 3;
 
@@ -28,27 +29,41 @@ export const DEMO_LAYOUT = [
 ];
 
 /**
- * The Back (0.4) under the demo store: one of every part, working. The Returns Drop at 10,2 feeds a
- * belt round a corner into a Splitter at 12,5. Its front branch runs east through an Overpass into
- * a Clearance Bin; its left branch goes up, along and down over that Overpass, and an Unpaid Intern
- * at 13,8 lifts its items onto its right branch, which runs south into another bin. The second drop
- * (20,12) empties into a bin of its own.
+ * The Back (0.4) under the demo store: a working supply chain feeding the demo's security.
+ *   Spite: the Returns Drop at 10,2 drops junk down a belt into a Spite Still at 10,5, whose Bottled
+ *   Spite runs east along row 5 past two Unpaid Interns (12,4 and 14,4), each lifting it up to the
+ *   Dumbwaiter of the Pepper Sprinkler above him, to a Splitter at 16,5: straight on into a
+ *   Clearance Bin, and right, down column 16 over an Overpass, into another bin.
+ *   Cola: the drop at 20,12 feeds a Cola Cannery at 19,12, then two Rebranders in a row (Name Brand,
+ *   then Premium), and a belt west along row 9, under that Overpass, that ends pointing straight
+ *   into the Dumbwaiter of the Forklift Turret at 9,8.
+ * Nothing in it sits on a Dumbwaiter (the security buildings' tiles).
  */
 export const DEMO_BACK = [
-  ['conv', 10, 3, S], ['conv', 10, 4, S], ['conv', 10, 5, E], ['conv', 11, 5, E], ['split', 12, 5, E],
-  ['conv', 13, 5, E], ['conv', 14, 5, E], ['over', 15, 5, 0], ['conv', 16, 5, E], ['bin', 17, 5, 0],
-  ['conv', 12, 4, N], ['conv', 12, 3, E], ['conv', 13, 3, E], ['conv', 14, 3, E], ['conv', 15, 3, S],
-  ['conv', 15, 4, S], ['conv', 15, 6, S], ['conv', 15, 7, S], ['conv', 15, 8, W], ['conv', 14, 8, W],
-  ['intern', 13, 8, W],
-  ['conv', 12, 6, S], ['conv', 12, 7, S], ['conv', 12, 8, S], ['conv', 12, 9, S], ['conv', 12, 10, S],
-  ['bin', 12, 11, 0],
-  ['conv', 19, 12, W], ['conv', 18, 12, W], ['bin', 17, 12, 0],
+  ['conv', 10, 3, S], ['conv', 10, 4, S], ['still', 10, 5, E],
+  ['conv', 11, 5, E], ['conv', 12, 5, E], ['conv', 13, 5, E], ['conv', 14, 5, E], ['conv', 15, 5, E],
+  ['intern', 12, 4, N], ['intern', 14, 4, N],
+  ['split', 16, 5, E], ['bin', 17, 5, 0],
+  ['conv', 16, 6, S], ['conv', 16, 7, S], ['conv', 16, 8, S], ['over', 16, 9, 0], ['conv', 16, 10, S], ['bin', 16, 11, 0],
+  ['cannery', 19, 12, N], ['rebrand', 19, 11, N], ['rebrand', 19, 10, N],
+  ['conv', 19, 9, W], ['conv', 18, 9, W], ['conv', 17, 9, W], ['conv', 15, 9, W], ['conv', 14, 9, W],
+  ['conv', 13, 9, W], ['conv', 12, 9, W], ['conv', 11, 9, W], ['conv', 10, 9, N], ['conv', 10, 8, W],
 ];
+
+/**
+ * Stock the demo's buildings start with, as [x, y, supply code, units], so the shop floor's supply
+ * pips have something to show from the first frame: one unit of Name Brand Bottled Spite in the
+ * Sprinkler by the entrance, which it fires off in twenty shots (so its damage runs dry early in the
+ * first sales event and the "OUT OF SPITE" warning is seen), one of Name Brand Extension Cord in the
+ * far Forklift Turret, which it uses up in six shots (so its range runs dry in the first sales
+ * event and the "OUT OF CORD" warning is seen), and Duct Tape in the Sprinkler at the bottom.
+ */
+const DEMO_STOCK = [[7, 11, 12, 1], [25, 8, 32, 1], [20, 13, 41, 2]];
 
 /**
  * A ring of belts in the top left corner of The Back carrying one of each of the five supplies at
  * each of the four tiers, round and round, so how they look can be judged before anything in the
- * game makes them (machines come in a later stage of 0.4). Clockwise from 1,1; two items a tile.
+ * a Rebrander can raise them that far. Clockwise from 1,1; two items a tile.
  */
 const SHOWCASE = [
   [1, 1, E], [2, 1, E], [3, 1, E], [4, 1, S], [4, 2, S], [4, 3, S],
@@ -58,7 +73,7 @@ const SHOWCASE = [
 /**
  * Builds the demo's Back for a player: its Returns Drops where the map's would be (the bare default
  * map has none of its own yet; makeDrops gives the positions a warehouse of this size has), the
- * parts in DEMO_BACK and the ring of supplies. Free: his cash is put back as it was, so the shop
+ * parts in DEMO_BACK, the stock in DEMO_STOCK and the ring of supplies. Free: his cash is put back as it was, so the shop
  * floor's demo plays exactly as before. @returns {string[]} problems, empty if all was placed
  */
 export function applyDemoBack(state, pid = 0) {
@@ -88,15 +103,24 @@ export function applyDemoBack(state, pid = 0) {
       n++;
     }
   }
+  for (const [x, y, code, units] of DEMO_STOCK) {
+    const b = state.grid[y * state.w + x];
+    if (!b || !BUILD[b.k].lift) { problems.push(`stock at ${x},${y}: no security building`); continue; }
+    for (let u = 0; u < units; u++) if (takesSupply(b, code)) addStock(b, code);
+  }
   p.cash = cash;
   return problems;
 }
 
 /**
  * Builds the demo layout for a player, giving him enough cash to pay for it.
+ * @param {Object} [o]
+ * @param {boolean} [o.back] also build The Back's supply chain (applyDemoBack); true by default.
+ *   A test about the shop floor alone can leave it out, so stocked security does not change who
+ *   reaches what.
  * @returns {string[]} problems, empty if everything was placed
  */
-export function applyDemoLayout(state, pid = 0) {
+export function applyDemoLayout(state, pid = 0, { back = true } = {}) {
   const problems = [];
   const p = state.players[pid];
   p.cash += 5000;
@@ -105,7 +129,7 @@ export function applyDemoLayout(state, pid = 0) {
     if (!r.ok) problems.push(`${k} at ${x},${y}: ${r.why}`);
   }
   p.cash = Math.max(0, p.cash - 5000) + 300;
-  return problems.concat(applyDemoBack(state, pid));
+  return back ? problems.concat(applyDemoBack(state, pid)) : problems;
 }
 
 export { E, S, W, N };

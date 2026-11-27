@@ -91,11 +91,12 @@ test('a save from before it existed counts from 0', () => {
 test('a warranty purchase or a restocking fee is not goods sold', () => {
   // Both are paid through the same split as a sale; only a chute's sale adds to state.sales. The
   // ready-made demo layout, played with both cards and the warranty sure to sell, through a whole
-  // sales event of shoppers.
+  // sales event of shoppers. (Without the demo's Back: its stocked sprinklers would finish the
+  // shoppers before they reach the stands, and this is about the shop floor's money only.)
   const s = createGame({ seed: 5, cards: ['warranty', 'restocking'] });
   addPlayer(s, 'Dave');
   s.players[0].cash = 99999;
-  assert.deepEqual(applyDemoLayout(s, 0), []);
+  assert.deepEqual(applyDemoLayout(s, 0, { back: false }), []);
   const was = CARDS.warranty.chance;
   CARDS.warranty.chance = 1;
   try {
