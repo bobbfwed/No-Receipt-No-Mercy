@@ -1,5 +1,6 @@
 // A building's levels. A security building's strength comes in separate tracks:
-//   dmg  damage, or its main effect   spd  speed   rng  range   dur  durability (gym bro hits)
+//   dmg  damage, or its main effect   spd  speed   rng  range
+// (A fourth, dur, took Duct Tape until 0.4.01; reinforcing with cash does its job now.)
 // Which tracks a kind has, and what a level does in each, is data in BUILD[k].up (constants.js).
 //
 // From 0.4 the levels come only from the building's stock of supplies from The Back (`b.s`, see
@@ -11,9 +12,9 @@ import { BUILD, TUNE, BACK } from './constants.js';
 import { cardStats, priceMul } from './cards.js';
 
 /** Every track, in the order they are listed everywhere. */
-const TRACKS = ['dmg', 'spd', 'rng', 'dur'];
+const TRACKS = ['dmg', 'spd', 'rng'];
 
-/** The tracks a kind of building has, in the order dmg, spd, rng, dur (empty if none). */
+/** The tracks a kind of building has, in the order dmg, spd, rng (empty if none). */
 export function tracksOf(k) {
   const up = BUILD[k] && BUILD[k].up;
   return up ? TRACKS.filter((t) => up[t]) : [];
@@ -21,11 +22,10 @@ export function tracksOf(k) {
 
 /**
  * The level a building's stock gives one track: BACK.tierLevel of the tier of its oldest run of
- * that supply, 0 with none. Not durability: Duct Tape does not raise a level, each use of it soaks
- * up one gym bro hit instead (BACK.tapeHits).
+ * that supply, 0 with none. (Razor Wire has no level: it is used by dads, see wire.js.)
  */
 export function stockLevel(b, track) {
-  const run = track !== 'dur' && b && b.s && b.s[track];
+  const run = track !== 'wire' && b && b.s && b.s[track];
   return run && run.length ? BACK.tierLevel[run[0]] | 0 : 0;
 }
 
@@ -41,16 +41,17 @@ export function levelOf(b) {
 
 /**
  * What was spent on a building: what was paid for it (`c`, where that differs from its kind's
- * price: a card changed the price, or a Crate Stack was reinforced, 0.4). Selling back and
+ * price: a card changed the price, or the building was reinforced, 0.4). Selling back and
  * rebuilding are shares of this. Stock is never money.
  */
 export const spentOn = (b) => b.c ?? BUILD[b.k].cost;
 
 /**
- * What the next level of reinforcement costs for the Crate Stack b (the `reinforce` command, 0.4):
- * round(cost * grow ** r) from BUILD.crate.reinforce, times the cards that change a crate's price
- * (priceMul), whole dollars and never under one; 0 once it has the top level, or for anything that
- * cannot be reinforced. Pass the game's state wherever there is one, so the cards count.
+ * What the next level of reinforcement costs for building b (the `reinforce` command: Crate Stacks
+ * since 0.4, every security building since 0.4.01): round(cost * grow ** r) from BUILD[k].reinforce,
+ * times the cards that change that kind's price (priceMul), whole dollars and never under one; 0
+ * once it has the top level, or for anything that cannot be reinforced. The one place this price is
+ * worked out. Pass the game's state wherever there is one, so the cards count.
  */
 export function reinforceCost(b, state = null) {
   const rf = b && BUILD[b.k] && BUILD[b.k].reinforce;
@@ -72,9 +73,8 @@ export function reinforceCost(b, state = null) {
  *                        of each shopper's chance not to stop (it stops with 1 - (1 - stop) *
  *                        stopLeft), and what each chance to hurry past is multiplied by
  *   slow, slip, slipDmg  wet floor sign (speed multiplier, chance a dad slips, patience he loses)
- *   hits                 every building: gym bro hits it survives in one wave (Duct Tape soaks up
- *                        hits on top of these, one use a hit: see wreck in step.js; a reinforced
- *                        Crate Stack takes one more for each level `r`)
+ *   hits                 every building: gym bro hits it survives in one wave (a reinforced
+ *                        building takes one more for each level `r`: see wreck in step.js)
  * With `state`, the game's cards are applied too (cardStats in cards.js: the premature and
  * artisanal cards); the simulation always passes it. Without, the plain numbers (the handbook).
  */
@@ -95,7 +95,7 @@ export function statsOf(b, state = null) {
     slow: TUNE.wetSlow * (d.slow || 1) ** lv('dmg'),
     slip: Math.min(0.95, TUNE.slipChance + (d.slip || 0) * lv('dmg')),
     slipDmg: TUNE.slipDmg * (b.k === 'wetfloor' ? mul('dmg') : 1),
-    // (A reinforced Crate Stack, 0.4: one more hit for each level, `r`.)
+    // (A reinforced building, 0.4: one more hit for each level, `r`.)
     hits: (def.hits || 1) + (b.r | 0),
   };
   return state ? cardStats(state, b, st) : st;

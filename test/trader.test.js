@@ -334,7 +334,7 @@ test('Head Office cannot buy a Card Trader, and the release comes whatever he pl
 
 test('a copy of the game made mid-release, with stock being ripped, plays on identically', (t) => {
   const s = game(1, 4);
-  for (let x = 3; x <= 14; x++) stocked(s, x, 5, [[1, 4], [4, 2]]);
+  for (let x = 3; x <= 14; x++) stocked(s, x, 5, [[1, 4], [3, 2]]);
   assert.ok(place(s, 'sprinkler', 8, 7).ok);
   openOn(s, 12);
   // Until one of them is gloating over what he ripped and another is watching him.

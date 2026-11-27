@@ -51,7 +51,7 @@
 //             second wall, all three to Premium after the third, then Platinum and Returns Drop
 //             levels between its forklifts), and reinforced crates where gym bros keep wrecking.
 //             Tried and dropped while tuning (each did worse): fence posts in every wall, Extension
-//             Cord, Duct Tape, Returns Drop levels early (PLAN.md, 0.4 stage 7)
+//             Cord, Duct Tape (gone since 0.4.01), Returns Drop levels early (PLAN.md, 0.4 stage 7)
 //   greedy    (to see whether Platinum is too easy) the maze and its gap security and nothing more on
 //             the shop floor; each drop's Spite and Cola go through a comb of Rebranders side by side
 //             (2, 4 and 8 for the three steps) so all of it arrives Platinum; honest's fence; then
@@ -206,12 +206,12 @@ function interleave(list, markers, every) {
  * The bots: what each builds (see the top of the file). Settings:
  *   back       builds in The Back at all            fences   walls (0 = nearest the entrance, or
  *   reinforce  reinforces crates gym bros wreck                'all') that get fence posts
+ *              ('all', 0.4.01: any building gym bros wreck, now that security can be reinforced)
  *   prefix     room for this many Rebranders per machine (they come with 'tier' markers)
  *   sup.tower  supplies for its Pepper Sprinklers and Forklift Turrets
  *   lines      supplies started once the first gap is guarded ('line' markers)
  *   main       the two machines on each drop's main bus (default Spite and Cola; the third is a
  *              Barb Bender with a bus of its own)
- *   tape       asks for Duct Tape for any building a gym bro hits (needs 'dur' in main)
  *   afterWall  markers after each wall's security; markers, every: markers between the extras,
  *              one after every `every` forklifts; extras 'grid' or 'front'; stalls (see stalls())
  */
@@ -321,11 +321,12 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
       const r = applyCommand(s, 0, { c: 'rebuild' });
       if (r.ok) rebuilt += r.n;
     }
-    // Crates that keep getting wrecked are reinforced, a level per wreck, up to three.
+    // Crates that keep getting wrecked are reinforced, a level per wreck, up to three (with
+    // reinforce 'all', any building).
     if (cfg.reinforce) {
       for (const [i, n] of crateHits) {
         const b = s.grid[i];
-        if (!b || b.k !== 'crate' || (b.r | 0) >= Math.min(3, n)) continue;
+        if (!b || (b.k !== 'crate' && cfg.reinforce !== 'all') || (b.r | 0) >= Math.min(3, n)) continue;
         if (me.cash < reinforceCost(b, s)) break;
         if (applyCommand(s, 0, { c: 'reinforce', x: i % s.w, y: (i / s.w) | 0 }).ok) reinforced++;
       }
@@ -459,8 +460,7 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
       }
       if (e.e === 'smash') {
         wrecked += e.left === 0 ? 1 : 0;
-        if (e.k === 'crate' && e.left === 0) crateHits.set(e.i, (crateHits.get(e.i) || 0) + 1);
-        if (cfg && cfg.tape && e.k !== 'crate' && back) { enabled.add('dur'); back.want(e.i, 'dur'); }
+        if ((e.k === 'crate' || (cfg && cfg.reinforce === 'all')) && e.left === 0) crateHits.set(e.i, (crateHits.get(e.i) || 0) + 1);
       }
       if (e.e === 'rebuilt' && e.late) rebuilt += e.n;
       if (e.e === 'rip') { ripped++; rippedNow++; }
@@ -630,7 +630,7 @@ async function table({ bots, seeds, map, difficulty, players, sets, jobs }) {
   });
   const z = { ...MAP_SIZES[map.size], ...mapSize(map.design, map.size) };
   console.log(`\n#### ${map.design}, ${z.name} (${z.w} x ${z.h}), ${players} player${players > 1 ? 's' : ''}, ${difficulty || 'normal'}, seeds ${seeds.join(' ')}${sets ? ', set ' + sets : ''}`);
-  console.log('event lost in (a win is 21) per seed; then averages: event, cash at the end, dad refunds, first event a dad got through, stocked share (all events / events 6-12) for dmg spd rng dur wire');
+  console.log('event lost in (a win is 21) per seed; then averages: event, cash at the end, dad refunds, first event a dad got through, stocked share (all events / events 6-12) for dmg spd rng wire');
   for (const bot of bots) {
     const rs = out.filter((r, n) => list[n].bot === bot);
     const ev = rs.map((r) => (r.result === 'won' ? 21 : r.wave));

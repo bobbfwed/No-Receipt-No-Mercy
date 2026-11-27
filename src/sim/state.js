@@ -33,7 +33,7 @@ import { newDrop } from './back.js';
  * @property {number} [bz]  Free Sample table only: 1 if it hands out booze (the eightyproof card;
  *   decided when it is bought new, and kept through wrecking and rebuilding: rubble carries it too)
  * @property {Object<string, number[]>} [s] (0.4) a building with Dumbwaiters (BUILD[k].lift): its
- *   stock of supplies from The Back, by track ('dmg', 'spd', 'rng', 'dur', 'wire'), each as runs
+ *   stock of supplies from The Back, by track ('dmg', 'spd', 'rng', 'wire'), each as runs
  *   [tier, uses, tier, uses, ...] in the order they arrived; absent with none. Lost when it is
  *   wrecked or removed (see back.js)
  */

@@ -496,7 +496,7 @@ test('regifting: every Dumbwaiter holds two more units of each supply', () => {
 test('artisanal: every unit of supply lasts 25% longer (uses rounded up), counted as one unit', () => {
   const s = game(['artisanal']);
   for (const k of ['sprinkler', 'forklift', 'railgun', 'samples']) {
-    for (const t of ['dmg', 'dur', 'wire']) {
+    for (const t of ['dmg', 'spd', 'wire']) {
       for (const tier of [1, 2, 3, 4]) {
         assert.equal(usesPer(k, t, tier, s), Math.ceil(usesPer(k, t, tier) * CARDS.artisanal.uses), `${k} ${t} ${tier}`);
         assert.equal(usesPer(k, t, tier, game()), usesPer(k, t, tier));

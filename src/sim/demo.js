@@ -61,9 +61,10 @@ export const DEMO_BACK = [
  * Sprinkler by the entrance, which it fires off in twenty shots (so its damage runs dry early in the
  * first sales event and the "OUT OF SPITE" warning is seen), one of Name Brand Extension Cord in the
  * far Forklift Turret, which it uses up in six shots (so its range runs dry in the first sales
- * event and the "OUT OF CORD" warning is seen), and Duct Tape in the Sprinkler at the bottom.
+ * event and the "OUT OF CORD" warning is seen), and Rage Cola in the Sprinkler at the bottom (Duct Tape
+ * until it went in 0.4.01).
  */
-const DEMO_STOCK = [[7, 11, 12, 1], [25, 8, 32, 1], [20, 13, 41, 2], [9, 8, 51, 1]];
+const DEMO_STOCK = [[7, 11, 12, 1], [25, 8, 32, 1], [20, 13, 21, 2], [9, 8, 51, 1]];
 
 /**
  * Razor Wire directions in the demo (0.4, stage 4b), as [x, y, direction]: the Forklift Turret at

@@ -28,8 +28,9 @@
 import { applyCommand, buildPrice, footprint, DIRS } from '../../src/sim/index.js';
 
 /** The machine that makes each supply (by the track it stocks). */
-export const MACHINE = { dmg: 'still', spd: 'cannery', rng: 'spooler', dur: 'winder', wire: 'bender' };
-export const SUPPLIES = ['dmg', 'spd', 'rng', 'dur', 'wire'];
+// (Duct Tape and its Tape Winder went in 0.4.01.)
+export const MACHINE = { dmg: 'still', spd: 'cannery', rng: 'spooler', wire: 'bender' };
+export const SUPPLIES = ['dmg', 'spd', 'rng', 'wire'];
 
 const LEFT = (d) => (d + 3) & 3, RIGHT = (d) => (d + 1) & 3;
 

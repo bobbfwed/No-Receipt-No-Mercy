@@ -53,25 +53,30 @@ export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater
  * targets: an area tower hits at most this many shoppers at once (the ones nearest the tills).
  * size: [w, h] tiles when facing east or west; facing north or south it is [h, w]. Absent: 1 x 1.
  *   The top-left tile of the footprint holds the building; the others point at it (see state.js).
- * hits: how many gym bro hits it survives in one wave (1 if absent). Duct Tape soaks up more.
+ * hits: how many gym bro hits it survives in one wave (1 if absent); each level of reinforce adds one.
  * beam: fires straight out of its front end and hits everyone along the line (the Barcode Laser).
  * up: the tracks a security building takes supplies for, and what a level does in each (see
  *   upgrades.js; a supply's tier stands for a number of levels, BACK.tierLevel):
  *   dmg  damage, or the building's main effect (Bottled Spite)
  *   spd  speed, fires more often (Rage Cola)       rng  range (Extension Cord)
- *   dur  takes Duct Tape, whose uses soak up gym bro hits; it is never counted as levels
  *   In a track: `mul` multiplies per level, `add` adds per level. The Wet Floor Sign's dmg track
  *   has `slow` (speed multiplier per level) and `slip` (added to the chance a dad slips); the
  *   Salesman's has `keep` (what is left of each shopper's chance NOT to stop, per level) and
  *   `rush` (multiplies every chance to hurry past, per level).
- *   (Until 0.4 these were upgrades bought with cash, and the tracks also carried their prices.)
+ *   (Until 0.4 these were upgrades bought with cash, and the tracks also carried their prices. A
+ *   fourth track, dur, took Duct Tape until 0.4.01, which soaked up gym bro hits; reinforcing with
+ *   cash does that job now.)
+ * reinforce: { cost, grow, max }: the reinforce command raises the building's level r by one, and
+ *   each level lets it take one more gym bro hit in a sales event. Level r + 1 costs
+ *   round(cost * grow ** r), times the cards that change the building's price, up to max levels
+ *   (reinforceCost in upgrades.js).
  */
 export const BUILD = {
   // reinforce (0.4, the owner's request: crates are the filler of the maze, and fragile ones would
-  // make gym bros too strong): the `reinforce` command raises a crate's level `r` by one, and each
-  // level lets it take one more gym bro hit in a sales event. Level r + 1 costs
-  // round(cost * grow ** r), times the cards that change a crate's price, up to `max` levels: the
-  // numbers its bought durability track had in 0.3.04 (10, 16, 26, 41, 66, 105, 168, 268).
+  // make gym bros too strong): the numbers a crate's bought durability track had in 0.3.04 (10, 16,
+  // 26, 41, 66, 105, 168, 268). Since 0.4.01 every security building can be reinforced too (Duct
+  // Tape is gone): its first level costs an eighth of its price, at least $10, each level 1.6 times
+  // the last, 8 levels (the owner's decision).
   crate: {
     name: 'Crate Stack', cost: 10, group: 'walls', blocks: true,
     reinforce: { cost: 10, grow: 1.6, max: 8 },
@@ -84,37 +89,43 @@ export const BUILD = {
   sprinkler: {
     name: 'Pepper Sprinkler', cost: 80, group: 'security', blocks: true, tower: true, lift: true, shots: 20,
     range: 1.75, dmg: 6, cd: 0.5, aoe: true, targets: 4,
-    up: { dmg: { mul: 1.25 }, spd: { mul: 1.1 }, rng: { add: 0.15 }, dur: {} },
+    up: { dmg: { mul: 1.25 }, spd: { mul: 1.1 }, rng: { add: 0.15 } },
+    reinforce: { cost: 10, grow: 1.6, max: 8 },
     desc: 'Sprays up to four shoppers nearby. Short range.',
   },
   forklift: {
     name: 'Forklift Turret', cost: 200, group: 'security', blocks: true, tower: true, lift: true, shots: 6,
     range: 6, dmg: 30, cd: 1.6, aoe: false,
-    up: { dmg: { mul: 1.3 }, spd: { mul: 1.12 }, rng: { add: 0.3 }, dur: {} },
+    up: { dmg: { mul: 1.3 }, spd: { mul: 1.12 }, rng: { add: 0.3 } },
+    reinforce: { cost: 25, grow: 1.6, max: 8 },
     desc: 'Long range, one shopper at a time.',
   },
   // A 3 x 1 gun that fires down the line it faces, through everything, and hits every shopper on it.
   railgun: {
     name: 'Barcode Laser', cost: 700, group: 'security', blocks: true, tower: true, rot: true, size: [3, 1], hits: 2, lift: true, shots: 2,
     range: 10, dmg: 60, cd: 4.5, beam: true, width: 0.6,
-    up: { dmg: { mul: 1.3 }, spd: { mul: 1.12 }, rng: { add: 1 }, dur: {} },
+    up: { dmg: { mul: 1.3 }, spd: { mul: 1.12 }, rng: { add: 1 } },
+    reinforce: { cost: 88, grow: 1.6, max: 8 },
     desc: 'Fires a beam straight out of its front end, through walls and everything else, hitting every shopper in line. Slow to reload.',
   },
   wetfloor: {
     name: 'Wet Floor Sign', cost: 30, group: 'security', blocks: false, lift: true, shots: 10,
-    up: { dmg: { slow: 0.82, slip: 0.08, mul: 1.45 }, dur: {} },
+    up: { dmg: { slow: 0.82, slip: 0.08, mul: 1.45 } },
+    reinforce: { cost: 10, grow: 1.6, max: 8 },
     desc: 'Slows shoppers who walk through. Dads ignore signs and sometimes slip.',
   },
   samples: {
     name: 'Free Samples', cost: 120, group: 'security', blocks: true, range: 2.2, lift: true, shots: 8,
-    up: { dmg: { mul: 1.2 }, rng: { add: 0.25 }, dur: {} },
+    up: { dmg: { mul: 1.2 }, rng: { add: 0.25 } },
+    reinforce: { cost: 15, grow: 1.6, max: 8 },
     desc: 'Shoppers nearby stop for a sample. Dads do not.',
   },
   // A 2 x 2 stand where a man demonstrates knives and barbecues on a television. Each shopper
   // walking past may stop to watch, or hurry past to get away from him (see `pitch` on SHOPPERS).
   salesman: {
     name: 'TV Salesman', cost: 450, group: 'security', blocks: true, size: [2, 2], hits: 2, range: 4.5, lift: true, shots: 8,
-    up: { dmg: { mul: 1.15, keep: 0.88, rush: 0.85 }, rng: { add: 0.5 }, dur: {} },
+    up: { dmg: { mul: 1.15, keep: 0.88, rush: 0.85 }, rng: { add: 0.5 } },
+    reinforce: { cost: 56, grow: 1.6, max: 8 },
     desc: 'Demonstrates knives and barbecues on a television. Shoppers in reach may stop to watch, or hurry past.',
   },
   // The Back (0.4): the floor under the shop, where the factory is. Its parts are kinds like
@@ -149,8 +160,9 @@ export const BUILD = {
     desc: 'Where returned junk comes down from the shop. Fixed by the map; deals it out to all four sides in turn.',
   },
   // The machines (0.4, stage 3): each turns junk into one supply, `supply` being its type (1 Bottled
-  // Spite, damage; 2 Rage Cola, speed; 3 Extension Cord, range; 4 Duct Tape, durability; 5 Razor
-  // Wire, which stops dads in a later stage). See BACK.makeSecs.
+  // Spite, damage; 2 Rage Cola, speed; 3 Extension Cord, range; 5 Razor Wire, which stops dads).
+  // Type 4, Duct Tape, and its Tape Winder were taken out in 0.4.01; the number is not reused.
+  // See BACK.makeSecs.
   still: {
     name: 'Spite Still', cost: 40, group: 'back', back: true, rot: true, supply: 1,
     desc: 'Boils returned junk down into Bottled Spite. Security that drinks it hits harder.',
@@ -162,10 +174,6 @@ export const BUILD = {
   spooler: {
     name: 'Cord Spooler', cost: 40, group: 'back', back: true, rot: true, supply: 3,
     desc: 'Winds junk into Extension Cord. Security plugged into it reaches further.',
-  },
-  winder: {
-    name: 'Tape Winder', cost: 40, group: 'back', back: true, rot: true, supply: 4,
-    desc: 'Rolls junk into Duct Tape. Each roll soaks up gym bro hits.',
   },
   bender: {
     name: 'Barb Bender', cost: 40, group: 'back', back: true, rot: true, supply: 5,
@@ -216,7 +224,6 @@ export const buildDef = (k) => (typeof k === 'string' && Object.hasOwn(BUILD, k)
  *   rebrandSecs seconds a Rebrander takes, by the tier going in (index 0 unused): each pass slower
  *   stockUnits  the most units of one supply a building holds (per track)
  *   tierLevel   the level a tier counts as in its track (BUILD[k].up), by tier (index 0: no stock)
- *   tapeHits    gym bro hits one unit of Duct Tape soaks up, by tier
  *   wireTurns   dads one unit of Razor Wire turns away, by tier
  *   wireReach   how many tiles a building's Razor Wire runs out beyond its edge, in the direction
  *               the player gave it (b.wd; see wire.js). A number to tune by playing
@@ -237,7 +244,6 @@ export const BACK = {
   rebrandSecs: [0, 4, 8, 16],
   stockUnits: 6,
   tierLevel: [0, 2, 4, 6, 8],
-  tapeHits: [0, 1, 2, 3, 4],
   wireTurns: [0, 3, 6, 10, 15],
   wireReach: 3,
   dropUpCost: 150,

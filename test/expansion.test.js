@@ -280,15 +280,15 @@ test('the best stock makes a tower much stronger, and selling gives back a share
   place(s, 'forklift', 5, 5);
   const b = s.grid[at(5, 5)];
   const base = statsOf(b);
-  // Platinum in damage, speed and range (uses to spare), and Duct Tape, which is not levels.
+  // Platinum in damage, speed and range (uses to spare), and Razor Wire, which is not levels.
   const top = BACK.tierLevel[4];
-  b.s = { dmg: [4, 1e6], spd: [4, 1e6], rng: [4, 1e6], dur: [4, 4] };
+  b.s = { dmg: [4, 1e6], spd: [4, 1e6], rng: [4, 1e6], wire: [4, 4] };
   assert.equal(levelOf(b), 1 + 3 * top, 'the badge counts the levels its stock gives every track');
   const st = statsOf(b);
   assert.ok(st.dmg > base.dmg * 6);
   assert.ok(st.cd < base.cd / 2);
   assert.ok(st.range > base.range + 2);
-  assert.equal(st.hits, base.hits, 'tape soaks up hits one use at a time; it adds no levels');
+  assert.equal(st.hits, base.hits, 'stock never adds hits');
 
   // Stock is never money: selling gives back the same share of the price paid, no more.
   const cash = s.players[0].cash;
@@ -480,16 +480,15 @@ test('a super gym bro wrecks more than a normal one', () => {
   assert.ok(big > normal && big >= 9, `super wrecked ${big} sample tables, normal ${normal}`);
 });
 
-test('Duct Tape soaks up gym bro hits; the damage is forgotten when the wave ends', (t) => {
-  // (This is about soaking hits up, not about his limit, so he may hit as often as he likes here;
-  // the limit is tested below.)
+test('a reinforced building takes more gym bro hits; the damage is forgotten when the wave ends', (t) => {
+  // (This is about the hits a building takes, not about his limit, so he may hit as often as he
+  // likes here; the limit is tested below. Duct Tape did this job until 0.4.01.)
   tune(t, { smashOther: 1, smashMax: 1000, smashWait: 0 });
   const s = stage(3);
   for (let x = 3; x <= 26; x++) { place(s, 'sprinkler', x, 6); place(s, 'sprinkler', x, 8); }
-  // Name Brand tape: one unit soaks up two hits, then the sprinkler's own one hit is left.
-  for (let x = 3; x <= 26; x++) for (const y of [6, 8]) addStock(s.grid[at(x, y)], itemCode(4, 2));
-  assert.equal(usesIn(s.grid[at(3, 6)], 'dur'), BACK.tapeHits[2]);
-  assert.equal(statsOf(s.grid[at(3, 6)]).hits, 1);
+  // Two levels of reinforcement each, paid for with the command: three hits in all.
+  for (let x = 3; x <= 26; x++) for (const y of [6, 8]) for (let n = 0; n < 2; n++) assert.ok(applyCommand(s, 0, { c: 'reinforce', x, y }).ok);
+  assert.equal(statsOf(s.grid[at(3, 6)]).hits, 3);
   // Shoppers in training keep their starting patience, so give this one enough to get through.
   send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   step(s);
@@ -499,16 +498,16 @@ test('Duct Tape soaks up gym bro hits; the damage is forgotten when the wave end
   for (let i = 0; i < 9 * TICK_HZ; i++) ev.push(...step(s).filter((e) => e.e === 'smash'));
   assert.equal(s.phase, 'wave');
   assert.ok(ev.length >= 5);
-  // Each hit takes one off what is left this wave: the tape first, then the building's own hit.
+  // Each hit takes one off what is left this wave.
   for (const e of ev) assert.ok(e.left === 2 || e.left === 1 || e.left === 0);
-  assert.ok(ev.some((e) => e.tape), 'some hits were soaked up by tape');
+  assert.ok(ev.some((e) => e.left > 0), 'some hits were held');
   let taped = 0;
   for (let x = 3; x <= 26; x++) for (const y of [6, 8]) {
     const b = s.grid[at(x, y)];
     const mine = ev.filter((e) => e.i === at(x, y));
     if (!b || !mine.length) continue;
     taped++;
-    assert.equal(usesIn(b, 'dur') + statsOf(b).hits - (b.hit | 0), mine.pop().left);
+    assert.equal(statsOf(b).hits - (b.hit | 0), mine.pop().left);
   }
   assert.ok(taped >= 3, `${taped} sprinklers took hits and stood`);
   assert.equal(s.rubble.length, ev.filter((e) => e.left === 0).length, 'only the ones out of hits are rubble');

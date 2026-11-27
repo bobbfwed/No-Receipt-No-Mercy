@@ -14,7 +14,7 @@
 //                                              junk; owned by nobody. No facing since 0.4.01: it
 //                                              shares out to its four sides like a Splitter
 //   Clearance Bin { k: 'bin', o }
-//   machine       { k, o, d, n, t, out }       k: still, cannery, spooler, winder or bender (BUILD[k].supply
+//   machine       { k, o, d, n, t, out }       k: still, cannery, spooler or bender (BUILD[k].supply
 //                                              is the supply it makes); n: junk waiting (up to 2);
 //                                              t: ticks left on the one being worked; out: the supply
 //                                              made and waiting to go out of its front (0 if none)
@@ -55,18 +55,22 @@ export const JUNK = 1;
 
 /**
  * An item's number: 1 for junk; a supply is 10 * type + tier (type 1 Bottled Spite, 2 Rage Cola,
- * 3 Extension Cord, 4 Duct Tape, 5 Razor Wire; tier 1 Store Brand to 4 Platinum).
+ * 3 Extension Cord, 5 Razor Wire; tier 1 Store Brand to 4 Platinum). Type 4 was Duct Tape until
+ * 0.4.01: gone, and its number not reused.
  */
 export const itemCode = (type, tier) => (type ? 10 * type + tier : JUNK);
-/** A supply's type (1 to 5), or 0 for junk. */
+/** A supply's type (1, 2, 3 or 5), or 0 for junk. */
 export const itemType = (code) => (code / 10) | 0;
 /** A supply's tier (1 to 4), or 0 for junk. */
 export const itemTier = (code) => (code >= 10 ? code % 10 : 0);
 
-/** The track (BUILD[k].up) each supply type stocks, by type (index 0, junk: none). */
-export const SUPPLY_TRACKS = [null, 'dmg', 'spd', 'rng', 'dur', 'wire'];
+/**
+ * The track (BUILD[k].up) each supply type stocks, by type (index 0, junk: none; index 4, Duct
+ * Tape's track 'dur' until 0.4.01: none).
+ */
+export const SUPPLY_TRACKS = [null, 'dmg', 'spd', 'rng', null, 'wire'];
 /** Every track a building can hold stock in, in a fixed order (the checksum walks them so). */
-export const STOCK_TRACKS = ['dmg', 'spd', 'rng', 'dur', 'wire'];
+export const STOCK_TRACKS = ['dmg', 'spd', 'rng', 'wire'];
 
 /** True for a part that makes things and puts them out of its front: a machine or a Rebrander. */
 const makes = (p) => p.k === 'rebrand' || !!BUILD[p.k].supply;
@@ -754,14 +758,13 @@ export function stepBack(state, ev = null) {
 /**
  * How many uses one unit of a supply at `tier` gives a building of kind k in `track`: for damage,
  * speed and range the kind's own BUILD[k].shots (whatever the tier: the tier sets the level, see
- * levelIn); for durability BACK.tapeHits[tier] (hits soaked up); for wire BACK.wireTurns[tier]
+ * levelIn); for wire BACK.wireTurns[tier]
  * (dads turned away: see wire.js). With `state`, the game's cards count (artisanal: times
  * cardUses, rounded up); without, the plain number the handbook shows.
  */
 export function usesPer(k, track, tier, state = null) {
-  const n = track === 'dur' ? BACK.tapeHits[tier] | 0
-    : track === 'wire' ? BACK.wireTurns[tier] | 0
-      : (BUILD[k] && BUILD[k].shots) | 0;
+  const n = track === 'wire' ? BACK.wireTurns[tier] | 0
+      : track === 'dmg' || track === 'spd' || track === 'rng' ? (BUILD[k] && BUILD[k].shots) | 0 : 0;
   const m = state ? cardUses(state) : 1;
   return m === 1 ? n : Math.ceil(n * m);
 }
@@ -801,6 +804,7 @@ export function takesSupply(b, code, state = null) {
   const type = itemType(code), tier = itemTier(code);
   if (type < 1 || type > 5 || tier < 1 || tier > 4) return false;
   const track = SUPPLY_TRACKS[type];
+  if (!track) return false;
   if (track !== 'wire' && !(def.up && def.up[track])) return false;
   // Razor Wire only for a building that has a wire direction (0.4, stage 7): otherwise every
   // building on a shared belt would fill up with six units of wire it can never use before the real
@@ -892,7 +896,7 @@ export function useStock(b, track, i, ev) {
 /**
  * The building on anchor tile i has done its work once: a shot fired (however many it hit), or a
  * shopper stopped, slowed or tripped. One use comes off each of damage, speed and range that it
- * has stock in. (Durability is used by gym bro hits, wire by dads.)
+ * has stock in. (Wire is used by dads.)
  */
 export function useWork(b, i, ev) {
   if (!b || !b.s) return;

@@ -7,7 +7,7 @@ import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { stepRebuilds } from './commands.js';
-import { stepBack, useWork, useStock, usesIn, syncLifts, stealStock } from './back.js';
+import { stepBack, useWork, syncLifts, stealStock } from './back.js';
 import { wireMap, useWire, wireChanged } from './wire.js';
 import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardPay, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardGrabChance, cardGrabHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
@@ -1167,15 +1167,9 @@ function wreck(state, ti, s, ev, flatten = false) {
   const b = state.grid[ai];
   if (!b) return false;
   state.ws.wrecked++;
+  // (Its hits include a level of reinforcement for each one bought: statsOf. Duct Tape, which
+  // soaked up hits until 0.4.01, is gone.)
   const hits = statsOf(b).hits;
-  // Duct Tape from The Back (0.4) soaks up the hit: it takes one use of the tape instead of
-  // counting toward wrecking it. (`left` counts the tape still on it as hits it can take.)
-  const tape = flatten ? 0 : usesIn(b, 'dur');
-  if (tape > 0) {
-    ev.push({ e: 'smash', i: ai, x: s.x, y: s.y, k: b.k, owner: b.o, left: tape - 1 + Math.max(0, hits - (b.hit | 0)), tape: 1 });
-    useStock(b, 'dur', ai, ev);
-    return true;
-  }
   b.hit = flatten ? hits : (b.hit | 0) + 1;
   const left = Math.max(0, hits - b.hit);
   ev.push({ e: 'smash', i: ai, x: s.x, y: s.y, k: b.k, owner: b.o, left });
@@ -1188,7 +1182,7 @@ function wreck(state, ti, s, ev, flatten = false) {
   if (b.c !== undefined) r.c = b.c;
   // (A Free Sample table that hands out booze, the eightyproof card, is rebuilt as one.)
   if (b.bz) r.bz = 1;
-  // (0.4: a reinforced Crate Stack comes back with its levels, which were paid for and are in `c`;
+  // (0.4: a reinforced building comes back with its levels, which were paid for and are in `c`;
   // a wire's direction comes back if the wire command would allow it then: restoreWire.)
   if (b.r) r.r = b.r;
   if (b.wd !== undefined) { r.wd = b.wd; wireChanged(state); }
@@ -1207,8 +1201,8 @@ function wreck(state, ti, s, ev, flatten = false) {
 }
 
 /**
- * One of a gym bro's own hits. Every hit he lands uses one up (TUNE.smashMax), even one Duct
- * Tape soaks up, and he rests after it (TUNE.smashWait). The owner's rule (0.2.12).
+ * One of a gym bro's own hits. Every hit he lands uses one up (TUNE.smashMax), and he rests after it
+ * (TUNE.smashWait). The owner's rule (0.2.12).
  */
 function landHit(state, ti, s, def, ev) {
   if (!wreck(state, ti, s, ev)) return;
@@ -1775,13 +1769,12 @@ function dadMove(state, s, i, fields, ev) {
  *  pause {on,by} player `by` paused (on true) or resumed (on false) the game.)
  *  The Back (0.4, back.js): binned {i,v,by} a Clearance Bin on tile i was paid v for a supply.
  *  stockOut {i,t} the building on anchor tile i has just used, or had stolen, the last of its stock
- *  in track t ('dmg', 'spd', 'rng', 'dur', 'wire'). smash has tape 1 when Duct Tape soaked
- *  the hit up (its `left` then counts the tape still on it). dropUp {x,y,lv,by,paid} (a command)
+ *  in track t ('dmg', 'spd', 'rng', 'wire'). dropUp {x,y,lv,by,paid} (a command)
  *  a player bought the Returns Drop at (x, y) its cash level lv.
  *  Razor Wire and crates (0.4): turned {i,x,y} a dad at (x, y) was turned away by the live wire of
  *  the building on anchor tile i, which used one use of its Razor Wire (dadStep). Commands add
  *  wire {x,y,d,by,live} (the building at anchor (x, y) was given wire direction d, -1 none) and
- *  reinforce {x,y,r,by,paid} (the Crate Stack at (x, y) was reinforced to level r).
+ *  reinforce {x,y,r,by,paid} (the building whose anchor is (x, y) was reinforced to level r).
  */
 export function step(state) {
   const ev = [];

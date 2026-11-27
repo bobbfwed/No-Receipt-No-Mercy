@@ -103,23 +103,23 @@ test('a gym bro lands at most 2 hits in a walk past crates, a Roid Rager at most
   }
 });
 
-test('a hit Duct Tape soaks up still counts', (t) => {
-  // (Until 0.4 this was a crate with a bought level of durability; crates now go at one hit, and
-  // Duct Tape from The Back is what soaks one up.) With smashOther 1 he hits whatever stands beside
-  // him once no crate does.
+test('a hit a reinforced building holds still counts', (t) => {
+  // (Until 0.4 this was a crate with a bought level of durability; from 0.4 to 0.4.01 Duct Tape
+  // from The Back soaked one up; now a level of reinforcement, bought with cash, holds one.) With
+  // smashOther 1 he hits whatever stands beside him once no crate does.
   tune(t, { smashOther: 1 });
   const taped = (s) => {
-    // A Forklift Turret beside the tile he is put on, with one roll of Store Brand tape (one hit).
+    // A Forklift Turret beside the tile he is put on, reinforced one level (one hit more).
     assert.ok(place(s, 'forklift', 12, 7).ok);
-    addStock(s.grid[at(12, 7)], itemCode(4, 1));
-    assert.equal(usesIn(s.grid[at(12, 7)], 'dur'), 1);
+    assert.ok(applyCommand(s, 0, { c: 'reinforce', x: 12, y: 7 }).ok);
+    assert.equal(s.grid[at(12, 7)].r, 1);
   };
   // (sm 0: ready to swing the moment he is let go. He counts it down only while walking, and the
   // forklift is not on his way, so he would otherwise have walked off before his next swing.)
   const stand = (sh) => { sh.x = 11.5; sh.y = 7.5; sh.vx = 0; sh.vy = 0; sh.sm = 0; };
 
   // Stood beside it, and held there through his rest (as if watching a television), he comes back
-  // and finishes it: the tape soaks his first hit, his second brings it down, and he is spent.
+  // and finishes it: it holds his first hit, his second brings it down, and he is spent.
   {
     const s = stage(2);
     taped(s);
@@ -134,13 +134,13 @@ test('a hit Duct Tape soaks up still counts', (t) => {
         sh.t = sh.hw + 2;
       }
     });
-    assert.deepEqual(hits.map((e) => [e.i, e.left, e.tape | 0]), [[at(12, 7), 1, 1], [at(12, 7), 0, 0]]);
+    assert.deepEqual(hits.map((e) => [e.i, e.left]), [[at(12, 7), 1], [at(12, 7), 0]]);
     assert.equal(s.grid[at(12, 7)], 0, 'it took both his hits to fall');
-    assert.equal(sh.hn, TUNE.smashMax, 'the hit the tape soaked up counted');
+    assert.equal(sh.hn, TUNE.smashMax, 'the hit it held counted');
     assert.equal(escaped, 1);
   }
 
-  // Spend a hit elsewhere first (a plain crate by the entrance) and the taped one survives him.
+  // Spend a hit elsewhere first (a plain crate by the entrance) and the reinforced one survives him.
   {
     const s = stage(2);
     taped(s);
@@ -149,7 +149,7 @@ test('a hit Duct Tape soaks up still counts', (t) => {
     const sh = gymBro(s);
     let held = false;
     const { hits, escaped } = watch(s, 200, (ev) => {
-      // After that first hit, stand him beside the taped forklift through his rest.
+      // After that first hit, stand him beside the reinforced forklift through his rest.
       if (!held && ev.some((e) => e.e === 'smash')) {
         held = true;
         stand(sh);
@@ -159,9 +159,8 @@ test('a hit Duct Tape soaks up still counts', (t) => {
     });
     assert.equal(hits.length, 2);
     assert.ok([at(1, 6), at(1, 9)].includes(hits[0].i) && hits[0].left === 0, 'the plain crate took his first hit');
-    assert.deepEqual([hits[1].i, hits[1].left, hits[1].tape], [at(12, 7), 1, 1], 'the taped forklift his second, and it held');
-    assert.ok(s.grid[at(12, 7)], 'the tape saved it');
-    assert.equal(usesIn(s.grid[at(12, 7)], 'dur'), 0, 'and is used up');
+    assert.deepEqual([hits[1].i, hits[1].left], [at(12, 7), 1], 'the reinforced forklift his second, and it held');
+    assert.ok(s.grid[at(12, 7)], 'the reinforcement saved it');
     assert.equal(sh.hn, TUNE.smashMax);
     assert.equal(escaped, 1);
   }

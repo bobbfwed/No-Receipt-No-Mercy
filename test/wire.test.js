@@ -78,7 +78,7 @@ test('the numbers: wire reaches 3 tiles; a unit turns 3, 6, 10, 15 dads; crates 
   const prices = [];
   for (let r = 0; r <= 8; r++) prices.push(reinforceCost({ k: 'crate', r }));
   assert.deepEqual(prices, [10, 16, 26, 41, 66, 105, 168, 268, 0]);
-  assert.equal(reinforceCost({ k: 'sprinkler' }), 0, 'only a Crate Stack');
+  assert.equal(reinforceCost({ k: 'conv' }), 0, 'nothing in The Back');
   // Only buildings with Dumbwaiters carry wire.
   for (const k of Object.keys(BUILD)) assert.equal(carriesWire(k), !!BUILD[k].lift && !BUILD[k].back, k);
   assert.equal(carriesWire('crate'), false);
@@ -749,7 +749,8 @@ test('reinforce: the refusals', () => {
   assert.ok(place(s, 'crate', 5, 5).ok);
   assert.ok(place(s, 'sprinkler', 7, 7).ok);
   const r = (x, y, pid = 0) => applyCommand(s, pid, { c: 'reinforce', x, y }).why;
-  assert.equal(r(7, 7), 'kind');
+  // (Since 0.4.01 every building on the shop floor can be reinforced: no 'kind' refusal for a real one.)
+  assert.equal(canReinforce(s, 0, 7, 7), null);
   assert.equal(r(6, 6), 'empty');
   assert.equal(r(-1, 5), 'bounds');
   assert.equal(r(5.5, 5), 'bounds');
@@ -782,6 +783,67 @@ test('reinforce: the cards that change a crate\'s price change the price of a le
       assert.ok(applyCommand(s, 0, { c: 'reinforce', x: 5, y: 5 }).ok);
     }
   }
+});
+
+test('reinforce (0.4.01): every security building, an eighth of its price at least $10 to start, 1.6 times a level, 8 levels', () => {
+  const first = { sprinkler: 10, wetfloor: 10, samples: 15, forklift: 25, salesman: 56, railgun: 88, crate: 10 };
+  for (const k of Object.keys(BUILD)) {
+    if (BUILD[k].back) { assert.equal(BUILD[k].reinforce, undefined, k); continue; }
+    assert.deepEqual(BUILD[k].reinforce, { cost: first[k], grow: 1.6, max: 8 }, k);
+    if (k !== 'crate') assert.equal(first[k], Math.max(10, Math.round(BUILD[k].cost / 8)), `${k}: the owner's rule`);
+    const prices = [];
+    for (let r = 0; r <= 8; r++) prices.push(reinforceCost({ k, r }));
+    assert.deepEqual(prices, [...Array(8)].map((_, r) => Math.max(1, Math.round(first[k] * 1.6 ** r))).concat([0]), k);
+  }
+  assert.deepEqual([0, 1, 2].map((r) => reinforceCost({ k: 'railgun', r })), [88, 141, 225]);
+});
+
+test('reinforce (0.4.01): any tile of a big building raises its anchor; hits a level; rubble keeps it; sold back from what was spent', (t) => {
+  tune(t, { smashWait: 0, smashMax: 1000, smashOther: 1 });
+  const s = stage();
+  addPlayer(s, 'Steve');
+  s.players[1].cash = 1e6;
+  assert.ok(place(s, 'salesman', 14, 6).ok); // 2 x 2: 14-15, 6-7
+  const ai = at(14, 6);
+  const got = [];
+  assert.ok(applyCommand(s, 0, { c: 'reinforce', x: 15, y: 7 }, got).ok, 'its far corner');
+  assert.deepEqual(got, [{ e: 'reinforce', x: 14, y: 6, r: 1, by: 0, paid: 56 }]);
+  assert.ok(applyCommand(s, 1, { c: 'reinforce', x: 14, y: 7 }).ok);
+  const b = s.grid[ai];
+  assert.equal(b.r, 2);
+  assert.equal(s.grid[at(15, 7)].r, undefined, 'only the anchor holds it');
+  assert.equal(b.c, BUILD.salesman.cost + 56 + 90);
+  assert.equal(statsOf(b).hits, BUILD.salesman.hits + 2);
+  // A gym bro held beside it: four hits to bring it down (its own two and two levels).
+  send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
+  const ev = play(s, 60, () => {
+    for (const m of s.shoppers) { m.hp = m.mhp = 1e9; if (m.k === 'gymbro' && s.grid[ai]) { m.x = 13.5; m.y = 6.5; m.vx = m.vy = 0; m.sm = 0; } }
+  });
+  assert.deepEqual(ev.filter((e) => e.e === 'smash' && e.i === ai).map((e) => e.left), [3, 2, 1, 0]);
+  const r = s.rubble.find((x) => x.i === ai);
+  assert.equal(r.r, 2, 'the rubble keeps its levels');
+  assert.equal(r.c, b.c);
+  play(s, 200);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'salesman', x: 15, y: 7 }).ok);
+  assert.equal(s.grid[ai].r, 2, 'rebuilt with them');
+  // Sold back: the usual share of everything spent, levels included, to its owner.
+  const owner = s.grid[ai].o, cash = s.players[owner].cash, spent = s.grid[ai].c;
+  assert.ok(applyCommand(s, 0, { c: 'remove', x: 15, y: 6 }).ok);
+  assert.equal(s.players[owner].cash, cash + Math.floor(spent * TUNE.sellBack));
+});
+
+test('no Duct Tape anywhere (0.4.01): no Tape Winder, no tapeHits, no supply type 4, no dur track', () => {
+  assert.equal(BUILD.winder, undefined);
+  assert.equal(BACK.tapeHits, undefined);
+  for (const k of Object.keys(BUILD)) {
+    assert.notEqual(BUILD[k].supply, 4, k);
+    assert.ok(!BUILD[k].up || !('dur' in BUILD[k].up), k);
+  }
+  assert.ok(!JSON.stringify(BUILD).includes('winder'));
+  assert.ok(!JSON.stringify(BACK).includes('tape'));
+  const s = stage();
+  assert.ok(place(s, 'sprinkler', 5, 5).ok);
+  for (let tier = 1; tier <= 4; tier++) assert.equal(give(s, at(5, 5), itemCode(4, tier), 0), false, 'type 4 is wanted by nobody');
 });
 
 test('a reinforced crate takes a gym bro hit more a level, every sales event; its rubble keeps its levels', (t) => {

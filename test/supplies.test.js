@@ -12,7 +12,8 @@ import {
 import { checksum } from '../src/net/session.js';
 
 const E = 0, S = 1, W = 2, N = 3;
-const MACHINES = { still: 1, cannery: 2, spooler: 3, winder: 4, bender: 5 };
+// (Type 4, Duct Tape, and its Tape Winder went in 0.4.01.)
+const MACHINES = { still: 1, cannery: 2, spooler: 3, bender: 5 };
 const ticks = (secs) => Math.max(1, Math.round(secs * TICK_HZ));
 
 /**
@@ -79,7 +80,8 @@ test('the numbers are the work package\'s', () => {
   assert.deepEqual(BACK.rebrandSecs, [0, 4, 8, 16]);
   assert.equal(BACK.stockUnits, 6);
   assert.deepEqual(BACK.tierLevel, [0, 2, 4, 6, 8]);
-  assert.deepEqual(BACK.tapeHits, [0, 1, 2, 3, 4]);
+  assert.equal(BACK.tapeHits, undefined, 'Duct Tape went in 0.4.01');
+  assert.equal(BUILD.winder, undefined);
   assert.deepEqual(BACK.wireTurns, [0, 3, 6, 10, 15]);
   assert.deepEqual([BACK.dropUpCost, BACK.dropUpGrow, BACK.dropUpMax, BACK.dropMul], [150, 1.6, 5, 0.85]);
   for (const k of Object.keys(MACHINES)) assert.deepEqual([BUILD[k].cost, BUILD[k].back, BUILD[k].supply], [40, true, MACHINES[k]], k);
@@ -241,9 +243,9 @@ test('stock gives a track exactly the level a tier stands for, and nothing else 
   // Levels a save from before 0.4 bought (`u`) count for nothing: bought upgrades are gone.
   assert.equal(levelIn({ k: 'sprinkler', u: { dmg: 5 }, s: { dmg: [2, 1] } }, 'dmg'), BACK.tierLevel[2]);
   assert.equal(levelIn({ k: 'sprinkler', u: { dmg: 5 } }, 'dmg'), 0);
-  // Durability's level is never raised by stock (tape soaks hits instead).
-  assert.equal(levelIn({ k: 'sprinkler', s: { dur: [4, 1] } }, 'dur'), 0);
-  assert.equal(statsOf({ k: 'sprinkler', s: { dur: [4, 1] } }).hits, statsOf({ k: 'sprinkler' }).hits);
+  // Razor Wire gives no level, and nothing in stock changes the hits a building takes.
+  assert.equal(levelIn({ k: 'sprinkler', s: { wire: [4, 1] } }, 'wire'), 0);
+  assert.equal(statsOf({ k: 'sprinkler', s: { wire: [4, 1] } }).hits, statsOf({ k: 'sprinkler' }).hits);
   // No stock, no levels: exactly the building it always was.
   assert.deepEqual(statsOf({ k: 'forklift', s: {} }), statsOf({ k: 'forklift' }));
 });
@@ -270,9 +272,10 @@ test('a Dumbwaiter takes only the tracks its building has (and wire once it has 
   placeOk(s, 'samples', 7, 5);
   placeOk(s, 'sprinkler', 9, 5);
   const w = idx(s, 5, 5), sm = idx(s, 7, 5), sp = idx(s, 9, 5);
-  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, w, itemCode(t, 1), E)), [true, false, false, true, false], 'sign: damage, tape; no wire without a direction');
-  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sm, itemCode(t, 1), E)), [true, false, true, true, false], 'samples: no speed');
-  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sp, itemCode(t, 1), N)), [true, true, true, true, false], 'from any side');
+  // (Type 4 was Duct Tape until 0.4.01: nobody takes it now.)
+  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, w, itemCode(t, 1), E)), [true, false, false, false, false], 'sign: damage; no wire without a direction');
+  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sm, itemCode(t, 1), E)), [true, false, true, false, false], 'samples: no speed');
+  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sp, itemCode(t, 1), N)), [true, true, true, false, false], 'from any side');
   // Razor Wire (0.4, stage 7): only a building with a wire direction takes it, so a shared belt
   // does not fill every building with wire it cannot use. Clearing the direction keeps what it has.
   for (const [i, x] of [[w, 5], [sm, 7], [sp, 9]]) {
@@ -293,15 +296,15 @@ test('a Dumbwaiter takes only the tracks its building has (and wire once it has 
   assert.ok(!wants(s, sp, itemCode(2, 1), E), 'one use gone is not a unit gone');
   for (let n = 1; n < BUILD.sprinkler.shots; n++) useStock(b, 'spd', sp, []);
   assert.ok(wants(s, sp, itemCode(2, 1), E), 'a whole unit used: room for one');
-  // Tape and wire: the tier is the uses per unit.
+  // Wire: the tier is the uses per unit.
   for (let tier = 1; tier <= 4; tier++) {
-    assert.equal(usesPer('sprinkler', 'dur', tier), BACK.tapeHits[tier]);
+    assert.equal(usesPer('sprinkler', 'dur', tier), 0, 'no tape');
     assert.equal(usesPer('sprinkler', 'wire', tier), BACK.wireTurns[tier]);
     assert.equal(usesPer('railgun', 'dmg', tier), BUILD.railgun.shots);
   }
-  give(s, w, itemCode(4, 3), E);
+  assert.equal(give(s, w, itemCode(4, 3), E), false);
   give(s, w, itemCode(5, 2), E);
-  assert.deepEqual(bld(s, 5, 5).s, { dur: [3, 3], wire: [2, 6] });
+  assert.deepEqual(bld(s, 5, 5).s, { wire: [2, 6] });
   // Nothing standing above (a part of a big building points at its anchor): nothing wanted.
   assert.ok(!takesSupply(null, itemCode(1, 1)));
   assert.ok(!takesSupply({ k: 'crate', o: 0 }, itemCode(1, 1)));
@@ -400,31 +403,24 @@ test('Free Samples, the TV Salesman and the Wet Floor Sign use one use for each 
   }
 });
 
-test('Duct Tape soaks up gym bro hits: a use each instead of a hit, then he wrecks it as usual', (t) => {
+test('a reinforced security building takes a hit more a level, then he wrecks it as usual (0.4.01: Duct Tape is gone)', (t) => {
   tune(t, { smashOther: 1, smashEvery: 0.3, smashWait: 0.3, smashMax: 99 });
   const s = stage(9);
   corridor(s, 'sprinkler', 3, 26);
-  for (const b of s.grid) if (b && b.part === undefined) addStock(b, itemCode(4, 2)); // two hits each
+  for (const b of s.grid) if (b && b.part === undefined) b.r = 2; // two levels: three hits each
   const seen = new Map();
-  let taped = 0;
+  let held = 0;
   wave(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }], 120, (ev) => {
     for (const e of ev) {
       if (e.e !== 'smash') continue;
       const n = (seen.get(e.i) || 0) + 1;
       seen.set(e.i, n);
-      if (n <= 2) {
-        taped++;
-        assert.equal(e.tape, 1, `hit ${n} on ${e.i} is soaked up`);
-        assert.equal(e.left, 2 - n + 1, 'its tape and its own hit are what is left');
-        assert.ok(s.grid[e.i] && !s.grid[e.i].hit, 'no hit counted');
-        if (n === 2) assert.ok(ev.some((o) => o.e === 'stockOut' && o.i === e.i && o.t === 'dur'));
-      } else {
-        assert.equal(e.tape, undefined);
-        assert.equal(e.left, 0, 'the third wrecks it');
-      }
+      assert.equal(e.tape, undefined, 'no tape any more');
+      assert.equal(e.left, 3 - n, `hit ${n} on ${e.i}`);
+      if (n < 3) { held++; assert.equal(s.grid[e.i].hit, n); }
     }
   });
-  assert.ok(taped >= 2, `${taped} hits soaked up`);
+  assert.ok(held >= 2, `${held} hits held`);
 });
 
 test('a wreck\'s Dumbwaiters stay under the rubble, wanting nothing, until it is rebuilt or the rubble goes', (t) => {

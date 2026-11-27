@@ -192,8 +192,8 @@ test('remove and rotate work from any tile of a big building, on the whole build
 
 test('each kind has the tracks it should, and only stock raises their levels', () => {
   const want = {
-    sprinkler: ['dmg', 'spd', 'rng', 'dur'], forklift: ['dmg', 'spd', 'rng', 'dur'], railgun: ['dmg', 'spd', 'rng', 'dur'],
-    wetfloor: ['dmg', 'dur'], samples: ['dmg', 'rng', 'dur'], salesman: ['dmg', 'rng', 'dur'],
+    sprinkler: ['dmg', 'spd', 'rng'], forklift: ['dmg', 'spd', 'rng'], railgun: ['dmg', 'spd', 'rng'],
+    wetfloor: ['dmg'], samples: ['dmg', 'rng'], salesman: ['dmg', 'rng'],
     // (Bought upgrades went in 0.4: Crate Stacks have no Dumbwaiter, so no tracks.)
     crate: [],
   };
@@ -214,8 +214,8 @@ test('each kind has the tracks it should, and only stock raises their levels', (
 
 test('the stats of any mix of stock, the overall level, and what was spent', () => {
   // Runs of [tier, uses]: damage Store Brand (2 levels), speed Name Brand (4), range Premium (6),
-  // and Duct Tape, which soaks up hits and is never counted as levels.
-  const f = { k: 'forklift', s: { dmg: [1, 6], spd: [2, 6], rng: [3, 6], dur: [1, 1] } };
+  // and Razor Wire, which is never counted as levels.
+  const f = { k: 'forklift', s: { dmg: [1, 6], spd: [2, 6], rng: [3, 6], wire: [1, 1] } };
   const st = statsOf(f);
   assert.ok(Math.abs(st.dmg - 30 * 1.3 ** 2) < 1e-9);
   assert.ok(Math.abs(st.cd - 1.6 / 1.12 ** 4) < 1e-9);
@@ -227,7 +227,8 @@ test('the stats of any mix of stock, the overall level, and what was spent', () 
   assert.equal(spentOn({ ...f, c: 150 }), 150);
   assert.deepEqual(statsOf({ k: 'forklift' }), statsOf({ k: 'forklift', s: {} }));
   assert.equal(statsOf({ k: 'railgun' }).hits, 2);
-  assert.equal(statsOf({ k: 'salesman', s: { dur: [2, 4] } }).hits, 2);
+  assert.equal(statsOf({ k: 'salesman', s: { wire: [2, 4] } }).hits, 2);
+  assert.equal(statsOf({ k: 'salesman', r: 3 }).hits, 5, 'a level of reinforcement a hit (0.4.01)');
   assert.equal(statsOf({ k: 'crate' }).hits, 1);
   const sign = statsOf({ k: 'wetfloor', s: { dmg: [1, 10] } });
   assert.ok(Math.abs(sign.slow - TUNE.wetSlow * 0.82 ** 2) < 1e-9 && Math.abs(sign.slip - (TUNE.slipChance + 0.16)) < 1e-9);
@@ -894,10 +895,12 @@ function everything(seed = 21) {
   for (let x = 6; x <= 34; x += 7) {
     place(g, 'crate', x, 5); place(g, 'crate', x, 6);
     place(g, 'sprinkler', x, 12, 0, 1); place(g, 'samples', x + 1, 15, 0, 1); place(g, 'wetfloor', x + 2, 11, 0, 1);
-    // Stock from The Back on some of it (as if it had come up the Dumbwaiters): Rage Cola and Duct Tape.
+    // Stock from The Back on some of it (as if it had come up the Dumbwaiters): Rage Cola and
+    // Extension Cord (Duct Tape until 0.4.01); and a level of reinforcement.
     const sp = g.grid[12 * g.w + x];
     addStock(sp, itemCode(2, 1));
-    addStock(sp, itemCode(4, 2));
+    addStock(sp, itemCode(3, 2));
+    sp.r = 1;
   }
   assert.ok(place(g, 'railgun', 20, 1, 1).ok);
   assert.ok(place(g, 'railgun', 12, 20, 3).ok);

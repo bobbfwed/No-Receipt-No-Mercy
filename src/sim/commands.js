@@ -166,8 +166,8 @@ function placeCheck(state, k, x, y, pid, d, paid) {
 /**
  * A building as it is put down. `card` carries what a card gave it, or what a wreck being rebuilt
  * had (see the Building fields in state.js): `c` the price paid where it differs from the kind's,
- * `bz` a Free Sample table that hands out booze (the eightyproof card), `r` a Crate Stack's
- * reinforcement (0.4). A wire's direction is not copied here: see restoreWire.
+ * `bz` a Free Sample table that hands out booze (the eightyproof card), `r` its reinforcement
+ * (0.4; a Crate Stack's, and since 0.4.01 any security building's). A wire's direction is not copied here: see restoreWire.
  */
 function newBuilding(k, owner, d, card = null) {
   const b = { k, o: owner };
@@ -348,8 +348,9 @@ export function stepRebuilds(state, ev) {
  *                               bigger than one tile, so it keeps its footprint)
  *   { c: 'wire', x, y, d }      (0.4) give the building on (x, y) Razor Wire running in direction d
  *                               (0-3), or take it away (-1); free (see canWire, setWire)
- *   { c: 'reinforce', x, y }    (0.4) pay for the next level of the Crate Stack on (x, y): one more
- *                               gym bro hit a sales event (see canReinforce, reinforce)
+ *   { c: 'reinforce', x, y }    (0.4) pay for the next level of the Crate Stack (0.4.01: or security
+ *                               building) on any tile (x, y) of it: one more gym bro hit a sales
+ *                               event (see canReinforce, reinforce)
  *   place, remove and rotate with f: 1 do the same on The Back (0.4; see backCommand)
  *   { c: 'line', f: 1, x, y, x2, y2, a }  (0.4.01) a whole line of belts in The Back from (x, y)
  *                               to (x2, y2), paid for at once (see layLine and planLine in line.js)
@@ -597,12 +598,13 @@ function setWire(state, pid, cmd, ev) {
 }
 
 /**
- * Whether player pid may reinforce the Crate Stack on (x, y) one more level now (0.4; the
+ * Whether player pid may reinforce the building on any tile (x, y) of it one more level now (0.4,
+ * Crate Stacks; 0.4.01, every security building too: the kinds with BUILD[k].reinforce; the
  * `reinforce` command). Anyone in the store may, paying for it himself, as anyone may pay for a
  * Returns Drop's level.
  * @returns {string|null} null if allowed, otherwise the reason: 'over', 'lobby', 'cards',
  *   'paused' as for canPlace; 'bad' no such player; 'office'; 'bounds' off the map; 'empty'
- *   nothing there; 'kind' not a Crate Stack; 'max' it has the top level; 'cash' he cannot pay
+ *   nothing there; 'kind' a kind that cannot be reinforced; 'max' it has the top level; 'cash' he cannot pay
  *   reinforceCost.
  */
 export function canReinforce(state, pid, x, y) {
@@ -623,8 +625,8 @@ export function canReinforce(state, pid, x, y) {
 }
 
 /**
- * The `reinforce` command (0.4): `{ c: 'reinforce', x, y }` pays reinforceCost to raise the Crate
- * Stack's level `r` by one: it takes one more gym bro hit in each sales event (statsOf's hits). The
+ * The `reinforce` command (0.4): `{ c: 'reinforce', x, y }` pays reinforceCost to raise the level `r`
+ * of the building on any tile of it (its anchor) by one: it takes one more gym bro hit in each sales event (statsOf's hits). The
  * money counts as spent on the building (added to `c`), so selling it back returns TUNE.sellBack of
  * it and a rebuild costs TUNE.rebuildShare of it, levels included. Sends
  * reinforce {x, y, r, by, paid}.
@@ -710,7 +712,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       }
       const b = newBuilding(cmd.k, pid, at.d, card);
       // The mallcop card: bought new, it comes stocked with Store Brand of every supply it takes but
-      // Razor Wire, as if that many units had come up its Dumbwaiter (takesSupply keeps to the cap).
+      // Razor Wire (types 1 to 3; Duct Tape, type 4, went in 0.4.01), as if that many units had
+      // come up its Dumbwaiter (takesSupply keeps to the cap).
       // Only the first time on its tiles (0.4.00): selling it and buying it again must not be a
       // refill at a quarter of its price. `state.mallcop` lists every tile a building has arrived
       // stocked on (absent in a game without the card, or before the first).
@@ -720,7 +723,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
         if (at.tiles.some((t) => seen.includes(t))) units = 0;
         else seen.push(...at.tiles);
       }
-      for (let type = 1; type <= 4; type++) {
+      for (let type = 1; type <= 3; type++) {
         const code = itemCode(type, 1);
         for (let n = 0; n < units && takesSupply(b, code, state); n++) addStock(b, code, state);
       }
