@@ -47,7 +47,7 @@ const VARS = {
   reportPerfect: 'p', pee: 'pk', flash: 'pn', fall: 'p', pitchStop: 'pk', pitchRush: 'pk',
   kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
   pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw', early: 'pnm',
-  pop: 'pn', nopop: 'p', autoRebuildOn: 'p',
+  pop: 'pn', nopop: 'p', rebuildHeld: 'pn',
   releaseNext: 'pnw', releaseIn: 'pn', rip: 'pn',
   // Version 0.3: the new store designs.
   backPassage: 'pw', stripMall: 'pw',
@@ -73,8 +73,8 @@ const AT_LEAST = {
   carPark: 12,
   // Version 0.2.09: the Pregnant Lady.
   pop: 12, nopop: 9,
-  // Version 0.2.15: auto-rebuild switched on.
-  autoRebuildOn: 5,
+  // Version 0.3.04: a Rebuild press paid for wrecks that must wait (auto-rebuild's lines went).
+  rebuildHeld: 5,
   // Version 0.3.01: the Card Trader and the Midnight Release.
   releaseNext: 10, releaseIn: 6, rip: 8,
   // Version 0.3: the new store designs.
@@ -653,7 +653,7 @@ test('the director handles every new event, with all its fields or none, and ign
   const names = ['pee', 'flash', 'fall', 'pitch', 'kidtv', 'rail', 'shield', 'smash', 'upgraded', 'rebuilt', 'caught',
     'waveStart', 'crawl', 'kid', 'begun', 'side', 'ready', 'gave', 'mess', 'bolt', 'escape', 'left', 'grab', 'slip', 'sale',
     'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'bossIn', 'bossOut', 'pep', 'endless', 'early',
-    'pop', 'nopop', 'watching', 'somethingNew', undefined];
+    'pop', 'nopop', 'rebuildHeld', 'watching', 'somethingNew', undefined];
   for (const random of [() => 0, () => 0.999, seeded(1)]) {
     const director = createDirector(random);
     const state = game('Dave', 'Bobb');

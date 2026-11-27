@@ -2,7 +2,6 @@
 import { TUNE, ROLES, SPEEDS, officePlayer, isEndless, bossTier, bossTitle } from '../sim/index.js';
 import { eventOf } from '../content/facts.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton, copyText } from './dom.js';
-import { createAutoSwitch } from './rebuild.js';
 import { GROUPS, DEFAULTS as DEFAULT_LEVELS } from '../audio/groups.js';
 
 const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
@@ -73,8 +72,6 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   }, h('span', { class: 'pz-icon', 'aria-hidden': 'true' }));
   // The pause button sits just before the speed buttons, and goes wherever they go (under ☰ on a phone).
   const timeBox = h('div', { class: 'hud-clock' }, pauseBtn, speed);
-  // Auto-rebuild lives up here so it can be switched on before anything breaks, on any screen.
-  const auto = createAutoSwitch(session, { playSound, cls: 'hud-auto' });
 
   // An invite link opens the menu with the room code already filled in. When the bar is short of
   // room (see fit() below), "Copy link" shrinks to a link icon and then goes, and the code itself
@@ -125,9 +122,9 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   // On a narrow screen the things a player needs less often (speed, room code, sound, help) fold
   // away behind one button. On a wide screen the wrapper takes no part in the layout
   // (display: contents) and the button is hidden, so the bar looks as it always has.
-  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, auto.el, timeBox, room, audio, full, book, help);
+  const more = h('div', { class: 'hud-more', role: 'group', 'aria-label': 'More' }, timeBox, room, audio, full, book, help);
   const moreBtn = h('button', {
-    type: 'button', class: 'btn-more', 'aria-label': 'More: auto-rebuild, pause and speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
+    type: 'button', class: 'btn-more', 'aria-label': 'More: pause and speed, room code, sound, help', title: 'More', 'aria-expanded': 'false',
     onclick: () => setMore(!more.classList.contains('open')),
   }, '☰');
   function setMore(open) {
@@ -260,7 +257,6 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
     setStyle(refFill, 'background', `hsl(${Math.round(48 - 48 * share)} 90% ${Math.round(52 - 6 * share)}%)`);
     setClass(refunds, 'danger', share >= 0.75);
 
-    auto.update(s);
     const paused = !!s.pause;
     if (pauseBtn.getAttribute('aria-pressed') !== String(paused)) {
       pauseBtn.setAttribute('aria-pressed', String(paused));

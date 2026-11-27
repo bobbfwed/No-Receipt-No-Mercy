@@ -184,7 +184,8 @@ test('nothing can be built, upgraded or started during the deal; skipping, speed
   }
   assert.ok(applyCommand(s, 0, { c: 'speed', n: 2 }).ok);
   assert.ok(applyCommand(s, 0, { c: 'role', role: 'Floater' }).ok);
-  assert.ok(applyCommand(s, 0, { c: 'autoRebuild', on: true }).ok);
+  // (Auto-rebuild's switch was allowed here until 0.3.04; there is no such command now.)
+  assert.deepEqual(applyCommand(s, 0, { c: 'autoRebuild', on: true }), { ok: false, why: 'cards' });
   assert.ok(applyCommand(s, 0, { c: 'skipCards', on: false }).ok);
   assert.equal(s.players[0].skip, false);
   // Outside the deal there is nothing to skip.
@@ -693,7 +694,7 @@ test('offatruck and mallcop: a new building of the group comes with a free level
   const b = s.grid[5 * s.w + 5];
   s.grid[5 * s.w + 5] = 0;
   s.gridVer++;
-  s.rubble.push({ i: 5 * s.w + 5, k: 'forklift', d: 0, o: 0, u: { ...b.u }, spent: spentOn(b), at: 0, f: b.f });
+  s.rubble.push({ i: 5 * s.w + 5, k: 'forklift', d: 0, o: 0, u: { ...b.u }, spent: spentOn(b), f: b.f });
   s.players[0].cash = Math.floor(BUILD.forklift.cost * TUNE.rebuildShare);
   assert.ok(applyCommand(s, 0, { c: 'rebuild' }).ok);
   const back = s.grid[5 * s.w + 5];

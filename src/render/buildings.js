@@ -1439,10 +1439,32 @@ function paintBadge(ctx, x, y, w, h, k, lv, top) {
  * scorch of dust under it, so players can see the holes in their maze. A big building leaves a
  * heap on every tile of its footprint (i is its anchor tile, d its facing).
  */
-export function drawRubble(ctx, i, kind, w, d = 0) {
+export function drawRubble(ctx, i, kind, w, d = 0, ordered = false) {
   const def = BUILD[kind];
   const [fw, fh] = def ? sizeOf(kind, def.rot ? d | 0 : 0) : [1, 1];
   for (let dy = 0; dy < fh; dy++) for (let dx = 0; dx < fw; dx++) heap(ctx, i + dy * w + dx, kind, w);
+  if (ordered) cone(ctx, i, w);
+}
+
+/**
+ * A little orange traffic cone on the heap (0.3.04): somebody has paid to rebuild this wreck, and it
+ * goes back as soon as nothing is in the way. Only on the anchor tile, so a big building gets one.
+ */
+function cone(ctx, i, w) {
+  const cx = (i % w) * T + T - 10, by = ((i / w) | 0) * T + 17;
+  ctx.beginPath();
+  ctx.rect(cx - 7, by - 1, 14, 3.5);
+  paint(ctx, '#f97316', 1.2);
+  ctx.beginPath();
+  ctx.moveTo(cx - 5, by - 1); ctx.lineTo(cx - 1.6, by - 14); ctx.lineTo(cx + 1.6, by - 14); ctx.lineTo(cx + 5, by - 1);
+  ctx.closePath();
+  paint(ctx, '#f97316', 1.2);
+  // The white reflective band.
+  ctx.beginPath();
+  ctx.moveTo(cx - 3.7, by - 5.5); ctx.lineTo(cx - 2.7, by - 9); ctx.lineTo(cx + 2.7, by - 9); ctx.lineTo(cx + 3.7, by - 5.5);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
 }
 
 function heap(ctx, i, kind, w) {

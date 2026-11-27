@@ -159,7 +159,7 @@ test('nothing can be built, sold, upgraded, rebuilt, given or bought while pause
   // A building to act on, owned by Dave: the demo's first.
   const at = s.grid.findIndex((b) => b && b.part === undefined && b.k === 'sprinkler');
   const x = at % s.w, y = (at / s.w) | 0;
-  s.rubble.push({ i: 0, k: 'crate', d: 0, o: 0, u: {}, spent: 10, at: 0 });
+  s.rubble.push({ i: 0, k: 'crate', d: 0, o: 0, u: {}, spent: 10 });
   applyCommand(s, 0, { c: 'pause', on: true });
   const before = json(s);
   const refused = [
@@ -178,19 +178,22 @@ test('nothing can be built, sold, upgraded, rebuilt, given or bought while pause
   assert.ok(NOPE.paused.length >= 3);
 });
 
-test('speed, job titles, auto-rebuild and pausing still work while paused; switching auto-rebuild on builds nothing', () => {
+test('speed, job titles and pausing still work while paused; a rebuild paid for before the pause waits for the game to carry on', () => {
   const s = midWave();
-  s.rubble.push({ i: 3 * s.w + 3, k: 'crate', d: 0, o: 0, u: {}, spent: 10, at: 0 });
+  s.rubble.push({ i: 3 * s.w + 3, k: 'crate', d: 0, o: 0, u: {}, spent: 10 });
+  // (Paid for just before the pause, but not yet built: as if a shopper had been in the hole.
+  // Since 0.3.04 a Rebuild press orders it and step() puts it back when it can.)
+  Object.assign(s.rubble[0], { by: 0, res: 5 });
+  s.players[0].cash -= 5;
   applyCommand(s, 0, { c: 'pause', on: true });
   assert.equal(applyCommand(s, 0, { c: 'speed', n: 3 }).ok, true);
   assert.equal(s.speed, 3);
   assert.equal(applyCommand(s, 1, { c: 'role', role: s.players[1].role }).ok, true);
-  const ev = [];
-  assert.equal(applyCommand(s, 0, { c: 'autoRebuild', on: true }, ev).ok, true);
-  assert.equal(s.players[0].autoRebuild, true);
+  // Auto-rebuild's switch went in 0.3.04: like any unknown command, refused while paused.
+  assert.deepEqual(applyCommand(s, 0, { c: 'autoRebuild', on: true }), { ok: false, why: 'paused' });
+  run(s, TICK_HZ);
   assert.equal(s.rubble.length, 1, 'the wreck is still a wreck');
-  assert.equal(ev.some((e) => e.e === 'rebuilt'), false);
-  // Once it carries on, auto-rebuild picks the wreck up by itself.
+  // Once it carries on, the paid-for wreck goes back by itself.
   applyCommand(s, 0, { c: 'pause', on: false });
   run(s, TICK_HZ);
   assert.equal(s.rubble.length, 0, 'rebuilt after the pause');

@@ -186,9 +186,10 @@ export function startGame(session, {
     if (on) setText(pauseWho, by === session.me ? 'You stopped the store. Everyone is waiting on you.' : `${name} stopped the store. Anyone can carry on.`);
   }
 
-  // The big REBUILD button over the floor while anything of this player's is wrecked (0.2.15): on a
-  // phone the build bar's Rebuild button is usually scrolled out of sight.
-  const rebuildPop = createRebuildPop(session, { rebuild: () => input.rebuild(), playSound });
+  // The big REBUILD button over the floor while anything of this player's is wrecked, or paid for
+  // and waiting to go back (0.2.15, 0.3.04): on a phone the build bar's Rebuild button is usually
+  // scrolled out of sight.
+  const rebuildPop = createRebuildPop(session, { rebuild: () => input.rebuild() });
   stage.append(rebuildPop.el);
 
   // Before the game starts: pick the store and press Ready. It sits where the players list goes.

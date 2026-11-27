@@ -164,10 +164,7 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [gone] how long he has been away, while his grace period runs, in ticks at
  *                          normal speed (so it measures real time at any game speed; see
  *                           setPlayerOnline). Absent when he is here, or away with nothing pending.
- * @property {boolean} [autoRebuild] his auto-rebuild switch (0.2.15; absent, as in older saves,
- *                          means off): step() puts back his wrecks for him (see autoRebuild in
- *                          commands.js)
- * @property {Object} w      statistics for this wave
+ * @property {Object} w     statistics for this wave
  * @property {Object} all    statistics for the whole game
  */
 
@@ -244,11 +241,16 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
      *  it existed lacks it; the simulation makes it when first needed.) */
     carts: [],
     /** What gym bros have destroyed and nobody has rebuilt yet, oldest first, as
-     *  { i, k, d, o, u, spent, at }: anchor tile, kind, facing, owner, upgrade levels (as on a
-     *  building, possibly {}), what had been spent on it (spentOn), and the tick it broke (since
-     *  0.2.15, for auto-rebuild's delay; rubble in an older save lacks it and counts as long
-     *  broken). The 'rebuild' command, or placing the same kind there, puts them back at
-     *  TUNE.rebuildShare of that. */
+     *  { i, k, d, o, u, spent }: anchor tile, kind, facing, owner, upgrade levels (as on a
+     *  building, possibly {}), what had been spent on it (spentOn); plus `c`, `f`, `fn`, `bz` when
+     *  a card gave it those. The 'rebuild' command, or placing the same kind there, puts them back
+     *  at TUNE.rebuildShare of that.
+     *  Ordered (0.3.04): a wreck somebody has pressed Rebuild for also has `by` (the id of the
+     *  player who pressed and paid) and `res` (whole dollars already taken from his cash and held
+     *  for it). Without `by` it is not ordered. step() puts an ordered wreck back as soon as nothing
+     *  is in the way (stepRebuilds in commands.js); if it stops being rubble any other way, the
+     *  held money goes back to him (releaseOrder). Saves from before 0.2.15 to 0.3.03 may carry
+     *  `at` (the tick it broke, for the old auto-rebuild's delay): nothing reads it any more. */
     rubble: [],
     nextId: 1,
     /** Shoppers still to arrive this wave, as [tick, kind, super 0|1, entrance or -1 for any],
@@ -273,7 +275,7 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     // (state.pause, 0.3.02: { by: the id of the player who paused } while the game is paused, and
     // absent the rest of the time, as in every save from before it. While it is set, step() does
     // nothing at all, not even the clock, and applyCommand refuses everything but pausing, speed,
-    // job titles, auto-rebuild's switch and skipping the cards (see setPause in commands.js). It is
+    // job titles and skipping the cards (see setPause in commands.js). It is
     // saved and sent with the state, so a game saved or joined while paused is paused.)
     /** The player running the shoppers, if any: see office.js. */
     office: null,
@@ -331,10 +333,17 @@ export const STATE_VERSION = 4;
  * 25 of 40 would become 25 of 25). So the limit is set from today's formula for the save's
  * players and the refunds are scaled by the same ratio, rounded down: the save keeps the share of
  * its limit it had used.
+ * Any version (0.3.04): auto-rebuild is gone, so a player's old `autoRebuild` switch and the
+ * tick a wreck broke (`at`, only its delay read it) are dropped. Neither changes how the game
+ * plays; it only keeps dead fields out of the state.
  * @returns {boolean} whether anything was changed
  */
 export function migrateSave(state) {
-  if (!state || (state.v | 0) >= STATE_VERSION) return false;
+  if (!state) return false;
+  let changed = false;
+  for (const p of state.players || []) if ('autoRebuild' in p) { delete p.autoRebuild; changed = true; }
+  for (const r of state.rubble || []) if ('at' in r) { delete r.at; changed = true; }
+  if ((state.v | 0) >= STATE_VERSION) return changed;
   const limit = TUNE.refundLimit + TUNE.refundPerPlayer * Math.max(0, state.players.length - 1);
   if (state.refundLimit > 0) state.refunds = Math.floor(((state.refunds || 0) * limit) / state.refundLimit);
   state.refundLimit = limit;
@@ -501,7 +510,9 @@ export function setPlayerOnline(state, id, on) {
  * Called by step() every tick: anyone whose grace period has run out without his coming back
  * hands his money to those who stay, split evenly, and returns (if ever) with none. Leaving and
  * rejoining must not be a way to keep money safe from refunds. The last player left keeps his
- * money; the clock keeps running for him in case someone else turns up.
+ * money; the clock keeps running for him in case someone else turns up. Money he had paid for
+ * rebuilds still waiting (0.3.04) is part of it: those orders are cancelled first and shared out
+ * with his cash, so no later refund of an order can hand money to someone who has gone.
  */
 export function expireAway(state) {
   const limit = Math.max(1, Math.round(TUNE.graceSecs * TICK_HZ));
@@ -514,6 +525,7 @@ export function expireAway(state) {
     if (p.gone < limit - 1e-6) continue;
     const stay = state.players.filter((q) => q.on && q.side !== 'office');
     if (!stay.length) continue;
+    for (const r of state.rubble) if (r.by === p.id) releaseOrder(state, r);
     if (p.cash > 0) {
       for (const q of stay) q.cash = tidy(q.cash + p.cash / stay.length);
       p.cash = 0;
@@ -537,6 +549,37 @@ export const shareCount = (state) => Math.max(1, sharers(state).length);
 
 // Shares are rarely whole numbers; keep them to a thousandth so sums do not drift.
 const tidy = (n) => Math.round(n * 1000) / 1000;
+
+/**
+ * Cancels the order on one wreck (0.3.04): the money held for it (`res`) goes back in full to the
+ * player who paid it (`by`), if he is still in the game, and the wreck is plain rubble again. Used
+ * whenever an ordered wreck stops being rubble without being rebuilt from it (something else built
+ * over it, the rubble list overflowing, its payer gone to Head Office, the game ending), so held
+ * money is never lost. Does nothing to a wreck nobody ordered.
+ */
+export function releaseOrder(state, r) {
+  if (r.by === undefined) return;
+  const p = state.players[r.by];
+  if (p) p.cash += r.res | 0;
+  delete r.by;
+  delete r.res;
+}
+
+/**
+ * Gives back all the money held for ordered wrecks (0.3.04), when the game is won or lost: the end
+ * screen and DEB's final count read the players' cash, and money waiting for a rebuild that will
+ * never happen is still theirs.
+ */
+export function releaseAllOrders(state) {
+  for (const r of state.rubble) releaseOrder(state, r);
+}
+
+/** The money held for rebuilds a player has paid for and that are waiting (0.3.04). */
+export function heldFor(state, pid) {
+  let sum = 0;
+  for (const r of state.rubble) if (r.by === pid) sum += r.res | 0;
+  return sum;
+}
 
 /** All the players' money added up. */
 export function teamCash(state) {

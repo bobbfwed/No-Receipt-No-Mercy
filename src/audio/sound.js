@@ -246,6 +246,9 @@ export function createSound() {
           if (!mine(e.by)) fire('rebuilt', { n: e.n, short: e.short | 0 }, { gain: OTHERS });
           else if (!heardAlready('fx', 'rebuild')) fire('rebuilt', { n: e.n, short: e.short | 0 });
           break;
+        // A Rebuild press paid for wrecks that must wait (0.3.04): money changing hands, nothing
+        // built yet, so the sound of money handed over. Its building comes later as 'rebuilt'.
+        case 'rebuildHeld': fire('gave', { n: e.paid | 0 }, { gain: mine(e.by) ? 1 : OTHERS }); break;
         case 'gave': fire('gave', { n: e.n }, { gain: mine(e.by) || mine(e.to) ? 1 : OTHERS }); break;
         case 'begun': fire('begun'); break;
         // Somebody paused or resumed the game (0.3.02). The music follows by itself (pauseDuck).

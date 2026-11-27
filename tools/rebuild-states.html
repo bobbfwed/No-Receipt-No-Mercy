@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  The big REBUILD button's looks (0.3.04), for checking by eye or with tools/shot.ps1. Opens the
+  ready-made demo game (/?demo=1&seed=7&ff=300) in a frame and changes its state the way a gym bro
+  and a Rebuild press would. Needs the dev server: node tools/serve.mjs, then
+  http://localhost:5173/tools/rebuild-states.html?state=...
+    ready    three of your buildings wrecked, nothing paid: lit, "REBUILD 3 · $47 / Your shit is
+             broken. Fix it", the build bar's Rebuild button nudging
+    dim      the same with no cash: greyed, "Too broke. Need $2"
+    waiting  a wrecked sprinkler already paid for, a fallen drunk lying in its hole: dashed and
+             greyed, "PAID $40 · 1 waiting / Some idiot is standing in the hole", an orange cone
+             on the wreck, the build bar's button "1 waiting"
+    partial  the same, ordered with less than its full price and no cash coming in:
+             "PAID $40 of $118 · 1 waiting" (the paid part grows as the factory sells)
+    mixed    one paid for and waiting, one not: lit, "REBUILD 1 · $2 / 1 more paid for and waiting"
+  Allow the page a few seconds (shot.ps1 -WaitMs 6000).
+-->
+<html><head><meta charset="utf-8"><title>Rebuild button states</title></head>
+<body style="margin:0;overflow:hidden">
+<iframe id="f" src="/?demo=1&seed=7&ff=300" style="border:0;width:100vw;height:100vh;display:block"></iframe>
+<script type="module">
+import { spentOn, ST } from '/src/sim/index.js';
+const look = new URLSearchParams(location.search).get('state') || 'ready';
+const frame = document.getElementById('f');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// The game puts its session on globalThis.__game (src/ui/game.js) once it is running.
+let game;
+for (let i = 0; i < 200 && !(game = frame.contentWindow.__game); i++) await wait(50);
+const session = game.session, me = session.me;
+const s = () => session.state;
+const mine = (k) => s().grid.findIndex((b) => b && b.part === undefined && b.o === me && b.k === k);
+/** Wrecks one building as a gym bro's last hit does (wreck() in src/sim/step.js). */
+function wreck(i, u) {
+  const S = s(), b = S.grid[i];
+  S.grid[i] = 0;
+  S.gridVer++;
+  const r = { i, k: b.k, d: b.d | 0, o: b.o, u: u || { ...(b.u || {}) } };
+  r.spent = spentOn({ k: r.k, u: r.u });
+  S.rubble.push(r);
+  return r;
+}
+/** A fallen drunk who never gets up, lying in a hole, so a paid-for wreck has to wait. */
+function drunkOn(i) {
+  const S = s();
+  S.shoppers.push({ id: 99999, k: 'drinker', x: (i % S.w) + 0.5, y: ((i / S.w) | 0) + 0.5, vx: 0, vy: 0, hp: 1e9, mhp: 1e9, st: ST.STUN, t: 1e9, cd: 0, ox: 0, oy: 0, lt: -1, sv: 1 });
+}
+const broke = () => setInterval(() => { s().players[me].cash = 0; }, 16);
+if (look === 'ready' || look === 'dim') {
+  wreck(mine('sprinkler'));
+  wreck(mine('crate') >= 0 ? mine('crate') : mine('forklift'));
+  wreck(mine('belt'));
+  if (look === 'dim') broke();
+}
+if (look === 'waiting' || look === 'partial' || look === 'mixed') {
+  const i = mine('sprinkler');
+  const r = wreck(i, look === 'partial' ? { dmg: 2, rng: 1 } : undefined);
+  drunkOn(i);
+  // Paid for, as a Rebuild press would: the bare sprinkler's price held on the wreck.
+  r.by = me;
+  r.res = 40;
+  if (look === 'partial') broke();
+  if (look === 'mixed') wreck(mine('belt'));
+}
+s().gridVer++;
+</script>
+</body></html>

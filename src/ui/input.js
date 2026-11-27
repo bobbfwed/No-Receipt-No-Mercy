@@ -30,6 +30,7 @@
 import { BUILD, doorOf, anchorOf, sizeOf } from '../sim/index.js';
 import { startDrag } from './drag.js';
 import { liftFraction, createPress, liftedSpot, edgeVelocity, barGesture, EDGE } from './lift.js';
+import { rebuildStatus } from './rebuild.js';
 
 export const BUILD_KEYS = Object.keys(BUILD);
 /** Hotkeys 1-9 then 0, in the order of BUILD. */
@@ -96,28 +97,31 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   }
 
   function send(cmds) {
-    let did = null;
+    let did = null, last = null;
     for (const c of cmds) {
       // The host answers at once. A client hears nothing back unless it is refused, so assume yes.
       const r = session.send(c);
-      if (!r || r.ok) did = c.c;
+      if (!r || r.ok) { did = c.c; last = r; }
     }
     if (did === 'place' || did === 'remove') playSound(did);
-    if (did === 'upgrade' || did === 'rebuild') playSound(did);
+    if (did === 'upgrade') playSound(did);
+    // A Rebuild press that only paid for wrecks that must wait builds nothing yet: its own sound
+    // comes with the rebuildHeld event (sound.js). The host knows at once. A joined player hears
+    // nothing back, so he plays it only when his own copy of the state says the press can order
+    // something: not when everything is already paid for, he is too broke, or nothing is wrecked
+    // (the command is sent all the same; the host decides).
+    if (did === 'rebuild') {
+      if (last ? last.ok && last.n > 0 : rebuildStatus(session.state, session.me)?.can) playSound(did);
+    }
   }
 
-  /** Puts back everything of this player's that gym bros have wrecked, as far as his cash goes. */
+  /**
+   * Pays to put back everything of this player's that gym bros have wrecked, as far as his cash
+   * goes: each goes back at once, or as soon as nothing is in the way (0.3.04).
+   */
   function rebuild() {
     if (isOffice()) return;
     send([{ c: 'rebuild' }]);
-  }
-
-  /** Flips this player's auto-rebuild switch (Shift+B). */
-  function toggleAutoRebuild() {
-    const me = session.state?.players[session.me];
-    if (isOffice() || !me) return;
-    playSound('click');
-    session.send({ c: 'autoRebuild', on: !me.autoRebuild });
   }
 
   /** Pauses the game, or carries on if it is paused (the P key). Only while the game is being played. */
@@ -589,7 +593,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       }
     } else if (lower === 'b') {
       e.preventDefault();
-      if (e.shiftKey) toggleAutoRebuild(); else rebuild();
+      // (With Shift or without: Shift+B switched auto-rebuild until 0.3.04, and there is none now.)
+      rebuild();
     } else if (lower === 'f') {
       e.preventDefault();
       renderer.fit?.();
@@ -744,7 +749,6 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     watchBar,
     setTool,
     rebuild,
-    toggleAutoRebuild,
     togglePause,
     goHome,
     rotate,

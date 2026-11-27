@@ -25,8 +25,8 @@ const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
   upgrade: { name: 'Upgrade', key: 'U', price: 'anything', how: HOW_UPGRADE, keys: 'key U' },
-  // Not a tool you hold: one press puts back everything of yours that gym bros have wrecked.
-  rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B · Shift+B switches auto-rebuild on or off', action: true },
+  // Not a tool you hold: one press pays to put back everything of yours that gym bros have wrecked.
+  rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true },
   remove: { name: 'Remove', key: 'X', price: `${Math.round(TUNE.sellBack * 100)}% back`, how: HOW_REMOVE, keys: 'key X or Delete' },
 };
 
@@ -145,10 +145,6 @@ export function createBuildBar(input, session) {
   info.addEventListener('click', (e) => { if (folded && !e.target.closest('button')) toggleFold(); });
   let lastCash = null, lastTool, lastDir, lastUp = '', lastRubble = '';
   const rebuildBtn = buttons.get('rebuild'), rebuildNote = rebuildBtn.querySelector('.bb-price');
-  // A badge on the Rebuild button while auto-rebuild is on (the switch itself is in the top bar).
-  const autoBadge = h('span', { class: 'bb-auto hidden', title: 'Auto-rebuild is on (Shift+B switches it off)' }, 'AUTO');
-  rebuildBtn.append(autoBadge);
-  let lastAuto = null;
 
   function showInfo(k) {
     const def = BUILD[k];
@@ -246,19 +242,23 @@ export function createBuildBar(input, session) {
       showInfo(input.tool);
     }
     if (input.tool === 'upgrade') showUpgrade(s, cash);
-    // The Rebuild button says how much of yours is lying in pieces and what putting it back costs.
-    let n = 0, cost = 0;
+    // The Rebuild button says how much of yours is lying in pieces and what putting it back costs
+    // (alert); with nothing to order but something paid for and waiting to go back, how many
+    // (waiting, 0.3.04); otherwise nothing (idle).
+    let n = 0, cost = 0, held = 0;
     // (Half of what had been spent on each; with less money it comes back with fewer upgrades.)
-    for (const r of s.rubble) if (r.o === session.me) { n++; cost += rebuildDeal(r, Infinity).pay; }
-    const sig = `${n},${cost},${cash >= cost}`;
+    for (const r of s.rubble) {
+      if (r.by !== undefined) { if (r.by === session.me) held++; continue; }
+      if (r.o === session.me) { n++; cost += rebuildDeal(r, Infinity).pay; }
+    }
+    const sig = `${n},${cost},${held}`;
     if (sig !== lastRubble) {
       lastRubble = sig;
-      rebuildNote.textContent = n ? `${n} for ${money(cost)}` : 'half price';
-      setClass(rebuildBtn, 'idle', n === 0);
+      rebuildNote.textContent = n ? `${n} for ${money(cost)}` : held ? `${held} waiting` : 'half price';
+      setClass(rebuildBtn, 'idle', !n && !held);
       setClass(rebuildBtn, 'alert', n > 0);
+      setClass(rebuildBtn, 'waiting', !n && held > 0);
     }
-    const auto = !!s.players[session.me]?.autoRebuild;
-    if (auto !== lastAuto) { lastAuto = auto; setClass(autoBadge, 'hidden', !auto); }
     if (input.dir !== lastDir) {
       lastDir = input.dir;
       dirEl.textContent = `${DIR_ARROWS[input.dir]} ${DIR_NAMES[input.dir]}`;

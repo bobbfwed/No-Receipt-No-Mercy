@@ -294,13 +294,16 @@ export const LINES = {
     u('{p} rebuilt {n} wrecked things. Patching holes is a skill. He learned it in a marriage.'),
     r('{p} rebuilt {n} things a gym bro broke. The gym bro is watching. The gym bro is cracking his knuckles. The gym bro has a free afternoon.'),
   ],
-  // {p} switched auto-rebuild on: the game now puts his wrecked things back for him.
-  autoRebuildOn: [
-    '{p} turned on auto-rebuild. Even fixing his own mess is too much effort now. Very on brand.',
-    "{p} automated his rebuilding. Same as everything else in his life he can't be trusted to finish himself.",
-    "Auto-rebuild on for {p}. He'll still find a way to take credit for it.",
-    u('{p} has let the machine rebuild for him. Next he will want it to hold his hand at the tills.'),
-    r("{p} switched on auto-rebuild. Two seconds after anything breaks, it's back up. The stamina he's always lied about."),
+  // (0.3.04) {p} pressed Rebuild and paid for {n} wrecks that cannot go back yet (a shopper in the
+  // hole, or it would wall the crowd in): the money is gone, and they go back when the way is clear.
+  rebuildHeld: [
+    '{p} paid for {n} rebuilds that cannot go up yet. Money gone, nothing to show for it. Like his gym membership.',
+    "{p} has paid. Now he waits for some shopper to get out of the hole. Paying up front and waiting for someone else to finish: {p}'s entire love life.",
+    '{p} put his money down and nothing happened. It goes back up when the way is clear. Pay first, get it up later. He knows the drill.',
+    "{p}'s rebuild is paid for and on order. Like his personality: promised, paid for, still not delivered.",
+    u('Paid for, {p}. It goes up the second nobody is standing on it. Patience. You of all people should be used to waiting for things to get up.'),
+    u('{p} paid good money for {n} holes in the floor. Someone is standing in them. Welcome to being a landlord, {p}.'),
+    r("{p} has paid cash for a hole a shopper is standing in. That is the most action that hole has seen, {p}, and you are the one paying for it."),
   ],
   // Same, but {m} of them came back with fewer upgrades because he could not afford them.
   rebuiltShort: [
@@ -1557,6 +1560,12 @@ export const NOPE = {
     "The cards aren't all out yet, {p}. Read them. They're short. Even you can manage it.",
     'Not yet, {p}. Cards first, then you can play with your blocks. Mummy will tell you when.',
     u("Patience, {p}. Five cards. You can count to five. You've done it on one hand plenty of times."),
+  ],
+  // Rebuild pressed with every wreck of his already paid for and waiting for the way to clear (0.3.04).
+  ordered: [
+    "You already paid for it, {p}. It goes back when the way is clear. Pressing harder won't make it come any faster. Ask your wife.",
+    "It's paid for, {p}. It's waiting for some idiot to get out of the hole. Pressing again just makes you look desperate.",
+    u("Already on order, {p}. Calm down. It's a crate, not a kidney."),
   ],
   // The game is paused (0.3.02): nothing can be built, sold, upgraded or bought until someone resumes.
   paused: [

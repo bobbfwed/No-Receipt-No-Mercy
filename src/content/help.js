@@ -174,10 +174,10 @@ export const HOW_UPGRADE = {
   maze: '',
 };
 
-/** What the Rebuild button does. */
+/** What the Rebuild button does (0.3.04: the money goes when you press; the building when it can). */
 export const HOW_REBUILD = {
-  does: 'Puts back everything of yours that gym bros have wrecked, oldest first, at half of what you had spent on it, upgrades included.',
-  use: `Press it (or B) once. If you cannot afford a building with all its upgrades, it comes back with the upgrades you can afford and the rest are lost; if you cannot afford even half its base price it stays as rubble. Building the same thing by hand on its rubble gets the same deal. Or let the store do it: switch on AUTO-REBUILD (Shift+B, or its switch in the top bar) and each wreck is put back the moment that is allowed, at the same price, oldest first, but never sooner than ${TUNE.autoRebuildSecs} seconds after it broke, so the crowd behind a gym bro still gets through.`,
+  does: 'Pays to put back everything of yours that gym bros have wrecked, oldest first, at half of what you had spent on it, upgrades included.',
+  use: 'Press it (or B) once. The money is taken there and then. Each wreck goes back at once, or as soon as nothing is in the way (a shopper standing in the hole, or the crowd it would wall in); an orange cone marks one that is paid for and waiting. Short of money, a wreck is ordered with only the upgrades you can afford, and takes more of your cash while it waits, up to all of them. If you cannot afford even half its base price it is not ordered: press again when you can. Anything wrecked after you press needs another press. Building the same thing by hand on its rubble gets the same deal.',
   maze: '',
 };
 

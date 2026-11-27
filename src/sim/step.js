@@ -1,12 +1,12 @@
 // One tick of the simulation. Deterministic: the same state always produces the same next state,
 // which lets every player's browser predict the game between updates from the host.
 import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
-import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless } from './state.js';
+import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless, releaseOrder, releaseAllOrders } from './state.js';
 import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
-import { autoRebuild } from './commands.js';
+import { stepRebuilds } from './commands.js';
 import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
@@ -347,6 +347,8 @@ function endWave(state, ev) {
   ev.push({ e: 'waveEnd', wave: state.wave, bonus });
   if (!isEndless(state) && state.wave >= state.waves) {
     state.phase = 'won';
+    // (Money held for rebuilds that will now never happen goes back: the end screen counts cash.)
+    releaseAllOrders(state);
     ev.push({ e: 'won' });
   } else {
     state.phase = 'build';
@@ -857,6 +859,7 @@ function escape(state, s, ev) {
   ev.push(e);
   if (n && state.refunds >= state.refundLimit && state.phase !== 'lost' && !state.training) {
     state.phase = 'lost';
+    releaseAllOrders(state);
     ev.push({ e: 'lost' });
   }
 }
@@ -1274,14 +1277,15 @@ function wreck(state, ti, s, ev, flatten = false) {
   if (left > 0) return true;
   for (const t of tilesOf(state, ai)) state.grid[t] = 0;
   state.gridVer++;
-  const r = { i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b), at: state.tick };
+  const r = { i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b) };
   // What a card gave it comes back with it: the price it was bought at, its free levels.
   if (b.c !== undefined) r.c = b.c;
   if (b.f) { r.f = b.f; if (b.fn !== undefined) r.fn = b.fn; }
   // (A Free Sample table that hands out booze, the eightyproof card, is rebuilt as one.)
   if (b.bz) r.bz = 1;
   state.rubble.push(r);
-  if (state.rubble.length > RUBBLE_MAX) state.rubble.shift();
+  // (The oldest falls off the end. If someone had paid to rebuild it, he gets his money back.)
+  if (state.rubble.length > RUBBLE_MAX) releaseOrder(state, state.rubble.shift());
   return true;
 }
 
@@ -1809,7 +1813,9 @@ function stepShoppers(state, fields, sec, ev) {
  *     man at (x, y) (supportdog)
  * (Commands add: placed {k,x,y,d,by,rebuilt?,short?,free?} (free: the track a card's free upgrade
  *  went on), removed, upgraded {k,x,y,by,t,lv},
- *  gave {by,to,n}, rebuilt {by,n,short}, endless {by} a won game carries on as an endless one,
+ *  gave {by,to,n}, rebuilt {by,n,short,late?} (late 1: wrecks already paid for, put back by
+ *  step() once nothing was in the way), rebuildHeld {by,n,paid} a Rebuild press paid for n wrecks
+ *  that must wait, endless {by} a won game carries on as an endless one,
  *  pause {on,by} player `by` paused (on true) or resumed (on false) the game.)
  */
 export function step(state) {
@@ -1858,8 +1864,8 @@ export function step(state) {
   const sec = stepBuildings(state, fields, ev);
   stepShoppers(state, fields, sec, ev);
   // After the shoppers have moved, so a rebuild sees where they stand now (it must not be put
-  // down on one, or wall one in).
-  autoRebuild(state, ev);
+  // down on one, or wall one in): wrecks a player has paid for go back once nothing is in the way.
+  stepRebuilds(state, ev);
   if (state.phase === 'wave' && !state.spawnQ.length && !state.shoppers.length) endWave(state, ev);
   return ev;
 }

@@ -438,21 +438,22 @@ test('rebuilding costs half of what was spent, with upgrades; short of that, the
   assert.deepEqual(rebuildDeal(r, 210), { pay: 200, u: { rng: 1, dmg: 1 }, lost: 1 });
   assert.equal(TUNE.rebuildShare, 0.5);
 
-  // The rebuild command: oldest first, his own only, counting what came back short.
+  // The rebuild command: oldest first, his own only, counting what came back short. (Since 0.3.04
+  // it also says what it held for wrecks that must wait, none here, and what it took in all.)
   const s = stage();
   addPlayer(s, 'Steve');
   s.rubble.push({ ...r, i: at(5, 5) }, { i: at(7, 5), k: 'crate', d: 0, o: 1, u: {}, spent: 10 }, { i: at(9, 5), k: 'railgun', d: 1, o: 0, u: {}, spent: 700 });
   s.players[0].cash = 140 + 99;
   const ev = [];
   const res = applyCommand(s, 0, { c: 'rebuild' }, ev);
-  assert.deepEqual(res, { ok: true, n: 1, short: 1 });
+  assert.deepEqual(res, { ok: true, n: 1, short: 1, held: 0, paid: 200 });
   assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1, short: 1 }]);
   assert.deepEqual(s.grid[at(5, 5)].u, { rng: 1, dmg: 1 }, 'the forklift came back with what he could afford');
   assert.equal(s.players[0].cash, 39);
   assert.equal(s.grid[at(9, 5)], 0, 'not enough left for the barcode laser');
   assert.equal(s.rubble.length, 2);
   s.players[0].cash = 350;
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, short: 0 });
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, short: 0, held: 0, paid: 350 });
   assert.deepEqual(s.grid[at(9, 6)], { k: 'railgun', part: at(9, 5) }, 'back on its side, as it was');
   assert.equal(s.grid[at(9, 5)].d, 1);
   assert.equal(applyCommand(s, 0, { c: 'rebuild' }).why, 'empty', 'Steve\'s crate is his to rebuild');

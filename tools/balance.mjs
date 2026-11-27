@@ -143,8 +143,9 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
   let boss = null, bossLeft = 0; // the boss in the store, and the share of his patience he has left
 
   function shop() {
-    // Patch holes first: put back whatever gym bros have wrecked.
-    if (s.rubble.length) {
+    // Patch holes first: pay to put back whatever gym bros have wrecked (since 0.3.04 the money
+    // goes at once and a wreck that cannot go back yet follows by itself: counted below).
+    if (s.rubble.some((r) => r.by === undefined)) {
       const r = applyCommand(s, 0, { c: 'rebuild' });
       if (r.ok) rebuilt += r.n;
     }
@@ -238,6 +239,7 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
       if (e.e === 'escape' && e.k === 'boss') { byKind[`boss through (${Math.round(bossLeft * 100)}% left)`] = 1; boss = null; continue; }
       if (e.e === 'escape') { const k = (e.sup ? 'SUPER ' : '') + e.k; byKind[k] = (byKind[k] || 0) + 1; }
       if (e.e === 'smash') wrecked++;
+      if (e.e === 'rebuilt' && e.late) rebuilt += e.n;
       if (e.e === 'rip') { ripped++; rippedNow++; }
       if (e.e === 'waveEnd' || e.e === 'lost') {
         stolen += s.ws.stolen;

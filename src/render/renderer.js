@@ -426,7 +426,10 @@ export function createRenderer(canvas, session) {
     return v;
   }
 
-  /** What gym bros have wrecked and nobody has rebuilt: a heap of bits where it stood. */
+  /**
+   * What gym bros have wrecked and nobody has rebuilt: a heap of bits where it stood, with a cone
+   * on it once somebody has paid to rebuild it (0.3.04: it goes back when the way is clear).
+   */
   function drawWreckage(s) {
     for (const r of s.rubble) {
       // Rubble entries are { i, k, d, ... }; (very old saves had [i, k, d, o]).
@@ -435,7 +438,7 @@ export function createRenderer(canvas, session) {
       const x = i % s.w, y = (i / s.w) | 0;
       // A big building's rubble starts up to two tiles before the visible area.
       if (x < vis.x0 - 2 || x >= vis.x1 || y < vis.y0 - 2 || y >= vis.y1) continue;
-      drawRubble(ctx, i, k, s.w, d);
+      drawRubble(ctx, i, k, s.w, d, !Array.isArray(r) && r.by !== undefined);
     }
   }
 

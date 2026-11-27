@@ -36,7 +36,9 @@
     &damage=1      as if gym bros had hit every other building: some once, some down to their
                    last hit (smoke and sparks)
     &off=1         switch off every other piece of security, as if a stray dog had peed on it
-    &rubble=1      wreck a few buildings and leave the rubble (as a gym bro would)
+    &rubble=1      wreck a few buildings and leave the rubble (as a gym bro would); every other
+                   wreck is paid for and waiting (0.3.04), so it carries the orange cone (add
+                   &freeze=1 to keep them: a running game puts a paid-for wreck back at once)
     &wave=N        start at wave N (later waves bring dads, Karens and scooters; moms from 3,
                    teenagers from 4, guide dogs from 6, gym bros from 8; day drinkers from 5,
                    stray dogs from 7, exhibitionists from 8, cosplayers from 9; supers from 6 on)
@@ -262,12 +264,16 @@ if (q.get('null') === '1') {
     anchors().filter((i) => BUILD[s.grid[i].k].group === 'security' && s.grid[i].k !== 'wetfloor')
       .forEach((i, n) => { if (!(n % 2)) s.grid[i].off = 99999; });
   }
-  // &rubble=1  wreck every seventh building, leaving rubble as the rules do
+  // &rubble=1  wreck every seventh building, leaving rubble as the rules do; every other wreck is
+  // ordered (paid for with the Rebuild button and waiting: by and res, 0.3.04) and wears a cone
   if (q.get('rubble') === '1') {
+    let w = 0;
     anchors().forEach((i, n) => {
       if (n % 7) return;
       const b = s.grid[i];
-      s.rubble.push({ i, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b) });
+      const r = { i, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b) };
+      if (w++ % 2) { r.by = b.o; r.res = Math.floor(BUILD[b.k].cost * TUNE.rebuildShare); }
+      s.rubble.push(r);
       for (const t of tilesOf(s, i)) s.grid[t] = 0;
     });
     s.gridVer++;
@@ -604,7 +610,7 @@ if (q.get('lineup') === '1') {
     // Wreckage of each kind (a barcode laser's and a salesman's over their footprints), and badges.
     ['crate', 'press', 'sprinkler', 'belt', 'forklift'].forEach((k, n) => drawRubble(g, ti(26 + n, 15), k, LW));
     drawRubble(g, ti(31, 15), 'railgun', LW, 0);
-    drawRubble(g, ti(34, 15), 'salesman', LW, 0);
+    drawRubble(g, ti(34, 15), 'salesman', LW, 0, true); // paid for and waiting: the cone
     [[2, false], [5, false], [13, false], [9, true]].forEach(([lv, top], n) => {
       g.fillStyle = '#6b7178';
       g.fillRect((26 + n) * 40 + 4, 16 * 40 + 4, 32, 32);

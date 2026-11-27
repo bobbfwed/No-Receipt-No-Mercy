@@ -1275,35 +1275,9 @@ body.dealing .pause-banner { z-index: 42; }
 .bb-btn.tool-rebuild.idle { opacity: 0.45; }
 .bb-btn.tool-rebuild.alert { border-color: var(--orange); animation: rebuild-nudge 1.4s ease-in-out infinite; }
 @keyframes rebuild-nudge { 50% { box-shadow: 0 0 0 0.2rem rgba(249, 115, 22, 0.45); } }
-/* "AUTO" on the Rebuild button while auto-rebuild is on. */
-.bb-auto {
-  position: absolute; top: 0.15rem; right: 0.2rem; padding: 0 0.2rem; border-radius: 0.25rem;
-  background: var(--green-2); color: var(--ink); font: 900 0.55rem var(--font-heavy); line-height: 1.5;
-}
-
-/* ---------------------------------------------------------------- auto-rebuild switch (0.2.15) */
-
-.btn-auto {
-  display: inline-flex; align-items: center; gap: 0.4rem; flex: none;
-  height: 2.25rem; padding: 0 0.6rem 0 0.4rem;
-  border: 0.15rem solid var(--line); border-radius: 0.5rem; background: #3a424c;
-  font: 800 0.72rem var(--font); letter-spacing: 0.03em; white-space: nowrap; cursor: pointer;
-}
-.btn-auto:hover { background: #4b5563; }
-/* A sliding knob, so on and off read at a glance, not only from the word. */
-.ab-knob {
-  position: relative; flex: none; width: 2rem; height: 1.1rem; border-radius: 0.55rem;
-  background: #1c2127; border: 0.12rem solid #6b7280;
-}
-.ab-knob::after {
-  content: ""; position: absolute; top: 0.08rem; left: 0.1rem; width: 0.75rem; height: 0.75rem;
-  border-radius: 50%; background: #9ca3af; transition: left 0.12s;
-}
-.ab-state { min-width: 1.9rem; color: var(--muted); font: 900 0.78rem var(--font-heavy); }
-.btn-auto.on { border-color: var(--green-2); background: #1f3a28; }
-.btn-auto.on .ab-knob { background: var(--green); border-color: var(--green-2); }
-.btn-auto.on .ab-knob::after { left: 0.95rem; background: #fff; }
-.btn-auto.on .ab-state { color: #4ade80; }
+/* Everything of his is paid for and waiting to go back (0.3.04): nothing to press, so no nudge. */
+.bb-btn.tool-rebuild.waiting { border-color: #a16207; }
+.bb-btn.tool-rebuild.waiting .bb-price { color: #fde68a; }
 
 /* The big REBUILD button over the floor while something of yours is wrecked. Bottom middle of
    the floor, in the space left of DEB's bubble (as the held tool's card is; game.js lifts it onto
@@ -1337,15 +1311,10 @@ body.dealing .pause-banner { z-index: 42; }
 .rp-btn.dim { background: #6b7280; color: #f3f4f6; animation: none; box-shadow: 0 0.25rem 0 var(--line); }
 .rp-btn.dim .rp-icon { opacity: 0.6; filter: grayscale(1); }
 .rp-btn.dim .rp-sub { color: #fde68a; }
-.rebuild-pop .btn-auto { height: auto; min-height: 3.4rem; border-width: 0.18rem; box-shadow: 0 0.25rem 0 var(--line); }
-/* Beside the big button it is plainly about rebuilding: AUTO is enough. */
-.rebuild-pop .ab-long { display: none; }
-/* On a desktop the switch in the top bar is always in sight, so a second one down here is
-   overkill (the owner, 0.2.16). Phones and touch screens keep it: their top-bar switch is tucked
-   away under the menu button. */
-@media (min-width: 1100px) and (min-height: 560px) and (pointer: fine) {
-  .rebuild-pop .btn-auto { display: none; }
-}
+/* Everything of his is paid for and waiting for the way to clear (0.3.04): dimmed further, a
+   dashed edge that says "on order", and it says how much is paid and why it waits. */
+.rp-btn.waiting { background: #4b5563; border-style: dashed; opacity: 0.9; }
+.rp-btn.waiting .rp-count { font-size: 0.95rem; }
 /* On a big map the small map of the whole store is in the bottom left corner: stand above it. */
 .has-minimap .rebuild-pop { bottom: 9.7rem; }
 /* A tapped building's sheet sits where the button would: stand on it. */
@@ -1431,14 +1400,13 @@ body.dealing .pause-banner { z-index: 42; }
 .hud-refunds .meter { flex: 0 1 7rem; min-width: 2.5rem; }
 @media (max-width: 1700px) { .hud-room small { display: none; } }
 @media (max-width: 1360px) { .hud-refunds .meter { flex-basis: 5rem; } }
-/* Since the auto-rebuild switch joined the top bar (0.2.15) the refunds box was squeezed until its
-   words were cut off ("Refunds 0 / 2" at 1280 pixels wide, "Refu" at 1400). Between 1100 and 1500
-   the switch is just its knob and ON or OFF (its tooltip says the rest) and the cash box drops its
-   label, as it already did below 1360. Below 1300, and in a game with a room code (whose box takes
-   more room), the refunds meter makes way too (the numbers say it, as on the smallest phones), and
-   so does the handbook button (the ? screen opens the handbook too). Nothing else moves. */
+/* The top bar was once squeezed until the refunds box's words were cut off ("Refunds 0 / 2" at
+   1280 pixels wide, "Refu" at 1400; the auto-rebuild switch, 0.2.15 to 0.3.03, was in it then).
+   Between 1100 and 1500 the cash box drops its label, as it already did below 1360. Below 1300,
+   and in a game with a room code (whose box takes more room), the refunds meter makes way too (the
+   numbers say it, as on the smallest phones), and so does the handbook button (the ? screen opens
+   the handbook too). Nothing else moves. */
 @media (min-width: 1100px) and (max-width: 1500px) {
-  .hud-auto .ab-label { display: none; }
   .hud-cash .lbl { display: none; }
   .topbar:has(.hud-room) .hud-refunds .meter, .topbar:has(.hud-room) .btn-book { display: none; }
   /* (Online, "Copy link" stays: the link fills the code in for whoever opens it.) */
@@ -1453,7 +1421,7 @@ body.dealing .pause-banner { z-index: 42; }
 }
 @media (min-width: 1100px) and (max-width: 1200px) { .btn-speed, .btn-pause { min-width: 2.05rem; } }
 /* Those widths were not enough (0.3.01): a hosted game's room code and "Copy link" still pushed the
-   refunds count under the auto-rebuild switch at 1280 pixels ("Refunds 0 / 2"), and at 1600 to
+   refunds count under the auto-rebuild switch (gone since 0.3.04) at 1280 pixels ("Refunds 0 / 2"), and at 1600 to
    1920 pixels, where every label comes back, the bar ran off the screen, worse with a second
    player's team total or a boss's long title. The text grows with the window's height as well as
    its width, so no width can say when the bar is full: the bar measures itself (fit() in hud.js)
@@ -1462,9 +1430,9 @@ body.dealing .pause-banner { z-index: 42; }
 @media (min-width: 1100px) and (min-height: 560px) {
   /* 1. The room code's label, and its plain "Copy" button where "Copy link" is there too. */
   .topbar.fit-1 .hud-room small, .topbar.fit-1 .hud-room .btn-copy:not(:last-child) { display: none; }
-  /* 2. The words on the auto-rebuild switch and over the cash (their tooltips say it). Head
-     Office keeps his (a budget is not cash) and drops the store's total instead. */
-  .topbar.fit-2 .hud-auto .ab-label, .topbar.fit-2 .hud-cash:not(.is-budget) .lbl { display: none; }
+  /* 2. The word over the cash (its tooltip says it). Head Office keeps his (a budget is not
+     cash) and drops the store's total instead. */
+  .topbar.fit-2 .hud-cash:not(.is-budget) .lbl { display: none; }
   .topbar.fit-2 .hud-cash.is-budget .lbl { font-size: 0.68rem; }
   .topbar.fit-2 .hud-cash.is-budget .team-cash { display: none; }
   /* 3. The refunds meter (the numbers say it) and the handbook button (the ? screen opens it). */
@@ -1492,10 +1460,9 @@ body.dealing .pause-banner { z-index: 42; }
   .topbar.fit-7 .btn-full { display: none; }
   .topbar.fit-7 .hud-event { min-width: 0; }
   .topbar.fit-7 .btn-doors { padding-inline: 0.7rem; }
-  /* 8. Last: the switch is only its knob (green when on), a boss's long title is cut short (its
-     tooltip has it all), and the gaps close up a little more. */
+  /* 8. Last: a boss's long title is cut short (its tooltip has it all), and the gaps close up a
+     little more. */
   .topbar.fit-8 { gap: 0.3rem; }
-  .topbar.fit-8 .hud-auto .ab-state { display: none; }
   .topbar.fit-8 .hud-event .ev-sub { max-width: 9.5rem; overflow: hidden; text-overflow: ellipsis; }
   .topbar.fit-8 .countdown { min-width: 0; }
   /* 9. The link icon too: the code is left, and copies the link when clicked. */
@@ -2556,7 +2523,6 @@ html, body { overscroll-behavior: none; }
   .pause-banner .pb-word { font-size: 2.3rem; }
   .pause-banner .pb-who { font-size: 0.95rem; }
   .pause-banner .pb-how { font-size: 0.8rem; }
-  .hud-more .btn-auto { height: 46px; justify-content: flex-start; }
   /* The big REBUILD button: clear of the camera pad on the right, small enough for a phone,
      still a thumb's height. */
   .rebuild-pop { left: calc(0.5rem + env(safe-area-inset-left)); right: calc(0.5rem + env(safe-area-inset-right)); bottom: 0.5rem; gap: 0.35rem; }
@@ -2564,8 +2530,6 @@ html, body { overscroll-behavior: none; }
   .rp-icon { width: 1.8rem; height: 1.8rem; }
   .rp-count { font-size: 0.92rem; }
   .rp-sub { font-size: 0.68rem; }
-  .rebuild-pop .btn-auto { min-height: 48px; flex-direction: column; justify-content: center; gap: 0.15rem; padding: 0.25rem 0.5rem; }
-  .rebuild-pop .ab-state { min-width: 0; font-size: 0.7rem; }
   .has-minimap .rebuild-pop { bottom: 5.8rem; }
   .hud-more .hud-room { height: auto; padding: 0.35rem 0.5rem; flex-wrap: wrap; }
   .hud-more .hud-room small { display: block; width: 100%; }

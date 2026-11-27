@@ -110,6 +110,11 @@ export function checksum(s) {
   mix(s.nextId); mix(s.open); mix(s.phaseT); mix(s.speed); mix(s.waveAt);
   mix(s.phase.charCodeAt(0)); mix(s.phase.length);
   mix(s.spawnQ.length); mix(s.messes.length); mix(s.rubble.length); mix(s.carts ? s.carts.length : 0); mix(s.waves);
+  // (Money held for rebuilds players have paid for and that are waiting, 0.3.04: it has left their
+  // cash, so it is counted here. Nothing is mixed while nothing is held.)
+  let held = 0;
+  for (const r of s.rubble) if (r.by !== undefined) held += (r.res | 0) + 1;
+  if (held) mix(held);
   mix(s.office ? s.office.pid + 1 : 0);
   // (The deal's clock, only in a game with cards while it runs.)
   if (s.dealT !== undefined) mix(s.dealT);
@@ -489,7 +494,8 @@ export class HostSession extends Session {
     try { if (cmd && typeof cmd === 'object') mine = copy(cmd); } catch { mine = null; }
     const r = applyCommand(this.state, pid, mine, ev);
     // Clients replay what the host did. A refused command changes nothing, except that refusing
-    // a rebuild can tidy away rubble that has been built over, so that one goes too.
+    // a rebuild can tidy away rubble that has been built over (giving back any money held for
+    // it), so that one goes too.
     if (r.ok || (mine && mine.c === 'rebuild')) this._log.push([this._n, pid, copy(mine)]);
     if (!r.ok && pid === this.me) this.emit('nope', { why: r.why, cmd });
     if (ev.length) this._onSimEvents(ev);

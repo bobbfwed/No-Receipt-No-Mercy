@@ -3,7 +3,7 @@
 *The customer is always a prick.*
 
 <!-- gen:version -->
-**Play version 0.3.03 now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
+**Play version 0.3.04 now: https://bobbfwed.github.io/No-Receipt-No-Mercy/** (nothing to install; works in a browser on a computer, a tablet or a phone).
 <!-- /gen:version -->
 
 A co-op browser game for 1 to 7 players, set in the returns department of a discount warehouse. Shoppers pour into a discount warehouse wanting refunds. You and your friends each have your own cash (the store's income and refunds are split evenly between you), build a factory of belts and machines to earn more, and build security to make the shoppers give up before they reach the tills. The belts and machines are the maze they walk through. An HR chatbot called DEB insults you the whole time. Adults only.
@@ -129,7 +129,7 @@ With two or more players, one can stop defending and run the other side. Between
 | R | Rotate what you are holding, or the building under the mouse when holding nothing. The Barcode Laser fires the way it faces, so turn it before you place it |
 | Click a building with nothing picked | Opens its upgrades. Each kind (damage, speed, range, durability) is bought on its own; each level costs more than the last |
 | U | Buy the next level of the first upgrade of the building under the mouse (or pick the Upgrade tool and click a building to open its upgrades) |
-| B | Rebuild everything of yours that gym bros have wrecked, at half price, upgrades included |
+| B | Rebuild everything of yours that gym bros have wrecked, at half price, upgrades included. The money goes at once; each wreck goes back as soon as nothing is in the way, and every new wreck needs another press |
 | Right-click, or X then click | Remove (75% of what was spent on it back) |
 | OPEN THE DOORS | Start the next sales event without waiting for the timer. It costs nothing: the factory is paid at once for what it would have sold in the time skipped |
 | Esc | Put the tool down |

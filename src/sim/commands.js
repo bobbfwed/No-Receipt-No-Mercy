@@ -1,7 +1,7 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
 import { BUILD, TUNE, TICK_HZ, ST, ROLES, SPEEDS } from './constants.js';
-import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf } from './state.js';
+import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf, releaseOrder } from './state.js';
 import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './path.js';
 import { beginWave, skipBuild } from './step.js';
 import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
@@ -9,7 +9,7 @@ import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, freeTrack, boozeRoll } from './cards.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
-const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'autoRebuild', 'endless']);
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'endless']);
 
 /**
  * Commands that still work while the game is paused (0.3.02; state.pause). Everything else is
@@ -20,7 +20,7 @@ const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'reb
  * not go through commands at all: the session calls addPlayer and setPlayerOnline, which work as
  * ever while paused.)
  */
-const WHILE_PAUSED = new Set(['pause', 'speed', 'role', 'autoRebuild', 'skipCards']);
+const WHILE_PAUSED = new Set(['pause', 'speed', 'role', 'skipCards']);
 
 /** The phases a game may be paused in: the deal, a build pause and a sales event. */
 const PAUSE_PHASES = new Set(['cards', 'build', 'wave']);
@@ -50,13 +50,32 @@ function placement(state, k, x, y, d) {
   return { i, d: dd, tiles: footprint(state, k, x, y, dd), rubble: null };
 }
 
-/** Forgets any rubble under a set of tiles: something has been built over it. */
+/**
+ * Forgets any rubble under a set of tiles: something has been built over it. Money held for an
+ * ordered rebuild there goes back to whoever paid it (0.3.04). A wreck rebuilt from its own order
+ * has had its order taken off first (putBack), so it is not paid back as well.
+ */
 function clearRubble(state, tiles) {
   if (!state.rubble.length) return;
   state.rubble = state.rubble.filter((r) => {
     const under = footprint(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.d | 0) || [r.i];
-    return !under.some((t) => tiles.includes(t));
+    if (!under.some((t) => tiles.includes(t))) return true;
+    releaseOrder(state, r);
+    return false;
   });
+}
+
+/**
+ * Drops one wreck from the list if something has been built where it lay since (that hole is
+ * already patched), giving back any money held for it. Returns true if it was dropped.
+ */
+function tidyRubble(state, r) {
+  const tiles = footprint(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.d | 0);
+  if (tiles && !tiles.some((t) => state.grid[t])) return false;
+  const j = state.rubble.indexOf(r);
+  if (j >= 0) state.rubble.splice(j, 1);
+  releaseOrder(state, r);
+  return true;
 }
 
 /**
@@ -75,6 +94,15 @@ function clearRubble(state, tiles) {
  *   'bank' it would wall off one of the two banks of tills (the car park).
  */
 export function canPlace(state, k, x, y, pid = 0, d = 0) {
+  return placeCheck(state, k, x, y, pid, d, false);
+}
+
+/**
+ * canPlace's checks. With `paid` true the cash check is left out: an ordered wreck (0.3.04) has
+ * its money already, and must pass every other check (phase, pause, a shopper in the hole, the
+ * route) before it may go back. Keeping them in one place means the two can never disagree.
+ */
+function placeCheck(state, k, x, y, pid, d, paid) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
   if (state.phase === 'lobby') return 'lobby';
   if (state.phase === 'cards') return 'cards';
@@ -94,10 +122,15 @@ export function canPlace(state, k, x, y, pid = 0, d = 0) {
   // Laying a belt over a belt just turns it, which is free and always allowed.
   if (k === 'belt' && state.grid[at.i] && state.grid[at.i].k === 'belt') return null;
   for (const t of at.tiles) if (state.grid[t]) return t === own ? 'occupied' : 'fit';
-  const player = state.players[pid];
-  // (The game's cards may change what a new building costs: buildPrice.)
-  const price = at.rubble ? Math.floor(def.cost * TUNE.rebuildShare) : buildPrice(state, k);
-  if (!player || player.cash < price) return 'cash';
+  if (!paid) {
+    const player = state.players[pid];
+    // (The game's cards may change what a new building costs: buildPrice.)
+    const price = at.rubble ? Math.floor(def.cost * TUNE.rebuildShare) : buildPrice(state, k);
+    // Money he has already paid for this very wreck (pressing Rebuild, 0.3.04) counts as his: the
+    // 'place' command gives it back to him before he pays.
+    const held = at.rubble && at.rubble.by === pid ? at.rubble.res | 0 : 0;
+    if (!player || player.cash + held < price) return 'cash';
+  }
   if (def.blocks) {
     for (const s of state.shoppers) if (s.st !== ST.LEAVE && at.tiles.includes(tileOf(state, s))) return 'shopper';
     const block = at.tiles.length === 1 ? at.i : at.tiles;
@@ -186,87 +219,134 @@ function lift(state, ai) {
 }
 
 /**
- * Puts back a player's wrecked buildings: the B key, and auto-rebuild, which uses exactly this so
- * the two can never disagree on what is allowed or what it costs. Oldest wreck first, each at the
- * rebuild price with as many of its upgrades as the cash covers (rebuildDeal). Whatever cannot go
- * back yet (no cash, a shopper in the way, it would wall the route) stays as rubble.
- * @param {Object} [o]
- * @param {boolean} [o.all] everybody's rubble, not only his own (paid for by him)
- * @param {(r: Object) => boolean} [o.only] leave out any rubble this says no to
- * @param {boolean} [o.waitForCash] stop at the first wreck he cannot afford, so younger ones do
- *   not eat the money the oldest is waiting for (auto-rebuild; the B key buys what it can)
- * @returns {{n: number, short: number, why: string}} how many went back, how many of those lost
- *   upgrades, and why the last one refused was refused ('empty' if there was nothing to do)
+ * Puts one ordered wreck back (0.3.04), if nothing is in the way: every canPlace check except the
+ * cash, which was paid when Rebuild was pressed (r.res, held for it). It comes back with what that
+ * money buys (rebuildDeal, as when the B key put it back at once before 0.3.04): the building, a
+ * card's price, free levels and booze kept, and as many of its upgrade levels as were paid for.
+ * The money counts as spent, and the building as built, now, not when it was held.
+ * @returns {{done: true, short: boolean} | {done: false, why: string}}
  */
-function rebuildRubble(state, pid, { all = false, only = null, waitForCash = false } = {}) {
+function putBack(state, r) {
+  const pid = r.by, payer = state.players[pid];
+  const x = r.i % state.w, y = (r.i / state.w) | 0;
+  const no = placeCheck(state, r.k, x, y, pid, r.d | 0, true);
+  if (no) return { done: false, why: no };
+  const tiles = footprint(state, r.k, x, y, r.d | 0);
+  const res = r.res | 0;
+  const deal = rebuildDeal(r, res);
+  // (Never happens: res is always at least the bare building's price. Kept so that held money
+  // can never vanish if it somehow did.)
+  if (!deal) return { done: false, why: 'cash' };
+  // The order is used up here, before clearRubble, so the held money is not also paid back.
+  delete r.by;
+  delete r.res;
+  // (res is always exactly what some deal costs, so nothing is left over; if anything were, it
+  // goes back to him.)
+  payer.cash += res - deal.pay;
+  put(state, tiles, newBuilding(r.k, pid, r.d | 0, deal.u, r));
+  clearRubble(state, tiles);
+  bump(state, pid, 'spent', deal.pay);
+  bump(state, pid, 'built');
+  return { done: true, short: deal.lost > 0 };
+}
+
+/**
+ * The Rebuild button and the B key (0.3.04; before that it only put back what could go back at
+ * that moment, and auto-rebuild did the rest). Goes through the player's wrecks oldest first
+ * (everybody's with `all`), leaving out the ones already paid for: each one he can afford at
+ * least the bare building for is ordered, its price taken from his cash at once and held on the
+ * wreck (r.by, r.res); then it goes back at once if nothing is in the way, and otherwise waits
+ * for stepRebuilds. A wreck he cannot afford even the bare building for is not ordered: he must
+ * press again when he has the money (the owner's decision). There is no way to cancel an order.
+ * @returns {{ok: true, n: number, short: number, held: number, paid: number} | {ok: false, why: string}}
+ *   n: put back by this press; short: how many of those lost upgrades; held: ordered and now
+ *   waiting; paid: what this press took in all. Refused ('why') when it ordered nothing: 'cash' too
+ *   broke for any of them, 'ordered' everything is already paid for and waiting, 'empty' nothing
+ *   wrecked; 'over', 'paused' as for any command.
+ */
+function orderRebuilds(state, pid, all, ev) {
+  if (state.phase === 'won' || state.phase === 'lost') return { ok: false, why: 'over' };
+  if (state.phase !== 'build' && state.phase !== 'wave') return { ok: false, why: 'phase' };
   const player = state.players[pid];
-  let n = 0, short = 0, why = 'empty';
+  // paid: everything this press took; heldPaid: only what is held for the wrecks left waiting.
+  let n = 0, short = 0, held = 0, paid = 0, heldPaid = 0, broke = false, waiting = false;
   for (const r of state.rubble.slice()) {
     if (r.o !== pid && !all) continue;
-    if (only && !only(r)) continue;
-    const x = r.i % state.w, y = (r.i / state.w) | 0;
-    const tiles = footprint(state, r.k, x, y, r.d | 0);
-    // Something has been built there since: that hole is already patched.
-    if (!tiles || tiles.some((t) => state.grid[t])) {
-      const j = state.rubble.indexOf(r);
-      if (j >= 0) state.rubble.splice(j, 1);
-      continue;
-    }
-    const no = canPlace(state, r.k, x, y, pid, r.d | 0);
-    const deal = no ? null : rebuildDeal(r, player.cash);
-    if (!deal) {
-      why = no || 'cash';
-      if (why === 'cash' && waitForCash) break;
-      continue;
-    }
-    put(state, tiles, newBuilding(r.k, pid, r.d | 0, deal.u, r));
-    clearRubble(state, tiles);
+    // Something has been built there since: that hole is already patched. (It still goes when the
+    // press is refused, which is why the session sends a refused 'rebuild' on to its clients.)
+    if (tidyRubble(state, r)) continue;
+    if (r.by !== undefined) { waiting = true; continue; }
+    const deal = rebuildDeal(r, player.cash);
+    if (!deal) { broke = true; continue; }
     player.cash -= deal.pay;
-    bump(state, pid, 'spent', deal.pay);
-    bump(state, pid, 'built');
-    n++;
-    if (deal.lost > 0) short++;
+    r.by = pid;
+    r.res = deal.pay;
+    paid += deal.pay;
+    const back = putBack(state, r);
+    if (back.done) { n++; if (back.short) short++; } else { held++; heldPaid += r.res; }
   }
-  return { n, short, why };
-}
-
-/** Ticks after it broke before auto-rebuild may put a building back (TUNE.autoRebuildSecs). */
-export const autoRebuildWait = () => Math.round(TUNE.autoRebuildSecs * TICK_HZ);
-
-/**
- * Whether auto-rebuild may touch this wreck yet: it broke at least autoRebuildWait() ticks ago.
- * Rubble from a save made before 0.2.15 does not know when it broke, and counts as long ago.
- */
-export function autoReady(state, r) {
-  return r.at === undefined || state.tick - r.at >= autoRebuildWait();
-}
-
-/** One auto-rebuild attempt for one player: his wrecks that are old enough, oldest first. */
-function autoRebuildFor(state, player, ev) {
-  if (player.side === 'office') return;
-  const { n, short } = rebuildRubble(state, player.id, { only: (r) => autoReady(state, r), waitForCash: true });
-  if (n) ev.push({ e: 'rebuilt', by: player.id, n, short, auto: 1 });
+  if (!n && !held) return { ok: false, why: broke ? 'cash' : waiting ? 'ordered' : 'empty' };
+  if (n) ev.push({ e: 'rebuilt', by: pid, n, short });
+  if (held) ev.push({ e: 'rebuildHeld', by: pid, n: held, paid: heldPaid });
+  return { ok: true, n, short, held, paid };
 }
 
 /**
- * Auto-rebuild, run by step() every tick after the shoppers move. For each player who has it
- * switched on, it tries at the very tick a wreck of his becomes old enough (so the delay is
- * exactly TUNE.autoRebuildSecs), and after that every TUNE.autoRebuildEvery while something of
- * his is still waiting (a refused rebuild costs a path search, too dear for every tick).
+ * Why an ordered wreck cannot go back right now (canPlace's reasons, the cash left out: it is paid
+ * for), or null if it can. For the interface (the big REBUILD button says why it is waiting).
  */
-export function autoRebuild(state, ev) {
-  if (!state.rubble.length) return;
-  const wait = autoRebuildWait();
-  const retry = state.tick % Math.max(1, Math.round(TUNE.autoRebuildEvery * TICK_HZ)) === 0;
-  for (const p of state.players) {
-    if (!p.autoRebuild) continue;
-    let due = false;
-    for (const r of state.rubble) {
-      if (r.o !== p.id) continue;
-      const age = r.at === undefined ? Infinity : state.tick - r.at;
-      if (age === wait || (retry && age >= wait)) { due = true; break; }
+export function canPutBack(state, r) {
+  return placeCheck(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.by ?? r.o, r.d | 0, true);
+}
+
+/** Whether any wreck has been paid for and is waiting (cheap: no path search). */
+const anyOrdered = (state) => state.rubble.some((r) => r.by !== undefined);
+
+/**
+ * The wrecks players have paid for and that are waiting (0.3.04), run by step() every tick after
+ * the shoppers move. Nothing to do unless something is ordered; then, every TUNE.rebuildEvery
+ * seconds of game time (a refused rebuild costs a path search, too dear for every tick), oldest
+ * first:
+ *  1. a payer who has left the game or gone to Head Office has his order cancelled (and his money
+ *     back, if he is still in the game);
+ *  2. a wreck paid for at less than its full deal takes more of its payer's cash, as far as his
+ *     cash goes, up to the full deal: so a wreck ordered while he was short comes back with its
+ *     upgrades if the money arrives while it waits, and older wrecks get the money first. Not from
+ *     a payer who is away (not connected): while away he neither earns nor pays (setPlayerOnline).
+ *     What he had already paid still goes back when the way clears; if his grace period runs out,
+ *     expireAway cancels his orders and shares the held money out with the rest of his cash;
+ *  3. it goes back if nothing is in the way (putBack).
+ * One `rebuilt` event per payer whose wrecks went back, with `late: 1`.
+ */
+export function stepRebuilds(state, ev) {
+  if (!state.rubble.length || !anyOrdered(state)) return;
+  if (state.phase !== 'build' && state.phase !== 'wave') return;
+  if (state.tick % Math.max(1, Math.round(TUNE.rebuildEvery * TICK_HZ)) !== 0) return;
+  const done = new Map();
+  for (const r of state.rubble.slice()) {
+    if (r.by === undefined) continue;
+    if (tidyRubble(state, r)) continue;
+    const payer = state.players[r.by];
+    if (!payer || payer.side === 'office') { releaseOrder(state, r); continue; }
+    if (payer.on && payer.cash > 0 && r.res < rebuildDeal(r, Infinity).pay) {
+      // Never lowers what is held: a deal for more money never costs less.
+      const deal = rebuildDeal(r, r.res + payer.cash);
+      if (deal && deal.pay > r.res) {
+        payer.cash -= deal.pay - r.res;
+        r.res = deal.pay;
+      }
     }
-    if (due) autoRebuildFor(state, p, ev);
+    const by = r.by;
+    const back = putBack(state, r);
+    if (!back.done) continue;
+    const d = done.get(by) || { n: 0, short: 0 };
+    d.n++;
+    if (back.short) d.short++;
+    done.set(by, d);
+  }
+  for (const p of state.players) {
+    const d = done.get(p.id);
+    if (d) ev.push({ e: 'rebuilt', by: p.id, n: d.n, short: d.short, late: 1 });
   }
 }
 
@@ -284,11 +364,10 @@ export function autoRebuild(state, ev) {
  *   { c: 'upgrade', x, y, t }   buy the next level of track t ('dmg', 'spd', 'rng', 'dur');
  *                               without t, damage if the kind has it, otherwise its first track
  *   { c: 'give', to, n }        hand n of your cash to player `to`
- *   { c: 'rebuild' }            put back what gym bros destroyed of yours, oldest first, at the
- *                               rebuild price, as far as your cash goes (with all: true, everybody's)
- *   { c: 'autoRebuild', on }    switch your own auto-rebuild on or off (without on: flip it). While
- *                               on, step() rebuilds your wrecks like 'rebuild' does, each no sooner
- *                               than TUNE.autoRebuildSecs after it broke (see autoRebuild)
+ *   { c: 'rebuild' }            order back what gym bros destroyed of yours, oldest first, at the
+ *                               rebuild price, as far as your cash goes (with all: true, everybody's):
+ *                               the money is taken now, and each goes back at once, or as soon as
+ *                               nothing is in the way (see orderRebuilds and stepRebuilds)
  *   { c: 'map', design, size }  lobby only, host only (state.host): change the store
  *   { c: 'settings', waves, startCash, difficulty, cardsOn }  lobby only, host only: the game's
  *                               settings (see SETTINGS); anything left out keeps its value.
@@ -359,8 +438,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       player.ready = cmd.on !== false;
       return { ok: true };
     }
-    // (Auto-rebuild may be switched on before the game starts: it does nothing until something breaks.)
-    if (cmd.c !== 'role' && cmd.c !== 'autoRebuild') return { ok: false, why: 'lobby' };
+    if (cmd.c !== 'role') return { ok: false, why: 'lobby' };
   }
   if (state.phase === 'cards') {
     // The deal: nothing can be built until the cards are on the table. Everyone may ask to skip
@@ -369,7 +447,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       player.skip = cmd.on !== false;
       return { ok: true };
     }
-    if (cmd.c !== 'role' && cmd.c !== 'autoRebuild' && cmd.c !== 'speed') return { ok: false, why: 'cards' };
+    if (cmd.c !== 'role' && cmd.c !== 'speed') return { ok: false, why: 'cards' };
   }
   switch (cmd.c) {
     case 'skipCards':
@@ -385,7 +463,10 @@ export function applyCommand(state, pid, cmd, ev = []) {
         state.grid[at.i].d = cmd.d & 3;
         return { ok: true, turned: true };
       }
-      // On its own rubble it comes back as it was, with what upgrades the player can afford.
+      // On its own rubble it comes back as it was, with what upgrades the player can afford. If
+      // somebody had already paid to rebuild that wreck (0.3.04), the held money goes back to him
+      // first: when that is the placer, it is part of what he pays with now, so he pays once.
+      if (at.rubble) releaseOrder(state, at.rubble);
       const deal = at.rubble ? rebuildDeal(at.rubble, player.cash) : null;
       const paid = deal ? deal.pay : buildPrice(state, cmd.k);
       // What the game's cards gave it: another price (kept, for what it sells back for), and, when
@@ -457,22 +538,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       ev.push({ e: 'gave', by: pid, to: to.id, n });
       return { ok: true };
     }
-    case 'rebuild': {
-      const { n, short, why } = rebuildRubble(state, pid, { all: !!cmd.all });
-      if (!n) return { ok: false, why };
-      ev.push({ e: 'rebuilt', by: pid, n, short });
-      return { ok: true, n, short };
-    }
-    case 'autoRebuild': {
-      // A switch, his own only. Without `on` it flips.
-      player.autoRebuild = cmd.on === undefined ? !player.autoRebuild : !!cmd.on;
-      ev.push({ e: 'autoRebuild', by: pid, on: player.autoRebuild });
-      // Switched on with something already wrecked for longer than the delay: try it now, rather
-      // than at the next regular retry. (Not while the game is paused, when nothing is built: once
-      // it is resumed, step() picks his wrecks up at its next regular retry.)
-      if (player.autoRebuild && !state.pause) autoRebuildFor(state, player, ev);
-      return { ok: true };
-    }
+    case 'rebuild':
+      return orderRebuilds(state, pid, !!cmd.all, ev);
     case 'side': {
       if (cmd.side !== 'office' && cmd.side !== 'store') return { ok: false, why: 'bad' };
       if (state.training) return { ok: false, why: 'bad' };
@@ -486,6 +553,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
         // A previous holder who dropped out loses the job.
         if (state.office && state.players[state.office.pid]) state.players[state.office.pid].side = 'store';
         player.side = 'office';
+        // Head Office builds nothing: what he had paid to rebuild is his again (0.3.04).
+        for (const r of state.rubble) if (r.by === pid) releaseOrder(state, r);
         state.office = { pid, budget: 0, bank: 0, plan: [], ready: false };
         refreshBudget(state);
       } else {
