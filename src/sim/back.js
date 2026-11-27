@@ -956,12 +956,29 @@ export function syncLifts(state, tiles) {
 // Placing
 
 /**
+ * What putting a Back part of kind k on tile i costs in this game (0.4.01): its price (buildPrice);
+ * on a plain belt, a belt is a free turn, and any other part replaces the belt for its price less
+ * what was spent on the belt, never below 0 (the owner's request: no need to remove a belt first).
+ * canPlaceBack, the place command and the line command's crossings all use this, so the preview
+ * and the rules agree.
+ */
+export function backPrice(state, k, i) {
+  const price = buildPrice(state, k);
+  const q = state.back && state.back[i];
+  if (!q || q.k !== 'conv') return price;
+  if (k === 'conv') return 0;
+  return Math.max(0, price - (q.c ?? BUILD.conv.cost));
+}
+
+/**
  * Checks whether a player may put a Back part of kind k on (x, y) (canPlace's partner for The
  * Back). Nothing in The Back blocks shoppers, so no route check is needed.
  * @returns {string|null} null if allowed, otherwise the reason: 'over', 'lobby', 'cards', 'paused'
  *   as for canPlace; 'kind' not a Back part a player may buy (the Returns Drop is the map's, a
  *   Dumbwaiter its building's); 'bounds' off the map or a wall (the store's walls and shelves go
- *   all the way down); 'occupied' (a Dumbwaiter's tile too); 'cash'. A belt laid on a belt just turns it, free.
+ *   all the way down); 'occupied' (anything but a plain belt there: a Dumbwaiter's tile too);
+ *   'cash' (backPrice). A belt laid on a belt just turns it, free; any other part laid on a plain
+ *   belt replaces it (0.4.01), anyone's belt.
  */
 export function canPlaceBack(state, k, x, y, pid = 0, d = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
@@ -974,8 +991,9 @@ export function canPlaceBack(state, k, x, y, pid = 0, d = 0) {
   const i = idxOf(state, x, y);
   if (state.tiles[i] === '#') return 'bounds';
   const q = state.back[i];
-  if (q) return k === 'conv' && q.k === 'conv' ? null : 'occupied';
+  if (q && q.k !== 'conv') return 'occupied';
+  if (q && k === 'conv') return null;
   const player = state.players[pid];
-  if (!player || player.cash < buildPrice(state, k)) return 'cash';
+  if (!player || player.cash < backPrice(state, k, i)) return 'cash';
   return null;
 }

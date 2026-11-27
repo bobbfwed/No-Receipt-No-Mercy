@@ -7,7 +7,7 @@ import { beginWave } from './step.js';
 import { spentOn, rebuildDeal, reinforceCost } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, cardStock, boozeRoll, nextCard } from './cards.js';
-import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode, takeOverBelt } from './back.js';
+import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode, takeOverBelt, backPrice } from './back.js';
 import { planLine } from './line.js';
 import { carriesWire, wireCovers, buildingTiles, planWith, wireLive, wireChanged } from './wire.js';
 
@@ -417,8 +417,11 @@ function setPause(state, pid, cmd, ev) {
  * shopper, so there is no route check, and there is no rubble. The Returns Drops are
  * the map's: nobody can place or remove one ('fixed'), anybody can turn one. Every change to the
  * layout moves state.backVer on, which tells back.js to work its lane order out again.
- *   place: a belt laid on a belt turns it to face d, free, keeping what is on it. Sends placed
- *     {k, x, y, d, by, f: 1}.
+ *   place: a belt laid on a belt turns it to face d, free, keeping what is on it. Any other part laid
+ *     on a plain belt replaces it (0.4.01), for its price less what was spent on the belt (backPrice),
+ *     what was spent on both counted as spent on the new part (so selling it back is fair); an
+ *     Overpass keeps the belt's items on its lane, a Splitter the front one (takeOverBelt). Sends
+ *     placed {k, x, y, d, by, f: 1}.
  *   remove: whoever paid for it gets TUNE.sellBack of what he paid; whatever was on it is lost.
  *     Sends removed {k, x, y, by, owner, f: 1}.
  *   rotate: a quarter turn clockwise; 'empty' for nothing there or a part that does not turn.
@@ -429,16 +432,20 @@ function backCommand(state, pid, cmd, ev) {
     const why = canPlaceBack(state, cmd.k, cmd.x, cmd.y, pid, cmd.d | 0);
     if (why) return { ok: false, why };
     const i = idxOf(state, cmd.x, cmd.y);
-    if (state.back[i]) {
-      state.back[i].d = cmd.d & 3;
+    const old = state.back[i];
+    if (old && cmd.k === 'conv') {
+      old.d = cmd.d & 3;
       state.backVer = (state.backVer | 0) + 1;
       return { ok: true, turned: true };
     }
     const def = BUILD[cmd.k];
-    const paid = buildPrice(state, cmd.k);
+    const paid = backPrice(state, cmd.k, i);
     const p = newPart(cmd.k, pid, cmd.d | 0);
-    // (A card changed the price: kept, so that selling it back returns the usual share of it.)
-    if (paid !== def.cost) p.c = paid;
+    // (A card changed the price, or a belt was replaced: what was spent is kept, so that selling it
+    // back returns the usual share of it.)
+    const spent = old ? spentOn(old) + paid : paid;
+    if (spent !== def.cost) p.c = spent;
+    if (old) takeOverBelt(old, p);
     state.back[i] = p;
     state.backVer = (state.backVer | 0) + 1;
     player.cash -= paid;

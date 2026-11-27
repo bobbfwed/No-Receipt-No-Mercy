@@ -26,7 +26,7 @@ export {
 } from './cards.js';
 export { getBackField } from './path.js';
 // The Back (0.4): the floor under the shop and its belt engine.
-export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, overpassDirs, beltShape, feedsInto, takesFrom, addTrainingDrops } from './back.js';
+export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, backPrice, overpassDirs, beltShape, feedsInto, takesFrom, addTrainingDrops } from './back.js';
 export { makeDrops } from './maps.js';
 // Belt lines (0.4.01): the route the `line` command lays, for the interface's preview.
 export { planLine } from './line.js';

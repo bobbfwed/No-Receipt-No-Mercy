@@ -4,9 +4,8 @@
 // like the rest of the rules: the host plans it again from the same state and gets the same line.
 // docs/architecture.md, "The Back", is the contract.
 import { BUILD } from './constants.js';
-import { beltShape } from './back.js';
+import { beltShape, backPrice } from './back.js';
 import { buildPrice } from './cards.js';
-import { spentOn } from './upgrades.js';
 
 /** The tile next to tile i in direction d (0 east, 1 south, 2 west, 3 north), or -1 off the map. */
 function nb(W, H, i, d) {
@@ -212,7 +211,7 @@ export function planLine(state, pid, from, to, axis) {
   // and Overpasses; a line cannot be laid like that.)
   if (new Set(route).size !== route.length) return no('blocked');
 
-  const beltPrice = buildPrice(state, 'conv'), overPrice = buildPrice(state, 'over');
+  const beltPrice = buildPrice(state, 'conv');
   const steps = [];
   let cost = 0, cut = false;
   for (let n = 0; n < route.length; n++) {
@@ -224,7 +223,7 @@ export function planLine(state, pid, from, to, axis) {
       // Across the route: fed from the side at the end of a line with no end part; crossed by an
       // Overpass anywhere else.
       if (n === route.length - 1 && !endPart) step = { i, k: 'conv', d: p.d, cost: 0, keep: true };
-      else step = { i, k: 'over', d, cost: Math.max(0, overPrice - spentOn(p)), cross: true };
+      else step = { i, k: 'over', d, cost: backPrice(state, 'over', i), cross: true };
     } else if (p.d === d) step = { i, k: 'conv', d, cost: 0, keep: true };
     else step = { i, k: 'conv', d, cost: 0, turn: true };
     if (step.cost > 0 && cost + step.cost > player.cash) { cut = true; break; }

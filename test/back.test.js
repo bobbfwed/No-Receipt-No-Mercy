@@ -35,6 +35,7 @@ function row(s, x0, x1, y, d) { for (let x = Math.min(x0, x1); x <= Math.max(x0,
 /** A straight run of belts from (x, y0) to (x, y1), all facing d. */
 function col(s, x, y0, y1, d) { for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) lay(s, x, y, 'conv', d); }
 const at = (s, x, y) => s.back[y * s.w + x];
+const idx = (s, x, y) => y * s.w + x;
 
 /** Every item in The Back, hands included, as a sorted list of codes. */
 function codes(s) {
@@ -658,6 +659,77 @@ test('Returns Drop: a machine right beside it is fed straight from it', () => {
   assert.equal(codes(s).length, 0, 'nothing on belts');
 });
 
+test('a part laid on a plain belt replaces it, for its price less what the belt cost (0.4.01)', () => {
+  const s = blank();
+  addPlayer(s, 'Steve');
+  s.phase = 'build';
+  const cash = () => s.players[0].cash;
+  // A belt line east, carrying junk; a Splitter dropped into the middle of it keeps it flowing.
+  row(s, 3, 9, 5, E);
+  lay(s, 10, 5, 'bin');
+  lay(s, 6, 6, 'conv', S); lay(s, 6, 7, 'bin');
+  at(s, 6, 5).it.push(JUNK, 50);
+  at(s, 6, 5).o = 1; // Steve's belt: anyone may replace it
+  let c0 = cash();
+  const ev = [];
+  assert.equal(canPlaceBack(s, 'split', 6, 5, 0, E), null);
+  assert.deepEqual(applyCommand(s, 0, { c: 'place', k: 'split', x: 6, y: 5, d: E, f: 1 }, ev), { ok: true });
+  assert.deepEqual(ev, [{ e: 'placed', k: 'split', x: 6, y: 5, d: E, by: 0, f: 1 }]);
+  assert.equal(c0 - cash(), BUILD.split.cost - BUILD.conv.cost);
+  const sp = at(s, 6, 5);
+  assert.equal(sp.k, 'split');
+  assert.equal(sp.o, 0);
+  assert.equal(sp.c, undefined, 'spent: the belt and the difference, which is just its price');
+  assert.equal(sp.h, JUNK, 'it took the front item in its hand');
+  let east = 0, south = 0;
+  for (let t = 0; t < 30 * TICK_HZ; t++) {
+    if (wants(s, idx(s, 3, 5), JUNK, E)) give(s, idx(s, 3, 5), JUNK, E);
+    stepBack(s);
+    if (at(s, 7, 5).it.at(-1) === 0) east++;
+    if (at(s, 6, 6).it.at(-1) === 0) south++;
+  }
+  assert.ok(east > 20 && south > 20, `flow continues through it both ways (${east}, ${south})`);
+  // Sold back: the usual share of everything spent on that tile.
+  c0 = cash();
+  applyCommand(s, 1, { c: 'remove', x: 6, y: 5, f: 1 });
+  assert.equal(cash() - c0, Math.floor(BUILD.split.cost * TUNE.sellBack));
+
+  // An Overpass keeps the belt's items on its lane.
+  const o = blank();
+  o.phase = 'build';
+  col(o, 4, 2, 8, S);
+  at(o, 4, 5).it.push(11, 150, 21, 40);
+  assert.ok(applyCommand(o, 0, { c: 'place', k: 'over', x: 4, y: 5, f: 1 }).ok);
+  assert.deepEqual(at(o, 4, 5).b, [11, 150, 21, 40]);
+  assert.deepEqual(at(o, 4, 5).a, []);
+  // A machine over a belt: the belt goes, the machine works.
+  const m = blank();
+  m.phase = 'build';
+  row(m, 3, 9, 5, E);
+  const before = m.players[0].cash;
+  assert.ok(applyCommand(m, 0, { c: 'place', k: 'cannery', x: 6, y: 5, d: E, f: 1 }).ok);
+  assert.equal(before - m.players[0].cash, BUILD.cannery.cost - BUILD.conv.cost);
+  assert.equal(at(m, 6, 5).k, 'cannery');
+  // Short by the difference: refused, nothing changes; a card's belt price counts.
+  const p = blank();
+  p.phase = 'build';
+  lay(p, 5, 5, 'conv', E).c = 5; // (a belt bought dearer: $5 spent)
+  p.players[0].cash = BUILD.over.cost - 5 - 1;
+  assert.equal(canPlaceBack(p, 'over', 5, 5, 0), 'cash');
+  const was = JSON.stringify(p);
+  assert.equal(applyCommand(p, 0, { c: 'place', k: 'over', x: 5, y: 5, f: 1 }).why, 'cash');
+  assert.equal(JSON.stringify(p), was);
+  p.players[0].cash += 1;
+  assert.ok(applyCommand(p, 0, { c: 'place', k: 'over', x: 5, y: 5, f: 1 }).ok);
+  assert.equal(p.players[0].cash, 0);
+  assert.equal(at(p, 5, 5).c ?? BUILD.over.cost, BUILD.over.cost, 'five on the belt, ten more: spent in all');
+  // Anything that is not a plain belt still refuses; drops and Dumbwaiters stay.
+  lay(p, 7, 5, 'drop');
+  p.back[idx(p, 8, 5)] = { k: 'lift', a: idx(p, 8, 5) };
+  p.players[0].cash = 1e6;
+  for (const [x, k] of [[5, 'split'], [7, 'split'], [8, 'still']]) assert.equal(canPlaceBack(p, k, x, 5, 0), 'occupied', `${k} on ${x}`);
+});
+
 test('Clearance Bin: pays binPay by tier for supplies, shared like income; nothing for junk', () => {
   const s = blank();
   addPlayer(s, 'Steve');
@@ -832,7 +904,12 @@ test('commands on The Back: price, sell-back, walls, occupied tiles, belt over b
   // (From stage 3 a security building needs the tile below clear for its Dumbwaiter; a crate does not.)
   assert.equal(canPlace(s, 'sprinkler', 5, 5, 0), 'back', 'no security building over a Back part');
   assert.equal(canPlace(s, 'crate', 5, 5, 0), null, 'a crate does not care');
-  assert.equal(applyCommand(s, 0, { c: 'place', k: 'bin', x: 5, y: 5, f: 1 }).why, 'occupied');
+  // (Anything but a plain belt is occupied: 0.4.01 lets a part replace a belt, below.)
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'bin', x: 9, y: 9, f: 1 }).ok);
+  assert.equal(applyCommand(s, 0, { c: 'place', k: 'split', x: 9, y: 9, f: 1 }).why, 'occupied');
+  assert.equal(applyCommand(s, 0, { c: 'place', k: 'conv', x: 9, y: 9, f: 1 }).why, 'occupied');
+  applyCommand(s, 0, { c: 'remove', x: 9, y: 9, f: 1 });
+  s.players[0].cash = cash - BUILD.conv.cost;
   // A belt on a belt turns it, free.
   const v1 = s.backVer;
   assert.equal(applyCommand(s, 1, { c: 'place', k: 'conv', x: 5, y: 5, d: E, f: 1 }).turned, true);
