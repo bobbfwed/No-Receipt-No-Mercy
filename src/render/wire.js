@@ -4,9 +4,10 @@
 //   const art = createWireArt();
 //   art.setScale(r)                      when the zoom crosses a resolution step (sprites repainted)
 //   art.draw(ctx, s, vis, F)             every wire on screen: planned wire as a thin dashed line
-//                                        with small barbs on faint shading, live wire as a dark steel
-//                                        coil with barbs, purple tags and glints, over the floor and
-//                                        the buildings it crosses
+//                                        with small barbs on faint shading, live wire as a thin,
+//                                        see-through steel coil with barbs, purple tags and glints
+//                                        between two purple edge lines, over the floor and the
+//                                        buildings it crosses (0.4.01: light enough to see them)
 //   art.drawPreview(ctx, s, prev, pid)   a wire direction being tried ({ x, y, d }): green where it
 //                                        may go, red where the rules would refuse it
 //
@@ -36,42 +37,51 @@ const TAG = '#a855f7';
 function coil(g, style) {
   g.lineCap = 'round';
   if (style === 'live' || style === 'tag') {
-    // A dark band under it, so the wire reads on the pale floor as well as the dark, with a thin
-    // purple edge (the supply's colour) along both sides.
-    g.fillStyle = 'rgba(24,10,36,0.42)';
+    // (0.4.01, the owner: the old heavy coil on a dark band hid whatever stood under it.) Now a
+    // see-through coil of thin wire: a faint tint over the covered tiles and a thin purple line
+    // along each side of the strip (the supply's colour), which is what marks the tiles nobody may
+    // step on; the loops are fine strokes with gaps wide enough to see a building or a shopper
+    // through them.
+    g.fillStyle = 'rgba(88,28,135,0.10)';
     g.fillRect(-20, -17, 40, 34);
-    g.fillStyle = 'rgba(168,85,247,0.55)';
-    g.fillRect(-20, -17, 40, 1.6);
-    g.fillRect(-20, 15.4, 40, 1.6);
-    // The back half of each loop first, darker, then the front half over it: a coil, not a chain.
+    g.fillStyle = 'rgba(15,10,25,0.55)';
+    g.fillRect(-20, -17.6, 40, 1);
+    g.fillRect(-20, 16.6, 40, 1);
+    g.fillStyle = 'rgba(192,132,252,0.95)';
+    g.fillRect(-20, -17, 40, 1.2);
+    g.fillRect(-20, 15.8, 40, 1.2);
+    // The back half of each loop first, faint, then the front half over it: a coil, not a chain.
+    g.globalAlpha = 0.55;
     for (const x of LOOPS) {
       g.beginPath(); g.ellipse(x, 0, RX, RY, TILT, Math.PI, TAU);
-      g.strokeStyle = INK; g.lineWidth = 3.4; g.stroke();
-      g.strokeStyle = '#3a3f45'; g.lineWidth = 1.6; g.stroke();
+      g.strokeStyle = INK; g.lineWidth = 1.7; g.stroke();
+      g.strokeStyle = '#7d858d'; g.lineWidth = 0.8; g.stroke();
     }
+    g.globalAlpha = 0.9;
     for (const x of LOOPS) {
       g.beginPath(); g.ellipse(x, 0, RX, RY, TILT, 0, Math.PI);
-      g.strokeStyle = INK; g.lineWidth = 4; g.stroke();
-      g.strokeStyle = STEEL; g.lineWidth = 2.2; g.stroke();
+      g.strokeStyle = INK; g.lineWidth = 2; g.stroke();
+      g.strokeStyle = '#9aa2aa'; g.lineWidth = 1.05; g.stroke();
       // A glint along the front of each loop.
       g.beginPath(); g.ellipse(x, 0, RX, RY, TILT, 0.5, 1.3);
-      g.strokeStyle = STEEL_HI; g.lineWidth = 1.2; g.stroke();
+      g.strokeStyle = STEEL_HI; g.lineWidth = 0.7; g.stroke();
     }
     // Barbs: small crossed blades at the top and bottom of every loop.
     g.beginPath();
     for (const x of LOOPS) {
       for (const [bx, by] of [[x + 4, -RY + 1.5], [x - 4, RY - 1.5]]) {
-        g.moveTo(bx - 2.3, by - 2.3); g.lineTo(bx + 2.3, by + 2.3);
-        g.moveTo(bx + 2.3, by - 2.3); g.lineTo(bx - 2.3, by + 2.3);
+        g.moveTo(bx - 1.7, by - 1.7); g.lineTo(bx + 1.7, by + 1.7);
+        g.moveTo(bx + 1.7, by - 1.7); g.lineTo(bx - 1.7, by + 1.7);
       }
     }
-    g.strokeStyle = INK; g.lineWidth = 2.4; g.stroke();
-    g.strokeStyle = '#c4cad0'; g.lineWidth = 1; g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 1.5; g.stroke();
+    g.strokeStyle = '#d4d9de'; g.lineWidth = 0.6; g.stroke();
+    g.globalAlpha = 1;
     if (style === 'tag') {
       // The purple tag the supply wears, clipped on now and then.
-      rr(g, -1, 11, 8, 6, 1.2);
+      rr(g, 0, 12, 6, 4.5, 1);
       g.fillStyle = TAG; g.fill();
-      g.strokeStyle = INK; g.lineWidth = 1.2; g.stroke();
+      g.strokeStyle = INK; g.lineWidth = 1; g.stroke();
     }
     return;
   }
@@ -80,22 +90,28 @@ function coil(g, style) {
   // with small barbs, like a line marked out on the floor; nothing like the heavy live coil. The
   // dash repeats every 10 pixels, so a run of tiles reads as one line.
   const col = style === 'ok' ? '#86efac' : style === 'bad' ? '#fca5a5' : '#d8b4fe';
-  g.fillStyle = style === 'ok' ? 'rgba(74,222,128,0.16)' : style === 'bad' ? 'rgba(239,68,68,0.2)' : 'rgba(168,85,247,0.12)';
+  // (0.4.01: lighter, so what is under it shows: a fainter tint, a thinner line, and a thin dashed
+  // edge along each side of the strip, as the live wire's solid one.)
+  g.fillStyle = style === 'ok' ? 'rgba(74,222,128,0.12)' : style === 'bad' ? 'rgba(239,68,68,0.15)' : 'rgba(168,85,247,0.06)';
   g.fillRect(-20, -20, 40, 40);
+  g.setLineDash([4, 4]);
+  g.lineCap = 'butt';
+  g.beginPath(); g.moveTo(-20, -18.5); g.lineTo(20, -18.5); g.moveTo(-20, 18.5); g.lineTo(20, 18.5);
+  g.strokeStyle = col; g.globalAlpha = 0.7; g.lineWidth = 1; g.stroke();
+  g.globalAlpha = 1;
   g.beginPath(); g.moveTo(-20, 0); g.lineTo(20, 0);
   g.setLineDash([6, 4]);
-  g.lineCap = 'butt';
-  g.strokeStyle = 'rgba(15,10,25,0.7)'; g.lineWidth = 3.6; g.stroke();
-  g.strokeStyle = col; g.lineWidth = 1.8; g.stroke();
+  g.strokeStyle = 'rgba(15,10,25,0.55)'; g.lineWidth = 2.6; g.stroke();
+  g.strokeStyle = col; g.lineWidth = 1.2; g.stroke();
   g.setLineDash([]);
   g.beginPath();
   for (const x of [-12, 8]) {
-    g.moveTo(x - 2.4, -2.4); g.lineTo(x + 2.4, 2.4);
-    g.moveTo(x + 2.4, -2.4); g.lineTo(x - 2.4, 2.4);
+    g.moveTo(x - 2, -2); g.lineTo(x + 2, 2);
+    g.moveTo(x + 2, -2); g.lineTo(x - 2, 2);
   }
   g.lineCap = 'round';
-  g.strokeStyle = 'rgba(15,10,25,0.7)'; g.lineWidth = 2.8; g.stroke();
-  g.strokeStyle = col; g.lineWidth = 1.2; g.stroke();
+  g.strokeStyle = 'rgba(15,10,25,0.55)'; g.lineWidth = 2.2; g.stroke();
+  g.strokeStyle = col; g.lineWidth = 1; g.stroke();
 }
 
 const STYLES = ['live', 'tag', 'plan', 'ok', 'bad'];
