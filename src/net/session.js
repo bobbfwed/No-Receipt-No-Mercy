@@ -134,18 +134,26 @@ export function checksum(s) {
     mix(b.hit); mix(b.off);
     if (b.it) mix(b.it.length);
   }
-  // The Back (0.4): how many items are on it (belts, Overpass lanes and the one-item hands), and the
-  // sums of their positions and codes, plus its layout's version. Whole numbers, so exact.
+  // The Back (0.4), in one pass: how many items are on it (belts, Overpass lanes and the one-item
+  // hands), the sums of their positions and codes, each weighted by a number from its tile so an
+  // item on the wrong tile shows; the Splitters' hands and turns, the Interns' hands and timers, the
+  // Returns Drops' timers and levels; and the layout's version. Whole numbers, so exact (the sums
+  // stay far below where whole numbers stop being exact).
   if (s.back) {
-    let n = 0, pos = 0, codes = 0;
-    const lane = (it) => { for (let k = 0; k < it.length; k += 2) { n++; codes += it[k]; pos += it[k + 1]; } };
-    for (const p of s.back) {
+    let n = 0, pos = 0, codes = 0, parts = 0, wt = 1;
+    const lane = (it) => { for (let k = 0; k < it.length; k += 2) { n++; codes += it[k] * wt; pos += it[k + 1] * wt; } };
+    const back = s.back;
+    for (let i = 0; i < back.length; i++) {
+      const p = back[i];
       if (!p) continue;
+      wt = (i % 1021) + 1;
       if (p.it) lane(p.it);
-      if (p.a) { lane(p.a); lane(p.b); }
-      if (p.h) { n++; codes += p.h; }
+      if (p.a) lane(p.a);
+      if (p.b) lane(p.b);
+      if (p.h) n++;
+      parts += ((p.h | 0) * 7 + (p.r | 0) * 3 + (p.t | 0) * 5 + (p.lv | 0) * 11 + (p.d | 0)) * wt;
     }
-    mix(s.backVer); mix(n); mix(pos); mix(codes);
+    mix(s.backVer); mix(n); mix(pos % 0x7fffffff); mix(codes % 0x7fffffff); mix(parts % 0x7fffffff);
   }
   return h >>> 0;
 }

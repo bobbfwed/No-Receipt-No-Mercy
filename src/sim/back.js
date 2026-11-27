@@ -19,7 +19,7 @@
 // Lanes and parts are stepped downstream first (a part after whatever it hands to), so a full line
 // moves as one and nothing moves twice in a tick. That order is worked out from the layout and kept
 // in a WeakMap against state.backVer: it is never part of the state.
-import { BACK, BUILD, TICK_HZ } from './constants.js';
+import { BACK, BUILD, TICK_HZ, buildDef } from './constants.js';
 // (state.js and cards.js import from this file too. That is safe: none uses another while loading.)
 import { earn, bump, inBounds, idxOf } from './state.js';
 import { buildPrice } from './cards.js';
@@ -264,9 +264,11 @@ function build(state) {
     nodeAt, to, from, od, shape, order: Int32Array.from(order),
     // Scratch for one stepBack (see give): the pass number, the pass each lane was last stepped in,
     // and the positions (-1 for none) of up to two items handed into a lane before its turn in this
-    // pass (only at the break of a ring), which must not move again in the same tick.
+    // pass (only at the break of a ring), which must not move again in the same tick (for a
+    // Splitter, freshA 0 means what it holds came this tick); and the allowance for the one hand-over
+    // across a ring's break being made right now (see leanFor).
     pass: 0, stamp: new Int32Array(M), freshA: new Int32Array(M).fill(-1), freshB: new Int32Array(M).fill(-1),
-    running: false, ev: null,
+    lean: 0, leanAt: -1, running: false, ev: null,
   };
 }
 
@@ -319,20 +321,20 @@ function roomAt(it, at) {
 export function wants(state, i, code, dir, over = 0) {
   const p = state.back && state.back[i];
   if (!p) return false;
+  if (p.k !== 'conv' && p.k !== 'over') return p.k === 'bin' || (p.k === 'split' && dir === p.d && !p.h);
+  const c = cacheOf(state);
+  // (The allowance at a ring's break, while that one hand-over is being made: see leanFor.)
+  const lean = c.leanAt === i ? c.lean : 0;
   switch (p.k) {
     case 'conv':
-      if (fromBehind(cacheOf(state), i, p, dir)) return roomBehind(p.it, over);
+      if (fromBehind(c, i, p, dir)) return roomBehind(p.it, over - lean);
       if (dir === ((p.d + 2) & 3)) return false;
       return roomAt(p.it, MID);
     case 'over': {
       const axis = dir & 1;
-      if (cacheOf(state).od[i * 2 + axis] !== dir) return false;
-      return roomBehind(axis ? p.b : p.a, over);
+      if (c.od[i * 2 + axis] !== dir) return false;
+      return roomBehind(axis ? p.b : p.a, over - lean);
     }
-    case 'split':
-      return dir === p.d && !p.h;
-    case 'bin':
-      return true;
     default:
       return false;
   }
@@ -377,9 +379,17 @@ export function give(state, i, code, dir, over = 0) {
       }
       return true;
     }
-    case 'split':
+    case 'split': {
       p.h = code;
+      // At the break of a ring the Splitter may get an item before its own turn this tick: it
+      // must not pass it on in the same tick, or the item would move twice.
+      const c = CACHE.get(state);
+      if (c && c.running) {
+        const n = c.nodeAt[i * 2];
+        if (n >= 0 && c.stamp[n] !== c.pass) c.freshA[n] = 0;
+      }
       return true;
+    }
     case 'bin': {
       // Leftover supplies fetch pennies, shared like any income; junk nothing.
       const v = BACK.binPay[itemTier(code)] || 0;
@@ -417,21 +427,30 @@ function stepLane(state, c, it, dir, to, f1, f2) {
   const back = state.back;
   // The lane it joins as if from behind, if any (a belt straight on or round a corner, or an
   // Overpass lane running the same way).
-  let next = null;
+  let next = null, nn = -1;
   const q = to >= 0 ? back[to] : 0;
-  if (q && q.k === 'conv' && fromBehind(c, to, q, dir)) next = q.it;
-  else if (q && q.k === 'over' && c.od[to * 2 + (dir & 1)] === dir) next = dir & 1 ? q.b : q.a;
+  if (q && q.k === 'conv' && fromBehind(c, to, q, dir)) { next = q.it; nn = c.nodeAt[to * 2]; }
+  else if (q && q.k === 'over' && c.od[to * 2 + (dir & 1)] === dir) { next = dir & 1 ? q.b : q.a; nn = c.nodeAt[to * 2 + (dir & 1)]; }
   // The front item first, so that when it is handed over the one behind it moves up the same tick:
   // a line that was held up starts again all together. (Two items are never at one position, so a
   // position names an item: f1 and f2 are those of items that came on this tick and stay put.)
   if (it[1] !== f1 && it[1] !== f2) {
-    advance(it, 1, frontCap(next));
-    if (to >= 0 && (next ? it[1] >= SUB : it[1] >= END) && give(state, to, it[0], dir, next ? it[1] - SUB : 0)) {
-      takeOff(it, 0);
-      if (!it.length) return;
-      // (The new front item is at least GAP behind where the old one was, so it cannot reach the
-      // end of the tile this tick: one hand-over a tick at most.)
-      if (it[1] !== f1 && it[1] !== f2) advance(it, 1, frontCap(next));
+    const lean = next ? leanFor(c, next, nn, it[1]) : 0;
+    advance(it, 1, frontCap(next, lean));
+    if (to >= 0 && (next ? it[1] >= SUB : it[1] >= END)) {
+      c.lean = lean;
+      c.leanAt = to;
+      const gone = give(state, to, it[0], dir, next ? it[1] - SUB : 0);
+      c.lean = 0;
+      c.leanAt = -1;
+      if (gone) {
+        takeOff(it, 0);
+        if (!it.length) return;
+        // (The new front item is at least GAP behind where the old one was, so it cannot reach the
+        // end of the tile this tick: one hand-over a tick at most. The item just handed over has not
+        // moved in its new lane yet, so no allowance now.)
+        if (it[1] !== f1 && it[1] !== f2) advance(it, 1, frontCap(next, 0));
+      }
     }
   }
   for (let k = 3; k < it.length; k += 2) if (it[k] !== f1 && it[k] !== f2) advance(it, k, it[k - 2] - GAP);
@@ -441,9 +460,31 @@ function stepLane(state, c, it, dir, to, f1, f2) {
  * How far a lane's front item may go: into the lane `next` it joins straight on, up to GAP behind
  * that lane's last item (anywhere if it is empty); with no such lane (null), END.
  */
-function frontCap(next) {
+function frontCap(next, lean) {
   if (!next) return END;
-  return next.length ? SUB + next[next.length - 1] - GAP : SUB + STEP;
+  return next.length ? SUB + next[next.length - 1] + lean - GAP : SUB + STEP;
+}
+
+/**
+ * The allowance at the break of a ring. The lane that hands into the ring's first tile (node nn,
+ * lane `next`) is stepped before that tile has moved this tick, so measured against where its last
+ * item is now, a ring with no space anywhere would never move at all. So the hand-over across the
+ * break may assume that last item will move one STEP on this tick: the front item (at `front`) may
+ * come up to GAP - STEP of where it is now. If it then does not move (the ring is held up
+ * somewhere), those two sit up to one STEP closer than GAP until it moves again. Never more, and
+ * never a second pair: the allowance is given only while the pair across the join is at least GAP
+ * apart, the last item has not just come on and is itself at least GAP behind the item ahead of it.
+ * Anywhere but a ring's break the lane handed into has already moved, and there is no allowance.
+ * @returns {number} STEP or 0
+ */
+function leanFor(c, next, nn, front) {
+  const n = next.length;
+  if (!c.running || nn < 0 || c.stamp[nn] === c.pass || !n) return 0;
+  const last = next[n - 1];
+  if (last === c.freshA[nn] || last === c.freshB[nn]) return 0;
+  if (n >= 4 && next[n - 3] - last < GAP) return 0;
+  if (SUB - front + last < GAP) return 0;
+  return STEP;
 }
 
 /** Moves the item at position index k (odd) of a lane STEP on, but not past `cap`, never back. */
@@ -482,7 +523,11 @@ export function stepBack(state, ev = null) {
       case SPLIT: {
         // Offers what it holds to the front, left and right in turn, starting after the way that
         // took the last item and skipping any that do not want it: shared evenly among those open.
-        if (!p.h) break;
+        // Not what it was handed earlier this tick, before its turn (a ring's break: see give).
+        const now = c.freshA[m] >= 0;
+        c.freshA[m] = -1;
+        c.stamp[m] = c.pass;
+        if (!p.h || now) break;
         for (let n = 1; n <= 3; n++) {
           const k = (p.r + n) % 3;
           const t = to[m * 3 + k];
@@ -541,7 +586,7 @@ export function canPlaceBack(state, k, x, y, pid = 0, d = 0) {
   if (state.phase === 'lobby') return 'lobby';
   if (state.phase === 'cards') return 'cards';
   if (state.pause) return 'paused';
-  const def = BUILD[k];
+  const def = buildDef(k);
   if (!def || !def.back || def.fixed) return 'kind';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y) || !state.back) return 'bounds';
   const i = idxOf(state, x, y);

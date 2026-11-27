@@ -65,9 +65,11 @@ export const MAP_DESIGNS = {
  * @returns {{w: number, h: number}}
  */
 export function mapSize(design, size) {
-  const z = MAP_SIZES[size] || MAP_SIZES.xs;
-  if (design === 'horseshoe') return stripSize(MAP_SIZES[size] ? size : 'xs');
-  if (design === 'corridors') return passageSize(MAP_SIZES[size] ? size : 'xs');
+  // (Its own keys only: '__proto__' is found on every object.)
+  const known = typeof size === 'string' && Object.hasOwn(MAP_SIZES, size) ? size : 'xs';
+  const z = MAP_SIZES[known];
+  if (design === 'horseshoe') return stripSize(known);
+  if (design === 'corridors') return passageSize(known);
   return { w: z.w, h: z.h };
 }
 

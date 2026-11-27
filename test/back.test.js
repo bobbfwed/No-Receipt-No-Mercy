@@ -485,6 +485,98 @@ test('a ring of belts keeps circulating without losing or making items', () => {
   }
 });
 
+/** A clockwise square ring of belts with its top-left corner at (x0, y0), n tiles a side; its tiles in flow order. */
+function ring(s, x0, y0, n) {
+  const path = [];
+  for (let x = x0; x < x0 + n - 1; x++) path.push([x, y0, E]);
+  for (let y = y0; y < y0 + n - 1; y++) path.push([x0 + n - 1, y, S]);
+  for (let x = x0 + n - 1; x > x0; x--) path.push([x, y0 + n - 1, W]);
+  for (let y = y0 + n - 1; y > y0; y--) path.push([x0, y, N]);
+  for (const [x, y, d] of path) lay(s, x, y, 'conv', d);
+  return path.map(([x, y]) => y * s.w + x);
+}
+
+/** Where every numbered item is: code -> [tile, pos], or [tile, -1] in a hand. */
+function where(s) {
+  const m = new Map();
+  s.back.forEach((p, i) => {
+    if (!p) return;
+    if (p.it) for (let k = 0; k < p.it.length; k += 2) m.set(p.it[k], [i, p.it[k + 1]]);
+    if (p.h) m.set(p.h, [i, -1]);
+  });
+  return m;
+}
+
+test('a completely full ring of belts circulates at full speed, every item a step a tick', () => {
+  const s = blank();
+  const tiles = ring(s, 4, 3, 5); // 16 tiles
+  assert.equal(tiles.length, 16);
+  let code = 100;
+  for (const i of tiles) s.back[i].it = [code++, END, code++, END - GAP, code++, END - 2 * GAP];
+  const before = codes(s);
+  assert.equal(before.length, 48);
+  const along = (i, pos) => tiles.indexOf(i) * SUB + pos;
+  const lap = tiles.length * SUB;
+  let was = where(s);
+  for (let t = 0; t < 40 * TICK_HZ; t++) {
+    stepBack(s);
+    checkGaps(s);
+    const now = where(s);
+    for (const [c, [i, pos]] of now) {
+      const [i0, p0] = was.get(c);
+      assert.equal((along(i, pos) - along(i0, p0) + lap) % lap, STEP, `tick ${t}: item ${c}`);
+    }
+    was = now;
+  }
+  assert.deepEqual(codes(s), before);
+});
+
+test('a Splitter at the break of a ring passes nothing on in the tick it gets it; a ring jammed there keeps every item and runs again', () => {
+  // The Splitter faces north and is the ring's lowest tile; the ring leaves by its right-hand way
+  // (east), runs round clockwise and comes back up into it from below.
+  const s = blank();
+  lay(s, 4, 3, 'split', N);
+  row(s, 5, 7, 3, E); col(s, 8, 3, 6, S); row(s, 5, 8, 7, W); col(s, 4, 4, 7, N);
+  lay(s, 8, 3, 'conv', S); lay(s, 8, 7, 'conv', W); lay(s, 4, 7, 'conv', N);
+  const feeder = 4 * s.w + 4, out = 3 * s.w + 5, split = 3 * s.w + 4;
+  let code = 200;
+  for (const [x, y] of [[5, 3], [8, 4], [8, 6], [6, 7], [4, 6], [4, 5], [4, 4]]) at(s, x, y).it = [code++, END, code++, END - GAP];
+  const before = codes(s);
+  let was = where(s);
+  const throughSplit = () => {
+    let n = 0;
+    for (let t = 0; t < 30 * TICK_HZ; t++) {
+      stepBack(s);
+      checkGaps(s);
+      const now = where(s);
+      for (const [c, [i]] of now) {
+        const [i0] = was.get(c);
+        // Off the feeder belt into the hand, then a tick later onto the way out: never both at once.
+        if (i === out && i0 !== out) { assert.equal(i0, split, `tick ${t}: item ${c} came from the hand`); n++; }
+        if (i === split && i0 !== split) assert.equal(i0, feeder);
+      }
+      was = now;
+    }
+    return n;
+  };
+  assert.ok(throughSplit() > 50, 'it circulates');
+  assert.deepEqual(codes(s), before);
+  // Jam it: the belt after the Splitter turned to face it head on.
+  at(s, 5, 3).d = W;
+  s.backVer++;
+  run(s, 30 * TICK_HZ);
+  assert.deepEqual(codes(s), before, 'jammed, nothing lost or made');
+  const stuck = JSON.stringify(s.back);
+  run(s, 1);
+  assert.equal(JSON.stringify(s.back), stuck, 'and nothing moves');
+  // Turned back: it runs again.
+  at(s, 5, 3).d = E;
+  s.backVer++;
+  was = where(s);
+  assert.ok(throughSplit() > 50, 'it circulates again');
+  assert.deepEqual(codes(s), before);
+});
+
 test('commands on The Back: price, sell-back, walls, occupied tiles, belt over belt, backVer', () => {
   const s = createGame({ map: { design: 'warehouse', size: 's' } });
   addPlayer(s, 'Dave');
@@ -590,6 +682,25 @@ test('a busy Back survives a copy through JSON and plays on identically; the che
   lane.it[1] += 1;
   lane.it[0] += 1;
   assert.notEqual(checksum(s), was);
+  lane.it[0] -= 1;
+  assert.equal(checksum(s), was);
+  // The same item on another tile (moved to an empty belt, same position).
+  const i = s.back.indexOf(lane), other = s.back.findIndex((p, j) => p && p.k === 'conv' && !p.it.length && j !== i);
+  assert.ok(other >= 0);
+  s.back[other].it.push(...lane.it.splice(0, 2));
+  assert.notEqual(checksum(s), was, 'the same item on another tile');
+  lane.it.unshift(...s.back[other].it.splice(0, 2));
+  assert.equal(checksum(s), was);
+  // The parts' own numbers: a Splitter's hand and turn, an Intern's hand and timer, a drop's timer and level.
+  const change = (k, f) => {
+    const p = s.back.find((q) => q && q.k === k);
+    const saved = { ...p };
+    p[f] = (p[f] | 0) + 1;
+    assert.notEqual(checksum(s), was, `${k}.${f}`);
+    Object.assign(p, saved);
+    assert.equal(checksum(s), was);
+  };
+  for (const [k, f] of [['split', 'h'], ['split', 'r'], ['intern', 'h'], ['intern', 't'], ['drop', 't'], ['drop', 'lv']]) change(k, f);
 });
 
 test('step runs The Back in the build pause and in sales events, and opening early runs it ahead too', () => {

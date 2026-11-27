@@ -1,6 +1,6 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
-import { BUILD, TUNE, TICK_HZ, ST, ROLES, SPEEDS } from './constants.js';
+import { BUILD, TUNE, TICK_HZ, ST, ROLES, SPEEDS, buildDef } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf, releaseOrder } from './state.js';
 import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './path.js';
 import { beginWave, skipBuild } from './step.js';
@@ -108,8 +108,9 @@ function placeCheck(state, k, x, y, pid, d, paid) {
   if (state.phase === 'lobby') return 'lobby';
   if (state.phase === 'cards') return 'cards';
   if (state.pause) return 'paused';
-  const def = BUILD[k];
-  // (The Back's parts, 0.4, are placed with canPlaceBack and the `f: 1` commands.)
+  // (Only a real kind: buildDef refuses names every object has, like '__proto__'. The Back's parts,
+  // 0.4, are placed with canPlaceBack and the `f: 1` commands.)
+  const def = buildDef(k);
   if (!def || def.back) return 'kind';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
   const at = placement(state, k, x, y, d | 0);
@@ -478,7 +479,10 @@ function backCommand(state, pid, cmd, ev) {
 }
 
 export function applyCommand(state, pid, cmd, ev = []) {
-  const player = state.players[pid];
+  // (Every value in a command comes from a player's browser and may be anything. Any of them used to
+  // look something up by name goes through Object.hasOwn or a list's includes, never a bare obj[x]:
+  // '__proto__', 'constructor' and 'toString' are found on every object.)
+  const player = Number.isInteger(pid) ? state.players[pid] : null;
   if (!player || !cmd || typeof cmd !== 'object') return { ok: false, why: 'bad' };
   if (cmd.c === 'pause') return setPause(state, pid, cmd, ev);
   if (state.pause && !WHILE_PAUSED.has(cmd.c)) return { ok: false, why: 'paused' };
@@ -596,7 +600,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       return { ok: true };
     }
     case 'give': {
-      const to = state.players[cmd.to];
+      // (A player's number, nothing else: players['constructor'] would be an array's own function.)
+      const to = Number.isInteger(cmd.to) ? state.players[cmd.to] : null;
       const n = Math.floor(cmd.n);
       if (!to || to === player || !(n > 0)) return { ok: false, why: 'bad' };
       if (player.cash < n) return { ok: false, why: 'cash' };

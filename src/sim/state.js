@@ -409,7 +409,8 @@ export function cleanSettings(o) {
   return {
     waves: SETTINGS.waves.includes(s.waves) ? s.waves : d.waves,
     startCash: SETTINGS.startCash.includes(s.startCash) ? s.startCash : d.startCash,
-    difficulty: SETTINGS.difficulty[s.difficulty] ? s.difficulty : d.difficulty,
+    // (Its own keys only: '__proto__' or 'toString' are found on every object.)
+    difficulty: typeof s.difficulty === 'string' && Object.hasOwn(SETTINGS.difficulty, s.difficulty) ? s.difficulty : d.difficulty,
     cardsOn: s.cardsOn !== false,
   };
 }
@@ -465,7 +466,7 @@ export const difficultyOf = (state) => SETTINGS.difficulty[state.difficulty] || 
  * @returns {boolean} false if the design or size is unknown, or the game has started
  */
 export function setMap(state, design, size) {
-  if (state.phase !== 'lobby' || !MAP_DESIGNS[design] || !MAP_SIZES[size]) return false;
+  if (state.phase !== 'lobby' || typeof design !== 'string' || typeof size !== 'string' || !Object.hasOwn(MAP_DESIGNS, design) || !Object.hasOwn(MAP_SIZES, size)) return false;
   const plan = makeMap(design, size, state.doors.length);
   state.map = { design, size };
   state.w = plan.w;

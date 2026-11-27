@@ -221,6 +221,12 @@ export const BUILD = {
 export const SHOP_KINDS = Object.keys(BUILD).filter((k) => !BUILD[k].back);
 
 /**
+ * BUILD[k] if k really is a kind, else null. Use it for any kind a player's command names: a plain
+ * BUILD[k] finds '__proto__', 'constructor' or 'toString' on every object.
+ */
+export const buildDef = (k) => (typeof k === 'string' && Object.hasOwn(BUILD, k) ? BUILD[k] : null);
+
+/**
  * The Back (0.4): numbers for its belts and parts (src/sim/back.js). Positions on a belt are whole
  * numbers, so every browser moves items exactly alike.
  *   sub        units along one tile: 0 entering, sub leaving
