@@ -600,7 +600,9 @@ test('commands on The Back: price, sell-back, walls, occupied tiles, belt over b
   assert.ok(s.backVer > v0);
   assert.ok(s.phaseT > 0, 'the first thing placed starts the build timer, on either floor');
   assert.equal(s.grid[5 * s.w + 5], 0, 'the shop floor above is untouched');
-  assert.equal(canPlace(s, 'sprinkler', 5, 5, 0), null, 'and still free to build on (for now)');
+  // (From stage 3 a security building needs the tile below clear for its Dumbwaiter; a crate does not.)
+  assert.equal(canPlace(s, 'sprinkler', 5, 5, 0), 'back', 'no security building over a Back part');
+  assert.equal(canPlace(s, 'crate', 5, 5, 0), null, 'a crate does not care');
   assert.equal(applyCommand(s, 0, { c: 'place', k: 'bin', x: 5, y: 5, f: 1 }).why, 'occupied');
   // A belt on a belt turns it, free.
   const v1 = s.backVer;

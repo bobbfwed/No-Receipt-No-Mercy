@@ -5,7 +5,7 @@ import { makeMap, makeZones, makeDrops, MAP_DESIGNS, MAP_SIZES } from './maps.js
 // (cards.js imports rand from this file. That is safe: neither uses the other while loading.)
 import { dealCards, cleanHand } from './cards.js';
 // (back.js imports from this file too; the same holds.)
-import { newDrop } from './back.js';
+import { newDrop, syncAllLifts } from './back.js';
 
 /**
  * A building. One bigger than a tile (BUILD[k].size) is held by the top-left tile of its
@@ -34,6 +34,10 @@ import { newDrop } from './back.js';
  * @property {number} [fn]  ...how many of them, if not 1
  * @property {number} [bz]  Free Sample table only: 1 if it hands out booze (the eightyproof card;
  *   decided when it is bought new, and kept through wrecking and rebuilding: rubble carries it too)
+ * @property {Object<string, number[]>} [s] (0.4) a building with Dumbwaiters (BUILD[k].lift): its
+ *   stock of supplies from The Back, by track ('dmg', 'spd', 'rng', 'dur', 'wire'), each as runs
+ *   [tier, uses, tier, uses, ...] in the order they arrived; absent with none. Lost when it is
+ *   wrecked or removed (see back.js)
  */
 
 /** A kind's footprint in tiles, [w, h], for a facing: turned on its side facing north or south. */
@@ -370,6 +374,9 @@ export function migrateSave(state) {
     state.backVer = 0;
     changed = true;
   }
+  // Any version (0.4, stage 3): every security building with `lift`, and the rubble of one, gets its
+  // Dumbwaiters, as one placed now would.
+  if (Array.isArray(state.grid) && state.grid.length === state.w * state.h && syncAllLifts(state)) changed = true;
   if ((state.v | 0) >= STATE_VERSION) return changed;
   const limit = TUNE.refundLimit + TUNE.refundPerPlayer * Math.max(0, state.players.length - 1);
   if (state.refundLimit > 0) state.refunds = Math.floor(((state.refunds || 0) * limit) / state.refundLimit);

@@ -53,7 +53,7 @@
 //                   lobby {me, n, s} (the game is over and a fresh one starts in the lobby: s is
 //                   its state, me the client's id in it, n the step it starts at; anything the
 //                   host sent about an earlier step is from the old game and is dropped)
-import { createGame, addPlayer, setPlayerOnline, applyCommand, step, migrateSave, TICK_HZ, SPEEDS } from '../sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, applyCommand, step, migrateSave, TICK_HZ, SPEEDS, STOCK_TRACKS } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
 /** Steps between advance messages at normal speed: one every step, thirty a second. They are
@@ -133,12 +133,23 @@ export function checksum(s) {
     if (b.u) { mix(b.u.dmg); mix(b.u.spd); mix(b.u.rng); mix(b.u.dur); }
     mix(b.hit); mix(b.off);
     if (b.it) mix(b.it.length);
+    // (Its stock from The Back, 0.4: every run's tier and uses, track by track in a fixed order.
+    // Only on a stocked building, so an unstocked one sums as it did.)
+    if (b.s) {
+      for (let t = 0; t < STOCK_TRACKS.length; t++) {
+        const run = b.s[STOCK_TRACKS[t]];
+        if (!run) continue;
+        mix(t + 1);
+        for (let k = 0; k < run.length; k++) mix(run[k]);
+      }
+    }
   }
   // The Back (0.4), in one pass: how many items are on it (belts, Overpass lanes and the one-item
   // hands), the sums of their positions and codes, each weighted by a number from its tile so an
   // item on the wrong tile shows; the Splitters' hands and turns, the Interns' hands and timers, the
-  // Returns Drops' timers and levels; and the layout's version. Whole numbers, so exact (the sums
-  // stay far below where whole numbers stop being exact).
+  // Returns Drops' timers and levels; the machines' and Rebranders' counters and what they hold
+  // (0.4, stage 3); the Dumbwaiters' buildings; and the layout's version. Whole numbers, so exact
+  // (the sums stay far below where whole numbers stop being exact).
   if (s.back) {
     let n = 0, pos = 0, codes = 0, parts = 0, wt = 1;
     const lane = (it) => { for (let k = 0; k < it.length; k += 2) { n++; codes += it[k] * wt; pos += it[k + 1] * wt; } };
@@ -148,10 +159,14 @@ export function checksum(s) {
       if (!p) continue;
       wt = (i % 1021) + 1;
       if (p.it) lane(p.it);
+      // (A Dumbwaiter's `a` is its building's tile, not a lane.)
+      if (p.k === 'lift') { parts += (p.a + 1) * 13 * wt; continue; }
       if (p.a) lane(p.a);
       if (p.b) lane(p.b);
       if (p.h) n++;
-      parts += ((p.h | 0) * 7 + (p.r | 0) * 3 + (p.t | 0) * 5 + (p.lv | 0) * 11 + (p.d | 0)) * wt;
+      if (p.q) for (let k = 0; k < p.q.length; k++) { n++; codes += p.q[k] * wt; }
+      if (p.out) { n++; codes += p.out * wt; }
+      parts += ((p.h | 0) * 7 + (p.r | 0) * 3 + (p.t | 0) * 5 + (p.lv | 0) * 11 + (p.d | 0) + (p.n | 0) * 17) * wt;
     }
     mix(s.backVer); mix(n); mix(pos % 0x7fffffff); mix(codes % 0x7fffffff); mix(parts % 0x7fffffff);
   }

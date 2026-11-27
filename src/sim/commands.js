@@ -1,16 +1,16 @@
 // Player commands: the only way anything outside the simulation may change the game state.
 // The host validates every command here, so a confused or cheating client cannot break the game.
-import { BUILD, TUNE, TICK_HZ, ST, ROLES, SPEEDS, buildDef } from './constants.js';
+import { BUILD, BACK, TUNE, TICK_HZ, ST, ROLES, SPEEDS, buildDef } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf, releaseOrder } from './state.js';
 import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './path.js';
 import { beginWave, skipBuild } from './step.js';
-import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
+import { upgradeCost, spentOn, boughtIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, freeTrack, boozeRoll } from './cards.js';
-import { canPlaceBack, newPart } from './back.js';
+import { canPlaceBack, newPart, syncLifts, dropTicks } from './back.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
-const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'endless']);
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'endless', 'dropUp']);
 
 /**
  * Commands that still work while the game is paused (0.3.02; state.pause). Everything else is
@@ -58,17 +58,22 @@ function placement(state, k, x, y, d) {
  */
 function clearRubble(state, tiles) {
   if (!state.rubble.length) return;
+  const gone = [];
   state.rubble = state.rubble.filter((r) => {
     const under = footprint(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.d | 0) || [r.i];
     if (!under.some((t) => tiles.includes(t))) return true;
     releaseOrder(state, r);
+    gone.push(...under);
     return false;
   });
+  // (Its Dumbwaiters, 0.4, go with it, except where the new building has its own.)
+  if (gone.length) syncLifts(state, gone);
 }
 
 /**
  * Drops one wreck from the list if something has been built where it lay since (that hole is
- * already patched), giving back any money held for it. Returns true if it was dropped.
+ * already patched), giving back any money held for it (and taking away its Dumbwaiters, 0.4).
+ * Returns true if it was dropped.
  */
 function tidyRubble(state, r) {
   const tiles = footprint(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.d | 0);
@@ -76,6 +81,7 @@ function tidyRubble(state, r) {
   const j = state.rubble.indexOf(r);
   if (j >= 0) state.rubble.splice(j, 1);
   releaseOrder(state, r);
+  syncLifts(state, tiles || [r.i]);
   return true;
 }
 
@@ -92,7 +98,8 @@ function tidyRubble(state, r) {
  *   'zone' that machine only goes on its own marked floor,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
  *   'blocked' it would wall off the tills from an entrance or from a shopper,
- *   'bank' it would wall off one of the two banks of tills (the car park).
+ *   'bank' it would wall off one of the two banks of tills (the car park),
+ *   'back' (0.4) a security building with Dumbwaiters over a part in The Back.
  */
 export function canPlace(state, k, x, y, pid = 0, d = 0) {
   return placeCheck(state, k, x, y, pid, d, false);
@@ -125,6 +132,9 @@ function placeCheck(state, k, x, y, pid, d, paid) {
   // Laying a belt over a belt just turns it, which is free and always allowed.
   if (k === 'belt' && state.grid[at.i] && state.grid[at.i].k === 'belt') return null;
   for (const t of at.tiles) if (state.grid[t]) return t === own ? 'occupied' : 'fit';
+  // (0.4) A building with Dumbwaiters needs The Back under it clear for them. Dumbwaiters already
+  // there belong to rubble (nothing stands above them), which this building clears away.
+  if (def.lift && state.back) for (const t of at.tiles) if (state.back[t] && state.back[t].k !== 'lift') return 'back';
   if (!paid) {
     const player = state.players[pid];
     // (The game's cards may change what a new building costs: buildPrice.)
@@ -173,7 +183,8 @@ export function canUpgrade(state, x, y, pid = 0, track = undefined) {
   if (!b) return 'empty';
   const t = track ?? defaultTrack(b.k);
   if (!TRACKS.includes(t) || !BUILD[b.k].up || !BUILD[b.k].up[t]) return 'noup';
-  if (levelIn(b, t) >= maxIn(b.k, t)) return 'max';
+  // (Levels bought: stock from The Back, 0.4, never stops a level being bought.)
+  if (boughtIn(b, t) >= maxIn(b.k, t)) return 'max';
   const player = state.players[pid];
   if (!player || player.cash < upgradeCost(b, t)) return 'cash';
   return null;
@@ -192,32 +203,38 @@ function newBuilding(k, owner, d, u, card = null) {
   if (card) {
     if (card.c !== undefined) b.c = card.c;
     // (Free levels only while they are still there: a short rebuild may have lost them.)
-    if (card.f && levelIn(b, card.f) > 0) {
+    if (card.f && boughtIn(b, card.f) > 0) {
       b.f = card.f;
-      if ((card.fn ?? 1) !== 1) b.fn = Math.min(card.fn, levelIn(b, card.f));
+      if ((card.fn ?? 1) !== 1) b.fn = Math.min(card.fn, boughtIn(b, card.f));
     }
     if (card.bz) b.bz = 1;
   }
   if (k === 'belt') b.it = [];
-  if (k === 'unpacker') b.t = Math.round((def.period / (def.up.spd.mul ** levelIn(b, 'spd'))) * TICK_HZ);
+  if (k === 'unpacker') b.t = Math.round((def.period / (def.up.spd.mul ** boughtIn(b, 'spd'))) * TICK_HZ);
   if (k === 'press' || k === 'packer') { b.n = 0; b.t = 0; b.out = 0; }
   if (def.tower) b.cd = 0;
   if (k === 'forklift') b.a = 0;
   return b;
 }
 
-/** Puts a building on the grid: the anchor holds it, its other tiles point at the anchor. */
+/**
+ * Puts a building on the grid: the anchor holds it, its other tiles point at the anchor. A security
+ * building with `lift` (0.4) gets a Dumbwaiter under each tile.
+ */
 function put(state, tiles, b) {
   state.grid[tiles[0]] = b;
   for (let n = 1; n < tiles.length; n++) state.grid[tiles[n]] = { k: b.k, part: tiles[0] };
   state.gridVer++;
+  syncLifts(state, tiles);
 }
 
-/** Takes a building off the grid, all of its tiles. Returns it. */
+/** Takes a building off the grid, all of its tiles, and its Dumbwaiters with it. Returns it. */
 function lift(state, ai) {
   const b = state.grid[ai];
-  for (const t of tilesOf(state, ai)) state.grid[t] = 0;
+  const tiles = tilesOf(state, ai);
+  for (const t of tiles) state.grid[t] = 0;
   state.gridVer++;
+  syncLifts(state, tiles);
   return b;
 }
 
@@ -365,6 +382,8 @@ export function stepRebuilds(state, ev) {
  *   { c: 'rotate', x, y }       turn a building a quarter turn clockwise (half a turn if it is
  *                               bigger than one tile, so it keeps its footprint)
  *   place, remove and rotate with f: 1 do the same on The Back (0.4; see backCommand)
+ *   { c: 'dropUp', x, y }       pay for the next cash level of the Returns Drop on (x, y) in The
+ *                               Back: junk comes down faster (0.4; see dropUp)
  *   { c: 'upgrade', x, y, t }   buy the next level of track t ('dmg', 'spd', 'rng', 'dur');
  *                               without t, damage if the kind has it, otherwise its first track
  *   { c: 'give', to, n }        hand n of your cash to player `to`
@@ -475,6 +494,40 @@ function backCommand(state, pid, cmd, ev) {
   if (!p || !BUILD[p.k].rot) return { ok: false, why: 'empty' };
   p.d = (p.d + 1) & 3;
   state.backVer = (state.backVer | 0) + 1;
+  return { ok: true };
+}
+
+/**
+ * What the next cash level of a Returns Drop at level lv costs (the dropUp command, 0.4), in whole
+ * dollars: BACK.dropUpCost, times BACK.dropUpGrow for each level it has. 0 at the top level.
+ */
+export function dropUpCost(lv) {
+  lv |= 0;
+  return lv >= BACK.dropUpMax ? 0 : Math.round(BACK.dropUpCost * BACK.dropUpGrow ** lv);
+}
+
+/**
+ * The dropUp command (0.4): any player pays for the Returns Drop on (x, y) to send junk down
+ * faster, one cash level (`lv`) at a time, up to BACK.dropUpMax. Each level multiplies its time
+ * between junk by BACK.dropMul (dropTicks); a wait already under way is cut to the new time if it is
+ * longer. The drop belongs to nobody, so the money is simply spent: nothing sells it back.
+ * Refused with 'over', 'bounds', 'empty' (no Returns Drop there), 'max' or 'cash'.
+ * Sends dropUp {x, y, lv, by, paid}.
+ */
+function dropUp(state, pid, cmd, ev) {
+  if (state.phase === 'won' || state.phase === 'lost') return { ok: false, why: 'over' };
+  if (!Number.isInteger(cmd.x) || !Number.isInteger(cmd.y) || !inBounds(state, cmd.x, cmd.y) || !state.back) return { ok: false, why: 'bounds' };
+  const p = state.back[idxOf(state, cmd.x, cmd.y)];
+  if (!p || p.k !== 'drop') return { ok: false, why: 'empty' };
+  const lv = p.lv | 0;
+  if (lv >= BACK.dropUpMax) return { ok: false, why: 'max' };
+  const cost = dropUpCost(lv), player = state.players[pid];
+  if (player.cash < cost) return { ok: false, why: 'cash' };
+  player.cash -= cost;
+  bump(state, pid, 'spent', cost);
+  p.lv = lv + 1;
+  p.t = Math.min(p.t | 0, dropTicks(p.lv));
+  ev.push({ e: 'dropUp', x: cmd.x, y: cmd.y, lv: p.lv, by: pid, paid: cost });
   return { ok: true };
 }
 
@@ -594,7 +647,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       const cost = upgradeCost(b, t);
       player.cash -= cost;
       b.u ||= {};
-      b.u[t] = levelIn(b, t) + 1;
+      b.u[t] = boughtIn(b, t) + 1;
       bump(state, pid, 'spent', cost);
       ev.push({ e: 'upgraded', k: b.k, x: ai % state.w, y: (ai / state.w) | 0, by: pid, t, lv: b.u[t] });
       return { ok: true };
@@ -612,6 +665,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
     }
     case 'rebuild':
       return orderRebuilds(state, pid, !!cmd.all, ev);
+    case 'dropUp':
+      return dropUp(state, pid, cmd, ev);
     case 'side': {
       if (cmd.side !== 'office' && cmd.side !== 'store') return { ok: false, why: 'bad' };
       if (state.training) return { ok: false, why: 'bad' };

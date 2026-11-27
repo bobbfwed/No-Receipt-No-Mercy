@@ -146,39 +146,43 @@ export const BUILD = {
     up: { dur: { add: 1, cost: 1 } },
     desc: 'A cheap wall. Does nothing else, but even a dad cannot climb it.',
   },
+  // (0.4) `lift`: a Dumbwaiter under every tile of it, through which The Back stocks it with
+  // supplies (back.js). `shots`: the uses one unit of Bottled Spite, Rage Cola or Extension Cord
+  // gives this kind (a shot, or a shopper it acts on), so a slow gun and a fast one eat at about
+  // the same rate. Crate Stacks and the old factory have neither.
   sprinkler: {
-    name: 'Pepper Sprinkler', cost: 80, group: 'security', blocks: true, tower: true,
+    name: 'Pepper Sprinkler', cost: 80, group: 'security', blocks: true, tower: true, lift: true, shots: 20,
     range: 1.75, dmg: 6, cd: 0.5, aoe: true, targets: 4,
     up: { dmg: { mul: 1.25, cost: 0.6 }, spd: { mul: 1.1, cost: 0.6 }, rng: { add: 0.15, cost: 0.4 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Sprays up to four shoppers nearby. Short range.',
   },
   forklift: {
-    name: 'Forklift Turret', cost: 200, group: 'security', blocks: true, tower: true,
+    name: 'Forklift Turret', cost: 200, group: 'security', blocks: true, tower: true, lift: true, shots: 6,
     range: 6, dmg: 30, cd: 1.6, aoe: false,
     up: { dmg: { mul: 1.3, cost: 0.6 }, spd: { mul: 1.12, cost: 0.6 }, rng: { add: 0.3, cost: 0.4 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Long range, one shopper at a time.',
   },
   // A 3 x 1 gun that fires down the line it faces, through everything, and hits every shopper on it.
   railgun: {
-    name: 'Barcode Laser', cost: 700, group: 'security', blocks: true, tower: true, rot: true, size: [3, 1], hits: 2,
+    name: 'Barcode Laser', cost: 700, group: 'security', blocks: true, tower: true, rot: true, size: [3, 1], hits: 2, lift: true, shots: 2,
     range: 10, dmg: 60, cd: 4.5, beam: true, width: 0.6,
     up: { dmg: { mul: 1.3, cost: 0.5 }, spd: { mul: 1.12, cost: 0.5 }, rng: { add: 1, cost: 0.25 }, dur: { add: 1, cost: 0.2 } },
     desc: 'Fires a beam straight out of its front end, through walls and everything else, hitting every shopper in line. Slow to reload.',
   },
   wetfloor: {
-    name: 'Wet Floor Sign', cost: 30, group: 'security', blocks: false,
+    name: 'Wet Floor Sign', cost: 30, group: 'security', blocks: false, lift: true, shots: 10,
     up: { dmg: { slow: 0.82, slip: 0.08, mul: 1.45, cost: 0.8 }, dur: { add: 1, cost: 0.5 } },
     desc: 'Slows shoppers who walk through. Dads ignore signs and sometimes slip.',
   },
   samples: {
-    name: 'Free Samples', cost: 120, group: 'security', blocks: true, range: 2.2,
+    name: 'Free Samples', cost: 120, group: 'security', blocks: true, range: 2.2, lift: true, shots: 8,
     up: { dmg: { mul: 1.2, cost: 0.6 }, rng: { add: 0.25, cost: 0.4 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Shoppers nearby stop for a sample. Dads do not.',
   },
   // A 2 x 2 stand where a man demonstrates knives and barbecues on a television. Each shopper
   // walking past may stop to watch, or hurry past to get away from him (see `pitch` on SHOPPERS).
   salesman: {
-    name: 'TV Salesman', cost: 450, group: 'security', blocks: true, size: [2, 2], hits: 2, range: 4.5,
+    name: 'TV Salesman', cost: 450, group: 'security', blocks: true, size: [2, 2], hits: 2, range: 4.5, lift: true, shots: 8,
     up: { dmg: { mul: 1.15, keep: 0.88, rush: 0.85, cost: 0.5 }, rng: { add: 0.5, cost: 0.4 }, dur: { add: 1, cost: 0.25 } },
     desc: 'Demonstrates knives and barbecues on a television. Shoppers in reach may stop to watch, or hurry past.',
   },
@@ -212,6 +216,39 @@ export const BUILD = {
     name: 'Returns Drop', cost: 0, group: 'back', back: true, rot: true, fixed: true,
     desc: 'Where returned junk comes down from the shop. Fixed by the map; anyone may turn it.',
   },
+  // The machines (0.4, stage 3): each turns junk into one supply, `supply` being its type (1 Bottled
+  // Spite, damage; 2 Rage Cola, speed; 3 Extension Cord, range; 4 Duct Tape, durability; 5 Razor
+  // Wire, which stops dads in a later stage). See BACK.makeSecs.
+  still: {
+    name: 'Spite Still', cost: 40, group: 'back', back: true, rot: true, supply: 1,
+    desc: 'Boils returned junk down into Bottled Spite. Security that drinks it hits harder.',
+  },
+  cannery: {
+    name: 'Cola Cannery', cost: 40, group: 'back', back: true, rot: true, supply: 2,
+    desc: 'Cans junk as Rage Cola. Security on it works faster.',
+  },
+  spooler: {
+    name: 'Cord Spooler', cost: 40, group: 'back', back: true, rot: true, supply: 3,
+    desc: 'Winds junk into Extension Cord. Security plugged into it reaches further.',
+  },
+  winder: {
+    name: 'Tape Winder', cost: 40, group: 'back', back: true, rot: true, supply: 4,
+    desc: 'Rolls junk into Duct Tape. Each roll soaks up gym bro hits.',
+  },
+  bender: {
+    name: 'Barb Bender', cost: 40, group: 'back', back: true, rot: true, supply: 5,
+    desc: 'Twists junk into Razor Wire, for the dads.',
+  },
+  rebrand: {
+    name: 'Rebrander', cost: 50, group: 'back', back: true, rot: true,
+    desc: 'Slaps a better label on any supply: one tier up a pass, slower each tier.',
+  },
+  // Under every tile of a building with `lift`; it comes and goes with the building (back.js,
+  // syncLifts), so nobody buys, removes or turns one.
+  lift: {
+    name: 'Dumbwaiter', cost: 0, group: 'back', back: true, fixed: true,
+    desc: 'Sends supplies up to the security building above it. Takes from any side.',
+  },
 };
 
 /**
@@ -235,9 +272,18 @@ export const buildDef = (k) => (typeof k === 'string' && Object.hasOwn(BUILD, k)
  *   end        where an item waits at the end of a belt that cannot hand it on straight
  *   internSecs how long an Unpaid Intern holds an item before handing it over
  *   dropSecs   seconds between two pieces of junk from a Returns Drop at level 0
- *   dropMul    each cash level of a Returns Drop (`lv`, a later stage's dropUp command) multiplies
+ *   dropMul    each cash level of a Returns Drop (`lv`, bought with the dropUp command) multiplies
  *              its time by this (a first guess, to tune by playing)
  *   binPay     what a Clearance Bin pays for a supply, by its tier (index 0 is junk: nothing)
+ * Supplies (stage 3; first guesses, to tune by playing):
+ *   makeSecs    seconds a machine takes to turn one junk into a supply (tier 1)
+ *   rebrandSecs seconds a Rebrander takes, by the tier going in (index 0 unused): each pass slower
+ *   stockUnits  the most units of one supply a building holds (per track)
+ *   tierLevel   the upgrade level a tier counts as, by tier (index 0: no stock)
+ *   tapeHits    gym bro hits one unit of Duct Tape soaks up, by tier
+ *   wireTurns   dads one unit of Razor Wire turns away, by tier (no effect until a later stage)
+ *   dropUpCost, dropUpGrow, dropUpMax  the dropUp command: a Returns Drop's next cash level costs
+ *               dropUpCost * dropUpGrow ** (levels it has), up to dropUpMax levels
  */
 const BACK_SUB = 240, BACK_GAP = 80;
 export const BACK = {
@@ -249,6 +295,15 @@ export const BACK = {
   dropSecs: 1.5,
   dropMul: 0.85,
   binPay: [0, 0.1, 0.25, 0.5, 1],
+  makeSecs: 2,
+  rebrandSecs: [0, 4, 8, 16],
+  stockUnits: 6,
+  tierLevel: [0, 2, 4, 6, 8],
+  tapeHits: [0, 1, 2, 3, 4],
+  wireTurns: [0, 3, 6, 10, 15],
+  dropUpCost: 150,
+  dropUpGrow: 1.6,
+  dropUpMax: 5,
 };
 
 /**

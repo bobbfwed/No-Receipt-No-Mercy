@@ -12,8 +12,23 @@
 //   Returns Drop  { k: 'drop', d, t, lv }      t: ticks to the next junk; lv: its cash level (a later
 //                                              stage buys them); owned by nobody
 //   Clearance Bin { k: 'bin', o }
+//   machine       { k, o, d, n, t, out }       k: still, cannery, spooler, winder or bender (BUILD[k].supply
+//                                              is the supply it makes); n: junk waiting (up to 2);
+//                                              t: ticks left on the one being worked; out: the supply
+//                                              made and waiting to go out of its front (0 if none)
+//   Rebrander     { k: 'rebrand', o, d, q: [codes], t, out }  q: the supplies it holds, the one being
+//                                              worked first while t > 0 (up to 2 more waiting); t, out
+//                                              as a machine's
+//   Dumbwaiter    { k: 'lift', a }             under every tile of a security building with `lift`;
+//                                              a: the building's anchor tile. Made and taken away by
+//                                              syncLifts, never by a player
 // An item is a small whole number (itemCode). A position on a belt is a whole number from 0 (just
 // come on) to BACK.sub (leaving), so every browser moves items exactly alike.
+//
+// Stock (stage 3): a building with a Dumbwaiter keeps what it is sent as `b.s` on the building, by
+// track, as runs in the order they arrived: { dmg: [tier, uses, tier, uses, ...], ... }. Whole
+// numbers only. A track's oldest run sets its level (levelIn in upgrades.js); using the building
+// takes uses off it (useWork, useStock); an empty track is deleted, and so is an empty `s`.
 //
 // Every hand-over goes through wants() and give(), so a new part only has to answer those two.
 // Lanes and parts are stepped downstream first (a part after whatever it hands to), so a full line
@@ -21,12 +36,14 @@
 // in a WeakMap against state.backVer: it is never part of the state.
 import { BACK, BUILD, TICK_HZ, buildDef } from './constants.js';
 // (state.js and cards.js import from this file too. That is safe: none uses another while loading.)
-import { earn, bump, inBounds, idxOf } from './state.js';
+import { earn, bump, inBounds, idxOf, footprint } from './state.js';
 import { buildPrice } from './cards.js';
 
 const SUB = BACK.sub, GAP = BACK.gap, STEP = BACK.step, END = BACK.end;
 /** Where an item lands when it comes onto a belt from the side. */
 const MID = SUB / 2;
+/** Seconds to ticks, never less than one. */
+const ticks = (s) => Math.max(1, Math.round(s * TICK_HZ));
 
 // ---------------------------------------------------------------------------------------------
 // Items
@@ -44,6 +61,14 @@ export const itemType = (code) => (code / 10) | 0;
 /** A supply's tier (1 to 4), or 0 for junk. */
 export const itemTier = (code) => (code >= 10 ? code % 10 : 0);
 
+/** The upgrade track each supply type stocks, by type (index 0, junk: none). */
+export const SUPPLY_TRACKS = [null, 'dmg', 'spd', 'rng', 'dur', 'wire'];
+/** Every track a building can hold stock in, in a fixed order (the checksum walks them so). */
+export const STOCK_TRACKS = ['dmg', 'spd', 'rng', 'dur', 'wire'];
+
+/** True for a part that makes things and puts them out of its front: a machine or a Rebrander. */
+const makes = (p) => p.k === 'rebrand' || !!BUILD[p.k].supply;
+
 /** Ticks between two pieces of junk from a Returns Drop with `lv` cash levels. */
 export const dropTicks = (lv = 0) => Math.max(1, Math.round(BACK.dropSecs * BACK.dropMul ** (lv | 0) * TICK_HZ));
 
@@ -58,6 +83,8 @@ export function newPart(k, o, d = 0) {
   else if (k === 'split') { p.h = 0; p.r = 2; } // (r 2: the first item goes to the front)
   else if (k === 'over') { p.a = []; p.b = []; }
   else if (k === 'intern') { p.h = 0; p.t = 0; }
+  else if (k === 'rebrand') { p.q = []; p.t = 0; p.out = 0; }
+  else if (BUILD[k].supply) { p.n = 0; p.t = 0; p.out = 0; }
   return p;
 }
 
@@ -65,8 +92,9 @@ export function newPart(k, o, d = 0) {
 // The lane order, derived from the layout and cached against state.backVer.
 
 // What a node in the order is. A belt is one lane; an Overpass is two (a and b); the parts that
-// pass items on are one node each. Clearance Bins only take, so they need no turn of their own.
-const CONV = 1, OVA = 2, OVB = 3, SPLIT = 4, INTERN = 5, DROP = 6;
+// pass items on are one node each. Clearance Bins and Dumbwaiters only take, so they need no turn
+// of their own.
+const CONV = 1, OVA = 2, OVB = 3, SPLIT = 4, INTERN = 5, DROP = 6, MACHINE = 7, REBRAND = 8;
 
 const CACHE = new WeakMap();
 
@@ -79,7 +107,7 @@ function nb(W, H, i, d) {
 /** Whether a part (not an Overpass) puts items out in direction dir. */
 function sendsToward(p, dir) {
   if (!p) return false;
-  if (p.k === 'conv' || p.k === 'drop' || p.k === 'intern') return p.d === dir;
+  if (p.k === 'conv' || p.k === 'drop' || p.k === 'intern' || makes(p)) return p.d === dir;
   if (p.k === 'split') return dir !== ((p.d + 2) & 3);
   return false;
 }
@@ -112,13 +140,14 @@ function overpassLanes(back, W, H) {
 
 /**
  * Whether the part on tile j puts items out in direction dir into the next tile, for working out a
- * belt's shape: a belt, a Returns Drop, a Splitter's three ways, an Overpass lane. Not an Unpaid
- * Intern: he puts things down where there is room and does not make a belt a corner.
+ * belt's shape: a belt, a Returns Drop, a machine's or a Rebrander's front, a Splitter's three
+ * ways, an Overpass lane. Not an Unpaid Intern: he puts things down where there is room and does
+ * not make a belt a corner.
  */
 function feeds(back, od, j, dir) {
   const p = back[j];
   if (!p) return false;
-  if (p.k === 'conv' || p.k === 'drop') return p.d === dir;
+  if (p.k === 'conv' || p.k === 'drop' || makes(p)) return p.d === dir;
   if (p.k === 'split') return dir !== ((p.d + 2) & 3);
   if (p.k === 'over') return od[j * 2 + (dir & 1)] === dir;
   return false;
@@ -187,15 +216,18 @@ function build(state) {
     else if (p.k === 'split') add(SPLIT, i, p.d, 0);
     else if (p.k === 'intern') add(INTERN, i, p.d, 0);
     else if (p.k === 'drop') add(DROP, i, p.d, 0);
+    else if (p.k === 'rebrand') add(REBRAND, i, p.d, 0);
+    else if (BUILD[p.k].supply) add(MACHINE, i, p.d, 0);
   }
   const M = kinds.length;
   // For each node, up to three tiles it hands to (a Splitter's front, left, right; everyone else's
   // front) and the nodes on them (for the order).
   const to = new Int32Array(M * 3).fill(-1), outs = new Int32Array(M * 3).fill(-1);
+  // (A machine or a Rebrander is stepped before whatever feeds it, like a belt: downstream first.)
   const entry = (t, dir) => {
     const q = back[t];
     if (!q) return -1;
-    if (q.k === 'conv' || q.k === 'split') return nodeAt[t * 2];
+    if (q.k === 'conv' || q.k === 'split' || makes(q)) return nodeAt[t * 2];
     if (q.k === 'over') return nodeAt[t * 2 + (dir & 1)];
     return -1;
   };
@@ -317,11 +349,28 @@ function roomAt(it, at) {
  *   Overpass: on the lane running the way it travels, from behind, as a belt
  *   Splitter: from behind, when its hand is empty
  *   Clearance Bin: anything, from any side
+ *   machine: junk, from any side but its front, while fewer than 2 are waiting
+ *   Rebrander: a supply below Platinum (tier 4), from any side but its front, while fewer than 2
+ *         are waiting
+ *   Dumbwaiter: a supply its building takes now (takesSupply), from any side
  */
 export function wants(state, i, code, dir, over = 0) {
   const p = state.back && state.back[i];
   if (!p) return false;
-  if (p.k !== 'conv' && p.k !== 'over') return p.k === 'bin' || (p.k === 'split' && dir === p.d && !p.h);
+  if (p.k !== 'conv' && p.k !== 'over') {
+    switch (p.k) {
+      case 'bin': return true;
+      case 'split': return dir === p.d && !p.h;
+      case 'lift': return takesSupply(state.grid[p.a], code);
+      case 'rebrand': {
+        const tier = itemTier(code);
+        return tier >= 1 && tier < 4 && dir !== ((p.d + 2) & 3) && p.q.length - (p.t > 0 ? 1 : 0) < 2;
+      }
+      default:
+        // (A machine: only junk, and never from the tile its front puts out to.)
+        return !!BUILD[p.k].supply && code === JUNK && dir !== ((p.d + 2) & 3) && p.n < 2;
+    }
+  }
   const c = cacheOf(state);
   // (The allowance at a ring's break, while that one hand-over is being made: see leanFor.)
   const lean = c.leanAt === i ? c.lean : 0;
@@ -402,8 +451,16 @@ export function give(state, i, code, dir, over = 0) {
       }
       return true;
     }
+    case 'lift':
+      addStock(state.grid[p.a], code);
+      return true;
+    case 'rebrand':
+      p.q.push(code);
+      return true;
     default:
-      return false;
+      // (A machine: wants let only junk through.)
+      p.n++;
+      return true;
   }
 }
 
@@ -564,10 +621,193 @@ export function stepBack(state, ev = null) {
         if (p.t <= 0 && front >= 0 && give(state, front, JUNK, d, 0)) p.t = dropTicks(p.lv);
         break;
       }
+      case MACHINE:
+      case REBRAND: {
+        // Finishing, handing over and starting the next all happen in the same tick (as the shop
+        // floor's Press does it), so one takes exactly its time. What is made waits in `out` while
+        // the tile in front will not take it, and nothing new is started meanwhile.
+        if (p.t > 0 && --p.t === 0) p.out = kind === MACHINE ? itemCode(BUILD[p.k].supply, 1) : p.q.shift() + 1;
+        const front = to[m * 3];
+        if (p.out && front >= 0 && give(state, front, p.out, d, 0)) p.out = 0;
+        if (p.out || p.t > 0) break;
+        if (kind === MACHINE) {
+          if (p.n > 0) { p.n--; p.t = ticks(BACK.makeSecs); }
+        } else if (p.q.length) p.t = ticks(BACK.rebrandSecs[itemTier(p.q[0])]);
+        break;
+      }
     }
   }
   c.running = false;
   c.ev = null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Stock: supplies on the security buildings above (stage 3)
+
+/**
+ * How many uses one unit of a supply at `tier` gives a building of kind k in `track`: for damage,
+ * speed and range the kind's own BUILD[k].shots (whatever the tier: the tier sets the level, see
+ * levelIn); for durability BACK.tapeHits[tier] (hits soaked up); for wire BACK.wireTurns[tier]
+ * (dads turned away, a later stage).
+ */
+export function usesPer(k, track, tier) {
+  if (track === 'dur') return BACK.tapeHits[tier] | 0;
+  if (track === 'wire') return BACK.wireTurns[tier] | 0;
+  return (BUILD[k] && BUILD[k].shots) | 0;
+}
+
+/**
+ * How many units of one supply a building holds: each run's uses over what a unit of its tier
+ * gives, a unit partly used counting as a whole one. So a building takes a new unit only once a
+ * whole one is used up, and the count is a whole number on every browser.
+ */
+export function unitsIn(b, track) {
+  const run = b && b.s && b.s[track];
+  if (!run) return 0;
+  let n = 0;
+  for (let k = 0; k < run.length; k += 2) n += Math.ceil(run[k + 1] / (usesPer(b.k, track, run[k]) || 1));
+  return n;
+}
+
+/** Uses left in one track of a building's stock, all its runs together. */
+export function usesIn(b, track) {
+  const run = b && b.s && b.s[track];
+  let n = 0;
+  if (run) for (let k = 1; k < run.length; k += 2) n += run[k];
+  return n;
+}
+
+/**
+ * Would building b (from the grid; its anchor) take supply `code` through its Dumbwaiters right
+ * now? Only a standing building whose kind has `lift`, only a supply for a track its kind has
+ * (BUILD[k].up; every such kind takes Razor Wire), and only while that track holds fewer than
+ * BACK.stockUnits units. No side effects.
+ */
+export function takesSupply(b, code) {
+  if (!b || b.part !== undefined) return false;
+  const def = BUILD[b.k];
+  if (!def || !def.lift) return false;
+  const type = itemType(code), tier = itemTier(code);
+  if (type < 1 || type > 5 || tier < 1 || tier > 4) return false;
+  const track = SUPPLY_TRACKS[type];
+  if (track !== 'wire' && !(def.up && def.up[track])) return false;
+  if (!usesPer(b.k, track, tier)) return false;
+  return unitsIn(b, track) < BACK.stockUnits;
+}
+
+/**
+ * Adds one unit of supply `code` to building b's stock (takesSupply must have said yes): its uses
+ * go on the newest run of that track if the tier is the same, otherwise they start a new run. So
+ * mixed tiers are used in the order they came.
+ */
+export function addStock(b, code) {
+  const track = SUPPLY_TRACKS[itemType(code)], tier = itemTier(code);
+  const s = b.s || (b.s = {});
+  const run = s[track] || (s[track] = []);
+  const n = usesPer(b.k, track, tier);
+  if (run.length && run[run.length - 2] === tier) run[run.length - 1] += n;
+  else run.push(tier, n);
+}
+
+/**
+ * Takes one use off a track of building b's stock (anchor tile i). A run used up is dropped, and
+ * the next run's tier applies from then on; when the track is empty it is deleted (and `s` with it,
+ * once nothing is left) and `stockOut {i, t}` goes on the event list, so the interface can warn.
+ * @returns {boolean} false if the track had no stock
+ */
+export function useStock(b, track, i, ev) {
+  const s = b.s, run = s && s[track];
+  if (!run || !run.length) return false;
+  if (--run[1] > 0) return true;
+  for (let k = 2; k < run.length; k++) run[k - 2] = run[k];
+  run.length -= 2;
+  if (run.length) return true;
+  delete s[track];
+  let any = false;
+  for (const t of STOCK_TRACKS) if (s[t]) { any = true; break; }
+  if (!any) delete b.s;
+  if (ev) ev.push({ e: 'stockOut', i, t: track });
+  return true;
+}
+
+/**
+ * The building on anchor tile i has done its work once: a shot fired (however many it hit), or a
+ * shopper stopped, slowed or tripped. One use comes off each of damage, speed and range that it
+ * has stock in. (Durability is used by gym bro hits, wire by dads.)
+ */
+export function useWork(b, i, ev) {
+  if (!b || !b.s) return;
+  useStock(b, 'dmg', i, ev);
+  useStock(b, 'spd', i, ev);
+  useStock(b, 'rng', i, ev);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Dumbwaiters
+
+/**
+ * The anchor of the building that should have a Dumbwaiter on tile t, or -1: a standing building
+ * whose kind has `lift`, or, where nothing stands, the rubble of one (its Dumbwaiters stay, wanting
+ * nothing, so nothing can be built under it and it can always be rebuilt).
+ */
+function liftOwner(state, t) {
+  const g = state.grid[t];
+  if (g) {
+    const ai = g.part !== undefined ? g.part : t, b = state.grid[ai];
+    return b && BUILD[b.k].lift ? ai : -1;
+  }
+  for (const r of state.rubble || []) {
+    if (!BUILD[r.k] || !BUILD[r.k].lift) continue;
+    const under = footprint(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.d | 0);
+    if (under && under.includes(t)) return r.i;
+  }
+  return -1;
+}
+
+/**
+ * Makes The Back's Dumbwaiters on `tiles` match the shop floor above: one under every tile of a
+ * building with `lift`, and of its rubble; none anywhere else. Called after anything changes the
+ * grid or the rubble on those tiles (commands.js, wreck in step.js). A Dumbwaiter is never put on
+ * another part (only a save from before Dumbwaiters can have one there: that tile goes without).
+ * @returns {boolean} whether anything changed (backVer then goes up)
+ */
+export function syncLifts(state, tiles) {
+  const back = state.back;
+  if (!back || back.length !== state.grid.length) return false;
+  let changed = false;
+  for (const t of tiles) {
+    if (!(t >= 0 && t < back.length)) continue;
+    const want = liftOwner(state, t), q = back[t];
+    if (want >= 0) {
+      if (!q || (q.k === 'lift' && q.a !== want)) { back[t] = { k: 'lift', a: want }; changed = true; }
+    } else if (q && q.k === 'lift') {
+      back[t] = 0;
+      changed = true;
+    }
+  }
+  if (changed) state.backVer = (state.backVer | 0) + 1;
+  return changed;
+}
+
+/** syncLifts over the whole store: every standing building, every wreck and every Dumbwaiter. */
+export function syncAllLifts(state) {
+  if (!state.back) return false;
+  const tiles = [];
+  for (let i = 0; i < state.grid.length; i++) {
+    const b = state.grid[i];
+    if (b && b.part === undefined && BUILD[b.k] && BUILD[b.k].lift) {
+      const under = footprint(state, b.k, i % state.w, (i / state.w) | 0, b.d | 0);
+      if (under) tiles.push(...under);
+    }
+    const q = state.back[i];
+    if (q && q.k === 'lift') tiles.push(i);
+  }
+  for (const r of state.rubble || []) {
+    if (!BUILD[r.k] || !BUILD[r.k].lift) continue;
+    const under = footprint(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.d | 0);
+    if (under) tiles.push(...under);
+  }
+  return syncLifts(state, tiles);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -577,9 +817,9 @@ export function stepBack(state, ev = null) {
  * Checks whether a player may put a Back part of kind k on (x, y) (canPlace's partner for The
  * Back). Nothing in The Back blocks shoppers, so no route check is needed.
  * @returns {string|null} null if allowed, otherwise the reason: 'over', 'lobby', 'cards', 'paused'
- *   as for canPlace; 'kind' not a Back part a player may buy (the Returns Drop is the map's);
- *   'bounds' off the map or a wall (the store's walls and shelves go all the way down);
- *   'occupied'; 'cash'. A belt laid on a belt just turns it, free, as on the shop floor.
+ *   as for canPlace; 'kind' not a Back part a player may buy (the Returns Drop is the map's, a
+ *   Dumbwaiter its building's); 'bounds' off the map or a wall (the store's walls and shelves go
+ *   all the way down); 'occupied' (a Dumbwaiter's tile too); 'cash'. A belt laid on a belt just turns it, free, as on the shop floor.
  */
 export function canPlaceBack(state, k, x, y, pid = 0, d = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';

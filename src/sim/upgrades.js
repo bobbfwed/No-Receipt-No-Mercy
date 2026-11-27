@@ -3,7 +3,13 @@
 // Which tracks a kind has, what a level does and what it costs is data in BUILD[k].up
 // (constants.js). Each level of a track costs more than the last, so a full floor still leaves
 // something to spend money on.
-import { BUILD, TUNE } from './constants.js';
+//
+// From 0.4 a building can also be stocked with supplies from The Back (`b.s`, see back.js): a stocked
+// track works at the level its supply's tier stands for (BACK.tierLevel). Until bought upgrades are
+// removed (the next stage), a track works at the larger of the two. Stock is never money: what was
+// spent, the sell-back, the rebuild price and the price of the next level read the levels bought
+// (boughtIn), never the stock.
+import { BUILD, TUNE, BACK } from './constants.js';
 // (cards.js imports from this file too. That is safe: neither uses the other while loading.)
 import { cardStats } from './cards.js';
 
@@ -22,8 +28,27 @@ export function defaultTrack(k) {
   return ts.includes('dmg') ? 'dmg' : ts[0] || null;
 }
 
-/** The levels bought in one track (0 if none). */
-export const levelIn = (b, track) => (b && b.u && b.u[track]) | 0;
+/** The levels bought in one track (0 if none). Prices, refunds and the upgrade command read this. */
+export const boughtIn = (b, track) => (b && b.u && b.u[track]) | 0;
+
+/**
+ * The level a building's stock gives one track (0.4): BACK.tierLevel of the tier of its oldest run
+ * of that supply, 0 with none. Not durability: Duct Tape does not raise a level, each use of it
+ * soaks up one gym bro hit instead (BACK.tapeHits), so counting it as levels too would pay twice.
+ */
+export function stockLevel(b, track) {
+  const run = track !== 'dur' && b && b.s && b.s[track];
+  return run && run.length ? BACK.tierLevel[run[0]] | 0 : 0;
+}
+
+/**
+ * The level one track works at: the larger of the levels bought and the level its stock gives
+ * (0.4; the bought levels go in the next stage). This is what statsOf reads.
+ */
+export function levelIn(b, track) {
+  const bought = boughtIn(b, track), stocked = stockLevel(b, track);
+  return bought > stocked ? bought : stocked;
+}
 
 /** The most levels a kind can have in a track (0 if it lacks the track). */
 export function maxIn(k, track) {
@@ -58,14 +83,15 @@ export function levelCost(k, track, lv) {
 export function upgradeCost(b, track = b && defaultTrack(b.k)) {
   const def = b && BUILD[b.k];
   if (!def || !def.up || !def.up[track]) return 0;
-  const lv = levelIn(b, track);
+  // (The levels bought: stock never makes the next level dearer, or stops it being bought.)
+  const lv = boughtIn(b, track);
   return lv >= maxIn(b.k, track) ? 0 : levelCost(b.k, track, lv);
 }
 
 /** What one track's levels so far have cost in all. */
 export function spentOnTrack(b, track) {
   let sum = 0;
-  for (let lv = 0; lv < levelIn(b, track); lv++) sum += levelCost(b.k, track, lv);
+  for (let lv = 0; lv < boughtIn(b, track); lv++) sum += levelCost(b.k, track, lv);
   return sum;
 }
 
@@ -73,7 +99,7 @@ export function spentOnTrack(b, track) {
 export function freeWorth(b) {
   if (!b.f) return 0;
   let sum = 0;
-  for (let lv = 0; lv < Math.min(b.fn ?? 1, levelIn(b, b.f)); lv++) sum += levelCost(b.k, b.f, lv);
+  for (let lv = 0; lv < Math.min(b.fn ?? 1, boughtIn(b, b.f)); lv++) sum += levelCost(b.k, b.f, lv);
   return sum;
 }
 
@@ -88,8 +114,9 @@ export function spentOn(b) {
 }
 
 /**
- * A building's working numbers with its upgrades applied. `b` may be a building from the grid or
- * any `{ k, u }`, so tables can be worked out for any mix of levels. Only the numbers its kind
+ * A building's working numbers with its upgrades applied (and, from 0.4, its stock: see levelIn).
+ * `b` may be a building from the grid or any `{ k, u }` (or `{ k, s }`), so tables can be worked
+ * out for any mix of levels. Only the numbers its kind
  * uses are meaningful:
  *   dmg, range, cd       towers (cd in seconds between shots; the Barcode Laser's range is its beam)
  *   width                Barcode Laser: how far either side of the beam's centre line it hits

@@ -22,3 +22,7 @@ export { getBackField } from './path.js';
 export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, overpassDirs, beltShape } from './back.js';
 export { makeDrops } from './maps.js';
 export { freeWorth } from './upgrades.js';
+// The Back's supplies (0.4, stage 3): stock on the security buildings, Dumbwaiters, the dropUp price.
+export { SUPPLY_TRACKS, STOCK_TRACKS, usesPer, unitsIn, usesIn, takesSupply, addStock, useStock, useWork, syncLifts, syncAllLifts } from './back.js';
+export { boughtIn, stockLevel } from './upgrades.js';
+export { dropUpCost } from './commands.js';

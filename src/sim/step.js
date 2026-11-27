@@ -1,13 +1,13 @@
 // One tick of the simulation. Deterministic: the same state always produces the same next state,
 // which lets every player's browser predict the game between updates from the host.
 import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
-import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless, releaseOrder, releaseAllOrders } from './state.js';
+import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless, releaseOrder, releaseAllOrders, footprint } from './state.js';
 import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { stepRebuilds } from './commands.js';
-import { stepBack } from './back.js';
+import { stepBack, useWork, useStock, usesIn, syncLifts } from './back.js';
 import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
@@ -792,6 +792,8 @@ function stepBuildings(state, fields, ev, only = null) {
           }
           if (!hit.length) break;
           b.cd = secs(st.cd);
+          // (A shot uses one use of its stock, however many it hits: see useWork in back.js.)
+          useWork(b, i, ev);
           ev.push({ e: 'rail', i, d: b.d | 0, len: st.range, n: hit.length });
           for (const s of hit) {
             const who = strike(state, s, st.dmg, b.o, cosplayers, ev, b.k);
@@ -819,7 +821,7 @@ function stepBuildings(state, fields, ev, only = null) {
             const wdef = defOf(who);
             if (wdef.bolts) bolt(who, wdef, ev);
           }
-          if (near.length) { b.cd = secs(st.cd); ev.push({ e: 'spray', i }); }
+          if (near.length) { b.cd = secs(st.cd); useWork(b, i, ev); ev.push({ e: 'spray', i }); }
         } else {
           let best = null, bd = UNREACHABLE + 1;
           for (const s of S) {
@@ -829,6 +831,7 @@ function stepBuildings(state, fields, ev, only = null) {
           }
           if (best) {
             b.cd = secs(st.cd);
+            useWork(b, i, ev);
             b.a = Math.atan2(best.y - cy, best.x - cx);
             ev.push({ e: 'shot', i, x: best.x, y: best.y });
             const who = strike(state, best, st.dmg, b.o, cosplayers, ev, b.k);
@@ -1277,6 +1280,14 @@ function wreck(state, ti, s, ev, flatten = false) {
   if (!b) return false;
   state.ws.wrecked++;
   const hits = statsOf(b).hits;
+  // Duct Tape from The Back (0.4) soaks up the hit: it takes one use of the tape instead of
+  // counting toward wrecking it. (`left` counts the tape still on it as hits it can take.)
+  const tape = flatten ? 0 : usesIn(b, 'dur');
+  if (tape > 0) {
+    ev.push({ e: 'smash', i: ai, x: s.x, y: s.y, k: b.k, owner: b.o, left: tape - 1 + Math.max(0, hits - (b.hit | 0)), tape: 1 });
+    useStock(b, 'dur', ai, ev);
+    return true;
+  }
   b.hit = flatten ? hits : (b.hit | 0) + 1;
   const left = Math.max(0, hits - b.hit);
   ev.push({ e: 'smash', i: ai, x: s.x, y: s.y, k: b.k, owner: b.o, left });
@@ -1290,8 +1301,16 @@ function wreck(state, ti, s, ev, flatten = false) {
   // (A Free Sample table that hands out booze, the eightyproof card, is rebuilt as one.)
   if (b.bz) r.bz = 1;
   state.rubble.push(r);
-  // (The oldest falls off the end. If someone had paid to rebuild it, he gets his money back.)
-  if (state.rubble.length > RUBBLE_MAX) releaseOrder(state, state.rubble.shift());
+  // (Its stock went with it. Its Dumbwaiters stay under the rubble, wanting nothing: syncLifts
+  // leaves them where they are, so nothing changes in The Back.)
+  // (The oldest falls off the end. If someone had paid to rebuild it, he gets his money back; its
+  // Dumbwaiters go, as nothing can be rebuilt from it now.)
+  if (state.rubble.length > RUBBLE_MAX) {
+    const old = state.rubble.shift();
+    releaseOrder(state, old);
+    const was = footprint(state, old.k, old.i % state.w, (old.i / state.w) | 0, old.d | 0);
+    if (was) syncLifts(state, was);
+  }
   return true;
 }
 
@@ -1646,12 +1665,16 @@ function stepShoppers(state, fields, sec, ev) {
         // A sign takes no patience from someone who does not slip, so being weak to it (the day
         // drinker) means taking that much longer to get across it. (Never faster than walking.)
         speed *= sign ? Math.min(1, sign.slow / edgeMul(def, 'wetfloor')) : TUNE.wetSlow;
+        // (A sign's stock, 0.4: one use for each shopper it slows, as he steps onto it.)
+        if (sign && s.lt !== i) useWork(here, i, ev);
       } else if (s.lt !== i && rand(state) < (sign ? sign.slip : TUNE.slipChance) * cardSlip(state)) {
         s.lt = i;
         s.st = ST.STUN;
         s.t = secs(TUNE.slipSecs);
         ev.push({ e: 'slip', x: s.x, y: s.y });
         hurt(state, s, sign ? sign.slipDmg : TUNE.slipDmg, wet ? here.o : -1, ev, wet ? 'wetfloor' : '');
+        // (...and one for each dad it trips.)
+        if (sign) useWork(here, i, ev);
         continue;
       }
     }
@@ -1685,6 +1708,8 @@ function stepShoppers(state, fields, sec, ev) {
         const rush = rush0 * st.rushMul;
         const roll = rand(state);
         s.pc = secs(TUNE.pitchCool);
+        // (His stock, 0.4: one use for each pitch that works, a shopper stopped or hurried past.)
+        if (roll < stop + rush) useWork(grid[m[4]], m[4], ev);
         if (roll < stop) {
           // He does not freeze where he is: he walks over to the stand, and watches from there
           // (see walkToStand). `sa` is the stand, `sw` how long he will watch, `sl` how long he
@@ -1712,6 +1737,8 @@ function stepShoppers(state, fields, sec, ev) {
           s.st = ST.BROWSE;
           s.t = st[3];
           s.cd = secs(TUNE.browseCooldown);
+          // (The table's stock, 0.4: one use for each shopper it stops.)
+          useWork(grid[st[4]], st[4], ev);
           ev.push({ e: 'sample', x: s.x, y: s.y });
           // The game's cards: now and then he buys something (warranty); a table handing out booze
           // may turn him into a Day Drinker (eightyproof).
@@ -1824,6 +1851,10 @@ function stepShoppers(state, fields, sec, ev) {
  *  that must wait, endless {by} a won game carries on as an endless one,
  *  pause {on,by} player `by` paused (on true) or resumed (on false) the game.)
  *  The Back (0.4, back.js): binned {i,v,by} a Clearance Bin on tile i was paid v for a supply.
+ *  stockOut {i,t} the building on anchor tile i has just used the last of its stock in track t
+ *  ('dmg', 'spd', 'rng', 'dur'; 'wire' in a later stage). smash has tape 1 when Duct Tape soaked
+ *  the hit up (its `left` then counts the tape still on it). dropUp {x,y,lv,by,paid} (a command)
+ *  a player bought the Returns Drop at (x, y) its cash level lv.
  */
 export function step(state) {
   const ev = [];
