@@ -70,7 +70,7 @@
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { availableParallelism } from 'node:os';
 import {
-  createGame, addPlayer, applyCommand, step, canPlace, canWire, buildPrice, footprint, dadRoute,
+  createGame, addPlayer, applyCommand, step, canPlace, canWire, buildPrice, footprint, dadRoute, upgradeCost,
   usesIn, TICK_HZ, MAP_SIZES, mapSize, recommendedSize, BUILD, BACK, TUNE, SHOPPERS, reinforceCost,
 } from '../src/sim/index.js';
 import { Backroom, SUPPLIES } from './balance/back.mjs';
@@ -206,6 +206,7 @@ function interleave(list, markers, every) {
  * The bots: what each builds (see the top of the file). Settings:
  *   back       builds in The Back at all            fences   walls (0 = nearest the entrance, or
  *   reinforce  reinforces crates gym bros wreck                'all') that get fence posts
+ *   signUp     (0.4.01) upgrades every Wet Floor Sign with cash to this level once its plan is built
  *              ('all', 0.4.01: any building gym bros wreck, now that security can be reinforced)
  *   prefix     room for this many Rebranders per machine (they come with 'tier' markers)
  *   sup.tower  supplies for its Pepper Sprinklers and Forklift Turrets
@@ -402,6 +403,15 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
       for (let j = next + 1; j < list.length; j++) {
         if (done.has(j) || me.cash < need(list[j]) || typeof list[j][1] !== 'number') continue;
         if (tryBuy(j)) done.add(j);
+      }
+    }
+    // (0.4.01) Wet Floor Signs upgraded with cash, up to signUp levels, once the whole plan is bought.
+    if (cfg.signUp && next >= list.length) {
+      for (let i = 0; i < s.grid.length; i++) {
+        const b = s.grid[i];
+        if (!b || b.k !== 'wetfloor' || (b.u | 0) >= cfg.signUp) continue;
+        if (me.cash < upgradeCost(b, s)) break;
+        applyCommand(s, 0, { c: 'upgrade', x: i % s.w, y: (i / s.w) | 0 });
       }
     }
   }

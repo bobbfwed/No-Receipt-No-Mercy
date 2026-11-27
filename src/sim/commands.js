@@ -4,7 +4,7 @@ import { BUILD, BACK, TUNE, TICK_HZ, ST, ROLES, SPEEDS, buildDef } from './const
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf, releaseOrder } from './state.js';
 import { shopPlanCheck, dadPlanCheck, modeOf, DAD } from './path.js';
 import { beginWave } from './step.js';
-import { spentOn, rebuildDeal, reinforceCost } from './upgrades.js';
+import { spentOn, rebuildDeal, reinforceCost, upgradeCost } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, cardStock, boozeRoll, nextCard } from './cards.js';
 import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode, takeOverBelt, backPrice } from './back.js';
@@ -12,7 +12,7 @@ import { planLine } from './line.js';
 import { carriesWire, wireCovers, buildingTiles, planWith, wireLive, wireChanged, wireMap } from './wire.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
-const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp', 'wire', 'reinforce', 'line']);
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp', 'wire', 'reinforce', 'line', 'upgrade']);
 
 /**
  * Commands that still work while the game is paused (0.3.02; state.pause). Everything else is
@@ -174,6 +174,8 @@ function newBuilding(k, owner, d, card = null) {
     if (card.c !== undefined) b.c = card.c;
     if (card.bz) b.bz = 1;
     if (card.r > 0 && def.reinforce) b.r = card.r;
+    // (A Wet Floor Sign's cash upgrades, 0.4.01, come back with it too.)
+    if (card.u > 0 && def.upgrade) b.u = Math.min(def.upgrade.max, card.u);
   }
   if (def.tower) b.cd = 0;
   if (k === 'forklift') b.a = 0;
@@ -349,6 +351,8 @@ export function stepRebuilds(state, ev) {
  *   { c: 'reinforce', x, y }    (0.4) pay for the next level of the Crate Stack (0.4.01: or security
  *                               building) on any tile (x, y) of it: one more gym bro hit a sales
  *                               event (see canReinforce, reinforce)
+ *   { c: 'upgrade', x, y }      (0.4.01) pay for the next cash upgrade of the Wet Floor Sign on (x, y)
+ *                               (see canUpgrade, upgrade)
  *   place, remove and rotate with f: 1 do the same on The Back (0.4; see backCommand)
  *   { c: 'line', f: 1, x, y, x2, y2, a }  (0.4.01) a whole line of belts in The Back from (x, y)
  *                               to (x2, y2), paid for at once (see layLine and planLine in line.js)
@@ -655,6 +659,51 @@ function reinforce(state, pid, cmd, ev) {
   return { ok: true };
 }
 
+/**
+ * Whether player pid may upgrade the building on any tile (x, y) of it one level with cash now (the
+ * `upgrade` command, 0.4.01; only kinds with BUILD[k].upgrade: the Wet Floor Sign). Anyone in the
+ * store may, paying for it himself, as for reinforcing.
+ * @returns {string|null} null if allowed, otherwise the reason: 'over', 'lobby', 'cards',
+ *   'paused' as for canPlace; 'bad' no such player; 'office'; 'bounds' off the map; 'empty'
+ *   nothing there; 'kind' a kind that cannot be upgraded; 'max' it has the top level; 'cash' he
+ *   cannot pay upgradeCost.
+ */
+export function canUpgrade(state, pid, x, y) {
+  if (state.phase === 'won' || state.phase === 'lost') return 'over';
+  if (state.phase === 'lobby') return 'lobby';
+  if (state.phase === 'cards') return 'cards';
+  if (state.pause) return 'paused';
+  const player = Number.isInteger(pid) ? state.players[pid] : null;
+  if (!player) return 'bad';
+  if (player.side === 'office') return 'office';
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
+  const b = state.grid[anchorOf(state, idxOf(state, x, y))];
+  if (!b) return 'empty';
+  if (!BUILD[b.k].upgrade) return 'kind';
+  const cost = upgradeCost(b, state);
+  if (!cost) return 'max';
+  return player.cash < cost ? 'cash' : null;
+}
+
+/**
+ * The `upgrade` command (0.4.01): `{ c: 'upgrade', x, y }` pays upgradeCost to raise the level `u`
+ * of the building on any tile of it (its anchor) by one; every track it has then works at
+ * BUILD[k].upgrade.level[u] (levelIn). The money counts as spent on the building (added to `c`),
+ * as reinforcing does. Sends upgrade {i, k, u, by, paid} (i: the anchor tile).
+ */
+function upgrade(state, pid, cmd, ev) {
+  const why = canUpgrade(state, pid, cmd.x, cmd.y);
+  if (why) return { ok: false, why };
+  const ai = anchorOf(state, idxOf(state, cmd.x, cmd.y)), b = state.grid[ai];
+  const cost = upgradeCost(b, state);
+  state.players[pid].cash -= cost;
+  bump(state, pid, 'spent', cost);
+  b.c = spentOn(b) + cost;
+  b.u = (b.u | 0) + 1;
+  ev.push({ e: 'upgrade', i: ai, k: b.k, u: b.u, by: pid, paid: cost });
+  return { ok: true };
+}
+
 export function applyCommand(state, pid, cmd, ev = []) {
   // (Every value in a command comes from a player's browser and may be anything. Any of them used to
   // look something up by name goes through Object.hasOwn or a list's includes, never a bare obj[x]:
@@ -797,6 +846,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       return setWire(state, pid, cmd, ev);
     case 'reinforce':
       return reinforce(state, pid, cmd, ev);
+    case 'upgrade':
+      return upgrade(state, pid, cmd, ev);
     case 'give': {
       // (A player's number, nothing else: players['constructor'] would be an array's own function.)
       const to = Number.isInteger(cmd.to) ? state.players[cmd.to] : null;

@@ -208,8 +208,8 @@ test('each kind has the tracks it should, and only stock raises their levels', (
   addStock(b, itemCode(1, 1));
   assert.equal(levelIn(b, 'dmg'), BACK.tierLevel[1]);
   assert.equal(levelIn(b, 'spd'), 0);
-  // There is no command to buy a level any more.
-  assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'dmg' }).why, 'bad');
+  // There is no command to buy a level for it (only a Wet Floor Sign is upgraded with cash, 0.4.01).
+  assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'dmg' }).why, 'kind');
 });
 
 test('the stats of any mix of stock, the overall level, and what was spent', () => {
@@ -230,7 +230,9 @@ test('the stats of any mix of stock, the overall level, and what was spent', () 
   assert.equal(statsOf({ k: 'salesman', s: { wire: [2, 4] } }).hits, 2);
   assert.equal(statsOf({ k: 'salesman', r: 3 }).hits, 5, 'a level of reinforcement a hit (0.4.01)');
   assert.equal(statsOf({ k: 'crate' }).hits, 1);
-  const sign = statsOf({ k: 'wetfloor', s: { dmg: [1, 10] } });
+  // (A sign at upgrade level 1 works at level 2, as Store Brand stock did until 0.4.01.)
+  assert.equal(BUILD.wetfloor.upgrade.level[1], 2);
+  const sign = statsOf({ k: 'wetfloor', u: 1 });
   assert.ok(Math.abs(sign.slow - TUNE.wetSlow * 0.82 ** 2) < 1e-9 && Math.abs(sign.slip - (TUNE.slipChance + 0.16)) < 1e-9);
   assert.ok(Math.abs(sign.slipDmg - TUNE.slipDmg * 1.45 ** 2) < 1e-9);
 });

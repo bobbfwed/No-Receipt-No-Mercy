@@ -65,7 +65,7 @@ function tune(t, changes, obj = TUNE) {
 function wireWall(s, x, upTo = 4) {
   const res = [];
   for (const y of [1, 5, 9, 13].slice(0, upTo)) {
-    assert.ok(place(s, 'wetfloor', x, y).ok);
+    assert.ok(place(s, 'sprinkler', x, y).ok);
     res.push(wire(s, x, y, 1));
   }
   return res;
@@ -123,7 +123,7 @@ test('without wire nothing changes; planned wire changes nothing for anyone but 
   const s = stage();
   for (let y = 1; y <= 13; y++) assert.ok(place(s, 'crate', 12, y).ok);
   assert.ok(place(s, 'sprinkler', 5, 5).ok);
-  assert.ok(place(s, 'wetfloor', 20, 6).ok);
+  assert.ok(place(s, 'sprinkler', 20, 6).ok);
   const before = [getDist(s), getField(s, SMASH), getField(s, GHOST)].map((f) => [...f]);
   assert.ok(wire(s, 5, 5, 1).ok);
   assert.ok(wire(s, 20, 6, 1).ok);
@@ -188,7 +188,7 @@ test('a Barcode Laser\'s wire, lying and standing, and a TV Salesman\'s: as wide
 test('planned wire does nothing; live wire turns dads away over open floor, and ordinary shoppers go round it unharmed (0.4.01)', () => {
   const s = stage();
   // A Wet Floor Sign (blocks nobody) at (14, 5) with wire south over (14, 5..8): across the dads' way.
-  assert.ok(place(s, 'wetfloor', 14, 5).ok);
+  assert.ok(place(s, 'sprinkler', 14, 5).ok);
   assert.ok(wire(s, 14, 5, 1).ok);
   const covered = tilesAt([[14, 5], [14, 6], [14, 7], [14, 8]]);
   assert.equal(wireLive(s.grid[at(14, 5)]), false);
@@ -275,7 +275,7 @@ test('the wire command\'s refusals', () => {
 test('a wire may not cut an entrance off: one building\'s plan, and only the combination of several', () => {
   const s = stage();
   // One building: a sign by the entrance with wire west would cover the entrance tile itself.
-  assert.ok(place(s, 'wetfloor', 1, 7).ok);
+  assert.ok(place(s, 'sprinkler', 1, 7).ok);
   assert.equal(canWire(s, 0, 1, 7, 2), 'blocked');
   assert.equal(wire(s, 1, 7, 2).why, 'blocked');
   assert.equal(s.grid[at(1, 7)].wd, undefined);
@@ -303,12 +303,13 @@ test('the Car Park: a wire may not cut one bank of tills off from the other', ()
   addPlayer(s, 'Dave');
   s.players[0].cash = 1e6;
   const w = s.w, tile = (x, y) => y * w + x;
-  // The bottom bank is (21..24, 15). Signs above it with wire south cover a till each.
+  // The bottom bank is (21..24, 15). Sprinklers two rows above it with wire south cover a till each
+  // (and the row in front of it).
   assert.equal(s.tiles[tile(21, 15)], 'T');
   const res = [];
   for (const x of [21, 22, 23, 24]) {
-    assert.ok(place(s, 'wetfloor', x, 14).ok);
-    res.push(applyCommand(s, 0, { c: 'wire', x, y: 14, d: 1 }));
+    assert.ok(place(s, 'sprinkler', x, 13).ok, `sprinkler at ${x},13`);
+    res.push(applyCommand(s, 0, { c: 'wire', x, y: 13, d: 1 }));
   }
   assert.deepEqual(res.map((r) => r.ok), [true, true, true, false], 'the last till of the bank must stay open');
   assert.equal(res[3].why, 'blocked');
@@ -318,7 +319,7 @@ test('the Car Park: a wire may not cut one bank of tills off from the other', ()
 
 test('a wire goes live when Razor Wire comes up its Dumbwaiter, and dead when the last is used, stolen, or the building goes', () => {
   const s = stage();
-  assert.ok(place(s, 'wetfloor', 14, 5).ok);
+  assert.ok(place(s, 'sprinkler', 14, 5).ok);
   assert.ok(wire(s, 14, 5, 1).ok);
   const t = at(14, 7);
   // Arriving through the Dumbwaiter (give, as a belt or an intern hands it over).
@@ -351,7 +352,7 @@ test('a wrecked building\'s wire goes; its rubble remembers it and a rebuild bri
   // A gym bro who hits whatever is beside him, every time.
   tune(t, { smashOther: 1, smashEvery: 0.3 });
   const s = stage();
-  assert.ok(place(s, 'wetfloor', 4, 7).ok);
+  assert.ok(place(s, 'sprinkler', 4, 7).ok);
   assert.ok(wire(s, 4, 7, 3).ok);
   stock(s, 4, 7);
   assert.equal(getDadDist(s)[at(4, 6)], UNREACHABLE);
@@ -374,16 +375,16 @@ test('a rebuild brings a wire back only if the wire command would allow it then'
     const s = stage();
     // Three signs down column 14 cover rows 1 to 12; a fourth's wire covered rows 13 and 14.
     wireWall(s, 14, 3);
-    s.rubble.push({ i: at(14, 13), k: 'wetfloor', d: 0, o: 0, wd: 1 });
-    const cmd = how === 'rebuild' ? { c: 'rebuild' } : { c: 'place', k: 'wetfloor', x: 14, y: 13, d: 0 };
+    s.rubble.push({ i: at(14, 13), k: 'sprinkler', d: 0, o: 0, wd: 1 });
+    const cmd = how === 'rebuild' ? { c: 'rebuild' } : { c: 'place', k: 'sprinkler', x: 14, y: 13, d: 0 };
     assert.ok(applyCommand(s, 0, cmd).ok, how);
-    assert.equal(s.grid[at(14, 13)].k, 'wetfloor');
+    assert.equal(s.grid[at(14, 13)].k, 'sprinkler');
     assert.equal(s.grid[at(14, 13)].wd, undefined, `${how}: it would cut the store in two, so it comes back without`);
     assert.notEqual(getDadPlanDist(s)[at(0, 7)], UNREACHABLE);
     // With a hole left elsewhere it comes back with its wire.
     const s2 = stage();
     wireWall(s2, 14, 2);
-    s2.rubble.push({ i: at(14, 13), k: 'wetfloor', d: 0, o: 0, wd: 1 });
+    s2.rubble.push({ i: at(14, 13), k: 'sprinkler', d: 0, o: 0, wd: 1 });
     assert.ok(applyCommand(s2, 0, cmd).ok);
     assert.equal(s2.grid[at(14, 13)].wd, 1, `${how}: allowed, so it is back`);
   }
@@ -418,7 +419,7 @@ function chargesBy(ev) {
 /** Wire carriers: Wet Floor Signs (they block nobody else) with wire, stocked with Platinum to the brim. */
 function carriers(s, list, units = 6) {
   for (const [x, y, d] of list) {
-    assert.ok(place(s, 'wetfloor', x, y).ok, `sign at ${x},${y}`);
+    assert.ok(place(s, 'sprinkler', x, y).ok, `sign at ${x},${y}`);
     assert.ok(wire(s, x, y, d).ok, `wire at ${x},${y}`);
     stock(s, x, y, 4, units);
   }
@@ -444,7 +445,7 @@ function trackDads(s) {
  * dad who comes in steps onto (1, 7) or (1, 8), would go straight on into the wire, and bumps.
  */
 function frontWire(s, tier, units = 1) {
-  assert.ok(place(s, 'wetfloor', 2, 5).ok);
+  assert.ok(place(s, 'sprinkler', 2, 5).ok);
   assert.ok(wire(s, 2, 5, 1).ok);
   return stock(s, 2, 5, tier, units);
 }
@@ -553,7 +554,7 @@ test('changing how any wire is laid makes dads forget, and the wire in their way
   const s = stage();
   frontWire(s, 4, 6);
   // A second sign far off, whose wire is flipped while the dad stands at the first.
-  assert.ok(place(s, 'wetfloor', 20, 2).ok);
+  assert.ok(place(s, 'sprinkler', 20, 2).ok);
   assert.ok(wire(s, 20, 2, 0).ok);
   const gen = s.wireGen | 0;
   send(s, [{ k: 'dad', n: 1, gap: 1, at: 0 }]);
@@ -579,7 +580,7 @@ test('changing how any wire is laid makes dads forget, and the wire in their way
 
 test('a dad caught under a wire when it goes live climbs out and carries on; a pocket shut in by wire costs nothing to leave', () => {
   const s = stage();
-  assert.ok(place(s, 'wetfloor', 14, 5).ok);
+  assert.ok(place(s, 'sprinkler', 14, 5).ok);
   assert.ok(wire(s, 14, 5, 1).ok);
   const under = tilesAt([[14, 5], [14, 6], [14, 7], [14, 8]]);
   send(s, [{ k: 'dad', n: 1, gap: 1, at: 0 }]);
@@ -625,7 +626,9 @@ test('dadRoute traces the way a dad walks: the same tiles as a dad with the firs
   // Dads whose ids are a multiple of 4 break ties the same way.
   send(s, [{ k: 'dad', n: 16, gap: 0.6, at: 0 }]);
   const track = trackDads(s);
-  play(s, 120, () => track.tick());
+  // (The carriers are Pepper Sprinklers since 0.4.01, when the sign lost its Dumbwaiter: they fire,
+  // so the dads are kept from storming out half way.)
+  play(s, 120, () => { track.tick(); for (const m of s.shoppers) m.hp = m.mhp; });
   let compared = 0;
   for (const [id, path] of track.paths) {
     if (id % 4) continue;
@@ -635,7 +638,7 @@ test('dadRoute traces the way a dad walks: the same tiles as a dad with the firs
   assert.ok(compared >= 3, `${compared} dads compared`);
   // "If wired": the planned route of an unstocked layout is the live route of the same layout stocked.
   const p = stage();
-  for (const [x, y, d] of [[15, 3, 1], [15, 7, 1], [15, 11, 1], [6, 9, 2]]) { assert.ok(place(p, 'wetfloor', x, y).ok); assert.ok(wire(p, x, y, d).ok); }
+  for (const [x, y, d] of [[15, 3, 1], [15, 7, 1], [15, 11, 1], [6, 9, 2]]) { assert.ok(place(p, 'sprinkler', x, y).ok); assert.ok(wire(p, x, y, d).ok); }
   assert.deepEqual(dadRoute(p, at(0, 7)), dadRoute(plain, at(0, 7)), 'unstocked: dads walk straight');
   assert.deepEqual(dadRoute(p, at(0, 7), true), dadRoute(s, at(0, 7)), 'planned: as if stocked');
 });
@@ -649,7 +652,7 @@ test('no dad stalls or doubles back: a few hundred dads through random live wire
     const signs = [];
     for (let k = 0; k < 14; k++) {
       const x = 3 + rnd(24), y = 1 + rnd(14);
-      if (place(s, 'wetfloor', x, y).ok && wire(s, x, y, rnd(4)).ok) signs.push(s.grid[at(x, y)]);
+      if (place(s, 'sprinkler', x, y).ok && wire(s, x, y, rnd(4)).ok) signs.push(s.grid[at(x, y)]);
     }
     for (const b of signs) for (let u = 0; u < BACK.stockUnits; u++) addStock(b, itemCode(5, 4), s);
     const ver = s.gridVer;
@@ -694,7 +697,7 @@ test('no dad stalls or doubles back: a few hundred dads through random live wire
 test('a copy of the game made mid-run plays on identically; the checksum sees wd, r and rw', () => {
   const s = stage(11);
   carriers(s, [[15, 3, 1], [15, 7, 1], [15, 11, 1]], 2);
-  assert.ok(place(s, 'wetfloor', 20, 2).ok);
+  assert.ok(place(s, 'sprinkler', 20, 2).ok);
   assert.ok(wire(s, 20, 2, 0).ok);
   assert.ok(place(s, 'crate', 10, 3).ok);
   assert.ok(applyCommand(s, 0, { c: 'reinforce', x: 10, y: 3 }).ok);

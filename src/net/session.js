@@ -182,6 +182,8 @@ export function checksum(s) {
     // (Its wire's direction and a crate's reinforcement, 0.4: only where there are any.)
     if (b.wd !== undefined) { mix(0x5744); mix(b.wd); }
     if (b.r) { mix(0x5246); mix(b.r); mix(b.c); }
+    // (A Wet Floor Sign's cash upgrades, 0.4.01: only where there are some.)
+    if (b.u) { mix(0x5547); mix(b.u); mix(b.c); }
     // (Its stock from The Back, 0.4: every run's tier and uses, track by track in a fixed order.
     // Only on a stocked building, so an unstocked one sums as it did.)
     if (b.s) {

@@ -309,7 +309,7 @@ test('a stocked sprinkler stops shoppers a plain one lets through', () => {
   assert.equal(run({ dmg: [2, 1e6], spd: [2, 1e6], rng: [2, 1e6] }), 6, 'stocked for damage, speed and range it stops them all');
 });
 
-test('stocked samples hold shoppers longer and a stocked sign slows them more', () => {
+test('stocked samples hold shoppers longer and an upgraded sign slows them more', () => {
   const s = stage();
   place(s, 'samples', 5, 5);
   place(s, 'wetfloor', 6, 6);
@@ -319,7 +319,8 @@ test('stocked samples hold shoppers longer and a stocked sign slows them more', 
   assert.ok(statsOf(stand).secs > a.secs && statsOf(stand).range === a.range, 'Spite on samples: they hold longer');
   addStock(stand, itemCode(3, 1));
   assert.ok(statsOf(stand).range > a.range, 'Cord: they reach further');
-  addStock(sign, itemCode(1, 1));
+  // (A sign is upgraded with cash since 0.4.01, not stocked.)
+  assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 6, y: 6 }).ok);
   assert.ok(statsOf(sign).slow < b.slow && statsOf(sign).slip > b.slip && statsOf(sign).slipDmg > b.slipDmg);
 });
 

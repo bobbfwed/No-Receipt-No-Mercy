@@ -87,7 +87,8 @@ test('the numbers are the work package\'s', () => {
   for (const k of Object.keys(MACHINES)) assert.deepEqual([BUILD[k].cost, BUILD[k].back, BUILD[k].supply], [40, true, MACHINES[k]], k);
   assert.equal(BUILD.rebrand.cost, 15, 'a Rebrander (0.4 stage 7: was 50)');
   assert.ok(BUILD.lift.back && BUILD.lift.fixed, 'nobody buys or removes a Dumbwaiter');
-  const shots = { sprinkler: 20, forklift: 6, railgun: 2, wetfloor: 10, samples: 8, salesman: 8 };
+  // (The Wet Floor Sign lost its Dumbwaiter in 0.4.01: it is upgraded with cash.)
+  const shots = { sprinkler: 20, forklift: 6, railgun: 2, samples: 8, salesman: 8 };
   for (const k of Object.keys(BUILD)) assert.equal(!!BUILD[k].lift, k in shots, `${k} has Dumbwaiters`);
   for (const [k, n] of Object.entries(shots)) assert.equal(BUILD[k].shots, n, k);
 });
@@ -181,7 +182,7 @@ test('a chain from a Returns Drop through a Still and a Rebrander stocks a tower
 
 test('Dumbwaiters come and go with their building: 1 x 1, the Barcode Laser both ways round, the TV Salesman', () => {
   const s = stage();
-  const cases = [['sprinkler', 3, 2, 0], ['wetfloor', 5, 2, 0], ['railgun', 10, 2, E], ['railgun', 15, 1, S], ['salesman', 22, 2, 0]];
+  const cases = [['sprinkler', 3, 2, 0], ['samples', 5, 2, 0], ['railgun', 10, 2, E], ['railgun', 15, 1, S], ['salesman', 22, 2, 0]];
   for (const [k, x, y, d] of cases) {
     const v = s.backVer;
     placeOk(s, k, x, y, d);
@@ -218,7 +219,7 @@ test('a security building cannot go over a Back part (\'back\'); a crate can', (
   const s = stage();
   lay(s, 5, 5, 'conv', E);
   assert.equal(canPlace(s, 'sprinkler', 5, 5, 0), 'back');
-  assert.equal(canPlace(s, 'wetfloor', 5, 5, 0), 'back');
+  assert.equal(canPlace(s, 'wetfloor', 5, 5, 0), null, 'a sign has no Dumbwaiter since 0.4.01: it goes over anything, as a crate does');
   assert.equal(canPlace(s, 'salesman', 4, 4, 0), 'back', 'any tile of its footprint');
   assert.equal(canPlace(s, 'railgun', 5, 3, 0, S), 'back');
   assert.equal(canPlace(s, 'railgun', 5, 4, 0, E), null, 'one row up it misses');
@@ -227,7 +228,8 @@ test('a security building cannot go over a Back part (\'back\'); a crate can', (
 });
 
 test('stock gives a track exactly the level a tier stands for, and nothing else gives levels', () => {
-  for (const k of ['sprinkler', 'forklift', 'salesman', 'wetfloor', 'samples', 'railgun']) {
+  // (Not the Wet Floor Sign: it takes no stock since 0.4.01, its level is its cash upgrades.)
+  for (const k of ['sprinkler', 'forklift', 'salesman', 'samples', 'railgun']) {
     for (const t of ['dmg', 'spd', 'rng']) {
       if (!BUILD[k].up[t]) continue;
       for (const tier of [1, 2, 3, 4]) {
@@ -260,7 +262,7 @@ test('stock is never money: what was spent, selling back and the rebuild price i
   assert.equal(stockLevel(b, 'dmg'), 8);
   assert.deepEqual({ spent: spentOn(b), rebuild: rebuildDeal(b, Infinity).pay }, plain);
   assert.equal(plain.spent, BUILD.sprinkler.cost);
-  assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'dmg' }).why, 'bad', 'nothing is bought for a track any more');
+  assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'dmg' }).why, 'kind', 'nothing is bought for a sprinkler (only a Wet Floor Sign is upgraded with cash, 0.4.01)');
   const before = s.players[0].cash;
   assert.ok(applyCommand(s, 0, { c: 'remove', x: 5, y: 5 }).ok);
   assert.equal(s.players[0].cash, before + Math.floor(BUILD.sprinkler.cost * TUNE.sellBack), 'sold back for what was paid');
@@ -268,17 +270,19 @@ test('stock is never money: what was spent, selling back and the rebuild price i
 
 test('a Dumbwaiter takes only the tracks its building has (and wire once it has a direction), up to stockUnits units of each', () => {
   const s = stage();
-  placeOk(s, 'wetfloor', 5, 5);
+  placeOk(s, 'samples', 3, 5);
   placeOk(s, 'samples', 7, 5);
   placeOk(s, 'sprinkler', 9, 5);
-  const w = idx(s, 5, 5), sm = idx(s, 7, 5), sp = idx(s, 9, 5);
-  // (Type 4 was Duct Tape until 0.4.01: nobody takes it now.)
-  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, w, itemCode(t, 1), E)), [true, false, false, false, false], 'sign: damage; no wire without a direction');
+  const w = idx(s, 3, 5), sm = idx(s, 7, 5), sp = idx(s, 9, 5);
+  // (Type 4 was Duct Tape until 0.4.01: nobody takes it now. A Wet Floor Sign takes nothing: it has
+  // no Dumbwaiter since 0.4.01.)
+  assert.equal(placeOk(s, 'wetfloor', 5, 5) && s.back[idx(s, 5, 5)], 0);
+  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, w, itemCode(t, 1), E)), [true, false, true, false, false], 'samples: damage, range; no wire without a direction');
   assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sm, itemCode(t, 1), E)), [true, false, true, false, false], 'samples: no speed');
   assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sp, itemCode(t, 1), N)), [true, true, true, false, false], 'from any side');
   // Razor Wire (0.4, stage 7): only a building with a wire direction takes it, so a shared belt
   // does not fill every building with wire it cannot use. Clearing the direction keeps what it has.
-  for (const [i, x] of [[w, 5], [sm, 7], [sp, 9]]) {
+  for (const [i, x] of [[w, 3], [sm, 7], [sp, 9]]) {
     assert.ok(applyCommand(s, 0, { c: 'wire', x, y: 5, d: S }).ok);
     assert.ok(wants(s, i, itemCode(5, 1), E), `wire wanted at ${x},5 once it has a direction`);
   }
@@ -304,7 +308,7 @@ test('a Dumbwaiter takes only the tracks its building has (and wire once it has 
   }
   assert.equal(give(s, w, itemCode(4, 3), E), false);
   give(s, w, itemCode(5, 2), E);
-  assert.deepEqual(bld(s, 5, 5).s, { wire: [2, 6] });
+  assert.deepEqual(bld(s, 3, 5).s, { wire: [2, 6] });
   // Nothing standing above (a part of a big building points at its anchor): nothing wanted.
   assert.ok(!takesSupply(null, itemCode(1, 1)));
   assert.ok(!takesSupply({ k: 'crate', o: 0 }, itemCode(1, 1)));
@@ -362,7 +366,7 @@ test('a tower uses one use a shot, however many it hits, and is plain again when
   if (sprays >= BUILD.sprinkler.shots) assert.ok(outs.some((e) => e.i === si && e.t === 'spd'));
 });
 
-test('Free Samples, the TV Salesman and the Wet Floor Sign use one use for each shopper they act on', (t) => {
+test('Free Samples and the TV Salesman use one use for each shopper they act on; an upgraded sign uses nothing', (t) => {
   tune(t, { grabChance: 0 }); // (no thefts: only use is counted)
   // Samples: one use a stop.
   {
@@ -388,18 +392,19 @@ test('Free Samples, the TV Salesman and the Wet Floor Sign use one use for each 
     assert.ok(pitches >= 2, `${pitches} pitches`);
     assert.equal(usesIn(b, 'rng'), full - pitches);
   }
-  // The sign: one use for each shopper it slows, however long he is on it (a couple of seconds).
+  // The sign (0.4.01): upgraded with cash, it uses nothing up, however many it slows.
   {
     const s = stage(8);
     corridor(s, 'crate');
     const b = placeOk(s, 'wetfloor', 10, 7);
-    addStock(b, itemCode(1, 1));
+    assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 10, y: 7 }).ok);
     const crossed = new Set();
     wave(s, [{ k: 'hunter', n: 4, gap: 2, at: 0 }], 120, () => {
       for (const h of s.shoppers) if ((h.y | 0) * s.w + (h.x | 0) === idx(s, 10, 7)) crossed.add(h.id);
     });
     assert.ok(crossed.size >= 3, `${crossed.size} crossed it`);
-    assert.equal(usesIn(b, 'dmg'), BUILD.wetfloor.shots - crossed.size);
+    assert.equal(b.s, undefined);
+    assert.equal(b.u, 1, 'still upgraded');
   }
 });
 
@@ -509,13 +514,14 @@ test('the Rebuild button puts a wreck back over its Dumbwaiters; one that falls 
 
 test('an Unpaid Intern takes from a mixed belt only what the Dumbwaiter in front wants', () => {
   const s = stage();
-  const sign = placeOk(s, 'wetfloor', 8, 5);
+  // (Free Samples: damage and range, no speed. Until 0.4.01 this was a Wet Floor Sign.)
+  const sign = placeOk(s, 'samples', 8, 5);
   row(s, 3, 6, 5, E);
   lay(s, 7, 5, 'intern', E);
   at(s, 6, 5).it.push(itemCode(2, 1), 200, itemCode(1, 3), 100);
   run(s, 60);
-  assert.deepEqual(sign.s, { dmg: [3, BUILD.wetfloor.shots] }, 'the Bottled Spite went up');
-  assert.deepEqual(codesOn(at(s, 6, 5).it), [itemCode(2, 1)], 'the Rage Cola, which a sign has no use for, stays');
+  assert.deepEqual(sign.s, { dmg: [3, BUILD.samples.shots] }, 'the Bottled Spite went up');
+  assert.deepEqual(codesOn(at(s, 6, 5).it), [itemCode(2, 1)], 'the Rage Cola, which samples have no use for, stays');
   // A belt pointing straight into a Dumbwaiter feeds it too.
   const f = placeOk(s, 'forklift', 8, 9);
   row(s, 4, 7, 9, E);

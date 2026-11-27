@@ -108,9 +108,15 @@ export const BUILD = {
     reinforce: { cost: 88, grow: 1.6, max: 8 },
     desc: 'Fires a beam straight out of its front end, through walls and everything else, hitting every shopper in line. Slow to reload.',
   },
+  // (0.4.01, the owner: a sign should not need feeding from The Back.) No Dumbwaiter, no stock,
+  // no Razor Wire: it is upgraded with cash instead (the upgrade command). `upgrade`: level u + 1
+  // costs round(cost * grow ** u), times the cards that change its price, up to `max`; level[u] is
+  // the level every track in `up` works at (the scale of BACK.tierLevel: so a sign upgraded all the
+  // way is as good as one on Premium was, 6, not Platinum, 8; and it never runs out).
   wetfloor: {
-    name: 'Wet Floor Sign', cost: 30, group: 'security', blocks: false, lift: true, shots: 10,
+    name: 'Wet Floor Sign', cost: 30, group: 'security', blocks: false,
     up: { dmg: { slow: 0.82, slip: 0.08, mul: 1.45 } },
+    upgrade: { cost: 30, grow: 2, max: 4, level: [0, 2, 3, 5, 6] },
     reinforce: { cost: 10, grow: 1.6, max: 8 },
     desc: 'Slows shoppers who walk through. Dads ignore signs and sometimes slip.',
   },

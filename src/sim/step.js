@@ -1185,6 +1185,8 @@ function wreck(state, ti, s, ev, flatten = false) {
   // (0.4: a reinforced building comes back with its levels, which were paid for and are in `c`;
   // a wire's direction comes back if the wire command would allow it then: restoreWire.)
   if (b.r) r.r = b.r;
+  // (A Wet Floor Sign's cash upgrades, 0.4.01, likewise.)
+  if (b.u) r.u = b.u;
   if (b.wd !== undefined) { r.wd = b.wd; wireChanged(state); }
   state.rubble.push(r);
   // (Its stock went with it. Its Dumbwaiters stay under the rubble, wanting nothing: syncLifts

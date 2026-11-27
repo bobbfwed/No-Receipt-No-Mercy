@@ -35,7 +35,7 @@ function crates(s, y0, y1) { for (let y = y0; y <= y1; y++) assert.ok(place(s, '
 test('ordinary shoppers go round live wire and walk straight over planned wire; they never use it up', () => {
   const s = stage();
   // A Wet Floor Sign (blocks nobody) at (14, 5), wire south over (14, 5..8), across the way in.
-  assert.ok(place(s, 'wetfloor', 14, 5).ok);
+  assert.ok(place(s, 'sprinkler', 14, 5).ok);
   const plain = [...getDist(s)];
   assert.ok(wire(s, 14, 5, 1).ok);
   assert.deepEqual([...getDist(s)], plain, 'planned wire changes nothing for them');
@@ -73,24 +73,23 @@ test('the wire command is refused when the plan would shut ordinary shoppers off
 
 test('placing a building is refused when it would shut shoppers off once planned wire is counted', () => {
   const s = stage();
-  crates(s, 1, 10);
-  // A Wet Floor Sign at (12, 11), wired north over the crates: planned only, nobody stocks it.
-  assert.ok(place(s, 'wetfloor', 12, 11).ok);
-  assert.ok(wire(s, 12, 11, 3).ok);
-  assert.equal(wireLive(s.grid[at(12, 11)]), false);
-  // Rows 12 to 14 left open: two of them may be closed, not the third.
+  crates(s, 1, 11);
+  // A Pepper Sprinkler at (10, 13), wired east over (11..13, 13): planned only, nobody stocks it.
+  // Rows 12 to 14 of column 12 are open; the planned wire covers row 13's.
+  assert.ok(place(s, 'sprinkler', 10, 13).ok);
+  assert.ok(wire(s, 10, 13, 0).ok);
+  assert.equal(wireLive(s.grid[at(10, 13)]), false);
   assert.ok(place(s, 'crate', 12, 12).ok);
-  assert.ok(place(s, 'crate', 12, 13).ok);
-  assert.equal(canPlace(s, 'crate', 12, 14, 0), 'blocked', 'the sign\'s planned wire counts as a wall');
+  assert.equal(canPlace(s, 'crate', 12, 14, 0), 'blocked', 'the planned wire counts as a wall');
   assert.equal(place(s, 'crate', 12, 14).ok, false);
-  // Without its wire it would have been allowed (the sign itself blocks nobody).
-  assert.ok(wire(s, 12, 11, -1).ok);
+  // Without its wire it would have been allowed.
+  assert.ok(wire(s, 10, 13, -1).ok);
   assert.equal(canPlace(s, 'crate', 12, 14, 0), null);
 });
 
 test('a shopper standing where wire goes live walks off it and on to the tills', () => {
   const s = stage();
-  assert.ok(place(s, 'wetfloor', 14, 5).ok);
+  assert.ok(place(s, 'sprinkler', 14, 5).ok);
   assert.ok(wire(s, 14, 5, 1).ok);
   const covered = [5, 6, 7, 8].map((y) => at(14, y));
   send(s, [{ k: 'clipper', n: 1, gap: 1, at: 0 }]);
@@ -124,7 +123,7 @@ test('a long random run: nobody but a dad ever steps from open floor onto live w
     const posts = [];
     for (let n = 0; n < 14; n++) {
       const x = 2 + Math.floor(rnd() * 25), y = 1 + Math.floor(rnd() * 14);
-      const k = ['sprinkler', 'wetfloor', 'samples'][n % 3];
+      const k = ['sprinkler', 'forklift', 'samples'][n % 3];
       if (place(s, k, x, y).ok) posts.push([x, y]);
     }
     let refused = 0;

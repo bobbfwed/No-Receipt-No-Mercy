@@ -188,7 +188,11 @@ function think(s, pid, rnd, plan) {
   if (r < 0.36) { const a = anchors(s, () => true); return a.length ? [{ c: 'remove', ...xy(pick(rnd, a)) }] : []; }
   if (r < 0.40) { const a = anchors(s, (b) => BUILD[b.k].rot); return a.length ? [{ c: 'rotate', ...xy(pick(rnd, a)) }] : []; }
   if (r < 0.45) { const a = anchors(s, (b) => BUILD[b.k].lift); return a.length ? [{ c: 'wire', ...xy(pick(rnd, a)), d: Math.floor(rnd() * 5) - 1 }] : []; }
-  if (r < 0.48) { const a = anchors(s, (b) => b.k === 'crate'); return a.length ? [{ c: 'reinforce', ...xy(pick(rnd, a)) }] : []; }
+  if (r < 0.48) {
+    // (0.4.01) Reinforcing any building; a Wet Floor Sign's cash upgrades.
+    if (rnd() < 0.4) { const w = anchors(s, (b) => b.k === 'wetfloor'); return w.length ? [{ c: 'upgrade', ...xy(pick(rnd, w)) }] : []; }
+    const a = anchors(s, (b) => b.k === 'crate' || rnd() < 0.2); return a.length ? [{ c: 'reinforce', ...xy(pick(rnd, a)) }] : [];
+  }
   if (r < 0.51) return [{ c: 'rebuild', all: rnd() < 0.5 }];
   if (r < 0.62) {
     // Something in The Back next to what is there already (or anywhere).
@@ -236,6 +240,7 @@ function screen(session, renderer, rnd) {
   sim.canPlaceBack(s, pick(rnd, BACK), hover.x, hover.y, session.me, view.dir);
   sim.canWire(s, session.me, hover.x, hover.y, Math.floor(rnd() * 5) - 1);
   sim.canReinforce(s, session.me, hover.x, hover.y);
+  sim.canUpgrade(s, session.me, hover.x, hover.y);
   sim.wireTiles(s, hover.x, hover.y, Math.floor(rnd() * 4));
   sim.overpassDirs(s, i); sim.beltShape(s, i);
 }

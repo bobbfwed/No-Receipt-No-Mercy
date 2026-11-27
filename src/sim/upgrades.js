@@ -7,6 +7,8 @@
 // back.js): a stocked track works at the level its supply's tier stands for (BACK.tierLevel). Bought
 // upgrades are gone (0.4, the owner's decision: supplies replace them), so a building's worth in
 // money is only the price paid for it, and an unstocked building works at its plain numbers.
+// The Wet Floor Sign is the exception since 0.4.01 (the owner: it should not need feeding): it takes
+// no supplies, and is upgraded with cash instead, a few levels that never run out (upgradeCost).
 import { BUILD, TUNE, BACK } from './constants.js';
 // (cards.js imports from this file too. That is safe: neither uses the other while loading.)
 import { cardStats, priceMul } from './cards.js';
@@ -29,8 +31,31 @@ export function stockLevel(b, track) {
   return run && run.length ? BACK.tierLevel[run[0]] | 0 : 0;
 }
 
-/** The level one track works at: the level its stock gives (stockLevel). This is what statsOf reads. */
-export const levelIn = stockLevel;
+/**
+ * The level one track works at, which is what statsOf reads: for a kind upgraded with cash (0.4.01:
+ * BUILD[k].upgrade, the Wet Floor Sign) the level its upgrades give, `upgrade.level[b.u]`, on every
+ * track it has; for everything else the level its stock gives (stockLevel).
+ */
+export function levelIn(b, track) {
+  const up = b && BUILD[b.k] && BUILD[b.k].upgrade;
+  if (!up) return stockLevel(b, track);
+  return BUILD[b.k].up && BUILD[b.k].up[track] ? up.level[Math.min(up.max, b.u | 0)] | 0 : 0;
+}
+
+/**
+ * What the next cash upgrade costs for building b (the `upgrade` command, 0.4.01; only the Wet Floor
+ * Sign has BUILD[k].upgrade): round(cost * grow ** u), times the cards that change that kind's
+ * price (priceMul), whole dollars and never under one; 0 at the top level, or for anything that
+ * cannot be upgraded. Pass the game's state wherever there is one, so the cards count.
+ */
+export function upgradeCost(b, state = null) {
+  const up = b && BUILD[b.k] && BUILD[b.k].upgrade;
+  if (!up) return 0;
+  const u = b.u | 0;
+  if (u >= up.max) return 0;
+  const m = state ? priceMul(state, b.k) : 1;
+  return Math.max(1, Math.round(up.cost * up.grow ** u * m));
+}
 
 /** A building's overall level, for the badge: 1 plus the level every track works at. */
 export function levelOf(b) {
@@ -41,7 +66,7 @@ export function levelOf(b) {
 
 /**
  * What was spent on a building: what was paid for it (`c`, where that differs from its kind's
- * price: a card changed the price, or the building was reinforced, 0.4). Selling back and
+ * price: a card changed the price, or the building was reinforced, 0.4, or upgraded, 0.4.01). Selling back and
  * rebuilding are shares of this. Stock is never money.
  */
 export const spentOn = (b) => b.c ?? BUILD[b.k].cost;

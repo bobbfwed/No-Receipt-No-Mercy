@@ -8,8 +8,8 @@ export { applyCommand, canPlace, canPutBack } from './commands.js';
 // Razor Wire and dads (0.4): what a building's wire covers (for any direction, to draw a preview),
 // whether it is live, where all wire is, and the wire command's check. Reinforcing Crate Stacks.
 export { wireTiles, wireCovers, wireLive, wireMap, carriesWire } from './wire.js';
-export { canWire, canReinforce } from './commands.js';
-export { reinforceCost } from './upgrades.js';
+export { canWire, canReinforce, canUpgrade } from './commands.js';
+export { reinforceCost, upgradeCost } from './upgrades.js';
 export { step, waveSpec, beginWave, queueTrainingWave, setTrainingCash, patienceGrowth, patienceFor, patienceScaleAt, crowdShiftAt, babyPace, walkPace, edgeMul, kidFirst, bossTier, bossTitle, bossPatience, pitchStop, surgeHpAt, surgeCrowdAt } from './step.js';
 // Money (0.4): what beating a sales event pays, and the speed bonus on top.
 export { eventPay, storePay, payHeads, speedPar, speedBonus } from './step.js';
