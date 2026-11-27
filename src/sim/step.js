@@ -2,13 +2,13 @@
 // which lets every player's browser predict the game between updates from the host.
 import { DIRS, BUILD, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless, releaseOrder, releaseAllOrders, footprint } from './state.js';
-import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, NORMAL, DAD, SMASH, GHOST, UNREACHABLE } from './path.js';
+import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, dadDecide, NORMAL, DAD, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { stepRebuilds } from './commands.js';
 import { stepBack, useWork, useStock, usesIn, syncLifts, stealStock } from './back.js';
-import { wireMap, useWire } from './wire.js';
+import { wireMap, useWire, wireChanged } from './wire.js';
 import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardPay, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardGrabChance, cardGrabHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
@@ -1149,7 +1149,7 @@ function wreck(state, ti, s, ev, flatten = false) {
   // (0.4: a reinforced Crate Stack comes back with its levels, which were paid for and are in `c`;
   // a wire's direction comes back if the wire command would allow it then: restoreWire.)
   if (b.r) r.r = b.r;
-  if (b.wd !== undefined) r.wd = b.wd;
+  if (b.wd !== undefined) { r.wd = b.wd; wireChanged(state); }
   state.rubble.push(r);
   // (Its stock went with it. Its Dumbwaiters stay under the rubble, wanting nothing: syncLifts
   // leaves them where they are, so nothing changes in The Back.)
@@ -1612,46 +1612,57 @@ function stepShoppers(state, fields, sec, ev) {
       // Trailing an Exhibitionist (the eyesup card), close enough behind her that his next step
       // would take him past her: he waits.
       going = false;
+    } else if (routeOf(s, state) === DAD) {
+      // A dad (0.4): he walks into Razor Wire before he goes round it (dadMove).
+      const to = dadMove(state, s, i, fields, ev);
+      going = to !== i && moveTo(s.x, s.y, (to % W) + 0.5 + s.ox, ((to / W) | 0) + 0.5 + s.oy, speed);
     } else {
-      let field = fields[routeOf(s, state)];
-      // A dad on a tile his map has no way on from (live Razor Wire went up under him, or round
-      // him) is not trapped: he climbs out the way he was going, by the walls-only map (0.4).
-      if (field === fields[DAD] && field[i] === UNREACHABLE) field = fields[GHOST];
-      going = moveAlong(state, field, s.x, s.y, s.ox, s.oy, speed, s.id);
+      going = moveAlong(state, fields[routeOf(s, state)], s.x, s.y, s.ox, s.oy, speed, s.id);
     }
     if (going) {
       s.vx = MV.vx;
       s.vy = MV.vy;
       s.x += MV.vx;
       s.y += MV.vy;
-      if (def.dad) dadStep(state, s, i, fields, ev);
     }
   }
 }
 
 /**
- * Razor Wire's use (0.4): each time a dad comes onto a new tile, the step he would take next by the
- * walls-only map (GHOST: the way he would go if there were no wire at all) is looked at. If that
- * tile is under live wire, a wire has turned him away: the building whose live wire covers it (the
- * lowest anchor, if several) uses one unit's worth of a use (useWire), unless it is the one that
- * last turned him (`s.rw`), so walking along one wire costs it once. Not while he is climbing out
- * from under a wire himself: that wire did not turn him away. Sends turned {i, x, y} (i the
- * wire's building) for each use.
- * @param {number} from the tile he was on before this tick's step
+ * Where a dad on tile i heads next, and what Razor Wire he runs into on the way (0.4; the rule is
+ * dadDecide in path.js). Dads are dumb: a dad heads the way he would with no wire at all, bumps into
+ * live wire, is turned away there, which is when the wire is charged, and only then goes round,
+ * testing each stretch of fence he walks along. Every wire charges him one use at most: `s.rw`
+ * lists the anchors of the buildings that have, and `s.dm` is 1 while he is going round. When any
+ * wire has been laid differently since he last looked (state.wireGen, his `s.wg`), he forgets both
+ * and may pay again. A charge is useWire (the last use drops the wire to planned, sends `stockOut`
+ * and moves gridVer on). Sends turned {i, t, x, y, id} for a bump (with free: 1 when that wire had
+ * already charged him) and for each fence he pays while going round: i the wire's building, t the
+ * tile of wire, (x, y) its middle, id the dad.
+ * @returns {number} the tile he heads for (i: he stays where he is)
  */
-function dadStep(state, s, from, fields, ev) {
-  const W = state.w, j = (s.y | 0) * W + (s.x | 0);
-  if (j === from) return;
+function dadMove(state, s, i, fields, ev) {
+  const gen = state.wireGen | 0;
+  if ((s.wg | 0) !== gen) { s.wg = gen; delete s.rw; delete s.dm; }
+  // (The wire as it is now: one may have run out earlier this tick. The maps are the tick's.)
   const live = wireMap(state).live;
-  if (live[j] >= 0) return;
-  const next = nextTile(state, fields[GHOST], j, s.id);
-  const ai = next === j ? -1 : live[next];
-  if (ai < 0) return;
-  if (s.rw !== ai) {
-    useWire(state, ai, ev);
-    ev.push({ e: 'turned', i: ai, x: s.x, y: s.y });
+  const d = dadDecide(state, i, s.dm, fields[DAD], fields[GHOST], live, s.id);
+  const next = d.next, hit = d.bump >= 0 ? d.bump : d.test, bumped = d.bump >= 0;
+  if (d.dm) s.dm = 1; else if (s.dm !== undefined) delete s.dm;
+  if (hit >= 0 && live[hit] >= 0) {
+    const ai = live[hit], W = state.w;
+    const paid = !(s.rw && s.rw.includes(ai));
+    if (paid || bumped) {
+      const e = { e: 'turned', i: ai, t: hit, x: (hit % W) + 0.5, y: ((hit / W) | 0) + 0.5, id: s.id };
+      if (!paid) e.free = 1;
+      ev.push(e);
+    }
+    if (paid) {
+      (s.rw || (s.rw = [])).push(ai);
+      useWire(state, ai, ev);
+    }
   }
-  s.rw = ai;
+  return next;
 }
 
 /**

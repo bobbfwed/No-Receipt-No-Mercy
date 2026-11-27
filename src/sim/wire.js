@@ -109,6 +109,17 @@ export function planWith(state, was, now) {
 }
 
 /**
+ * Some building's wire has been laid differently: a `wire` command changed a direction, or a
+ * building with wire was removed, wrecked or rebuilt with it. state.wireGen (absent reads as 0)
+ * goes up, and every dad forgets which wires have charged him and that he was going round (dadMove
+ * in step.js): flipping wire about to stall dads costs wire each time, and a wire built where an
+ * old one stood cannot be skipped because the old one charged him.
+ */
+export function wireChanged(state) {
+  state.wireGen = (state.wireGen | 0) + 1;
+}
+
+/**
  * A dad has been turned away by the live wire of the building on anchor ai (see the use rule in
  * step.js): one use of its Razor Wire. Spending the last use makes the wire planned again: gridVer
  * moves on so the dads' map is worked out again, and useStock sends `stockOut` with track 'wire'.

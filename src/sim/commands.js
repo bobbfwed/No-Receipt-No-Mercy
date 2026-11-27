@@ -8,7 +8,7 @@ import { spentOn, rebuildDeal, reinforceCost } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, cardStock, boozeRoll } from './cards.js';
 import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode } from './back.js';
-import { carriesWire, wireCovers, buildingTiles, planWith, wireLive } from './wire.js';
+import { carriesWire, wireCovers, buildingTiles, planWith, wireLive, wireChanged } from './wire.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
 const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp', 'wire', 'reinforce']);
@@ -204,6 +204,7 @@ function restoreWire(state, ai, wd) {
   if (dadPlanCheck(state, planWith(state, [], wireCovers(state, buildingTiles(state, ai, b), wd)))) return;
   b.wd = wd;
   state.gridVer++;
+  wireChanged(state);
 }
 
 /** Takes a building off the grid, all of its tiles, and its Dumbwaiters with it. Returns it. */
@@ -541,6 +542,7 @@ function setWire(state, pid, cmd, ev) {
   if (cmd.d < 0 ? b.wd === undefined : b.wd === cmd.d) return { ok: true };
   if (cmd.d < 0) delete b.wd; else b.wd = cmd.d;
   state.gridVer++;
+  wireChanged(state);
   ev.push({ e: 'wire', x: ai % state.w, y: (ai / state.w) | 0, d: cmd.d, by: pid, live: wireLive(b) ? 1 : 0 });
   return { ok: true };
 }
@@ -686,6 +688,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       const ai = anchorOf(state, idxOf(state, cmd.x, cmd.y));
       if (!state.grid[ai]) return { ok: false, why: 'empty' };
       const b = lift(state, ai);
+      // (Its wire went with it: dads forget what they knew of the wire, 0.4.)
+      if (b.wd !== undefined) wireChanged(state);
       const back = Math.floor(spentOn(b) * TUNE.sellBack);
       (state.players[b.o] || player).cash += back;
       bump(state, pid, 'sold');
@@ -711,7 +715,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
         if (moved && dadPlanCheck(state, planWith(state, was, now))) return { ok: false, why: 'blocked' };
       }
       b.d = d;
-      if (moved) state.gridVer++;
+      if (moved) { state.gridVer++; wireChanged(state); }
       return { ok: true };
     }
     case 'wire':

@@ -3,7 +3,7 @@ export * from './constants.js';
 export { createGame, STATE_VERSION, rand, addPlayer, setPlayerOnline, setMap, setSettings, cleanSettings, cardsOn, difficultyOf, isEndless, idxOf, inBounds, teamCash, heldFor, shareCount, doorOf, footprint, anchorOf, tilesOf, sizeOf, centreOf } from './state.js';
 export { MAP_SIZES, MAP_DESIGNS, DECOR, makeMap, mapSize, recommendedSize } from './maps.js';
 export { tracksOf, levelIn, stockLevel, levelOf, spentOn, statsOf, rebuildDeal } from './upgrades.js';
-export { getDist, getDadDist, getDadPlanDist, getField, getFieldTo, modeOf, routeOf, smashReady, computeDist, tillBanks, banksOpen, walkable, UNREACHABLE, NORMAL, DAD, SMASH, GHOST, DADPLAN } from './path.js';
+export { getDist, getDadDist, getDadPlanDist, dadRoute, dadDecide, getField, getFieldTo, modeOf, routeOf, smashReady, computeDist, tillBanks, banksOpen, walkable, UNREACHABLE, NORMAL, DAD, SMASH, GHOST, DADPLAN } from './path.js';
 export { applyCommand, canPlace, canPutBack } from './commands.js';
 // Razor Wire and dads (0.4): what a building's wire covers (for any direction, to draw a preview),
 // whether it is live, where all wire is, and the wire command's check. Reinforcing Crate Stacks.

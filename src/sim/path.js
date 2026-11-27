@@ -230,6 +230,98 @@ export function getBackField(state) {
   return hit.back.f;
 }
 
+/**
+ * The tile a shopper on tile i steps to next on a distance map: the neighbour with the smallest
+ * number, i itself if none is smaller. Neighbours are tried in DIRS order starting at `id & 3`, so
+ * a crowd spreads out over equal ways (step.js has the same walk for everyone else); id 0 is the
+ * fixed tie-break of the dad route traces (dadRoute).
+ */
+export function nextOn(state, field, i, id = 0) {
+  const W = state.w, H = state.h, x = i % W, y = (i / W) | 0;
+  let best = i, bd = field[i];
+  for (let k = 0; k < 4; k++) {
+    const dir = DIRS[(k + id) & 3], nx = x + dir[0], ny = y + dir[1];
+    if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+    const ni = ny * W + nx;
+    if (field[ni] < bd) { bd = field[ni]; best = ni; }
+  }
+  return best;
+}
+
+/** dadDecide's answer, reused so that a dad's step makes no garbage. */
+const DD = { next: -1, bump: -1, test: -1, dm: 0 };
+
+/**
+ * Which way a dad goes from tile t (0.4: dads are dumb, they walk into the wire). `dad` is his map
+ * with the wire that counts (the DAD map, or DADPLAN for "if every wire were stocked"), `ghost` the
+ * walls-only map, `wire` that wire per tile (live anchors with -1 for none, or planned counts with
+ * 0), `dm` whether he is already going round. He is obstructed when dad(t) > ghost(t): wire makes
+ * his way longer.
+ *   0. No way to a till from t on his map (under wire, or shut in by it): he climbs out by the
+ *      walls-only map; nothing else changes.
+ *   1. Not obstructed: a step by his map, and he is no longer going round.
+ *   2. Obstructed, not yet going round: g, his next walls-only step. If g is not under wire he
+ *      steps to it (he walks on toward where his straight way is blocked). If it is, he bumps into
+ *      the wire there (`bump` is g), is going round from now on, and steps by his map instead.
+ *   3. Obstructed and going round: if g is under wire he tests that stretch of fence (`test` is g),
+ *      then steps by his map.
+ * Each step makes progress: walking toward the wire the walls-only distance falls, going round and
+ * walking free his own distance falls, and once free he never becomes obstructed again on the same
+ * layout. Returns DD: { next, bump, test (tiles or -1), dm (0 or 1) }.
+ */
+export function dadDecide(state, t, dm, dad, ghost, wire, id = 0) {
+  const none = wire instanceof Int32Array ? -1 : 0;
+  DD.bump = -1;
+  DD.test = -1;
+  DD.dm = dm ? 1 : 0;
+  if (dad[t] === UNREACHABLE) { DD.next = nextOn(state, ghost, t, id); return DD; }
+  if (dad[t] <= ghost[t]) { DD.dm = 0; DD.next = nextOn(state, dad, t, id); return DD; }
+  const g = nextOn(state, ghost, t, id);
+  const fenced = g !== t && wire[g] !== none;
+  if (!dm) {
+    if (!fenced) { DD.next = g; return DD; }
+    DD.bump = g;
+    DD.dm = 1;
+  } else if (fenced) DD.test = g;
+  DD.next = nextOn(state, dad, t, id);
+  return DD;
+}
+
+const routes = new WeakMap();
+
+/**
+ * The tiles a dad who walks in at tile `from` would walk, to a till, under the dads' rule
+ * (dadDecide), with the fixed tie-break (the first choice in DIRS order: what a dad whose id is a
+ * multiple of 4 does). `planned` false: with the live wire, as dads walk now; true: as if every
+ * planned wire were stocked. The wire is not used up along the way. For the interface's two dad
+ * routes. Cached against the layout (gridVer); the result is shared: do not change it.
+ * @returns {number[]} tile indexes, `from` first
+ */
+export function dadRoute(state, from, planned = false) {
+  let hit = routes.get(state);
+  if (!hit || hit.ver !== state.gridVer) {
+    hit = { ver: state.gridVer, live: new Map(), plan: new Map() };
+    routes.set(state, hit);
+  }
+  const memo = planned ? hit.plan : hit.live;
+  let out = memo.get(from);
+  if (out) return out;
+  const dad = getField(state, planned ? DADPLAN : DAD), ghost = getField(state, GHOST);
+  const wire = planned ? wireMap(state).plan : wireMap(state).live;
+  out = [from];
+  let t = from, dm = 0;
+  // (Each step makes progress, so a route is never longer than the floor; the guard is a belt and braces.)
+  for (let n = 0; n < state.tiles.length && state.tiles[t] !== 'T'; n++) {
+    const d = dadDecide(state, t, dm, dad, ghost, wire, 0);
+    dm = d.dm;
+    if (d.next === t) break;
+    t = d.next;
+    out.push(t);
+  }
+  memo.set(from, out);
+  return out;
+}
+
 /** The map most shoppers walk by. */
 export const getDist = (state) => getField(state, NORMAL);
 /** The map dads walk by: only walls and live Razor Wire block it (0.4; see DAD at the top). */
