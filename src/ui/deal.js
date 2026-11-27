@@ -10,7 +10,16 @@
 // drifts. Each side lands with its own effect and sound (bad: a red flash, a shake and cracks;
 // good: a burst of gold coins; odd: a wobble and a purple swirl). With reduced motion the cards
 // fade in and slide without spinning, shaking or wobbling.
+//
+// The next card (0.4.01, the owner): a click or tap on the card being shown asks for the next one
+// (the nextCard command). It comes once every connected store player has asked, never sooner than a
+// second after the card appeared (the rules decide); on the last card the same click ends the deal.
+// The line under the table says how, that this player's click counted, and with friends who is still
+// being waited for. Skip still skips the whole deal.
 import { cardsShown } from '../sim/index.js';
+// (cardWaiting arrives with the rules of 0.4.01: until it does, the count is worked out here.)
+import * as cardRules from '../sim/cards.js';
+import { isTouch } from '../content/touch.js';
 import { h, setText, setClass } from './dom.js';
 import { cardEl } from './hand.js';
 import { dealView, slotsFilled, faceOf, FLY, SLIDE } from './cardart.js';
@@ -60,8 +69,29 @@ export function createDeal(session, { strip, playSound = () => {} }) {
       session.send({ c: 'skipCards', on: !(me && me.skip) });
     },
   }, 'Skip');
+  const next = h('p', { class: 'deal-next', 'aria-live': 'polite' });
   const el = h('section', { class: 'deal hidden', role: 'dialog', 'aria-label': 'The deal of the cards' },
-    flash, h('div', { class: 'deal-top', 'aria-live': 'polite' }, head, sub), table, h('div', { class: 'deal-foot' }, skip, count));
+    flash, h('div', { class: 'deal-top', 'aria-live': 'polite' }, head, sub), table, next, h('div', { class: 'deal-foot' }, skip, count));
+
+  /** The card on show, as the rules count it (its index), or -1 when none is. */
+  const onShow = (s) => (s && s.phase === 'cards' ? cardsShown(s) - 1 : -1);
+  /** Whether this player has already asked for the card after card n. */
+  const asked = (s, n) => ((s.players[session.me]?.nx | 0) > n);
+  // A click or tap on the card in the middle asks for the next one (once per card).
+  table.addEventListener('click', (e) => {
+    const s = session.state;
+    const n = onShow(s);
+    const b = live.get(n);
+    if (n < 0 || !b || b.leaving || !b.el.contains(e.target) || asked(s, n)) return;
+    const me = s.players[session.me];
+    if (!me || me.side === 'office') return;
+    playSound('click');
+    session.send({ c: 'nextCard', n });
+    // (Shown at once; a joined player's copy of the state hears of it with the host's next update.)
+    clickedLocal = n;
+  });
+  let clickedLocal = -1;
+  const tapWord = isTouch() ? 'Tap' : 'Click';
 
   // (A game screen torn down mid-deal, by a host hand-over, may have left this on the page.)
   document.body.classList.remove('dealing');
@@ -192,8 +222,26 @@ export function createDeal(session, { strip, playSound = () => {} }) {
       const c = v.centre >= 0 ? faceOf(v.cards[v.centre].id) : null;
       setText(sub, c ? `Card ${v.centre + 1} of ${v.cards.length}. ${SIDE_SUB[c.side]}` : `${v.cards.length} cards. Two to screw you, two to help, one nobody asked for.`);
     }
-    // Skip: everyone connected has to want it (one press, solo).
+    // The next card: how, that this player's click counted, and who is still being waited for.
     const store = s.players.filter((p) => p.on && p.side !== 'office');
+    const cur = onShow(s);
+    const me0 = s.players[session.me];
+    const showing = cur >= 0 && v.centre === cur && !v.done && me0 && me0.side !== 'office';
+    const mine = showing && (asked(s, cur) || clickedLocal === cur);
+    for (const [i, b] of live) setClass(b.el, 'is-asked', mine && i === cur);
+    for (const [i, b] of live) setClass(b.el, 'is-next', showing && !mine && i === cur);
+    if (!showing) setText(next, '');
+    else if (!mine) setText(next, cur + 1 < v.cards.length ? `${tapWord} the card for the next one.` : `${tapWord} the card to get on with it.`);
+    else {
+      // (cardWaiting from the rules where it is there; the same count from the players otherwise.)
+      const waiting = store.filter((p) => (p.nx | 0) <= cur && p !== me0);
+      const left = typeof cardRules.cardWaiting === 'function' ? cardRules.cardWaiting(s) : waiting.length + (asked(s, cur) ? 0 : 1);
+      const names = waiting.map((p) => p.name);
+      setText(next, store.length < 2 || left <= 0 || !names.length
+        ? (cur + 1 < v.cards.length ? 'Got it. Next one coming.' : 'Got it. Wrapping up.')
+        : `Got it. Waiting for ${names.length > 2 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more` : names.join(' and ')}.`);
+    }
+    // Skip: everyone connected has to want it (one press, solo).
     const want = store.filter((p) => p.skip).length;
     const me = s.players[session.me];
     setText(skip, me && me.skip ? (store.length > 1 ? 'Waiting... (cancel)' : 'Skipping') : v.done ? 'Get on with it' : 'Skip');

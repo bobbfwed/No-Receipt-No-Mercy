@@ -3571,3 +3571,12 @@ html, body { overscroll-behavior: none; }
   .chat, .game.has-minimap .chat { bottom: calc(9.8rem + var(--lift)); }
   .rebuild-pop, .has-minimap .rebuild-pop { bottom: calc(9.8rem + var(--lift)); }
 }
+
+/* ==== 0.4.01, input and deal (the INPUT side's rules; nothing above is changed by them) ==== */
+/* The card being shown asks to be clicked for the next one; once this player has, it says so. */
+.deal-card.is-next .tcard { cursor: pointer; }
+.deal-card.is-next:hover .tcard { outline: 3px solid rgba(250, 204, 21, 0.85); outline-offset: 4px; }
+.deal-card.is-asked .tcard { outline: 3px solid #22c55e; outline-offset: 4px; }
+.deal-next { position: relative; z-index: 1; margin: 0 0 0.5rem; min-height: 1.3em; font-weight: 800; color: #fde68a; text-align: center; }
+.deal-next:empty { visibility: hidden; }
+/* ==== end of 0.4.01 input and deal ==== */
