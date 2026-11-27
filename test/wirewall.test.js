@@ -130,7 +130,7 @@ test('a long random run: nobody but a dad ever steps from open floor onto live w
     for (const [x, y] of posts) if (!wire(s, x, y, Math.floor(rnd() * 4)).ok) refused++;
     send(s, [{ k: 'clipper', n: 14, gap: 0.5, at: 0 }, { k: 'karen', n: 5, gap: 1, at: 0.3 }, { k: 'gymbro', n: 3, gap: 2, at: 1 },
       { k: 'dad', n: 6, gap: 1, at: 0.6 }, { k: 'teen', n: 5, gap: 1, at: 0.8 }]);
-    let checked = 0;
+    let checked = 0, crated = 0;
     for (let n = 0; n < 150 * TICK_HZ && s.phase === 'wave'; n++) {
       // Now and then a wire goes live, is cleared or turned (the command checks the plan), or runs dry.
       if (n % 37 === 0 && posts.length) {
@@ -140,6 +140,13 @@ test('a long random run: nobody but a dad ever steps from open floor onto live w
         if (b && roll < 0.5) addStock(b, itemCode(5, 1), s);
         else if (b && roll < 0.8) wire(s, x, y, Math.floor(rnd() * 5) - 1);
         else if (b && b.s && b.s.wire) { delete b.s.wire; if (!Object.keys(b.s).length) delete b.s; s.gridVer++; }
+      }
+      // And now and then a crate on a tile under planned wire, shoppers or no shoppers about: the
+      // checks must never let one shut anybody in (a review case, below).
+      if (n % 23 === 0) {
+        const plan = wireMap(s).plan, open = [];
+        for (let t = 0; t < plan.length; t++) if (plan[t] && !s.grid[t] && s.tiles[t] === '.') open.push(t);
+        if (open.length) { const t = open[Math.floor(rnd() * open.length)]; if (place(s, 'crate', t % 30, (t / 30) | 0).ok) crated++; }
       }
       const live = wireMap(s).live, dist = getDist(s);
       const was = new Map(s.shoppers.map((m) => [m, at(m.x | 0, m.y | 0)]));
@@ -155,6 +162,37 @@ test('a long random run: nobody but a dad ever steps from open floor onto live w
       }
       for (const door of s.doors) for (const t of door) assert.notEqual(getDist(s)[t], UNREACHABLE, `seed ${seed}: an entrance is shut off`);
     }
-    assert.ok(checked > 200, `seed ${seed}: ${checked} steps checked (${refused} wires refused)`);
+    assert.ok(checked > 200, `seed ${seed}: ${checked} steps checked (${refused} wires refused, ${crated} crates on planned wire)`);
+    assert.ok(crated > 0, `seed ${seed}: some crates went onto planned wire`);
+    // Every sales event ends: nobody is left in the store for ever.
+    for (let n = 0; n < 400 * TICK_HZ && s.phase === 'wave'; n++) { for (const m of s.shoppers) m.hp = Math.min(m.hp, 1); step(s); }
+    assert.equal(s.phase, 'build', `seed ${seed}: the event ended`);
   }
+});
+
+test('a review case: crates on the planned wire at both ends of a tunnel cannot shut a shopper in it', () => {
+  const s = stage();
+  // A wall down column 14 with gaps at rows 7 (a tunnel) and 13 (the long way round); the tunnel along
+  // row 7 from x 10 to 18, walled by crates on rows 6 and 8, with a sprinkler at each end wired south
+  // over the tunnel's ends, unstocked.
+  for (let y = 1; y <= 14; y++) if (y !== 7 && y !== 13) assert.ok(place(s, 'crate', 14, y).ok);
+  for (let x = 11; x <= 17; x++) if (x !== 14) { assert.ok(place(s, 'crate', x, 6).ok); assert.ok(place(s, 'crate', x, 8).ok); }
+  assert.ok(place(s, 'sprinkler', 10, 6).ok);
+  assert.ok(place(s, 'sprinkler', 18, 6).ok);
+  assert.ok(place(s, 'crate', 10, 8).ok);
+  assert.ok(place(s, 'crate', 18, 8).ok);
+  assert.ok(wire(s, 10, 6, 1).ok);
+  assert.ok(wire(s, 18, 6, 1).ok);
+  send(s, [{ k: 'clipper', n: 12, gap: 0.6, at: 0 }]);
+  let victim = null;
+  for (let n = 0; n < 60 * TICK_HZ && !victim; n++) {
+    step(s);
+    victim = s.shoppers.find((m) => m.st !== ST.LEAVE && (m.y | 0) === 7 && (m.x | 0) >= 12 && (m.x | 0) <= 16) || null;
+  }
+  assert.ok(victim, 'a shopper in the tunnel');
+  // One end may be closed (the other is still a way out); not both.
+  assert.ok(place(s, 'crate', 18, 7).ok);
+  assert.deepEqual(place(s, 'crate', 10, 7), { ok: false, why: 'blocked' });
+  for (let n = 0; n < 300 * TICK_HZ && s.phase === 'wave'; n++) step(s);
+  assert.equal(s.phase, 'build', 'the event ended: nobody was shut in');
 });

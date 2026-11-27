@@ -6,7 +6,9 @@
 // tiles and a strip BACK.wireReach tiles long beyond its edge that way, as wide as that side of
 // the building, each line of the strip stopping at the first wall and at the edge of the map. The
 // wire is live while the building holds any Razor Wire (`b.s.wire`) and planned otherwise. Live
-// wire stops dads on every tile it covers, open floor included; nobody else notices it.
+// wire stops dads on every tile it covers, open floor included. Since 0.4.01 it is a wall to every
+// other shopper too but runaway children (path.js, NORMAL and SMASH): they see it and go round, so
+// only dads, who walk into it, use it up.
 //
 // Which tiles are under wire is worked out from the layout and cached against state.gridVer, like
 // the path maps, never stored in the state. So everything that changes it moves gridVer on: the

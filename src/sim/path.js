@@ -166,7 +166,9 @@ export function dadPlanCheck(state, plan) {
  * planWith) and `extraBlocked` as for computeDist (a building being tested), does every entrance,
  * open or shut, keep a way to the tills, every bank of tills a way to the others, and every shopper
  * in the store who has a way out now keep one? (A dad is left out: he walks by his own map. A
- * shopper standing on planned wire is left out: if it goes live under him he walks off it.)
+ * shopper standing on planned wire is left out of that: if it goes live under him he walks off it.)
+ * And with a building being tested (extraBlocked), every shopper who has a way on FREE now, on
+ * planned wire or not, must keep one there: FREE is how anyone caught by wire gets out.
  * Live wire is always part of planned wire, so passing this means stock arriving later can never
  * close the last way through.
  * @returns {string|null} null if it does; 'blocked' (an entrance or a shopper cut off) or 'bank'
@@ -176,11 +178,22 @@ export function shopPlanCheck(state, plan = wireMap(state).plan, extraBlocked = 
   const dist = flood(state, (i) => tiles[i] === 'T', extraBlocked, PLAN, null, plan);
   for (const door of state.doors) for (const t of door) if (dist[t] === UNREACHABLE) return 'blocked';
   if (!banksJoined(state, extraBlocked, PLAN, null, plan)) return 'bank';
-  let before = null;
+  let before = null, free = null, freeNow = null;
   const W = state.w;
   for (const s of state.shoppers) {
     if (s.st === ST.LEAVE || modeOf(s.k) === DAD) continue;
     const t = ((s.y | 0) * W) + (s.x | 0);
+    // A building being tested must also leave him a way on FREE (walls and buildings, no wire):
+    // that is his way out if wire goes live round him, so it may never be closed. Without this, a
+    // shopper in a pocket whose only ways out are planned wire could be shut in for good by crates
+    // put down on those very tiles, which change nothing on PLAN. (Wire never changes FREE.)
+    if (extraBlocked !== -1) {
+      freeNow ||= getField(state, FREE);
+      if (freeNow[t] !== UNREACHABLE) {
+        free ||= flood(state, (i) => tiles[i] === 'T', extraBlocked, FREE);
+        if (free[t] === UNREACHABLE) return 'blocked';
+      }
+    }
     if (dist[t] !== UNREACHABLE || plan[t]) continue;
     // (Only one this change would shut in: one already without a way out on the planned map, who
     // came in over wire that is not stocked yet, is not this change's doing.)
