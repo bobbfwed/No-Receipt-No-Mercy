@@ -451,6 +451,34 @@ test('a wreck\'s Dumbwaiters stay under the rubble, wanting nothing, until it is
   assert.equal(s.rubble.filter((r) => r.k === 'sprinkler').length, 0);
 });
 
+test('a security building starts empty: placed new in a real game, or rebuilt by the Rebuild button (0.4.01, the owner)', () => {
+  // A game from the menu, with a dealt hand (the mallcop card is the one thing that stocks a new
+  // building, on purpose; a hand with it is left out here).
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const s = createGame({ seed, cards: true, map: { design: 'warehouse', size: 'm' } });
+    if (s.cards.includes('mallcop')) continue;
+    addPlayer(s, 'Dave');
+    s.players[0].cash = 1e6;
+    s.phase = 'build';
+    delete s.dealT;
+    let first = -1;
+    for (const k of ['sprinkler', 'forklift', 'wetfloor', 'samples', 'salesman', 'railgun']) {
+      const i = s.grid.findIndex((_, t) => t > s.w * 3 && canPlace(s, k, t % s.w, (t / s.w) | 0, 0, 1) === null);
+      assert.ok(place(s, k, i % s.w, (i / s.w) | 0, 1).ok, k);
+      assert.equal(s.grid[i].s, undefined, `${k} placed with no stock`);
+      if (k === 'sprinkler') first = i;
+    }
+    // A wreck put back by the Rebuild button comes back empty, even from a record that somehow had
+    // stock on it.
+    s.grid[first] = 0;
+    s.gridVer++;
+    s.rubble.push({ i: first, k: 'sprinkler', d: 0, o: 0, s: { dmg: [4, 20] } });
+    assert.ok(applyCommand(s, 0, { c: 'rebuild' }).ok);
+    assert.equal(s.grid[first].k, 'sprinkler');
+    assert.equal(s.grid[first].s, undefined, 'rebuilt with no stock');
+  }
+});
+
 test('the Rebuild button puts a wreck back over its Dumbwaiters; one that falls off the rubble list loses them', (t) => {
   // (Two hits: the laser survives one.)
   tune(t, { smashOther: 1, smashEvery: 0.3, smashWait: 0.3, smashMax: 2 });
