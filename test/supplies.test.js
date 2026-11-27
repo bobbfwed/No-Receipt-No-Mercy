@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, migrateSave, queueTrainingWave, canPlace, canPlaceBack,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, canPlace, canPlaceBack,
   BACK, BUILD, TUNE, TICK_HZ, JUNK, itemCode, dropTicks, newPart, wants, give, stepBack, beltShape,
   statsOf, levelIn, stockLevel, spentOn, rebuildDeal,
   usesPer, unitsIn, usesIn, takesSupply, addStock, useStock, useWork, dropUpCost,
@@ -595,24 +595,4 @@ test('the checksum sees stock, the machines\' and Rebranders\' counters, and the
   changed('a supply waiting in a Rebrander');
   s.back[idx(s, 5, 5)] = { k: 'lift', a: idx(s, 5, 6) };
   changed('a Dumbwaiter serving another building');
-});
-
-test('a save from before Dumbwaiters gets them, for standing buildings and their wrecks', () => {
-  const s = stage();
-  placeOk(s, 'salesman', 5, 5);
-  placeOk(s, 'sprinkler', 10, 5);
-  s.rubble.push({ i: idx(s, 14, 5), k: 'forklift', d: 0, o: 0 });
-  lay(s, 12, 5, 'conv', E);
-  const want = JSON.stringify(s.back);
-  for (let i = 0; i < s.back.length; i++) if (s.back[i] && s.back[i].k === 'lift') s.back[i] = 0;
-  s.back[idx(s, 6, 6)] = newPart('bin', 0); // a part where a Dumbwaiter would go: that tile goes without
-  assert.equal(migrateSave(s), true);
-  assert.equal(lifts(s).length, 1 + 3 + 1);
-  assert.deepEqual(at(s, 6, 6).k, 'bin');
-  assert.deepEqual(at(s, 14, 5), { k: 'lift', a: idx(s, 14, 5) }, 'the wreck too, so it can be rebuilt');
-  s.back[idx(s, 6, 6)] = { k: 'lift', a: idx(s, 5, 5) };
-  s.back[idx(s, 14, 5)] = 0;
-  assert.equal(JSON.stringify(s.back), want, 'otherwise as placed');
-  assert.equal(migrateSave(s), true, 'the wreck\'s again');
-  assert.equal(migrateSave(s), false, 'and nothing to do the next time');
 });

@@ -4,8 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, canPlace, step, makeMap, makeZones, getDist, mapSize, setMap, tillBanks,
-  MAP_SIZES, MAP_DESIGNS, ZONES, BUILD, DECOR, UNREACHABLE,
+  createGame, addPlayer, applyCommand, canPlace, step, makeMap, getDist, mapSize, setMap, tillBanks,
+  MAP_SIZES, MAP_DESIGNS, BUILD, DECOR, UNREACHABLE,
 } from '../src/sim/index.js';
 import { createDirector, PLACE_BANKS } from '../src/content/director.js';
 import { LINES, fill, textOf } from '../src/content/lines.js';
@@ -48,42 +48,6 @@ test('every new design, every size: seven entrances in the outer wall, each open
     }
     // Every floor tile can be walked to the tills from: nothing is sealed off.
     for (let i = 0; i < s.tiles.length; i++) if (s.tiles[i] === '.') assert.notEqual(dist[i], UNREACHABLE, `${design} ${size}: ${i % w},${(i / w) | 0} is sealed off`);
-  }
-});
-
-test('marked floor on the new designs: on floor, patches never touching each other, a wall or an entrance', () => {
-  for (const design of NEW) for (const size of SIZES) for (const slots of [1, 7]) {
-    const s = createGame({ map: { design, size, slots } });
-    const { w, h } = s;
-    for (const ch of Object.keys(ZONES)) assert.ok(s.zones.includes(ch), `${design} ${size}: no ${ZONES[ch].name}`);
-    for (let i = 0; i < s.zones.length; i++) {
-      const ch = s.zones[i];
-      if (ch === ' ') continue;
-      const x = i % w, y = (i / w) | 0;
-      assert.equal(s.tiles[i], '.', `${design} ${size}: marked floor at ${x},${y} is not floor`);
-      // Nothing solid and no other kind of marked floor anywhere round it, corners included.
-      for (let ny = y - 1; ny <= y + 1; ny++) {
-        for (let nx = x - 1; nx <= x + 1; nx++) {
-          const j = ny * w + nx;
-          assert.notEqual(s.tiles[j], '#', `${design} ${size}: ${ZONES[ch].name} at ${x},${y} touches a wall`);
-          assert.ok(s.zones[j] === ' ' || s.zones[j] === ch, `${design} ${size}: ${ZONES[ch].name} at ${x},${y} touches other marked floor`);
-        }
-      }
-    }
-    // Clear of every entrance (open or shut): nothing within a tile of one, nor in the two rows in
-    // front of one in the top or bottom wall; and clear of the two tiles in front of every till.
-    for (const door of s.doors) {
-      for (const t of door) {
-        const tx = t % w, ty = (t / w) | 0, deep = ty === 0 || ty === h - 1 ? 2 : 1;
-        for (let y = ty - deep; y <= ty + deep; y++) {
-          for (let x = tx - 1; x <= tx + 1; x++) if (x >= 0 && y >= 0 && x < w && y < h) assert.equal(s.zones[y * w + x], ' ', `${design} ${size}: marked floor in front of the entrance at ${tx},${ty}`);
-        }
-      }
-    }
-    for (let i = 0; i < s.tiles.length; i++) {
-      if (s.tiles[i] !== 'T') continue;
-      for (const k of [1, 2]) assert.equal(s.zones[i - k], ' ', `${design} ${size}: marked floor in front of a till`);
-    }
   }
 });
 
@@ -204,22 +168,6 @@ test('the Back Passage is long corridors: walls right across, few openings, more
   assert.ok(last >= 9, 'the biggest store has plenty of corridors');
 });
 
-test('in the Back Passage the four kinds of marked floor of a section are in different corridors', () => {
-  for (const size of SIZES) {
-    const s = createGame({ map: { design: 'corridors', size } });
-    const { band, count } = corridorsOf(s);
-    for (let x0 = 9; x0 + 3 <= s.w - 4; x0 += 10) {
-      const at = {};
-      for (let y = 1; y < s.h - 1; y++) for (let x = x0; x < x0 + 4; x++) if (s.zones[y * s.w + x] !== ' ') at[s.zones[y * s.w + x]] = band[y];
-      assert.deepEqual(Object.keys(at).sort(), ['c', 'k', 'p', 'u'], `${size} x${x0}`);
-      assert.ok(count >= 4, `${size}: ${count} corridors`);
-      assert.equal(new Set(Object.values(at)).size, 4, `${size} x${x0}: ${JSON.stringify(at)}`);
-      // ...one corridor after another, so every belt goes through just one wall.
-      assert.equal(Math.abs(at.u - at.p) + Math.abs(at.p - at.k) + Math.abs(at.k - at.c), 3, `${size} x${x0}`);
-    }
-  }
-});
-
 test('the Back Passage is taller than the size\'s rectangle, with about as much floor as the Open Warehouse', () => {
   for (const size of SIZES) {
     const s = createGame({ map: { design: 'corridors', size } });
@@ -235,18 +183,6 @@ test('the Back Passage is taller than the size\'s rectangle, with about as much 
   }
 });
 
-test('in the Back Passage a Loading Bay loses no tile to an entrance (but one on the Outlet, with no row to spare)', () => {
-  for (const size of SIZES) {
-    const s = createGame({ map: { design: 'corridors', size } });
-    const tall = size === 'xs' ? 1 : 2; // (the Corner Shop's patches are one row tall)
-    for (let x0 = 9; x0 + 3 <= s.w - 4; x0 += 10) {
-      let n = 0;
-      for (let i = 0; i < s.zones.length; i++) if (s.zones[i] === 'u' && Math.abs((i % s.w) - x0 - 1.5) <= 2) n++;
-      assert.ok(n >= 4 * tall - (size === 's' ? 1 : 0), `${size} x${x0}: ${n} tiles of Loading Bay`);
-    }
-  }
-});
-
 test('the other designs come out tile for tile as before the Back Passage got its own plot', async () => {
   const { createHash } = await import('node:crypto');
   const hash = createHash('sha256');
@@ -256,13 +192,15 @@ test('the other designs come out tile for tile as before the Back Passage got it
       for (let slots = 1; slots <= 7; slots++) {
         const m = makeMap(design, size, slots);
         hash.update(JSON.stringify(m));
-        hash.update(makeZones(m.w, m.h, m.tiles, m.doors, design));
       }
     }
   }
-  // (Taken from 0.3.01 before the change. A new design added after the Back Passage in
-  // MAP_DESIGNS changes this: take the new hash then, after checking the old designs by hand.)
-  assert.equal(hash.digest('hex'), '0d392ebad82c9f66f87a190da4bfa4e96378d845056500770f9c487cf27a2c1f');
+  // (Taken from 0.3.01 before the change, then with the marked floor included. 0.4 removed the
+  // marked floor, so this is now the plans alone, taken with the 0.4 code before and after the
+  // removal: the same either way. Where the old marked floor was still decides where the Returns
+  // Drops go, pinned in back.test.js. A new design added after the Back Passage in MAP_DESIGNS
+  // changes this: take the new hash then, after checking the old designs by hand.)
+  assert.equal(hash.digest('hex'), 'cb1e67a051b751cf05765e6f5d718fc21645223b28f706de03875c3927136f4b');
 });
 
 test('DEB has lines of her own for the doors opening on each new design, about a third of the time, and nowhere else', () => {
@@ -383,8 +321,8 @@ test('nothing can be built outdoors or in the walls round the car park, and chan
         assert.equal(applyCommand(s, 0, { c: 'place', k: 'crate', x, y }).ok, false);
       }
     }
-    // No marked floor anywhere near it.
-    for (let y = y0 - 2; y < y1; y++) for (let x = x0 - 2; x <= x1 + 1; x++) assert.equal(s.zones[y * s.w + x], ' ', `${size}: marked floor at ${x},${y}`);
+    // No Returns Drop under it or beside it (the drops are pinned in back.test.js).
+    for (let y = y0 - 2; y < y1; y++) for (let x = x0 - 2; x <= x1 + 1; x++) assert.equal(s.back[y * s.w + x], 0, `${size}: a Returns Drop at ${x},${y}`);
   }
   const lobby = createGame({ lobby: true, map: { design: 'warehouse', size: 's' } });
   addPlayer(lobby, 'Dave');
@@ -392,7 +330,7 @@ test('nothing can be built outdoors or in the walls round the car park, and chan
   assert.deepEqual({ w: lobby.w, h: lobby.h }, mapSize('horseshoe', 'm'));
   assert.equal(lobby.grid.length, lobby.w * lobby.h);
   assert.equal(lobby.decor, makeMap('horseshoe', 'm', lobby.doors.length).decor);
-  assert.equal(lobby.zones.length, lobby.w * lobby.h);
+  assert.equal(lobby.back.length, lobby.w * lobby.h);
   assert.ok(setMap(lobby, 'warehouse', 'm'));
   assert.equal(lobby.w, MAP_SIZES.m.w);
   assert.equal(lobby.decor, '');

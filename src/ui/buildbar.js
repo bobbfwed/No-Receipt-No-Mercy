@@ -1,6 +1,6 @@
-// The build bar: one button per building, grouped Factory and Security, plus the Rebuild and
-// Remove tools. In The Back (0.4) the same bar shows The Back's parts instead, with Remove.
-import { BUILD, TUNE, ZONES, rebuildDeal, buildPrice } from '../sim/index.js';
+// The build bar: one button per building, grouped Walls (the Crate Stack) and Security, plus the
+// Rebuild and Remove tools. In The Back (0.4) the same bar shows The Back's parts instead, with Remove.
+import { BUILD, TUNE, rebuildDeal, buildPrice } from '../sim/index.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, BACK_GROUPS, hotkeyOf } from './input.js';
@@ -19,7 +19,7 @@ try { const v = localStorage.getItem(FOLD_KEY); if (v !== null) folded = v === '
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
 /** Names short enough for a button; the tooltip has the full one. */
-const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', still: 'Still', cannery: 'Cannery', spooler: 'Spooler', winder: 'Winder', bender: 'Bender', chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
+const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', still: 'Still', cannery: 'Cannery', spooler: 'Spooler', winder: 'Winder', bender: 'Bender', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
@@ -58,7 +58,6 @@ export function createBuildBar(input, session) {
       if (how) lines.push(h('p', { class: 'tip-use' }, h('b', null, 'How: '), worded(how.use)));
       const facts = [];
       if (how && how.maze) facts.push(how.maze.replace(/\.$/, ''));
-      if (def.zone) facts.push(`${ZONES[def.zone].name} floor only`);
       if (def.back) facts.push('The Back: shoppers never touch it');
       if (def.rot) facts.push('R rotates');
       if (def.size) facts.push(`${def.size[0]} x ${def.size[1]} tiles`);
@@ -97,17 +96,13 @@ export function createBuildBar(input, session) {
     h('span', { class: 'bb-icon', html: buildingIcon(k) }),
     h('span', { class: 'bb-name' }, def ? SHORT[k] || def.name : t.name),
     h('span', { class: 'bb-price' }, def ? `$${def.cost}` : t.price));
-    // The four factory machines wear the colour of the painted floor they go on.
-    if (def && def.zone) {
-      btn.classList.add('zoned');
-      btn.style.setProperty('--zone', ZONES[def.zone].color);
-    }
     longPress(btn, () => showTip(btn, k), hideTip);
     buttons.set(k, btn);
     return btn;
   }
 
-  const groups = ['factory', 'security'].map((g) => h('div', { class: `bb-group bb-${g}`, role: 'group', 'aria-label': g },
+  // The shop floor's two groups: its wall, then security (BUILD's `group`).
+  const groups = ['walls', 'security'].map((g) => h('div', { class: `bb-group bb-${g}`, role: 'group', 'aria-label': g },
     h('span', { class: 'bb-label' }, g.toUpperCase()),
     h('div', { class: 'bb-btns' }, BUILD_KEYS.map((k, i) => (BUILD[k].group === g ? makeButton(k, i) : null)))));
   // The Back's parts (0.4): shown instead of the two groups above while The Back is looked at, in
@@ -164,14 +159,13 @@ export function createBuildBar(input, session) {
         h('span', { class: 'bbi-icon', html: buildingIcon(k) }),
         h('b', null, def ? def.name : TOOLS[k].name),
         // What it means for the maze, in two words.
-        def ? h('span', { class: 'bbi-maze' }, def.back ? 'The Back' : !def.blocks ? 'Walkable' : k === 'belt' ? 'Blocks all but dads' : 'Blocks everyone') : null,
-        def && def.zone ? h('span', { class: 'bbi-maze bbi-zone', style: { background: ZONES[def.zone].color } }, `${ZONES[def.zone].name} only`) : null,
+        def ? h('span', { class: 'bbi-maze' }, def.back ? 'The Back' : !def.blocks ? 'Walkable' : 'Blocks everyone') : null,
         def ? h('span', { class: 'bbi-cost' }, `${priceOf(k)}`) : null,
         foldBtn()),
       h('p', null, worded(how.does)),
       h('p', null, h('b', null, 'How: '), worded(how.use)));
     // On a touch screen: how a finger places it (0.3.03). (The belt's "How" already says drag.)
-    if (def && k !== 'belt' && k !== 'conv' && isTouch()) info.append(h('p', { class: 'bbi-touch' }, PLACE_BY_TOUCH));
+    if (def && k !== 'conv' && isTouch()) info.append(h('p', { class: 'bbi-touch' }, PLACE_BY_TOUCH));
   }
 
   /** Lights up one button (the tutorial points at the tool to pick). Pass null to clear. */

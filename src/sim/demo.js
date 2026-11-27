@@ -7,20 +7,20 @@ import { BUILD } from './constants.js';
 
 const E = 0, S = 1, W = 2, N = 3;
 
-/** Two production lines that form walls with gaps, and security around the gaps. */
+/** A column of Crate Stacks from row y0 to row y1 in column x. */
+const crates = (x, y0, y1) => Array.from({ length: y1 - y0 + 1 }, (_, n) => ['crate', x, y0 + n, 0]);
+
+/**
+ * Three walls of Crate Stacks with gaps, making the shoppers zigzag, and security around the gaps.
+ * (Until 0.4 the walls were the old shop-floor factory's production lines, on the same tiles.)
+ */
 export const DEMO_LAYOUT = [
-  // Line 1: a wall down column 6, open at the bottom.
-  ['unpacker', 6, 1, S], ['belt', 6, 2, S], ['belt', 6, 3, S], ['belt', 6, 4, S], ['belt', 6, 5, S],
-  ['press', 6, 6, S], ['belt', 6, 7, S], ['belt', 6, 8, S], ['packer', 6, 9, S], ['belt', 6, 10, S],
-  ['chute', 6, 11, 0],
-  // Line 2: a wall up column 13, open at the top.
-  ['unpacker', 13, 14, N], ['belt', 13, 13, N], ['belt', 13, 12, N], ['belt', 13, 11, N], ['belt', 13, 10, N],
-  ['press', 13, 9, N], ['belt', 13, 8, N], ['belt', 13, 7, N], ['packer', 13, 6, N], ['belt', 13, 5, N],
-  ['chute', 13, 4, 0],
-  // Line 3: a short wall in column 21, open at the bottom.
-  ['unpacker', 21, 1, S], ['belt', 21, 2, S], ['belt', 21, 3, S], ['belt', 21, 4, S], ['press', 21, 5, S],
-  ['belt', 21, 6, S], ['belt', 21, 7, S], ['belt', 21, 8, S], ['belt', 21, 9, S], ['chute', 21, 10, 0],
-  ['crate', 21, 11, 0], ['crate', 21, 12, 0],
+  // A wall down column 6, open at the bottom.
+  ...crates(6, 1, 11),
+  // A wall up column 13, open at the top.
+  ...crates(13, 4, 14),
+  // A shorter wall in column 21, open at the bottom.
+  ...crates(21, 1, 12),
   // Security.
   ['sprinkler', 7, 11, 0], ['sprinkler', 5, 13, 0], ['wetfloor', 6, 13, 0], ['forklift', 9, 8, 0],
   ['samples', 9, 13, 0], ['sprinkler', 12, 3, 0], ['sprinkler', 14, 3, 0], ['wetfloor', 13, 2, 0],
@@ -132,4 +132,4 @@ export function applyDemoLayout(state, pid = 0, { back = true } = {}) {
   return back ? problems.concat(applyDemoBack(state, pid)) : problems;
 }
 
-export { E, S, W, N };
+

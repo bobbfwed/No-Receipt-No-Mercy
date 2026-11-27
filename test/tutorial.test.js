@@ -1,21 +1,20 @@
 // Plays the whole training shift automatically and checks that every step can be completed and
 // that each lesson shows what it claims to show. Run with: node --test
 import test from 'node:test';
-import { nopeLine } from '../src/content/lines.js';
 import assert from 'node:assert/strict';
 import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
 import { createTutorial, STEPS, PART_TWO } from '../src/tutorial/lessons.js';
 import { HOW } from '../src/content/help.js';
-import { createGame, applyCommand, step, queueTrainingWave, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ, ST } from '../src/sim/index.js';
+import { createGame, applyCommand, step, queueTrainingWave, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ } from '../src/sim/index.js';
 
 function trainingSession(seed = 9) {
-  return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
+  return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true }) });
 }
 
 const title = (t) => { const st = STEPS.find((x) => x.title === t); assert.ok(st, `there is a lesson called "${t}"`); return t; };
 const SALES = title('Hold them up: the TV Salesman'), SUPERS_LESSON = title('Super shoppers');
-const DADS = title('Dads'), STOP_DADS = title('Stopping dads'), LASER = title('Aim down the line: the Barcode Laser');
+const DADS = title('Dads'), STOP_DADS = title('Stopping dads: the Forklift Turret'), LASER = title('Aim down the line: the Barcode Laser');
 const GYM = title('Gym Bros'), WET = title('Slow them down: the Wet Floor Sign');
 /** The only kinds of shopper the training shift sends in (0.3.03, the owner's request). */
 const SHIFT_KINDS = ['clipper', 'dad', 'gymbro'];
@@ -30,18 +29,13 @@ function newWatch() {
     smashes: [], // smash events
     beams: [], // shoppers hit by each Barcode Laser beam, in order
     watching: [], // where shoppers stood to watch the TV Salesman, as [x, y]
-    crossed: new Set(), // rows on which dads stepped over the production line's belts
+    escapes: [], // escape events: who reached a till (kind, and 1 if super)
     kinds: new Set(), // kinds of shopper that walked in
   };
 }
 
 function watchTick(s, w) {
-  for (const m of s.shoppers) {
-    w.kinds.add(m.k);
-    if (m.k !== 'dad' || m.st === ST.LEAVE) continue;
-    const g = s.grid[(m.y | 0) * s.w + (m.x | 0)];
-    if (g && g.k === 'belt' && (m.x | 0) === 10) w.crossed.add(m.y | 0);
-  }
+  for (const m of s.shoppers) w.kinds.add(m.k);
 }
 
 /**
@@ -76,6 +70,7 @@ function playAll(session, tut, { onStep = () => {}, onDone = () => {} } = {}) {
       if (e.e === 'smash') w.smashes.push(e);
       if (e.e === 'rail') w.beams.push(e.n);
       if (e.e === 'watching') w.watching.push([e.x, e.y]);
+      if (e.e === 'escape') w.escapes.push(e);
     }
   });
   tut.start();
@@ -109,27 +104,28 @@ function checkLessons(s, waves, seen, label) {
   const reach = statsOf(s.grid[tileOf(s, 5, 12)]).range;
   assert.ok(seen[SALES].watching.some(([x, y]) => (x - 5.5) ** 2 + (y - 12.5) ** 2 <= reach ** 2),
     `${label}: a shopper watched him from inside the Sprinkler's reach`);
-  assert.deepEqual(waves[SALES], { stopped: 24, escaped: 0 }, `${label}: the whole coach party stopped`);
+  assert.deepEqual(waves[SALES], { stopped: 30, escaped: 0 }, `${label}: the whole coach party stopped`);
 
   // Super shoppers: a third sprinkler, by the samples, stops the Extreme Couponers.
   assert.deepEqual(waves[SUPERS_LESSON], { stopped: 8, escaped: 0 }, `${label}: three sprinklers stop eight super shoppers`);
 
-  // Dads: the four walk straight through; the forklift, signs and crate stop most of the next
-  // five, and every dad who steps over the belts does it on the same row.
-  assert.deepEqual(waves[DADS], { stopped: 0, escaped: 4 }, `${label}: all four dads walk straight through the belts`);
-  assert.ok(waves[STOP_DADS].stopped >= 3, `${label}: forklift, signs and crate stop most dads (stopped ${waves[STOP_DADS].stopped} of 5)`);
-  for (const t of [STOP_DADS, LASER]) {
-    assert.deepEqual([...seen[t].crossed], seen[t].crossed.size ? [7] : [], `${label}: in "${t}" every dad crosses the belt on row 7`);
-  }
-
-  // The Barcode Laser: the first dad sets it off on his own, the next beam takes most of the line.
+  // The Barcode Laser, down column 6: the first one in sets it off alone, the next beam takes most
+  // of the queue, and the whole crowd is stopped.
   const beams = seen[LASER].beams;
-  assert.equal(beams[0], 1, `${label}: the first beam hits the first dad alone (${beams})`);
-  assert.ok(Math.max(...beams) >= 4, `${label}: a later beam hits most of the line (${beams})`);
+  assert.equal(beams[0], 1, `${label}: the first beam hits the first shopper alone (${beams})`);
+  assert.ok(Math.max(...beams) >= 15, `${label}: a later beam hits most of the queue (${beams})`);
   assert.equal(seen[LASER].facts.beam, Math.max(...beams));
-  assert.deepEqual(waves[LASER], { stopped: 10, escaped: 0 }, `${label}: all ten dads stopped`);
-  assert.equal(s.grid[tileOf(s, 12, 7)].k, 'railgun');
-  assert.equal(s.grid[tileOf(s, 12, 7)].d, 2, `${label}: the laser faces west`);
+  assert.deepEqual(waves[LASER], { stopped: 30, escaped: 0 }, `${label}: all thirty Extreme Couponers stopped`);
+  assert.equal(s.grid[tileOf(s, 6, 4)].k, 'railgun');
+  assert.equal(s.grid[tileOf(s, 6, 4)].d, 1, `${label}: the laser faces down`);
+
+  // Dads: the five ordinary dads at the front all crack; some of the three Dads on a Mission at the
+  // back reach a till, and nobody else does.
+  assert.equal(waves[DADS].stopped + waves[DADS].escaped, 8, `${label}: eight dads came in`);
+  assert.ok(seen[DADS].escapes.length >= 1, `${label}: a Dad on a Mission got a refund`);
+  for (const e of seen[DADS].escapes) assert.deepEqual([e.k, e.sup], ['dad', 1], `${label}: only Dads on a Mission got through`);
+  // The forklift: both Dads on a Mission stopped (without it some get through: see the seeds).
+  assert.deepEqual(waves[STOP_DADS], { stopped: 2, escaped: 0 }, `${label}: the forklift stops both Dads on a Mission`);
 
   // Gym bro: he walked through a crate by the entrance, and Rebuild put everything back.
   const doorCrates = [[2, 7], [2, 8], [1, 9]].map(([x, y]) => tileOf(s, x, y));
@@ -143,7 +139,7 @@ function checkLessons(s, waves, seen, label) {
   for (const k of kinds) assert.ok(SHIFT_KINDS.includes(k), `${label}: a ${k} walked in`);
 
   // The gap cluster stays as part 1 left it, for the practice at the end.
-  for (const [x, y] of [[7, 13], [9, 13], [11, 13]]) assert.equal(s.grid[tileOf(s, x, y)]?.k, 'sprinkler', `${label}: the sprinklers at the gap are still there`);
+  for (const [x, y] of [[7, 13], [9, 13], [10, 13]]) assert.equal(s.grid[tileOf(s, x, y)]?.k, 'sprinkler', `${label}: the sprinklers at the gap are still there`);
 }
 
 test('training mode: no timer, no losing, waves only when lined up', () => {
@@ -210,8 +206,10 @@ test('the wave lessons play out the same whatever the random seed', () => {
         if (st.title === SALES) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: the gap alone lets some of the coach party through`);
         // "As they are, your two Sprinklers at the gap cannot stop the eight Extreme Couponers."
         if (st.title === SUPERS_LESSON) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the third sprinkler some Extreme Couponers get through`);
-        // The laser lesson's ten dads are too many for the forklift and the signs.
-        if (st.title === LASER) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the laser some dads get through`);
+        // "Without it, your gap cannot take 30 of them."
+        if (st.title === LASER) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the laser some Extreme Couponers get through`);
+        // "Your maze alone lets one of the two through."
+        if (st.title === STOP_DADS) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the forklift some Dads on a Mission get through`);
       },
       onDone: (t, st) => assert.equal(t.check(), true, `seed ${seed}: step "${st.title}" completes`),
     });
@@ -225,21 +223,19 @@ test('the wave lessons play out the same whatever the random seed', () => {
 test('opening the doors too early lines the same shoppers up again', () => {
   const session = trainingSession(5);
   const tut = createTutorial(session);
-  tut.autoplay(STEPS.findIndex((st) => st.title === LASER));
-  assert.equal(tut.step.title, LASER);
-  session.send({ c: 'start' }); // before building the laser
+  tut.autoplay(STEPS.findIndex((st) => st.title === STOP_DADS));
+  assert.equal(tut.step.title, STOP_DADS);
+  session.send({ c: 'start' }); // before building the forklift
   for (let n = 0; n < 240 && !tut.facts.waveEnds; n++) session.fastForward(15);
   assert.equal(tut.facts.waveEnds, 1);
-  assert.equal(tut.check(), false, 'not done: the laser is not there');
-  assert.ok(session.state.nextWave, 'ten more dads are waiting');
-  session.send({ c: 'place', k: 'railgun', x: 12, y: 7, d: 2 });
+  assert.equal(tut.check(), false, 'not done: the forklift is not there');
+  assert.ok(session.state.nextWave, 'two more Dads on a Mission are waiting');
+  session.send({ c: 'place', k: 'forklift', x: 8, y: 9, d: 0 });
   assert.equal(tut.check(), true, 'built now, after seeing a wave: done');
   // A lesson without shoppers leaves nobody waiting outside.
   tut.back();
-  assert.equal(tut.step.title, STOP_DADS);
-  assert.ok(session.state.nextWave);
-  tut.back();
   assert.equal(tut.step.title, DADS);
+  assert.ok(session.state.nextWave);
   tut.back();
   assert.equal(tut.step.manual, true);
   assert.equal(session.state.nextWave, null);
@@ -273,8 +269,8 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
 
   const other = trainingSession(4);
   const t2 = createTutorial(other);
-  assert.deepEqual(t2.autoplay(7), []);
-  assert.equal(t2.step.title, 'Close the gaps: Crates');
+  assert.deepEqual(t2.autoplay(1), []);
+  assert.equal(t2.step.title, 'Build the maze: Crate Stacks');
   t2.skip();
   assert.equal(t2.step.title, 'You can never block the route completely');
   assert.equal(t2.marks().length, 1);
@@ -290,6 +286,7 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   assert.deepEqual(says.filter((t) => quips.has(t)), [STEPS[PART_TWO].quip]);
   assert.equal(third.state.grid[13 * third.state.w + 7].k, 'sprinkler', 'the third sprinkler, by the samples, is in place');
   assert.equal(third.state.grid[13 * third.state.w + 4].k, 'salesman', 'and the TV Salesman');
+  assert.equal(third.state.grid[4 * third.state.w + 6].k, 'railgun', 'and the Barcode Laser, which part 1 ends with');
 
   // The panel's jump keeps refusals off the screen; the "you cannot block the route" lesson
   // still counts its refusal.
@@ -350,17 +347,17 @@ test('the player places every building at least once, and uses Rebuild and Remov
   tools.rebuild.add(GYM);
 
   const buildable = SHOP_KINDS;
-  assert.equal(buildable.length, 12, 'every building in BUILD (a new one needs a lesson)');
+  assert.equal(buildable.length, 7, 'every building on the shop floor (a new one needs a lesson)');
   for (const k of buildable) {
     assert.ok(asked.has(k), `some lesson's marks ask the player to place a ${BUILD[k].name}`);
     // ...and that lesson's own commands place it (the player does it, not the shift).
-    const placed = [...asked.get(k)].some((t) => STEPS.find((st) => st.title === t).solve(createGame({ training: true, zones: true })).some((c) => c.c === 'place' && c.k === k));
+    const placed = [...asked.get(k)].some((t) => STEPS.find((st) => st.title === t).solve(createGame({ training: true })).some((c) => c.c === 'place' && c.k === k));
     assert.ok(placed, `a lesson that asks for a ${BUILD[k].name} has the player place it`);
   }
   assert.ok(tools.remove.size >= 1, 'a lesson has the player remove something');
   assert.ok(STEPS.some((st) => st.after && st.after(createGame({ training: true })).some((c) => c.c === 'rebuild')), 'a lesson waits for Rebuild');
-  assert.ok(STEPS.some((st) => st.solve(createGame({ training: true, zones: true })).some((c) => c.c === 'remove')), 'a lesson removes something');
-  assert.ok(!STEPS.some((st) => st.solve(createGame({ training: true, zones: true })).some((c) => c.c === 'upgrade')), 'no lesson buys an upgrade');
+  assert.ok(STEPS.some((st) => st.solve(createGame({ training: true })).some((c) => c.c === 'remove')), 'a lesson removes something');
+  assert.ok(!STEPS.some((st) => st.solve(createGame({ training: true })).some((c) => c.c === 'upgrade')), 'no lesson buys an upgrade');
 });
 
 test('the whole shift sends in Coupon Clippers, Dads and a Gym Bro, and nobody else (0.3.03)', () => {
@@ -374,25 +371,6 @@ test('the whole shift sends in Coupon Clippers, Dads and a Gym Bro, and nobody e
       assert.ok(!words.includes(def.name), `"${st.title}" mentions ${def.name}`);
     }
   }
-});
-
-test('the training floor is marked, and every machine the lessons ask for is on its own patch', () => {
-  const session = trainingSession();
-  const s = session.state;
-  assert.ok(s.zones.length > 0, 'the training map has marked floor');
-  const tut = createTutorial(session);
-  tut.autoplay();
-  let machines = 0;
-  for (let i = 0; i < s.grid.length; i++) {
-    const b = s.grid[i];
-    if (!b || !BUILD[b.k].zone) continue;
-    machines++;
-    assert.equal(s.zones[i], BUILD[b.k].zone, `the ${b.k} is on its own floor`);
-  }
-  assert.ok(machines >= 4, 'unpacker, press, packer and chute were all built');
-  // Trying a machine anywhere else is refused with a reason DEB has a line for.
-  assert.equal(session.send({ c: 'place', k: 'press', x: 3, y: 3, d: 0 }).why, 'zone');
-  assert.ok(nopeLine('zone', 'Dave').length > 10);
 });
 
 test('on a touch screen no lesson or help text mentions a key or the mouse', async () => {
@@ -418,8 +396,7 @@ test('on a touch screen no lesson or help text mentions a key or the mouse', asy
   const tut = createTutorial(session);
   tut.start();
   for (let n = 0; n < STEPS.length - 1; n++) {
-    session.send({ c: 'place', k: 'crate', x: 10, y: 2 + n, d: 0 }); // something in the way
-    session.send({ c: 'place', k: 'belt', x: 10, y: 2 + n, d: 0 });
+    session.send({ c: 'place', k: 'wetfloor', x: 10, y: 2 + n, d: 0 }); // something in the way
     if (tut.hint()) texts.push(tut.hint());
     for (const m of tut.marks()) if (m.label) texts.push(m.label);
     tut.skip();

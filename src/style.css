@@ -680,8 +680,8 @@ body.dealing .pause-banner { z-index: 42; }
   letter-spacing: 0.1em;
   color: var(--muted);
 }
-.bb-factory { border-color: #3b82f6; }
-.bb-factory .bb-label { color: #93c5fd; }
+.bb-walls { border-color: #b57a3c; }
+.bb-walls .bb-label { color: #e0b483; }
 .bb-security { border-color: var(--orange); }
 .bb-security .bb-label { color: #fdba74; }
 .bb-tools { border-color: #f87171; }
@@ -1836,31 +1836,6 @@ body.dealing .pause-banner { z-index: 42; }
 .menu-version b { font: 900 2.4rem var(--font-heavy); color: var(--yellow); }
 .menu-version span { font: 900 1rem var(--font-heavy); color: #c3cad3; }
 
-/* ---------------------------------------------------------------- machines wear their floor's colour */
-
-.bb-btn.zoned { border-color: var(--zone); box-shadow: inset 0 -0.3rem 0 var(--zone), 0 0.18rem 0 var(--line); }
-.bb-btn.zoned .bb-name { color: var(--zone); }
-.bb-btn.zoned.poor { box-shadow: inset 0 -0.3rem 0 var(--zone), 0 0.18rem 0 var(--line); }
-.zone-hint {
-  position: absolute;
-  z-index: 8;
-  top: 0.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  max-width: min(46rem, calc(100% - 28rem));
-  padding: 0.35rem 0.7rem;
-  background: var(--ink);
-  border: 0.18rem solid var(--yellow);
-  border-radius: 0.5rem;
-  box-shadow: 0 0.2rem 0 rgba(0, 0, 0, 0.45);
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-.zone-hint .btn-small { flex: none; }
-
 /* ---------------------------------------------------------------- the boss bar (src/ui/bossbar.js) */
 
 /* Floats over the top of the floor, so it moves nothing. Fixed height whatever it says. */
@@ -1924,7 +1899,6 @@ body.dealing .pause-banner { z-index: 42; }
 .boss-bar.is-release-next .boss-meter i, .boss-bar.is-release-coming .boss-meter i { background: repeating-linear-gradient(-45deg, #a855f7 0 0.5rem, #6b21a8 0.5rem 1rem); }
 /* Whatever else sits at the top of the floor moves down out of its way. */
 .game.boss-up .notices { top: 4.1rem; }
-.game.boss-up .zone-hint { top: 4.1rem; }
 
 /* ---------------------------------------------------------------- chat */
 
@@ -2081,11 +2055,11 @@ body.dealing .pause-banner { z-index: 42; }
 
 /* The strip of five slots over the top of the floor, for the whole game. It floats, so it resizes
    nothing; it sits in the middle at the top, under the boss bar while that shows, and the notices
-   and the zone hint move down out of its way. */
+   move down out of its way. */
 .hand-wrap { position: absolute; z-index: 9; top: 0.6rem; left: 50%; transform: translateX(-50%); }
 .game.boss-up .hand-wrap { top: 4.1rem; }
-.game.has-hand .notices, .game.has-hand .zone-hint { top: 4.9rem; }
-.game.has-hand.boss-up .notices, .game.has-hand.boss-up .zone-hint { top: 8.4rem; }
+.game.has-hand .notices { top: 4.9rem; }
+.game.has-hand.boss-up .notices { top: 8.4rem; }
 .game.in-lobby .hand-wrap, .game.ended .hand-wrap { display: none; }
 .hand-strip {
   display: flex;
@@ -2144,8 +2118,8 @@ body.dealing .pause-banner { z-index: 42; }
   .hand-wrap.is-side .hs-slots { justify-content: space-between; gap: 0.3rem; }
   .hand-wrap.is-side .hs-slot { flex: 0 1 2.3rem; min-width: 0; width: auto; height: auto; aspect-ratio: 23 / 31; }
   .hand-wrap.is-side .hs-slot .tcard-mini { width: 100%; height: 100%; }
-  .game.has-hand:not(.hand-mid) .notices, .game.has-hand:not(.hand-mid) .zone-hint { top: 0.6rem; }
-  .game.has-hand.boss-up:not(.hand-mid) .notices, .game.has-hand.boss-up:not(.hand-mid) .zone-hint { top: 4.1rem; }
+  .game.has-hand:not(.hand-mid) .notices { top: 0.6rem; }
+  .game.has-hand.boss-up:not(.hand-mid) .notices { top: 4.1rem; }
 }
 
 /* The deal (src/ui/deal.js): over the whole screen, the floor dimmed, the cards below the strip. */
@@ -2425,7 +2399,6 @@ html, body { overscroll-behavior: none; }
   .btn-small, .btn-copy, .tut-btn, .chat-open { min-height: 38px; }
   .player .role-btn, .player .give-btn, .player .side-btn { min-height: 30px; padding-inline: 0.5rem; }
   .tut-min { width: 38px; height: 32px; }
-  .zone-hint .btn-small { min-height: 34px; }
   .pr-x { width: 40px; height: 40px; }
   /* The held tool's card and DEB's bubble keep clear of the camera pad. */
   .buildbar .bb-info { right: calc(0.5rem + 56px + env(safe-area-inset-right)); }
@@ -2574,15 +2547,6 @@ html, body { overscroll-behavior: none; }
 
   .notices { top: 0.4rem; width: max-content; max-width: calc(100% - 1rem); }
   .notice { font-size: 0.78rem; text-align: center; }
-  .zone-hint {
-    top: 2.9rem;
-    left: calc(0.4rem + env(safe-area-inset-left));
-    right: calc(0.4rem + env(safe-area-inset-right));
-    transform: none;
-    max-width: none;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.76rem;
-  }
   /* On a small screen the top of the floor is crowded (players, DEB, reviews): the boss bar takes
      the very top, above them, and they move down out of its way while it shows. */
   .boss-bar {
@@ -2605,7 +2569,6 @@ html, body { overscroll-behavior: none; }
   .boss-num { font-size: 0.66rem; }
   .boss-meter { height: 0.6rem; }
   .boss-note { max-width: 6.5rem; font-size: 0.6rem; white-space: normal; line-height: 1.1; }
-  .game.boss-up .zone-hint { top: 6.1rem; }
   .game.boss-up .notices, .game.boss-up .players, .game.boss-up .reviews, .game.boss-up .deb { top: 3.4rem; }
 
   /* DEB talks from the top of the floor, where nothing is being built. */
@@ -2903,7 +2866,7 @@ html, body { overscroll-behavior: none; }
 
 /* The lobby panel is long now: keep READY in reach at the bottom, and the floor key compact. */
 .lobby .btn-ready { position: sticky; bottom: 0; z-index: 1; box-shadow: 0 -0.5rem 0.6rem rgba(31, 37, 44, 0.95); }
-.lobby-legend { display: grid; grid-template-columns: 1fr 1fr; column-gap: 0.5rem; font-size: 0.8rem; }
+.lobby-legend { font-size: 0.8rem; }
 
 /* ---------------------------------------------------------------- resume a saved game (menu) */
 
@@ -3020,9 +2983,7 @@ html, body { overscroll-behavior: none; }
   .tcard-mini { padding: 0.12rem; }
   .cc-mark { width: 0.85rem; height: 0.85rem; font-size: 0.7rem; left: -0.25rem; top: -0.25rem; }
   .game.has-hand .notices { top: 3.5rem; }
-  .game.has-hand .zone-hint { top: 3.5rem; }
   .game.has-hand.boss-up .notices { top: 6.5rem; }
-  .game.has-hand.boss-up .zone-hint { top: 6.6rem; }
 
   /* The deal: the card large, the words at reading size. */
   .deal { padding: calc(var(--deal-top, 6rem) + 0.35rem) calc(0.5rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.5rem + env(safe-area-inset-left)); }
@@ -3271,3 +3232,7 @@ html, body { overscroll-behavior: none; }
 .ts-note.ts-plain { color: var(--ink); }
 .ts-btn.ts-more { min-width: 9rem; background: var(--yellow); color: var(--ink); }
 .ts-btn.ts-more.poor { background: #d6d3c9; }
+
+/* ---------------------------------------------------------------- Employee Handbook: The Back (0.4) */
+/* The supplies card heads The Back's tab across the whole width: its tier table is wide. */
+.hb-card.hb-supplies { grid-column: 1 / -1; }

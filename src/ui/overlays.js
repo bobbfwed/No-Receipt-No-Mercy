@@ -1,6 +1,6 @@
 // Full-screen overlays: the end of the game, losing the host, and the in-game "how to play".
 import { TUNE, SHOPPERS, SUPERS, BUILD, SETTINGS, isEndless } from '../sim/index.js';
-import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
+import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import { bossFacts, edgeText, fmt, payFacts } from '../content/facts.js';
 import { recordWhere } from './record.js';
 import { h, money, safeColor } from './dom.js';
@@ -11,17 +11,19 @@ export function howToPlay() {
   return h('div', { class: 'howto' },
     h('h3', null, 'The job'),
     h('p', null, `Shoppers come in through the entrances (one per player, mostly on the left) and head for the tills on the right. Every one who gets there takes a refund. ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more per extra player) and corporate shuts the store. Survive every sales event (${TUNE.waves} unless the host changes it), or choose Endless and see how long you last.`),
-    h('h3', null, 'Two halves'),
+    h('h3', null, 'Two floors'),
     h('ul', null,
-      h('li', null, h('b', null, 'Beating a sales event pays. '), payLine()),
-      h('li', null, h('b', null, 'Factory makes cash. '), 'Unpackers spit out boxes, belts carry them, the Press and the Packer turn them into pricier goods, and a Shipping Chute sells whatever lands in it. Each of those four only goes on its own painted floor (Loading Bay, Press Shop, Gift Wrap, Shipping), so the belts between them are the factory.'),
+      h('li', null, h('b', null, 'The shop floor is the maze. '), 'Crate Stacks and security block the way, so lay them out to make the walk to the tills long and painful. You cannot wall the tills off completely. Legal checked.'),
       h('li', null, h('b', null, 'Security makes them leave. '), 'Sprinklers, forklifts and barcode lasers wear down patience until shoppers storm out empty-handed; wet floor signs, free samples and the TV salesman hold them in range for longer. Shoppers get more patient every sales event.'),
-      h('li', null, h('b', null, 'The factory is the maze. '), 'Belts and machines are in the way of most shoppers, so lay your lines to make the walk long and painful. A few kinds of shopper get past things the rest cannot. You cannot block the tills completely. Legal checked.'),
+      h('li', null, h('b', null, 'The Back feeds security. '), 'Under the shop is The Back (Tab, or the floor switch at the bottom right, to go down). Returns Drops cough up returned junk; belts carry it to machines that turn it into supplies; more belts carry those to the Dumbwaiter under each security building, which sends them up. A Rebrander slaps a better label on a supply, and a better label does more. Nothing down there gets in a shopper\'s way.'),
+      h('li', null, h('b', null, 'Stocked security is stronger. '), 'On Bottled Spite it hits harder, on Rage Cola it fires faster, on Extension Cord it reaches further, and Duct Tape soaks up gym bro hits. Each is used up as it works; empty, it is back to as built. Pick a building with nothing held to see what it is working with.'),
+      h('li', null, h('b', null, 'Beating a sales event pays. '), payLine(), ' The Back makes no money, bar a Clearance Bin\'s pennies for leftovers.'),
       h('li', null, h('b', null, 'Your money is yours. '), 'Each player has his own cash and pays for what he builds. A sales event\'s pay and speed bonus go to each of you in full; everything else the store earns, and every refund, is split evenly between you, whoever built what. You can hand a colleague money from the list of players.'),
-      h('li', null, h('b', null, 'Supplies make security stronger. '), 'Under the shop is The Back (Tab, or the floor switch at the bottom right, to look): belts and machines there turn returned junk into supplies and send them up a Dumbwaiter under each security building, which hits harder, fires faster, reaches further or shrugs off gym bros while it is stocked. Pick one with nothing held to see what it is working with.'),
-      h('li', null, h('b', null, 'It gets worse. '), 'From sales event 6, super versions of every shopper turn up: bigger, with a gold crown, and a double refund. ',
+      h('li', null, h('b', null, 'Thieves. '), 'Shoppers who stop for free samples help themselves to stock from any security they walk past, and Card Traders rip out the best brand you have. Stop them before they reach your best-stocked buildings.'),
+      h('li', null, h('b', null, 'Gym bros smash things. '), 'A Crate Stack goes down in one hit, and now and then he hits something else. Duct Tape soaks his hits up; the Rebuild button puts back what he wrecked.'),
+      h('li', null, h('b', null, 'It gets worse. '), `From sales event ${Math.min(...Object.values(SHOPPERS).map((d) => d.sup.from))}, super versions of every shopper turn up: bigger, with a gold crown, and a double refund. `,
         `Every ${ordinal(TUNE.bossEvery)} sales event a boss walks in as well, a little after the doors open: nothing slows him, his pep talks cheer up the shoppers around him, and if he reaches a till he counts as ${TUNE.bossRefunds} refunds.`),
-      h('li', null, h('b', null, 'Except dads. '), 'Dads arrive in a line, ignore free samples, and step straight over your belts. Only crates, machines and towers stop one. His patience runs out by itself, so waste his time: he ignores wet floor signs and slips on them.')),
+      h('li', null, h('b', null, 'Except dads. '), 'Dads arrive in a line, walk fast and ignore free samples and anything else meant to distract a man. His patience runs out by itself, so waste his time: he ignores wet floor signs and slips on them.')),
     h('h3', null, 'Controls'),
     // On a touch screen (only shown there): fingers instead of the mouse and keys.
     h('ul', { class: 'keys touch-only' },
@@ -36,7 +38,9 @@ export function howToPlay() {
       h('li', null, h('b', null, 'Hold a button'), ' in the bar to read what it does'),
       h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It just opens them: whatever The Back would have made in the time you skip is never made')),
     h('ul', { class: 'keys key-only' },
-      h('li', null, h('kbd', null, '1'), '–', h('kbd', null, '0'), ', ', h('kbd', null, '-'), ' and ', h('kbd', null, '='), ' pick a building, or click it in the bar'),
+      h('li', null, h('kbd', null, 'Tab'), ' switches between the shop floor and The Back'),
+      // (0.4: each floor has its own bar, and the number keys follow the order of the one shown.)
+      h('li', null, 'The number keys (and ', h('kbd', null, '-'), ' in The Back) pick a building from the bar on show, or click it in the bar'),
       h('li', null, h('kbd', null, 'Click'), ' build · ', h('kbd', null, 'Drag'), ' build a line; belts follow the drag'),
       h('li', null, h('kbd', null, 'R'), ' rotate what you are holding, or the building under the mouse when holding nothing'),
       h('li', null, h('kbd', null, 'Right-click'), ' or ', h('kbd', null, 'X'), ' remove (75% back) · ', h('kbd', null, 'Esc'), ' put it down'),
@@ -48,7 +52,7 @@ export function howToPlay() {
       h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It just opens them: whatever The Back would have made in the time you skip is never made')));
 }
 
-/** The money rule in a sentence, numbers from the rules (0.4: the factory no longer pays the bills). */
+/** The money rule in a sentence, numbers from the rules (0.4: The Back makes no money). */
 function payLine() {
   const p = payFacts();
   return `Each one you survive pays every one of you the whole amount (${money(p.pay(1))} for the first, more each time), plus a speed bonus of up to ${Math.round(p.share * 100)}% of that for clearing the floor within ${p.best} seconds of the last shopper coming in (nothing after ${p.par}), scaled by how many you stopped rather than refunded. The EVENT PAY panel shows both.`;
@@ -76,14 +80,20 @@ function shopperGuide() {
       h('span', { class: 'guide-super' }, h('b', null, 'Ranks: '), b.titles.map((t) => `${t.title} (event ${t.from}${t.tier === b.titles.length ? ' on' : ''})`).join(', '), '.'))));
 }
 
-/** Every building in one line each. Holding a building in the build bar shows the full version. */
+/**
+ * Every building in one line each, the shop floor's and then The Back's (0.4). Holding a building in
+ * the build bar shows the full version.
+ */
 function buildingGuide() {
+  const list = (how) => h('dl', { class: 'guide' }, Object.entries(how).map(([k, v]) => [
+    h('dt', null, BUILD[k] ? (BUILD[k].fixed ? BUILD[k].name : `${BUILD[k].name} ($${BUILD[k].cost})`) : k),
+    h('dd', null, v.does),
+  ]));
   return h('div', null,
     h('h3', null, 'What the buildings do'),
-    h('dl', { class: 'guide' }, Object.entries(HOW).map(([k, v]) => [
-      h('dt', null, BUILD[k] ? `${BUILD[k].name} ($${BUILD[k].cost})` : k),
-      h('dd', null, v.does),
-    ])));
+    list(HOW),
+    h('h3', null, 'The Back'),
+    list(BACK_HOW));
 }
 
 function overlay(cls, ...children) {
@@ -119,7 +129,6 @@ export function endScreen(s, debLine, me = -1, { onEndless = null, record = null
   const players = s.players.map((p) => h('tr', { class: p === office ? 'end-office' : null },
     h('td', null, h('i', { class: 'chip', style: { background: safeColor(p.color) } }), ` ${p.name}`),
     h('td', null, p === office ? h('span', { class: 'ho-tag' }, 'HEAD OFFICE') : p.role),
-    h('td', null, String(p.all.shipped)),
     h('td', null, String(p.all.stopped)),
     h('td', null, money(p.all.earned)),
     h('td', null, money(p.all.spent)),
@@ -184,7 +193,7 @@ export function endScreen(s, debLine, me = -1, { onEndless = null, record = null
       stat('Refunds', `${s.refunds} / ${s.refundLimit}`),
       stat(office ? "Store's cash left" : 'Cash left', money(Math.floor(cashLeft + 1e-6)))),
     h('table', { class: 'end-table' },
-      h('thead', null, h('tr', null, ['Employee', 'Role', 'Shipped', 'Stopped', 'Earned', 'Wasted', 'Built'].map((t) => h('th', null, t)))),
+      h('thead', null, h('tr', null, ['Employee', 'Role', 'Stopped', 'Earned', 'Wasted', 'Built'].map((t) => h('th', null, t)))),
       h('tbody', null, players)),
     hand,
     debLine ? h('div', { class: 'end-deb' }, h('span', { class: 'end-deb-face', html: debFace(stored ? 'smug' : 'angry') }), h('p', null, debLine)) : null,

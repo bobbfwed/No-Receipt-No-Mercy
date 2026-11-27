@@ -39,7 +39,8 @@ export const CARD_ART = {
   hardy: { kind: true },
   hurry: { kind: true },
   clearance: { symbol: 'tagDown' },
-  klepto: { building: 'belt', badge: 'remove' },
+  // (0.4: the shoplifters steal stock from security now: the Doorbuster, the worst of them.)
+  klepto: { shopper: 'hunter', sup: true },
   shrinkflation: { symbol: 'tagUp' },
   pissing: { shopper: 'dog', sup: true },
   doorbuster: { symbol: 'crowd' },
@@ -47,10 +48,11 @@ export const CARD_ART = {
   dryjanuary: { shopper: 'drinker' },
   retreat: { shopper: 'boss' },
   // ---- Good for the players
-  lootbox: { symbol: 'box' },
-  asseenontv: { symbol: 'gadget' },
+  // (0.4: these cards show the parts of The Back they are about now.)
+  lootbox: { building: 'bin', badge: 'boost' },
+  asseenontv: { building: 'rebrand', badge: 'boost' },
   regifting: { symbol: 'gift' },
-  offatruck: { building: 'unpacker', badge: 'boost' },
+  offatruck: { building: 'drop', badge: 'boost' },
   mallcop: { building: 'forklift', badge: 'boost' },
   pulledout: { shopper: 'preggo' },
   eyesup: { shopper: 'flasher' },
@@ -71,14 +73,16 @@ export const CARD_ART = {
   convention: { shopper: 'cosplay' },
   bulkbuy: { symbol: 'crowd' },
   flashmob: { symbol: 'crowd' },
-  artisanal: { building: 'packer' },
+  // A craft distillery, hand-rubbed: the Spite Still (0.4).
+  artisanal: { building: 'still' },
   premature: { building: 'railgun' },
   fathersday: { shopper: 'dad' },
   payday: { symbol: 'coins' },
   mallwalkers: { shopper: 'hunter' },
   openbar: { shopper: 'drinker' },
   rentacop: { building: 'forklift', badge: 'tagDown' },
-  sweatshop: { building: 'press', badge: 'tagDown' },
+  // Cheap labour in The Back: the Unpaid Intern with a price tag going down (0.4).
+  sweatshop: { building: 'intern', badge: 'tagDown' },
 };
 
 const S = 'stroke="#111" stroke-width="2"';
@@ -105,12 +109,6 @@ export const SYMBOLS = {
   receipt: `<path d="M9 3h22v32l-3.7-2.5-3.7 2.5-3.6-2.5-3.7 2.5-3.6-2.5L9 35z" fill="#fff" ${S} stroke-linejoin="round"/>
     <path d="M13 10h14M13 15h10M13 20h14" stroke="#6b7280" stroke-width="2"/>
     <text x="20" y="30" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="8" font-weight="900" fill="#b91c1c">x2</text>`,
-  box: `<path d="M5 14l15-7 15 7v18l-15 6-15-6z" fill="#c8915a" ${S} stroke-linejoin="round"/><path d="M5 14l15 6 15-6M20 20v18" fill="none" ${S}/>
-    <text x="13" y="31" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="11" font-weight="900" fill="#7c2d12">?</text>
-    <text x="28" y="31" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="11" font-weight="900" fill="#7c2d12">?</text>`,
-  gadget: `<rect x="8" y="4" width="24" height="32" rx="4" fill="#1f2937" ${S}/><rect x="11" y="8" width="18" height="17" rx="1" fill="#38bdf8"/>
-    <path d="M14 17l4-5 3 4 2-2 3 4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
-    <circle cx="15" cy="30" r="2.2" fill="#ef4444"/><circle cx="20" cy="30" r="2.2" fill="#facc15"/><circle cx="25" cy="30" r="2.2" fill="#22c55e"/>`,
   gift: `<rect x="5" y="16" width="30" height="20" rx="1.5" fill="#c084fc" ${S}/><rect x="3" y="11" width="34" height="7" rx="1.5" fill="#a855f7" ${S}/>
     <path d="M20 11v25" stroke="#facc15" stroke-width="4"/><path d="M20 11q-11-9-11-1t11 1q11-9 11-1t-11 1" fill="#fde047" ${S}/>`,
 };

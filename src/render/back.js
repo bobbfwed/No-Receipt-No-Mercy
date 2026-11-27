@@ -28,7 +28,7 @@ const SPEED = (STEP * TICK_HZ) / SUB;
 const ITEM = 24;
 /** Sprite box for a part: a tile plus room for the Returns Drop's duct and the intern's head. */
 const PART = 80;
-/** Chevron steps per chevron spacing, as on the shop floor's belts. */
+/** Chevron steps per chevron spacing, as in the belt sprites (buildings.js). */
 const PHASES = 8;
 /** How long a Clearance Bin's "+$" floats, in milliseconds. */
 const FLOAT_MS = 1300;

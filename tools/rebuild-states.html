@@ -4,13 +4,14 @@
   ready-made demo game (/?demo=1&seed=7&ff=300) in a frame and changes its state the way a gym bro
   and a Rebuild press would. Needs the dev server: node tools/serve.mjs, then
   http://localhost:5173/tools/rebuild-states.html?state=...
-    ready    three of your buildings wrecked, nothing paid: lit, "REBUILD 3 · $47 / Your shit is
-             broken. Fix it", the build bar's Rebuild button nudging
-    dim      the same with no cash: greyed, "Too broke. Need $2"
+    ready    three of your buildings wrecked (a sprinkler and two Crate Stacks), nothing paid: lit,
+             "REBUILD 3 · $50 / Your shit is broken. Fix it", the build bar's Rebuild button nudging
+    dim      the same with no cash: greyed, "Too broke. Need $5"
     waiting  a wrecked sprinkler already paid for, a fallen drunk lying in its hole: dashed and
              greyed, "PAID $40 · 1 waiting / Some idiot is standing in the hole", an orange cone
              on the wreck, the build bar's button "1 waiting"
-    mixed    one paid for and waiting, one not: lit, "REBUILD 1 · $2 / 1 more paid for and waiting"
+    mixed    one paid for and waiting, one not (a Crate Stack): lit, "REBUILD 1 · $5 / 1 more paid
+             for and waiting"
   Allow the page a few seconds (shot.ps1 -WaitMs 6000).
 -->
 <html><head><meta charset="utf-8"><title>Rebuild button states</title></head>
@@ -45,8 +46,8 @@ function drunkOn(i) {
 const broke = () => setInterval(() => { s().players[me].cash = 0; }, 16);
 if (look === 'ready' || look === 'dim') {
   wreck(mine('sprinkler'));
-  wreck(mine('crate') >= 0 ? mine('crate') : mine('forklift'));
-  wreck(mine('belt'));
+  wreck(mine('crate'));
+  wreck(mine('crate'));
   if (look === 'dim') broke();
 }
 if (look === 'waiting' || look === 'mixed') {
@@ -56,7 +57,7 @@ if (look === 'waiting' || look === 'mixed') {
   // Paid for, as a Rebuild press would: its whole rebuild price held on the wreck.
   r.by = me;
   r.res = rebuildDeal(r, Infinity).pay;
-  if (look === 'mixed') wreck(mine('belt'));
+  if (look === 'mixed') wreck(mine('crate'));
 }
 s().gridVer++;
 </script>

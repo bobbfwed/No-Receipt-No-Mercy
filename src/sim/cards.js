@@ -294,11 +294,10 @@ export function cardRefund(state, s, def) {
 export const cardPay = (state) => mul(state, 'overtime', 'pay') * mul(state, 'clearance', 'pay') * mul(state, 'payday', 'pay');
 
 /**
- * The group a building's price is in for rentacop and sweatshop: 'security' (Crate Stacks count:
- * they are the security side's wall), 'back' (The Back's parts), or the kind's own group (the old
- * shop-floor factory, which neither card touches any more).
+ * The group a building's price is in for rentacop and sweatshop: 'security' (Crate Stacks, the
+ * 'walls' group, count: they are the security side's wall) or 'back' (The Back's parts).
  */
-const priceGroup = (k, def) => (k === 'crate' ? 'security' : def.group);
+const priceGroup = (k, def) => (def.group === 'walls' ? 'security' : def.group);
 
 /**
  * What a building of kind k costs to put down in this game (not to rebuild):
@@ -430,7 +429,7 @@ export const supportDog = (state, s) => s.k === 'blind' && cardPicks(state, 'sup
  * True if a shopper of this definition may stop to pet a support dog: not dads, the boss, babies
  * or puppies (they never stop), and not the men with dogs of their own.
  */
-export const stopsToPet = (def) => !def.boss && !def.baby && !def.bolts && !def.hopsBelts;
+export const stopsToPet = (def) => !def.boss && !def.baby && !def.bolts && !def.dad;
 
 /**
  * Whether a Free Sample table being put down hands out booze (eightyproof: a share of tables,

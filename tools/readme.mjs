@@ -1,6 +1,7 @@
 // Keeps the parts of README.md that change as the game grows up to date: the version number, the
-// list of store designs with a picture of each, and the list of shoppers with pictures and what
-// they do. The text comes from the game's own data, so the README cannot drift from the game.
+// list of store designs with a picture of each, The Back's parts and supplies (0.4), and the list
+// of shoppers with pictures and what they do. The text comes from the game's own data, so the
+// README cannot drift from the game.
 //
 //   node tools/readme.mjs           rewrite those parts of README.md
 //   node tools/readme.mjs --shots   also retake the pictures in docs/img/ first (the dev server
@@ -8,14 +9,17 @@
 //                                   design or a shopper's drawing changes, or one is added.
 //
 // test/readme.test.js fails if README.md is out of date, so run this after every change to
-// src/version.js, the maps or the shoppers.
+// src/version.js, the maps, The Back or the shoppers.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, TUNE, mapSize } from '../src/sim/index.js';
-import { SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../src/content/help.js';
-import { SHOPPER_ORDER, shopperFacts, bossFacts, fmt, paceText, edgeText, releaseText } from '../src/content/facts.js';
+import { MAP_DESIGNS, MAP_SIZES, SHOPPERS, BUILD, TUNE, mapSize } from '../src/sim/index.js';
+import { SHOPPER_HELP, SUPER_HELP, BOSS_HELP, BACK_HOW } from '../src/content/help.js';
+import {
+  SHOPPER_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, bossFacts, fmt, paceText, edgeText, releaseText,
+  supplyFacts, tierFacts, payText,
+} from '../src/content/facts.js';
 import { versionText } from '../src/version.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,7 +31,7 @@ export function generated() {
   const version = `**Play version ${versionText()} now: ${SITE}** (nothing to install; works in a browser on a computer, a tablet or a phone).`;
 
   const maps = [
-    'The host picks a design and a size before the game starts. Each player gets his own shopper entrance, and the painted floor shows where each kind of machine may go.',
+    'The host picks a design and a size before the game starts. Each player gets his own shopper entrance. The store\'s walls and shelves go all the way down, so The Back under it has the same shape, with the Returns Drops where the store put them.',
     '',
     ...Object.entries(MAP_DESIGNS).flatMap(([k, d]) => [`### ${d.name}`, d.desc, '', `![${d.name}](docs/img/map-${k}.png)`, '']),
     // (Two designs have plots of their own: the Back Passage's is taller, to stack up more
@@ -58,7 +62,24 @@ export function generated() {
     })(),
   ].join('\n');
 
-  return { version, maps, shoppers };
+  // The Back (0.4): the floor under the shop, its parts and the supplies it makes.
+  const price = (k) => (k === 'drop' ? 'put down by the store' : k === 'lift' ? 'comes with the building' : `$${BUILD[k].cost}`);
+  const tiers = tierFacts();
+  const back = [
+    `Under the shop is **The Back** (Tab switches floors). Nothing down there gets in a shopper's way. Returns Drops cough up returned junk; belts carry it to machines that turn it into supplies; more belts carry those to the Dumbwaiter under each security building, which sends them up. Security works as built until it is stocked, and better while it is, and every supply is used up as the building works. The Back makes no money, bar a Clearance Bin's pennies for leftovers. ${payText()}`,
+    '',
+    '| Part | Price | What it does |',
+    '|---|---|---|',
+    ...BACK_ORDER.map((k) => `| **${BUILD[k].name}** | ${price(k)} | ${BACK_HOW[k].does} |`),
+    '',
+    '| Supply | Made by | What it does upstairs |',
+    '|---|---|---|',
+    ...supplyFacts().map((s) => `| **${s.name}** | ${s.maker} | ${s.works ? (s.track === 'dur' ? 'Each use soaks up one gym bro hit' : `More ${s.gives}`) : 'For the dads. Coming soon: for now it only sits in the Dumbwaiter'} (${s.takers.length === SECURITY_ORDER.length ? 'every security building' : s.takers.join(', ')}) |`),
+    '',
+    `Every supply comes in four brands. The machines make ${tiers[0].name}; each pass through a Rebrander puts it up one: ${tiers.slice(1).map((t, i) => `${t.name} in ${fmt(t.secs)} s from ${tiers[i].name}`).join(', ')}. A better brand does more: Bottled Spite, Rage Cola and Extension Cord count as ${tiers.map((t) => `+${t.level}`).join(', ')} levels, a roll of Duct Tape soaks up ${tiers.map((t) => t.tape).join(', ')} hits, and a unit of Razor Wire is to stop ${tiers.map((t) => t.wire).join(', ')} dads.`,
+  ].join('\n');
+
+  return { version, maps, back, shoppers };
 }
 
 /** README text with the generated parts put in. */

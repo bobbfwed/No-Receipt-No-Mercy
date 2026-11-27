@@ -26,7 +26,7 @@ import { noteRecord } from './record.js';
 import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
 import { createPointer } from './pointer.js';
-import { BUILD, ZONES, statsOf, sizeOf } from '../sim/index.js';
+import { BUILD, statsOf, sizeOf } from '../sim/index.js';
 
 /** A phone-sized screen (the same limits as the narrow layout in style.css). */
 const narrow = () => innerWidth < 1100 || innerHeight < 560;
@@ -116,45 +116,6 @@ export function startGame(session, {
   };
   mapBox.addEventListener('pointerdown', (e) => { e.preventDefault(); mapBox.setPointerCapture(e.pointerId); jump(e); });
   mapBox.addEventListener('pointermove', (e) => { if (e.buttons & 1) jump(e); });
-
-  // On a big map the painted floor a machine needs may be off screen. When it is, say where the
-  // nearest patch is and offer to go there.
-  let zoneSpot = null;
-  const zoneText = h('span');
-  const zoneHint = h('div', { class: 'zone-hint hidden', role: 'status' }, zoneText,
-    h('button', { type: 'button', class: 'btn-small', onclick: () => { if (zoneSpot) renderer.centerOn(zoneSpot.x + 0.5, zoneSpot.y + 0.5); } }, 'Take me there'));
-  stage.append(zoneHint);
-  let zoneKey = '';
-  function updateZoneHint(s) {
-    const def = BUILD[input.tool];
-    const ch = def && s.zones ? def.zone : null;
-    const r = renderer.viewRect();
-    const key = ch ? `${ch},${Math.round(r.x0)},${Math.round(r.y0)},${Math.round(r.x1)},${Math.round(r.y1)}` : '';
-    if (key === zoneKey) return;
-    zoneKey = key;
-    zoneSpot = null;
-    if (ch) {
-      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
-      let best = Infinity, seen = false;
-      for (let i = 0; i < s.zones.length && !seen; i++) {
-        if (s.zones[i] !== ch) continue;
-        const x = i % s.w, y = (i / s.w) | 0;
-        if (x + 1 > r.x0 && x < r.x1 && y + 1 > r.y0 && y < r.y1) { seen = true; break; }
-        const d = (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2;
-        if (d < best) { best = d; zoneSpot = { x, y }; }
-      }
-      if (seen) zoneSpot = null;
-      if (zoneSpot) {
-        const dx = zoneSpot.x + 0.5 - cx, dy = zoneSpot.y + 0.5 - cy;
-        const ns = Math.abs(dy) > Math.abs(dx) * 0.4 ? (dy < 0 ? 'up' : 'down') : '';
-        const ew = Math.abs(dx) > Math.abs(dy) * 0.4 ? (dx < 0 ? 'left' : 'right') : '';
-        const many = def.name.endsWith('s') ? `${def.name}es` : `${def.name}s`;
-        zoneText.textContent = `No ${ZONES[ch].name} floor on screen. ${many} only go there. Nearest: ${[ns, ew].filter(Boolean).join(' and ')}. `;
-        zoneHint.style.borderColor = ZONES[ch].color;
-      }
-    }
-    zoneHint.classList.toggle('hidden', !zoneSpot);
-  }
 
   const chat = createChat(session, { playSound });
   stage.append(chat.el);
@@ -395,7 +356,6 @@ export function startGame(session, {
     deb.tick(now);
     toasts.tick(now);
     if (training) training.tick();
-    updateZoneHint(s);
     // The strip of cards (and, during the deal, the cards flying into it).
     const handUp = strip.update(s, dealFilled);
     if (handUp !== wasHand) { wasHand = handUp; root.classList.toggle('has-hand', handUp); }

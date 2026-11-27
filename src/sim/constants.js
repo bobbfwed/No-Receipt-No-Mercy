@@ -20,7 +20,7 @@ export const PLAYER_COLORS = ['#3b82f6', '#f97316', '#22c55e', '#e11d8f', '#eab3
 /**
  * What the host can set before a game starts (in the menu, and again in the lobby).
  * difficulty: `hp` multiplies every shopper's patience (the boss's and the babies' too), `pay`
- *   multiplies what goods sell for, the end-of-wave bonus and the boss's bounty. Normal is the
+ *   multiplies the event pay, a stand's sales (the warranty card) and the boss's bounty. Normal is the
  *   baseline, x1 and x1 by definition: every number in this file is Normal's, and the handbook and
  *   README show them as they are.
  */
@@ -35,7 +35,7 @@ export const SETTINGS = {
   // as before, and the other levels were given round numbers relative to it (each within 1% of its
   // old real effect; see PLAN.md, version 0.2.10).
   difficulty: {
-    easy: { name: 'Easy', hp: 0.75, pay: 1.25, note: 'Shoppers give up much sooner and goods sell for a lot more.' },
+    easy: { name: 'Easy', hp: 0.75, pay: 1.25, note: 'Shoppers give up much sooner and every sales event pays a lot more.' },
     normal: { name: 'Normal', hp: 1, pay: 1, note: 'The standard game. Every number in the handbook is for this one.' },
     hard: { name: 'Hard', hp: 1.3, pay: 0.85, note: 'More patient shoppers, a bit less money.' },
     brutal: { name: 'Brutal', hp: 1.65, pay: 0.7, note: 'For people who enjoy being told off.' },
@@ -45,46 +45,11 @@ export const SETTINGS = {
 export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater'];
 
 /**
- * Things that ride on belts. `value` is the cash for one reaching a shipping chute, before it is
- * rounded to whole dollars (times the difficulty's pay): on Normal a box pays $2, a gadget $8 and a
- * gift set $15. (2, 7 and 16 times Normal's old x1.1 until 0.2.10; anything shown to a player is
- * the rounded amount.) The gift set was 17.6 ($18) until 0.2.13, when the Packer was 3 seconds an
- * item; with every machine now at the same speed it is 17.6 x 2.5 / 3, so a full production line
- * (which the Packer held to its pace) still earns what it did.
- */
-export const ITEMS = {
-  box: { name: 'Mystery Box', value: 2.2 },
-  gadget: { name: 'Gadget', value: 7.7 },
-  giftset: { name: 'Gift Set', value: 14.7 },
-};
-
-/**
- * Every factory machine (Unpacker, Press, Packer) works at the same pace, so none outruns another
- * (the owner's request): MACHINE_SECS is the time for one item. (Their bought speed levels went
- * with bought upgrades in 0.4; the machines themselves go in a later step.)
- */
-export const MACHINE_SECS = 2.5;
-
-/**
- * Marked areas of the floor. Each of the four factory machines may only be built on its own
- * kind of floor, and the areas are apart from each other, so goods have to travel between them
- * by belt. Everything else can be built anywhere. Where the areas are is worked out in maps.js.
- * `color` is the floor paint, and each machine is drawn in its floor's colour (blue Unpacker,
- * orange Press, purple Packer, green Chute) so the build bar and the floor match.
- */
-export const ZONES = {
-  u: { name: 'Loading Bay', kind: 'unpacker', color: '#38bdf8' },
-  p: { name: 'Press Shop', kind: 'press', color: '#f97316' },
-  k: { name: 'Gift Wrap', kind: 'packer', color: '#c084fc' },
-  c: { name: 'Shipping', kind: 'chute', color: '#22c55e' },
-};
-
-/**
  * Everything a player can place.
- * group: which half of the game it belongs to ('factory' or 'security').
- * blocks: shoppers cannot walk through it (this is what makes the factory a maze).
+ * group: where it goes in the build bar: 'walls' (the Crate Stack), 'security', or 'back' (The
+ *   Back's parts, below).
+ * blocks: shoppers cannot walk through it (security and Crate Stacks are what make the maze).
  * rot: it has a facing direction.
- * zone: it may only be built on that kind of marked floor (a key of ZONES), where the map has them.
  * targets: an area tower hits at most this many shoppers at once (the ones nearest the tills).
  * size: [w, h] tiles when facing east or west; facing north or south it is [h, w]. Absent: 1 x 1.
  *   The top-left tile of the footprint holds the building; the others point at it (see state.js).
@@ -102,35 +67,14 @@ export const ZONES = {
  *   (Until 0.4 these were upgrades bought with cash, and the tracks also carried their prices.)
  */
 export const BUILD = {
-  belt: {
-    name: 'Belt', cost: 5, group: 'factory', blocks: true, rot: true,
-    desc: 'Moves goods. Shoppers cannot cross it. Dads step right over.',
-  },
-  // Factory machines all share MACHINE_SECS.
-  unpacker: {
-    name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: MACHINE_SECS, makes: 'box', zone: 'u',
-    desc: 'Opens pallets and spits out a Mystery Box every 2.5 seconds.',
-  },
-  press: {
-    name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: MACHINE_SECS, zone: 'p',
-    desc: 'Crushes a Mystery Box into a Gadget.',
-  },
-  packer: {
-    name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: MACHINE_SECS, zone: 'k',
-    desc: 'Wraps a Gadget into a Gift Set, the same thing at nearly twice the price.',
-  },
-  chute: {
-    name: 'Shipping Chute', cost: 40, group: 'factory', blocks: true, zone: 'c',
-    desc: 'Sells whatever falls into it.',
-  },
   crate: {
-    name: 'Crate Stack', cost: 10, group: 'factory', blocks: true,
-    desc: 'A cheap wall. Does nothing else, but even a dad cannot climb it.',
+    name: 'Crate Stack', cost: 10, group: 'walls', blocks: true,
+    desc: 'A cheap wall. Does nothing else, and a gym bro goes through it in one hit.',
   },
   // (0.4) `lift`: a Dumbwaiter under every tile of it, through which The Back stocks it with
   // supplies (back.js). `shots`: the uses one unit of Bottled Spite, Rage Cola or Extension Cord
   // gives this kind (a shot, or a shopper it acts on), so a slow gun and a fast one eat at about
-  // the same rate. Crate Stacks and the old factory have neither.
+  // the same rate. Crate Stacks have neither.
   sprinkler: {
     name: 'Pepper Sprinkler', cost: 80, group: 'security', blocks: true, tower: true, lift: true, shots: 20,
     range: 1.75, dmg: 6, cd: 0.5, aoe: true, targets: 4,
@@ -167,7 +111,7 @@ export const BUILD = {
     up: { dmg: { mul: 1.15, keep: 0.88, rush: 0.85 }, rng: { add: 0.5 }, dur: {} },
     desc: 'Demonstrates knives and barbecues on a television. Shoppers in reach may stop to watch, or hurry past.',
   },
-  // The Back (0.4): the floor under the shop, where the factory is moving. Its parts are kinds like
+  // The Back (0.4): the floor under the shop, where the factory is. Its parts are kinds like
   // any other, but with `back: true` they live in state.back, not state.grid, are placed with the
   // `f: 1` commands, and are left out of everything that lists the shop floor's buildings (the
   // build bar, hotkeys, handbook, README: see SHOP_KINDS below). They never block shoppers. The
@@ -293,7 +237,8 @@ export const BACK = {
  * browses: stops for free samples, and steals stock from the security buildings he walks past.
  * drain: patience lost per second just for being in the store.
  * ignoresSigns: not slowed by wet floor signs, but may slip on them.
- * hopsBelts: steps over conveyor belts instead of walking around them (machines and crates still stop him).
+ * dad: walks by his own route map (DAD in path.js). For now it is blocked by exactly what blocks
+ *   everyone else; it is kept apart because dads get rules of their own next (Razor Wire).
  * messy, kid, bolts, smashes: see the comments on the shoppers that have them.
  * steady: immune to slowing and slipping.
  * nag: slows towers near her.
@@ -327,7 +272,7 @@ export const SHOPPERS = {
   },
   // The super dad does not slip and his patience runs out half as fast.
   dad: {
-    name: 'Dad', hp: 30.6, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, hopsBelts: true, gawks: true, pitch: [0.2, 0.3], tough: 'sprinkler',
+    name: 'Dad', hp: 30.6, speed: 2.4, refund: 25, drain: 1, ignoresSigns: true, dad: true, gawks: true, pitch: [0.2, 0.3], tough: 'sprinkler',
     sup: { name: 'Dad on a Mission', from: 7, hp: 2.5, speed: 1.25, drain: 0.5, steady: true, pitch: [0.1, 0.45] },
   },
   // The super Karen slows towers twice as far away, and to a quarter speed instead of half.
@@ -443,7 +388,7 @@ for (const [k, def] of Object.entries(SHOPPERS)) {
  *   1 + TUNE.bossTierHp * (tier - 1) (see bossPatience in step.js).
  * refund: what he takes at a till, times his tier; he also counts as TUNE.bossRefunds refunds.
  * steady, no browses, no gawks, pitch [0, 0]: nothing slows or stops him (wet floor signs, messes,
- *   a fallen day drinker, free samples, goods on belts, the TV Salesman, an exhibitionist).
+ *   a fallen day drinker, free samples, stock to steal, the TV Salesman, an exhibitionist).
  * pepEvery, pepRange, pepHeal: every pepEvery seconds he gives a pep talk; every other shopper
  *   within pepRange tiles gets pepHeal of his own full patience back (never above full).
  */
@@ -473,7 +418,7 @@ export const BOSS = {
  * speed: the fastest thing in the store.
  * refund: the cash one takes at a till. A baby counts as no refund toward the limit (the owner's
  *   choice: babies are cash only), and its $5 is not scaled by TUNE.crowdScale like a real refund.
- * No browses, no gawks, pitch [0, 0]: free samples, goods on belts, the TV Salesman and an
+ * No browses, no gawks, pitch [0, 0]: free samples, stock to steal, the TV Salesman and an
  *   exhibitionist mean nothing to them. Wet floors, messes and a fallen drunk slow them like anyone.
  */
 export const BABY = {
@@ -599,13 +544,6 @@ export const TUNE = {
   waves: 20,
   buildSecs: 45, // pause between waves; players can start early
   sellBack: 0.75, // share of the price returned when you remove something
-  // Tiles per second. Items ride at least half a tile apart and a simulation tick is 1/30 s, so a
-  // belt carries one item every ceil(15 / beltSpeed) ticks or so. It was 2 (3.75 items a second)
-  // until 0.2.13, exactly what one factory machine makes at the new top speed level, with nothing
-  // to spare. At 5.25 a belt carries 10 a second: two top-level machines feeding one belt (7.5)
-  // with a third to spare. (Exactly 5 still only carries 7.5: the half-tile gap lands on the
-  // fourth tick, not the third, when an item moves from one belt to the next.)
-  beltSpeed: 5.25,
   // Patience in wave n is base * (1 + hpGrowth * (n - 1) + hpGrowth2 * (n - 1)^2):
   // gentle early, steep late.
   hpGrowth: 0.15,
@@ -838,8 +776,8 @@ export const CARDS = {
   payday: { side: 'odd', pay: 1.2, refund: 1.6 }, // the event pay and every refund, times (refund 1.4 before the playtest: it was a good card; pay was goods' prices until 0.4)
   mallwalkers: { side: 'odd', speed: 1.15, hp: 0.85 }, // every shopper but the boss
   openbar: { side: 'odd', who: 'drinker', crowd: 2, hp: 0.7 },
-  // Prices by group: security (Crate Stacks count as security here) and The Back's parts (0.4; the
-  // shop floor's old factory until then). See buildPrice in cards.js.
+  // Prices by group: security (Crate Stacks, the 'walls' group, count as security here) and The
+  // Back's parts (0.4; the shop floor's old factory until then). See buildPrice in cards.js.
   rentacop: { side: 'odd', cost: { security: 0.8, back: 1.2 } },
   sweatshop: { side: 'odd', cost: { back: 0.8, security: 1.2 } },
 };

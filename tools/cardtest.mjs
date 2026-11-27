@@ -30,12 +30,12 @@
 // Also printed per hand: how many games collapsed (lost by event 10), and the refunds taken by the
 // end of event 12 (CHECK below), which shows effects too small to move the event lost in.
 //
-// The yardstick is "keen" and "focus", the two players who keep investing: without cards they lose
-// around event 16. Read them beside their "+steady" versions. Without the steady opening their
-// first events are a knife edge (two seeds in twenty collapse by event 7 without cards, and $25
-// more or less starting cash moves their average by several events), so any card that moves money
-// early (prices, refunds, sale prices) shows up mostly as seeds tipped over that edge or rescued
-// from it; the steady versions never collapse and show the card's own effect.
+// The yardstick is "keen" and "focus", the two players who keep investing. Since 0.4.00 (the bots
+// build walls of Crate Stacks and no factory) they no longer collapse early without cards: on seeds
+// 1-20 keen loses in event 13 or 14 and focus in 12 or 13, and none of the eighty games (the four
+// players) is lost by event 10. Their "+steady" versions are still run beside them; without cards they play exactly the
+// same games now (the steady opening mattered when the old factory left them short of cash in the
+// first events), but a card that makes things dearer early can still tell them apart.
 // How long it takes on a six-core, twelve-thread machine (11 games at once, two to six seconds
 // each): baseline 2 minutes, alone about 45, hands about 10, deal about 6, stalls about 4.
 import { Worker, isMainThread, parentPort } from 'node:worker_threads';

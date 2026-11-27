@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, getField, idShare, patienceFor, difficultyOf, teamCash, kidBack, pupsOf,
   supportDog, trailsFlasher, cardKidRuns, boozeChance, drinks, stopsToPet,
-  CARDS, DEALABLE, SHOPPERS, SUPERS, PUP, BABY, TUNE, TICK_HZ, ST, NORMAL, HOP, GHOST, UNREACHABLE, walkable, addStock, itemCode,
+  CARDS, DEALABLE, SHOPPERS, SUPERS, PUP, BABY, TUNE, TICK_HZ, ST, NORMAL, DAD, GHOST, UNREACHABLE, walkable, addStock, itemCode,
 } from '../src/sim/index.js';
 
 /** A game with these cards, one rich player, no losing. */
@@ -304,12 +304,12 @@ function dadAndFlashers(cards, dadAt, flashers, { id = idFor('eyesup'), build = 
 }
 /** Plays until the dad is gone, checking he is never less than the gap behind her (by each one's own map). */
 function trail(s, dad, fs) {
-  const hop = getField(s, HOP), dist = getField(s, NORMAL);
+  const dadMap = getField(s, DAD), dist = getField(s, NORMAL);
   let closest = Infinity, waited = 0, movedAfter = null;
   const ev = run(s, 60, () => !s.shoppers.length, (e) => {
     if (dad.ex !== undefined) {
       const her = s.shoppers.find((o) => o.id === dad.ex);
-      if (her) closest = Math.min(closest, hop[tileOf(s, dad)] - dist[tileOf(s, her)]);
+      if (her) closest = Math.min(closest, dadMap[tileOf(s, dad)] - dist[tileOf(s, her)]);
       if (dad.vx === 0 && dad.vy === 0 && dad.st === ST.WALK) waited++;
     }
     // On the tick the last Exhibitionist leaves the store, he moves on.
@@ -342,16 +342,12 @@ test('eyesup: a dad who comes up behind her falls in, keeps back, and cannot rea
   assert.ok(Math.abs(n / 2000 - CARDS.eyesup.share) < 0.03);
 });
 
-test('eyesup: a dad already ahead of her ignores her, and so does one ahead by his own map (over a belt she must go round)', () => {
-  let o = dadAndFlashers(['eyesup'], [14.5, 7.5], [11.5]);
-  let r = trail(o.s, o.dad, o.fs);
+test('eyesup: a dad already ahead of her ignores her', () => {
+  // (Until 0.4 a dad could also be ahead by his own map, stepping over a belt she had to walk
+  // round. With the shop floor's belts gone his map, DAD, blocks what hers does.)
+  const o = dadAndFlashers(['eyesup'], [14.5, 7.5], [11.5]);
+  const r = trail(o.s, o.dad, o.fs);
   assert.ok(!r.ev.some((e) => e.e === 'trail'));
-  assert.deepEqual(r.order, ['dad', 'flasher']);
-  // A belt down column 16 with a way round at the bottom: she walks round it, he steps over it.
-  const belts = (s) => { for (let y = 1; y <= 13; y++) assert.ok(applyCommand(s, 0, { c: 'place', k: 'belt', x: 16, y, d: 1 }).ok); };
-  o = dadAndFlashers(['eyesup'], [13.5, 7.5], [15.5], { build: belts });
-  r = trail(o.s, o.dad, o.fs);
-  assert.ok(!r.ev.some((e) => e.e === 'trail'), 'by his own map he is nearer the tills than she is by hers');
   assert.deepEqual(r.order, ['dad', 'flasher']);
 });
 
@@ -362,12 +358,12 @@ test('eyesup: a dad who meets her at a doorway waits behind her and goes through
   const door = 7 * s.w + 18;
   // He never steps into the doorway while she is in it or still short of it.
   let barged = false;
-  const hop = getField(s, HOP);
+  const dadMap = getField(s, DAD);
   run(s, 6, () => !s.shoppers.includes(fs[0]) || fs[0].x > 21, () => {
     if (tileOf(s, dad) === door && fs[0].x < 19) barged = true;
   });
   assert.equal(barged, false);
-  assert.notEqual(hop[door], UNREACHABLE);
+  assert.notEqual(dadMap[door], UNREACHABLE);
   const r = trail(s, dad, fs);
   assert.ok(r.closest >= 1);
   assert.deepEqual(r.order, ['flasher', 'dad']);

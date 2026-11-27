@@ -11,7 +11,7 @@ import {
   createGame, addPlayer, applyCommand, step, canPlace, setPlayerOnline, waveSpec, statsOf, spentOn,
   rebuildDeal, buildPrice, dropTicks, itemCode, unitsIn, usesPer, addStock, takesSupply, stockCap, makeTicks, rebrandTicks, eventPay, give, stepBack, BACK, STOCK_TRACKS, DIRS, dealCards, cleanHand, hasCard, cardKind, cardKinds, cardParts, cardsShown,
   revealTick, dealLength, idShare, smashReady, patienceFor, bossPatience, CARDS, DEALABLE, CARDS_APART,
-  CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
+  CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
 import { cardSlip, cardFall, cardGrabChance, cardGrabHeal, cardShield, cardPicks } from '../src/sim/cards.js';
 import { HostSession } from '../src/net/session.js';
@@ -510,9 +510,9 @@ test('artisanal: every unit of supply lasts 25% longer (uses rounded up), counte
   assert.equal(unitsIn(b, 'dmg', s), 1, 'still one unit');
 });
 
-test('premature: security fires faster and reaches less far; the old factory\'s machines no longer slow for artisanal', () => {
+test('premature: security fires faster and reaches less far', () => {
   const s = game(['artisanal', 'premature']), plain = game();
-  for (const b of [{ k: 'press' }, { k: 'packer' }, { k: 'unpacker' }]) assert.deepEqual(statsOf(b, s), statsOf(b), b.k);
+  assert.deepEqual(statsOf({ k: 'crate' }, s), statsOf({ k: 'crate' }), 'a Crate Stack has nothing to change');
   for (const k of ['sprinkler', 'forklift', 'railgun']) {
     near(statsOf({ k }, s).cd, statsOf({ k }).cd / CARDS.premature.rate, k);
     near(statsOf({ k }, s).range, statsOf({ k }).range * CARDS.premature.range, k);
@@ -700,8 +700,8 @@ test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, 
     assert.equal(price(['shrinkflation'], k), Math.round(BUILD[k].cost * CARDS.shrinkflation.cost), k);
     assert.equal(price(['staffdiscount'], k), Math.round(BUILD[k].cost * CARDS.staffdiscount.cost), k);
     for (const card of ['rentacop', 'sweatshop']) {
-      // (Crate Stacks count as security for these two; the old factory is in neither group.)
-      const m = k === 'crate' ? CARDS[card].cost.security : CARDS[card].cost[BUILD[k].group] ?? 1;
+      // (Crate Stacks, the walls group, count as security for these two.)
+      const m = k === 'crate' ? CARDS[card].cost.security : CARDS[card].cost[BUILD[k].group];
       assert.equal(price([card], k), m === 1 ? BUILD[k].cost : Math.round(BUILD[k].cost * m), `${card} ${k}`);
     }
   }
@@ -711,7 +711,6 @@ test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, 
     assert.equal(price(['rentacop'], k), Math.max(1, Math.round(BUILD[k].cost * CARDS.rentacop.cost.back)), k);
   }
   assert.equal(price(['sweatshop'], 'crate'), Math.round(BUILD.crate.cost * CARDS.sweatshop.cost.security));
-  assert.equal(price(['sweatshop'], 'press'), BUILD.press.cost, 'the old factory is in neither group');
   // Paid, sold back at the usual share of what was paid, and rebuilt for half of what was paid.
   const s = game(['shrinkflation']);
   const cash = s.players[0].cash;
@@ -1029,7 +1028,7 @@ test('Cards setting: the host switches it in the lobby; nobody else, and not onc
   assert.equal(s.phaseT, -1);
   assert.ok(ev.some((e) => e.e === 'begun'));
   assert.ok(!ev.some((e) => e.e === 'deal' || e.e === 'card'));
-  assert.equal(buildPrice(s, 'belt'), BUILD.belt.cost);
+  assert.equal(buildPrice(s, 'crate'), BUILD.crate.cost);
   // Once the game is on it cannot be changed.
   assert.equal(applyCommand(s, 0, { c: 'settings', cardsOn: true }).ok, false);
   assert.equal(cardsOn(s), false);

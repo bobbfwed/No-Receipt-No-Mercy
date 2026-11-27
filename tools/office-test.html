@@ -102,7 +102,7 @@
     // Building keys and the build bar do nothing.
     for (const k of ['1', '7', 'x', 'u']) key('keydown', k);
     say(g.input.tool === null, `number keys, X and U pick no tool (tool: ${g.input.tool})`);
-    g.input.setTool('belt');
+    g.input.setTool('crate');
     say(g.input.tool === null, 'setTool from the build bar is ignored');
     const before = JSON.stringify(game(host).session.state.grid);
     mouse('pointermove', 6, 6); mouse('pointerdown', 6, 6); mouse('pointerup', 6, 6);

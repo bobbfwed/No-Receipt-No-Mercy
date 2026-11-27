@@ -1,18 +1,17 @@
 // Tests for the rules changed after the owner's playtest: easier difficulty, buildings bigger than
 // one tile, tracks (from 0.4 raised by stock, not bought), durability and half-price rebuilding, the Barcode Laser, the
-// TV Salesman, the longer forklift, the new rules for moms, four new shoppers, and the painted
-// floor kept off the walls. Run with: node --test
+// TV Salesman, the longer forklift, the new rules for moms and four new shoppers. (The painted floor
+// these tests also covered went with the old factory in 0.4.) Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, canPlace, step, queueTrainingWave, waveSpec, crowdShiftAt, getDist,
   footprint, anchorOf, tracksOf, levelIn, levelOf, spentOn, statsOf, rebuildDeal, addStock, itemCode,
-  priceOf, pitchStop, SHOPPERS, SUPERS, BUILD, BACK, SHOP_KINDS, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
+  priceOf, pitchStop, SHOPPERS, SUPERS, BUILD, BACK, SHOP_KINDS, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE,
 } from '../src/sim/index.js';
 import { HostSession, ClientSession, checksum } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
 import { readSave } from '../src/ui/save.js';
-import { factoryFacts } from '../src/content/facts.js';
 
 // Most of these use the original small map, 30 tiles by 16: entrance on the left at rows 7-8,
 // tills on the right at rows 5-10, pillars at (8,4), (20,4), (8,11), (20,11).
@@ -86,35 +85,30 @@ test('Normal is the baseline, exactly x1 and x1; the other levels are round numb
   assert.equal(arrival(s, 'hunter').mhp, 40);
 });
 
-test('spot check per difficulty: the patience a shopper walks in with in sales event 9, and what each kind of goods sells for', () => {
+test('spot check per difficulty: the patience a shopper walks in with in sales event 9', () => {
   // Recorded with a fixed game (seed 4, a Bargain Hunter, a super Karen, a Dad and a super Pregnant
   // Lady walking in in event 9). Normal and Hard: the figures from BEFORE 0.2.10 made Normal the
   // baseline, unchanged. Easy and Brutal: their patience moved from x0.68 / 0.9 to x0.75 and from
   // x1.49 / 0.9 to x1.65, under 1% (before: Easy hunter 111.077547, Brutal hunter 243.390507).
-  // Sale prices on every level: Easy $3 / $10 / $18, Normal $2 / $8 / $15,
-  // Hard $2 / $7 / $12, Brutal $2 / $5 / $10 (a Mystery Box, a Gadget, a Gift Set; the Gift Set lower since 0.2.13).
+  // (Until 0.4 this also checked what the old factory's goods sold for on each level.)
   const want = {
-    easy: { hunter: 110.2608, karen: 1874.4336, dad: 93.72168, preggo: 895.869, sells: 'Mystery Box $3, Gadget $10, Gift Set $18' },
-    normal: { hunter: 147.0144, karen: 2499.2448, dad: 124.96224, preggo: 1194.492, sells: 'Mystery Box $2, Gadget $8, Gift Set $15' },
-    hard: { hunter: 191.11872, karen: 3249.01824, dad: 162.450912, preggo: 1552.8396, sells: 'Mystery Box $2, Gadget $7, Gift Set $12' },
-    brutal: { hunter: 242.57376, karen: 4123.75392, dad: 206.187696, preggo: 1970.9118, sells: 'Mystery Box $2, Gadget $5, Gift Set $10' },
+    easy: { hunter: 110.2608, karen: 1874.4336, dad: 93.72168, preggo: 895.869 },
+    normal: { hunter: 147.0144, karen: 2499.2448, dad: 124.96224, preggo: 1194.492 },
+    hard: { hunter: 191.11872, karen: 3249.01824, dad: 162.450912, preggo: 1552.8396 },
+    brutal: { hunter: 242.57376, karen: 4123.75392, dad: 206.187696, preggo: 1970.9118 },
   };
   for (const [diff, w] of Object.entries(want)) {
     const s = createGame({ seed: 4, settings: { difficulty: diff } });
     addPlayer(s, 'Dave');
     s.wave = 8;
-    place(s, 'unpacker', 3, 3, 0); place(s, 'belt', 4, 3, 0); place(s, 'chute', 5, 3);
     applyCommand(s, 0, { c: 'start' });
     s.spawnQ = ['hunter', 'karen', 'dad', 'preggo'].map((k, i) => [s.tick + 1 + i, k, i % 2, -1]);
     s.shoppers = [];
-    let sale = null;
-    for (let i = 0; i < 10 * TICK_HZ && !sale; i++) for (const e of step(s)) if (e.e === 'sale') sale = e;
+    for (let i = 0; i < 10 * TICK_HZ && s.shoppers.length < 4; i++) step(s);
     for (const k of ['hunter', 'karen', 'dad', 'preggo']) {
       const m = s.shoppers.find((x) => x.k === k);
       assert.ok(Math.abs(m.mhp - w[k]) < 1e-6, `${diff} ${k}: ${m.mhp} against ${w[k]}`);
     }
-    assert.equal(`Mystery Box $${sale.v}`, w.sells.split(',')[0], `${diff}: a box sells for what it did`);
-    assert.equal(factoryFacts('chute', SETTINGS.difficulty[diff].pay).find(([label]) => label === 'Sells')[1], w.sells, diff);
   }
 });
 
@@ -184,10 +178,6 @@ test('remove and rotate work from any tile of a big building, on the whole build
   assert.deepEqual(s.grid[at(7, 3)], { k: 'railgun', part: at(5, 3) });
   applyCommand(s, 0, { c: 'rotate', x: 5, y: 3 });
   assert.equal(s.grid[at(5, 3)].d, 0);
-  // A one-tile building still turns a quarter.
-  place(s, 'belt', 10, 10, 0);
-  applyCommand(s, 0, { c: 'rotate', x: 10, y: 10 });
-  assert.equal(s.grid[at(10, 10)].d, 1);
   // Selling from its far end takes the whole thing and pays back its share of what was paid.
   const cash = s.players[0].cash, spent = spentOn(s.grid[at(5, 3)]);
   assert.equal(spent, BUILD.railgun.cost);
@@ -204,8 +194,8 @@ test('each kind has the tracks it should, and only stock raises their levels', (
   const want = {
     sprinkler: ['dmg', 'spd', 'rng', 'dur'], forklift: ['dmg', 'spd', 'rng', 'dur'], railgun: ['dmg', 'spd', 'rng', 'dur'],
     wetfloor: ['dmg', 'dur'], samples: ['dmg', 'rng', 'dur'], salesman: ['dmg', 'rng', 'dur'],
-    // (Bought upgrades went in 0.4: the old factory and crates have no Dumbwaiter, so no tracks.)
-    unpacker: [], press: [], packer: [], belt: [], chute: [], crate: [],
+    // (Bought upgrades went in 0.4: Crate Stacks have no Dumbwaiter, so no tracks.)
+    crate: [],
   };
   assert.deepEqual(Object.keys(want).sort(), [...SHOP_KINDS].sort());
   for (const [k, ts] of Object.entries(want)) assert.deepEqual(tracksOf(k), ts, k);
@@ -242,8 +232,6 @@ test('the stats of any mix of stock, the overall level, and what was spent', () 
   const sign = statsOf({ k: 'wetfloor', s: { dmg: [1, 10] } });
   assert.ok(Math.abs(sign.slow - TUNE.wetSlow * 0.82 ** 2) < 1e-9 && Math.abs(sign.slip - (TUNE.slipChance + 0.16)) < 1e-9);
   assert.ok(Math.abs(sign.slipDmg - TUNE.slipDmg * 1.45 ** 2) < 1e-9);
-  // The old factory runs at its one speed.
-  assert.ok(Math.abs(statsOf({ k: 'press' }).time - 2.5) < 1e-9);
 });
 
 test('a tower stocked with Rage Cola really fires more often', () => {
@@ -298,8 +286,9 @@ test('a crate falls to a gym bro\'s first hit, and he walks through where it sto
   tune(t, { smashOther: 0 });
   for (const sup of [0, 1]) {
     const s = stage(2);
-    // A wall of belts with a crate in it on the gym bro's way, and a gap far away for everyone else.
-    for (let y = 1; y <= 13; y++) assert.ok(place(s, y === 7 ? 'crate' : 'belt', 12, y, 1).ok);
+    // A wall of Free Samples tables (which he does not hit: smashOther is 0) with a crate in it on
+    // the gym bro's way, and a gap far away for everyone else.
+    for (let y = 1; y <= 13; y++) assert.ok(place(s, y === 7 ? 'crate' : 'samples', 12, y, 1).ok);
     send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0, sup }]);
     const sh = arrival(s, 'gymbro');
     sh.hp = 1e9;
@@ -369,10 +358,10 @@ test('placing the same kind on its rubble brings it back as it was, at the rebui
   assert.equal(s.rubble.length, 1);
   // Something else on the rubble just clears it, at the normal price.
   const cash = s.players[0].cash;
-  assert.ok(place(s, 'belt', 5, 9, 0).ok);
-  assert.equal(s.players[0].cash, cash - BUILD.belt.cost);
+  assert.ok(place(s, 'sprinkler', 5, 9, 0).ok);
+  assert.equal(s.players[0].cash, cash - BUILD.sprinkler.cost);
   assert.equal(s.rubble.length, 0);
-  assert.equal(s.grid[at(5, 9)].k, 'belt');
+  assert.equal(s.grid[at(5, 9)].k, 'sprinkler');
 });
 
 // ---------------------------------------------------------------- barcode laser
@@ -590,15 +579,6 @@ test('if something is in the way he gets as near as he can and watches from ther
   for (const p of stops) {
     assert.equal(p.ty, 7, `against the crates, on row 7 (was at ${p.tx},${p.ty})`);
     assert.ok(p.tx === 14 || p.tx === 15, `level with the stand (was at ${p.tx},${p.ty})`);
-  }
-  // What is in the way depends on who is walking: a belt stops a scooter, and a dad steps onto it.
-  for (const [k, n, row] of [['scooter', 12, 7], ['dad', 80, 6]]) {
-    const g = stage(4);
-    place(g, 'salesman', 14, 4);
-    for (let x = 9; x <= 20; x++) assert.ok(place(g, 'belt', x, 6).ok);
-    const seen = walkUps(g, [{ k, n, gap: 1.2, at: 0 }]);
-    assert.ok(seen.length >= 5, `${seen.length} ${k}s stopped`);
-    for (const p of seen) assert.equal(p.ty, row, `a ${k} watches from row ${row} (was at ${p.tx},${p.ty})`);
   }
 });
 
@@ -902,34 +882,6 @@ test('a day drinker changes pace, falls over at corners, and slows anyone who cr
   assert.ok(Math.abs(Math.hypot(h.vx, h.vy) - SHOPPERS.hunter.speed * DT) < 1e-9, 'full speed elsewhere');
 });
 
-// ---------------------------------------------------------------- painted floor
-
-test('no painted floor touches the outer wall, and a Loading Bay in front of an entrance is two tiles further in', () => {
-  for (const design of Object.keys(MAP_DESIGNS)) {
-    for (const size of Object.keys(MAP_SIZES)) {
-      const s = createGame({ map: { design, size } });
-      for (let i = 0; i < s.zones.length; i++) {
-        if (s.zones[i] === ' ') continue;
-        const x = i % s.w, y = (i / s.w) | 0;
-        assert.ok(x >= 2 && y >= 2 && x <= s.w - 3 && y <= s.h - 3, `${design} ${size}: ${s.zones[i]} at ${x},${y} touches the wall`);
-      }
-      for (const door of s.doors) {
-        for (const t of door) {
-          const dx = t % s.w, dy = (t / s.w) | 0;
-          if (dy !== 0 && dy !== s.h - 1) continue;
-          // The Loading Bay is the patch that would sit against the wall.
-          for (let x = dx - 1; x <= dx + 1; x++) {
-            for (let k = 1; k <= 2; k++) {
-              const y = dy === 0 ? k : s.h - 1 - k;
-              assert.notEqual(s.zones[y * s.w + x], 'u', `${design} ${size}: Loading Bay right in front of the entrance at ${dx},${dy}`);
-            }
-          }
-        }
-      }
-    }
-  }
-});
-
 // ---------------------------------------------------------------- determinism and multiplayer
 
 /** A busy game with all of this round's new things in it, on a medium showroom. */
@@ -939,7 +891,7 @@ function everything(seed = 21) {
   addPlayer(g, 'Steve');
   for (const p of g.players) p.cash = 1e6;
   for (let x = 6; x <= 34; x += 7) {
-    place(g, 'crate', x, 5); place(g, 'belt', x, 6);
+    place(g, 'crate', x, 5); place(g, 'crate', x, 6);
     place(g, 'sprinkler', x, 12, 0, 1); place(g, 'samples', x + 1, 15, 0, 1); place(g, 'wetfloor', x + 2, 11, 0, 1);
     // Stock from The Back on some of it (as if it had come up the Dumbwaiters): Rage Cola and Duct Tape.
     const sp = g.grid[12 * g.w + x];
@@ -1006,7 +958,7 @@ test('host and client stay in step with the new buildings and shoppers, sent ove
   assert.ok(st.shoppers.some((m) => NEW_KINDS.includes(m.k)) || st.ws.stopped + st.ws.escaped > 0);
 });
 
-test('the checksum sees stock, hits and a building switched off; saves are version 4, and 3 still loads', () => {
+test('the checksum sees stock, hits and a building switched off; saves are version 5, and older ones are ignored', () => {
   const s = stage();
   place(s, 'forklift', 5, 5);
   s.grid[at(5, 5)].s = { dmg: [1, 6] };
@@ -1016,7 +968,7 @@ test('the checksum sees stock, hits and a building switched off; saves are versi
     tweak(c);
     assert.notEqual(checksum(c), base);
   }
-  assert.equal(s.v, 4, 'version 4 since 0.2.09 (the refund limit was halved; see migrateSave)');
+  assert.equal(s.v, 5, 'version 5 since 0.4, which loads no older save');
   const storage = new Map();
   const store = { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: (k) => storage.delete(k) };
   const g = createGame({ seed: 5, map: { design: 'warehouse', size: 'm' } });
@@ -1024,8 +976,8 @@ test('the checksum sees stock, hits and a building switched off; saves are versi
   place(g, 'crate', 5, 5);
   store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: g }));
   assert.ok(readSave({ storage: store }));
-  store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: { ...g, v: 3 } }));
-  assert.ok(readSave({ storage: store }), 'a save from before 0.2.09 loads (and is migrated when resumed)');
-  store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: { ...g, v: 2 } }));
-  assert.equal(readSave({ storage: store }), null, 'a save from before these rules is ignored');
+  for (const v of [4, 3, 2]) {
+    store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: { ...g, v } }));
+    assert.equal(readSave({ storage: store }), null, `a save of version ${v} (before 0.4) is ignored`);
+  }
 });

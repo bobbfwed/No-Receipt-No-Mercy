@@ -1,8 +1,8 @@
 // One tick of the simulation. Deterministic: the same state always produces the same next state,
 // which lets every player's browser predict the game between updates from the host.
-import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
+import { DIRS, BUILD, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless, releaseOrder, releaseAllOrders, footprint } from './state.js';
-import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
+import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, NORMAL, DAD, SMASH, GHOST, UNREACHABLE } from './path.js';
 import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
@@ -435,41 +435,10 @@ function nextTile(state, field, i, id) {
   return best;
 }
 
-/** Tries to hand an item travelling in direction d to the building on tile ti. */
-function offer(state, ti, kind, d, ev) {
-  if (ti < 0) return false;
-  const b = state.grid[ti];
-  if (!b) return false;
-  if (b.k === 'belt') {
-    if (b.d === ((d + 2) & 3)) return false; // two belts facing each other
-    const it = b.it;
-    if (it.length >= 2 || (it.length && it[it.length - 1][1] < 0.5)) return false;
-    it.push([kind, 0]);
-    return true;
-  }
-  if (b.k === 'press' || b.k === 'packer') {
-    // A machine takes its input from any side except the side it outputs to.
-    if (kind !== BUILD[b.k].takes || b.n >= 2 || d === ((b.d + 2) & 3)) return false;
-    b.n++;
-    return true;
-  }
-  if (b.k === 'chute') {
-    // Whole dollars, and never nothing, whatever the difficulty does to the price. (The old shop-floor
-    // factory, on its way out in 0.4: no card changes what goods sell for any more.)
-    const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay));
-    bump(state, b.o, 'shipped');
-    takings(state, v, b.o);
-    ev.push({ e: 'sale', i: ti, v, kind });
-    return true;
-  }
-  return false;
-}
-
 /**
  * The store has sold something for v dollars (already rounded): split between the players like
  * any income, counted in the sales event's takings, and credited to the player whose building
- * made the sale. A chute's sale and a shopper actually buying something (the warranty card) both
- * come through here.
+ * made the sale: a shopper actually buying something at a stand (the warranty card).
  */
 function takings(state, v, owner) {
   earn(state, v);
@@ -596,7 +565,7 @@ function popOut(state, s, def, by, laser, ev, pups = 0) {
   const many = pups ? 1 : cardPops(state);
   const k = pups ? 'pup' : 'baby';
   const n = pups || (many === 1 ? def.pops : Math.max(1, Math.round(def.pops * many))), hp = patienceFor(state, pups ? PUP : BABY, k), r = TUNE.popSpread;
-  // Spread round her, but kept on her own tile: it is floor, and the next one may be a belt or a wall.
+  // Spread round her, but kept on her own tile: it is floor, and the next one may be a building or a wall.
   const tx = Math.floor(s.x), ty = Math.floor(s.y);
   const near = (v, t) => Math.min(t + 0.95, Math.max(t + 0.05, v + (rand(state) * 2 - 1) * r));
   for (let j = 0; j < n; j++) {
@@ -711,7 +680,6 @@ function stepBuildings(state, fields, ev) {
     if (d.nag) karens.push(s);
     if (d.shields) cosplayers.push(s);
   }
-  const beltAdv = TUNE.beltSpeed * DT;
   const way = (s) => fields[routeOf(s, state)][((s.y | 0) * W) + (s.x | 0)];
 
   for (let i = 0; i < grid.length; i++) {
@@ -725,32 +693,6 @@ function stepBuildings(state, fields, ev) {
       delete b.off;
     }
     switch (b.k) {
-      case 'belt': {
-        const it = b.it;
-        for (let j = 0; j < it.length; j++) {
-          const cap = j === 0 ? 1 : it[j - 1][1] - 0.5;
-          if (it[j][1] < cap) it[j][1] = Math.min(cap, it[j][1] + beltAdv);
-        }
-        if (it.length && it[0][1] >= 1 && offer(state, neighbour(state, i, b.d), it[0][0], b.d, ev)) it.shift();
-        break;
-      }
-      case 'unpacker':
-        if (b.t > 0) b.t--;
-        if (b.t <= 0 && offer(state, neighbour(state, i, b.d), def.makes, b.d, ev)) b.t = secs(statsOf(b, state).period);
-        break;
-      case 'press':
-      case 'packer':
-        // Finishing, handing over and starting the next item all happen in the same tick, so an
-        // item takes exactly its time, like the Unpacker's. (Until 0.2.13 each step took a tick of
-        // its own: two extra ticks an item, which at the top speed level made a Press or Packer a
-        // fifth slower than an Unpacker.)
-        if (b.t > 0 && --b.t === 0) b.out = def.makes;
-        if (b.out && offer(state, neighbour(state, i, b.d), b.out, b.d, ev)) b.out = 0;
-        if (!b.out && b.t <= 0 && b.n > 0) {
-          b.n--;
-          b.t = secs(statsOf(b, state).time);
-        }
-        break;
       case 'samples': {
         const st = statsOf(b, state);
         const [cx, cy] = centreOf(state, i, b);
@@ -906,7 +848,7 @@ const clearStand = (s) => { delete s.sa; delete s.sw; delete s.sl; };
  * A shopper the salesman has talked into stopping walks up to the stand before he stops, so it is
  * plain what stopped him (the owner's request). He heads straight for it: each step is to the
  * neighbouring tile he can walk on that is nearer the stand, so he ends up beside it, or, if
- * belts, crates or walls are in the way, as near as he can get. There he stands and watches for
+ * buildings, crates or walls are in the way, as near as he can get. There he stands and watches for
  * the time the pitch earned. He gives up if the stand is wrecked, sold or switched off on the way,
  * or if getting there takes too long.
  * @returns {boolean} true if this tick was spent on it (walking, or starting to watch)
@@ -1373,7 +1315,7 @@ function petDogs(state, ev) {
 /**
  * The eyesup card: one tick of a dad who falls in behind an Exhibitionist (`ex` is her id while he
  * does). She must be ahead of him: nearer the tills by her own map (she walks the ordinary one)
- * than he is by his (he steps over belts), and within CARDS.eyesup.range tiles. Of several, he
+ * than he is by his (DAD), and within CARDS.eyesup.range tiles. Of several, he
  * falls in behind the nearest ahead of him, the one with the furthest still to walk. He will not
  * step onto a tile that leaves him less than CARDS.eyesup.gap tiles of walking (by his map) behind
  * her (by hers), so he can never reach a till before she does. It ends when she leaves the store,
@@ -1383,7 +1325,7 @@ function petDogs(state, ev) {
  */
 function trailing(state, s, i, fields, ev) {
   const c = CARDS.eyesup, r2 = c.range * c.range, S = state.shoppers, W = state.w;
-  const hop = fields[HOP], dist = fields[NORMAL];
+  const dad = fields[DAD], dist = fields[NORMAL];
   const near = (o) => o.st !== ST.LEAVE && (o.x - s.x) ** 2 + (o.y - s.y) ** 2 <= r2;
   const left = (o) => dist[(o.y | 0) * W + (o.x | 0)];
   let her = null;
@@ -1393,15 +1335,15 @@ function trailing(state, s, i, fields, ev) {
   }
   if (!her) {
     for (const o of S) {
-      if (!near(o) || !defOf(o).flashes || left(o) >= hop[i]) continue;
+      if (!near(o) || !defOf(o).flashes || left(o) >= dad[i]) continue;
       if (!her || left(o) > left(her)) her = o;
     }
     if (!her) return false;
     s.ex = her.id;
     ev.push({ e: 'trail', x: s.x, y: s.y });
   }
-  const next = nextTile(state, hop, i, s.id);
-  return next !== i && hop[next] < left(her) + c.gap;
+  const next = nextTile(state, dad, i, s.id);
+  return next !== i && dad[next] < left(her) + c.gap;
 }
 
 function stepShoppers(state, fields, sec, ev) {
@@ -1704,7 +1646,7 @@ function stepShoppers(state, fields, sec, ev) {
  *   bossIn {tier,x,y} the boss walked in · bossOut {tier,x,y,bounty} he stormed off (after his
  *     'left' event) and the store was paid `bounty`, before it is split
  *   pep {x,y,n} the boss gave a pep talk; n shoppers near him got patience back (may be 0)
- *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y}
+ *   spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y}
  *   grab {x,y,i,t,tier,heal?} a shoplifter took a unit of tier `tier` from track t of the building
  *     on anchor tile i (heal: the klepto card gave him that much patience back)
  *   rail {i,d,len,n} the Barcode Laser on anchor tile i fired facing d, a beam len tiles long, hitting n
@@ -1774,7 +1716,7 @@ export function step(state) {
     stepDeal(state, ev);
     return ev;
   }
-  // Nothing runs before the first build. (In training the factory always runs.)
+  // Nothing runs before the first build. (In training The Back always runs.)
   const waiting = !state.training && state.phase === 'build' && state.phaseT === -1;
   if (state.phase === 'build') {
     if (state.phaseT > 0 && --state.phaseT === 0) beginWave(state, ev);
@@ -1786,7 +1728,7 @@ export function step(state) {
     if (--state.messes[k][1] <= 0) state.messes.splice(k, 1);
   }
   // A gym bro can change the layout mid-tick; everyone else finishes this tick on the old maps.
-  const fields = [getField(state, NORMAL), getField(state, HOP), getField(state, SMASH)];
+  const fields = [getField(state, NORMAL), getField(state, DAD), getField(state, SMASH)];
   // The Back (0.4) first: in a later stage it stocks the security buildings, which fire below.
   stepBack(state, ev);
   const sec = stepBuildings(state, fields, ev);

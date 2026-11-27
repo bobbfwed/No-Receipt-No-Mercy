@@ -5,10 +5,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, queueTrainingWave, waveSpec, priceOf, canBuy, checkPlan, modeOf,
-  patienceGrowth, patienceScaleAt, crowdShiftAt, surgeHpAt, surgeCrowdAt, bossPatience, shopperDef, defOf, perHead, babyPace, migrateSave, STATE_VERSION,
+  patienceGrowth, patienceScaleAt, crowdShiftAt, surgeHpAt, surgeCrowdAt, bossPatience, shopperDef, defOf, perHead, babyPace,
   SHOPPERS, SUPERS, BABY, BOSS, OFFICE, TUNE, SETTINGS, TICK_HZ, NORMAL,
 } from '../src/sim/index.js';
-import { HostSession } from '../src/net/session.js';
 import { SHOPPER_ORDER, patienceAt, shopperFacts, shopperTraits, countIn } from '../src/content/facts.js';
 import { SHOPPER_HELP } from '../src/content/help.js';
 
@@ -307,39 +306,6 @@ test('late in an endless game the crowd is at or just under the halved cap, for 
   }
 });
 
-test('a save from before 0.2.09 is brought up to date once when resumed: the same share of a new limit', () => {
-  const old = createGame({ seed: 3 });
-  for (const n of ['Dave', 'Steve']) addPlayer(old, n);
-  old.v = 3;
-  old.refundLimit = 50; // 40 plus 10, the old formula
-  old.refunds = 25;
-  assert.equal(migrateSave(old), true);
-  assert.equal(old.refundLimit, 25, '20 plus 5 for the second player');
-  assert.equal(old.refunds, 12, 'half used before, still about half: 12.5 rounded down');
-  assert.equal(old.v, STATE_VERSION);
-  assert.equal(migrateSave(old), false, 'only once');
-  assert.equal(old.refunds, 12);
-  // A new friend joining afterwards keeps the same limit and count.
-  addPlayer(old, 'Gaz');
-  assert.equal(old.refundLimit, 30);
-  assert.equal(old.refunds, 12);
-  // A save from this version is left alone.
-  const now = createGame({ seed: 3 });
-  addPlayer(now, 'Dave');
-  now.refunds = 7;
-  assert.equal(migrateSave(now), false);
-  assert.equal(now.refundLimit, 20);
-  assert.equal(now.refunds, 7);
-  // And it happens when a save is resumed.
-  const again = createGame({ seed: 3 });
-  addPlayer(again, 'Dave');
-  again.v = 3; again.refundLimit = 40; again.refunds = 30; again.wave = 6;
-  const host = new HostSession({ name: 'Dave', state: again, resume: true });
-  assert.equal(host.state.refundLimit, 20);
-  assert.equal(host.state.refunds, 15);
-  assert.equal(host.state.v, STATE_VERSION);
-});
-
 test('babies are in none of the lists of kinds, and Head Office cannot buy them', () => {
   assert.equal(SHOPPERS.baby, undefined);
   assert.equal(SUPERS.baby, undefined);
@@ -359,7 +325,7 @@ test('babies are in none of the lists of kinds, and Head Office cannot buy them'
   for (let n = 1; n <= 30; n++) assert.ok(!waveSpec(n).some((g) => g.k === 'baby'));
   assert.equal(canBuy('baby', 0, 30), false);
   // A plan naming them is refused, through the command as well.
-  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' }, zones: false });
+  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' } });
   addPlayer(s, 'Dave');
   addPlayer(s, 'Steve');
   s.wave = 9;
@@ -424,7 +390,7 @@ test('patience is phased in: unchanged early, a straight line, then double; a da
 });
 
 test("Head Office's shoppers walk in with the same patience as the automatic wave's", () => {
-  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' }, zones: false });
+  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' } });
   addPlayer(s, 'Dave');
   addPlayer(s, 'Steve');
   s.wave = 11;

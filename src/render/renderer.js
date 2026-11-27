@@ -21,11 +21,11 @@
 //
 // Everything is drawn in logical world pixels, TILE (40) per tile; the camera turns that into a
 // canvas transform. The parts are split by layer:
-//   floor.js      walls, shelving, the food court's furniture, entrances, tills, the machines'
-//                 marked floor (static parts cached in chunks)
-//   buildings.js  belts, machines, security, the flow arrows on factory buildings, level badges
-//                 (moved to the corner away from a flow arrow), wreckage left by gym bros
-//   items.js      goods on belts (pre-rendered sprites)
+//   floor.js      walls, shelving, the food court's furniture, entrances, tills (static parts
+//                 cached in chunks)
+//   buildings.js  Crate Stacks, security, level badges, wreckage left by gym bros; the belt
+//                 sprites and the out arrow, which The Back uses
+//   items.js      the Forklift Turret's box (a pre-rendered sprite)
 //   messes.js     slushie spills teenagers leave on the floor
 //   shoppers.js   every kind of shopper, their super versions, the boss (and his name plate, drawn
 //                 after everyone), a mom's runaway child, and the carts moms leave behind
@@ -42,14 +42,14 @@
 // bottom-left tile of their footprint (so what stands in front of them is drawn after them);
 // their other tiles (`part`) are skipped everywhere.
 import {
-  BUILD, BACK, ZONES, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, statsOf, levelOf,
+  BUILD, BACK, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, statsOf, levelOf,
   levelIn, tracksOf, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
 import {
-  beltShape, drawBelt, drawBeltItems, drawBuilding, createBeltSprites, createBuildingSprites, SP,
-  drawBadge, drawRubble, drawWear, rectOf, BIG, FLOW, drawFlow, badgeCorner,
+  drawBuilding, createBeltSprites, createBuildingSprites,
+  drawBadge, drawRubble, drawWear, rectOf, BIG, drawOutArrow,
 } from './buildings.js';
 import { buildItemSprites } from './items.js';
 import {
@@ -120,7 +120,6 @@ export function createRenderer(canvas, session) {
   const order = []; // shoppers (and loose children) sorted for drawing, reused every frame
   const kids = []; // reusable stand-ins for loose children in `order`: { kid: true, y, m: mom }
   const facing = new Map(); // shopper id -> 1 or -1, so a stopped shopper keeps facing the same way
-  let shapes = new Int8Array(0); // belt bend per tile, worked out for visible belts each frame
   let doorOpen = 0;
   let lastNow = 0;
   let heldAlpha = 0; // the fraction between ticks last drawn, held while the game is paused
@@ -341,7 +340,6 @@ export function createRenderer(canvas, session) {
     if (mapChanged(info, s)) {
       info = analyzeMap(s);
       floor.reset(info);
-      if (shapes.length !== s.w * s.h) shapes = new Int8Array(s.w * s.h);
     }
     F.w = s.w;
     F.zoom = cam.zoom;
@@ -413,9 +411,6 @@ export function createRenderer(canvas, session) {
    * routes, which are always drawn (the owner, 0.4), a little fainter while shoppers are about.
    */
   function drawShopView(s, view, now, alpha) {
-    // Holding a machine: light up the marked floor it may go on.
-    const zch = view.tool && BUILD[view.tool] && BUILD[view.tool].zone;
-    if (zch && info.patches.length) drawZoneGlow(zch, now);
     // Teenagers' slushie spills and wrecked buildings, on the floor under everything else.
     if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites, s.w);
     if (s.rubble && s.rubble.length) drawWreckage(s);
@@ -430,6 +425,9 @@ export function createRenderer(canvas, session) {
     }
 
     drawBuildings(s, now);
+    // In the lobby, where the store is chosen, the Returns Drops below stand out: where the junk
+    // comes in decides where The Back's supply lines start.
+    if (s.phase === 'lobby' && s.back) drawDropMarks(s);
 
     if (view.route) drawRoutes(ctx, s, now / 1000, view.routeFaint ? 0.6 : 1);
     const bossGrow = F.bde ? CARDS.bde.size : 1;
@@ -459,7 +457,6 @@ export function createRenderer(canvas, session) {
     beginLayer(s);
     drawBuildings(s, now);
     drawShoppers(s, alpha);
-    // (Darkened a little first, so the old shop belts' bright chevrons do not compete with The Back's.)
     endLayer(0.3, 0.25);
     drawFootprints(s);
     drawWarnings(s, now);
@@ -467,6 +464,26 @@ export function createRenderer(canvas, session) {
     const sl = view.selected;
     if (sl && s.back && s.back[sl.y * s.w + sl.x]) tileOutline(sl.x * T, sl.y * T, 'rgba(255,255,255,0.95)', 3);
     drawBackPreview(s, view);
+  }
+
+  /**
+   * A small yellow mark on each Returns Drop's tile, for the lobby's look at the store: a yellow
+   * square with a dark arrow pointing down (junk comes down into The Back there).
+   */
+  function drawDropMarks(s) {
+    const back = s.back, w = s.w;
+    for (let i = 0; i < back.length; i++) {
+      const p = back[i];
+      if (!p || p.k !== 'drop') continue;
+      const cx = (i % w) * T + T / 2, cy = ((i / w) | 0) * T + T / 2;
+      rr(ctx, cx - 11, cy - 11, 22, 22, 4);
+      paint(ctx, '#facc15', 2.5);
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, cy - 3); ctx.lineTo(cx + 6, cy - 3); ctx.lineTo(cx, cy + 6);
+      ctx.closePath();
+      ctx.fillStyle = INK;
+      ctx.fill();
+    }
   }
 
   /** A dashed white outline round every security building on screen, for the view from The Back. */
@@ -539,8 +556,7 @@ export function createRenderer(canvas, session) {
     ctx.stroke();
     // Which way it puts things out, at full strength, before it is built.
     if (def.rot) {
-      ghost.k = tool; ghost.d = d;
-      drawFlow(ctx, ghost, i, F, buildingSprites, 'belt');
+      drawOutArrow(ctx, d, i, F, buildingSprites);
     }
   }
 
@@ -670,54 +686,6 @@ export function createRenderer(canvas, session) {
   }
 
   /**
-   * The patches of marked floor a held machine may be built on, pulsing: a soft wash over them and
-   * a glowing outline in their colour with a white line through it. Nothing else is dimmed.
-   */
-  function drawZoneGlow(ch, now) {
-    const pulse = 0.5 + 0.5 * Math.sin((now / 1000) * Math.PI * 1.8);
-    // Line widths are given in screen pixels, so the glow looks the same at any zoom.
-    const thick = T / cam.zoom;
-    const { x0, y0, x1, y1 } = vis;
-    ctx.beginPath();
-    let any = false;
-    for (const p of info.patches) {
-      if (p.ch !== ch || p.x1 < x0 || p.x0 > x1 || p.y1 < y0 || p.y0 > y1) continue;
-      for (const i of p.cells) ctx.rect((i % p.width) * T, ((i / p.width) | 0) * T, T, T);
-      any = true;
-    }
-    if (!any) return;
-    const rgb = zoneRgb(ch);
-    ctx.fillStyle = `rgba(${rgb},${0.1 + 0.14 * pulse})`;
-    ctx.fill();
-    ctx.beginPath();
-    for (const p of info.patches) {
-      if (p.ch !== ch || p.x1 < x0 || p.x0 > x1 || p.y1 < y0 || p.y0 > y1) continue;
-      const e = p.edges;
-      for (let k = 0; k < e.length; k += 4) { ctx.moveTo(e[k] * T, e[k + 1] * T); ctx.lineTo(e[k + 2] * T, e[k + 3] * T); }
-    }
-    ctx.lineCap = 'square';
-    ctx.strokeStyle = `rgba(${rgb},${0.45 + 0.35 * pulse})`;
-    ctx.lineWidth = (8 + 6 * pulse) * thick;
-    ctx.stroke();
-    ctx.strokeStyle = `rgba(255,255,255,${0.75 + 0.25 * pulse})`;
-    ctx.lineWidth = 2.5 * thick;
-    ctx.stroke();
-    ctx.lineCap = 'butt';
-  }
-
-  const zoneRgbs = new Map();
-  /** A zone's colour as "r,g,b" for building rgba() strings. */
-  function zoneRgb(ch) {
-    let v = zoneRgbs.get(ch);
-    if (!v) {
-      const n = parseInt(ZONES[ch].color.slice(1), 16);
-      v = `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
-      zoneRgbs.set(ch, v);
-    }
-    return v;
-  }
-
-  /**
    * What gym bros have wrecked and nobody has rebuilt: a heap of bits where it stood, with a cone
    * on it once somebody has paid to rebuild it (0.3.04: it goes back when the way is clear).
    */
@@ -739,23 +707,6 @@ export function createRenderer(canvas, session) {
     // Start two tiles further left: a big building is drawn from the bottom-left of its footprint,
     // which may be off screen while the rest of it shows.
     const x0 = Math.max(0, vis.x0 - 2);
-    // Belts first (flat on the floor), then the goods riding on them, then everything else.
-    const phase = (((F.time * TUNE.beltSpeed * T) % SP) + SP) % SP;
-    for (let y = y0; y < y1; y++) {
-      for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
-        const b = grid[i];
-        if (!b || b.k !== 'belt') continue;
-        const sh = beltShape(s, x, y, b.d);
-        shapes[i] = sh;
-        drawBelt(ctx, s, x, y, b.d, sh, phase, beltSprites, base);
-      }
-    }
-    for (let y = y0; y < y1; y++) {
-      for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
-        const b = grid[i];
-        if (b && b.k === 'belt') drawBeltItems(ctx, b, x, y, shapes[i], F.alpha, sprites);
-      }
-    }
     // Level badges grow when zoomed out so the number stays readable (in steps, as they are cached).
     const bk = Math.round(Math.max(1, Math.min(1.6, 34 / cam.zoom)) * 10) / 10;
     const bres = stepScale(step);
@@ -774,14 +725,12 @@ export function createRenderer(canvas, session) {
           const fh = sizeOf(b.k, BUILD[b.k].rot ? b.d | 0 : 0)[1];
           if (i !== ai + (fh - 1) * w) continue;
         } else if (ai !== i) continue;
-        if (b.k !== 'belt') drawBuilding(ctx, b, ai, F, buildingSprites);
+        drawBuilding(ctx, b, ai, F, buildingSprites);
         drawWear(ctx, b, ai, F);
-        // Which way the goods go, over any damage (belts show it with their chevrons).
-        if (b.k !== 'belt' && FLOW[b.k] !== undefined) drawFlow(ctx, b, ai, F, buildingSprites);
         const r = rectOf(b, ai, w);
         // The level it is working at: 1 plus what its stock gives every track (levelOf).
         const lv = b.s ? levelOf(b) : 1;
-        if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b), badgeCorner(b));
+        if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b));
         if (BUILD[b.k].lift) drawPips(b, r);
       }
     }
@@ -1166,8 +1115,7 @@ export function createRenderer(canvas, session) {
     const def = tool ? BUILD[tool] : null;
     if (def) {
       const d = def.rot ? (view.dir | 0) & 3 : 0;
-      const why = canPlace(s, tool, h.x, h.y, session.me, d);
-      const ok = why === null;
+      const ok = canPlace(s, tool, h.x, h.y, session.me, d) === null;
       // Placing a kind on its own rubble puts it back where and how it was (as the rules do).
       let gi = i, gd = d;
       for (const r of s.rubble || []) {
@@ -1186,8 +1134,7 @@ export function createRenderer(canvas, session) {
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.35)' : 'rgba(239,68,68,0.4)';
       ctx.fill();
       ctx.globalAlpha = 0.7;
-      if (tool === 'belt') drawBelt(ctx, s, h.x, h.y, ghost.d, beltShape(s, h.x, h.y, ghost.d), 0, beltSprites, base);
-      else drawBuilding(ctx, ghost, gi, F, buildingSprites);
+      drawBuilding(ctx, ghost, gi, F, buildingSprites);
       ctx.globalAlpha = 1;
       rr(ctx, gx + 1, gy + 1, gw - 2, gh - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.18)' : 'rgba(239,68,68,0.3)';
@@ -1195,21 +1142,6 @@ export function createRenderer(canvas, session) {
       ctx.lineWidth = 3;
       ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
       ctx.stroke();
-      // The flow arrow at full strength, so the facing is plain before it is built.
-      if (tool === 'belt' || FLOW[tool] !== undefined) drawFlow(ctx, ghost, gi, F, buildingSprites, tool);
-      const cx = gx + gw / 2;
-      // Off its marked floor: say where it does go, in that floor's colour. Grows when zoomed out
-      // so it stays readable (about 11 screen pixels at least).
-      if (why === 'zone' && ZONES[def.zone]) {
-        const k = Math.max(1, 36 / cam.zoom);
-        const name = ZONES[def.zone].name.toUpperCase() + ' ONLY';
-        const ly = gy > T ? gy - 10 * k : gy + gh + 10 * k;
-        // Kept inside the map at the side walls.
-        ctx.font = font(12 * k);
-        const half = ctx.measureText(name).width / 2 + 4 * k;
-        const lx = Math.max(half, Math.min(s.w * T - half, cx));
-        label(ctx, name, lx, ly, 12 * k, ZONES[def.zone].color, INK, 3.5 * k);
-      }
       return;
     }
 

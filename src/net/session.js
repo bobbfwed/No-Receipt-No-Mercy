@@ -53,7 +53,7 @@
 //                   lobby {me, n, s} (the game is over and a fresh one starts in the lobby: s is
 //                   its state, me the client's id in it, n the step it starts at; anything the
 //                   host sent about an earlier step is from the old game and is dropped)
-import { createGame, addPlayer, setPlayerOnline, applyCommand, step, migrateSave, TICK_HZ, SPEEDS, STOCK_TRACKS } from '../sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, applyCommand, step, TICK_HZ, SPEEDS, STOCK_TRACKS } from '../sim/index.js';
 
 const TICK_MS = 1000 / TICK_HZ;
 /** Steps between advance messages at normal speed: one every step, thirty a second. They are
@@ -133,9 +133,8 @@ export function checksum(s) {
   for (let i = 0; i < g.length; i++) {
     const b = g[i];
     if (!b) continue;
-    mix(i); mix(b.k.charCodeAt(0)); mix(b.part ?? -1); mix(b.o); mix(b.d); dec(b.cd); mix(b.t); mix(b.n);
+    mix(i); mix(b.k.charCodeAt(0)); mix(b.part ?? -1); mix(b.o); mix(b.d); dec(b.cd);
     mix(b.hit); mix(b.off);
-    if (b.it) mix(b.it.length);
     // (Its stock from The Back, 0.4: every run's tier and uses, track by track in a fixed order.
     // Only on a stocked building, so an unstocked one sums as it did.)
     if (b.s) {
@@ -261,8 +260,7 @@ export class HostSession extends Session {
     this.state = state || createGame({ seed, map, lobby, settings, holiday, cards });
     const s = this.state;
     if (resume) {
-      // A save from an older version of the rules is brought up to date first (once).
-      migrateSave(s);
+      // (Only a save of this version of the rules is ever offered: readSave in src/ui/save.js.)
       // Nobody is here yet, and nobody has walked out on anyone either.
       for (const p of s.players) { p.on = false; delete p.gone; }
     } else if (takeOver) {
@@ -316,7 +314,7 @@ export class HostSession extends Session {
   backToLobby({ seed = (Date.now() & 0x7fffffff) || 1, director = null, holiday = this.state.holiday, cards = !!(this.state.cards && this.state.cards.length) } = {}) {
     const old = this.state;
     if (old.phase !== 'won' && old.phase !== 'lost') return false;
-    const s = createGame({ seed, map: old.map, zones: !!old.zones, lobby: true, settings: old, holiday, cards });
+    const s = createGame({ seed, map: old.map, lobby: true, settings: old, holiday, cards });
     // Drawing code keeps pictures of the floor keyed on this number; never let it repeat one.
     s.gridVer = (old.gridVer | 0) + 1;
     const connected = new Set([this.me, ...this.conns.values()]);

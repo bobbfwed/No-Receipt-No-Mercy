@@ -12,7 +12,6 @@ const RULES = [
   // on a marked tile, is fixed through its card, and a finger holding a tool would build instead.
   [/Put down what you are holding \(Esc, or click its button again\), click the ([^,]+), and click ⟳ Rotate on its card/g, 'Tap DROP if you are holding something, tap the $1, and tap ⟳ Rotate on its card'],
   [/Something else is on the highlighted tile\. Right-click it to remove it,/g, 'Something else is on the highlighted tile. Tap DROP if you are holding something, then tap it and tap ✕ Remove,'],
-  [/Press Esc to put your tool away, point at the ([^.,]+?),? and press R until/g, 'Tap DROP to put your tool away, tap the $1, and tap Rotate until'],
   [/\(press B to rebuild it\)/g, '(the Rebuild button in the bar puts it back)'],
   [/Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance\./g, 'Drag the floor with nothing picked to move the view, pinch with two fingers to zoom, tap MAP to see the whole floor and HOME to go back to your entrance.'],
   // Part 2 of the training: the Rebuild button.
@@ -21,16 +20,10 @@ const RULES = [
   [/press R before placing to turn it\./g, 'use the rotate button at the end of the bar before placing to turn it.'],
   [/Press R before placing to turn it\./g, 'Use the rotate button at the end of the bar before placing to turn it.'],
   [/drag belt over it again in the new direction, or point at it and press R\./g, 'drag belt over it again in the new direction, or tap it and choose Rotate.'],
-  [/Press the mouse button on the first highlighted tile, drag straight down to the last one, and let go\./g, 'Put your finger on the first highlighted tile, drag straight down to the last one, and lift it.'],
-  [/Press R until the arrow on the preview points DOWN\./g, 'Tap the rotate button at the end of the bar until its arrow points DOWN.'],
   // (A big building in the wrong place or lying the wrong way: the training shift's hint, 0.3.03.)
   [/press R until the arrow on the preview points (\w+)/g, 'tap the rotate button at the end of the bar until its arrow points $1'],
-  [/Press R before placing to choose the side\./g, 'Use the rotate button at the end of the bar before placing to choose the side.'],
-  [/\(press R to turn it\)/g, '(the rotate button at the end of the bar turns it)'],
   [/Press it \(or B\) once\./g, 'Tap it once.'],
   [/Click or drag over buildings\. Right-clicking does the same without picking this tool\./g, 'Tap a building to remove it, or slide your finger onto it and lift. Tapping a building with nothing picked also offers Remove.'],
-  [/right-click the highlighted belt to remove it/gi, 'tap the highlighted belt and choose Remove'],
-  [/right-click the highlighted belt/gi, 'tap the highlighted belt and choose Remove'],
   [/Right-click it to remove it/g, 'Tap it and choose Remove'],
   [/Right-click to remove/g, 'Tap, then Remove'],
   // "(or press 2)", "(press 7)": the number keys (and - and =, the Laser's and the Salesman's).

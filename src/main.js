@@ -38,7 +38,7 @@ import { applyDemoLayout, createGame, MAP_DESIGNS, MAP_SIZES } from './sim/index
 import { loadName, saveName } from './ui/dom.js';
 import { showMenu } from './ui/menu.js';
 import { startGame } from './ui/game.js';
-import { keepSaved, readSave, clearSave } from './ui/save.js';
+import { keepSaved, readSave, clearSave, dropOldSave } from './ui/save.js';
 
 const app = document.getElementById('app');
 
@@ -229,7 +229,7 @@ const actions = {
   /** The training shift: a guided game that cannot be lost. `step` jumps ahead (for screenshots). */
   async tutorial(name, step = 0) {
     const session = new HostSession({
-      name, director: createDirector(), state: createGame({ seed: opts.seed || 7, training: true, zones: true }),
+      name, director: createDirector(), state: createGame({ seed: opts.seed || 7, training: true }),
     });
     show(session, { tutorial: true, tutorialStep: step, onExit: leaveTo });
   },
@@ -299,7 +299,10 @@ const actions = {
 const inviteCode = (q.get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 
 function menu(error = '') {
-  showMenu(app, actions, { error, name: opts.name, code: inviteCode, map: urlMap(), settings: urlSettings(), save: readSave() });
+  // A save from before 0.4 cannot be carried on: say so once, and it is gone.
+  const old = dropOldSave();
+  const note = old === null ? '' : `Your saved game${old ? ` (from version ${old})` : ''} was thrown out: the factory has moved downstairs since then, and old saves cannot follow it. Start a new one.`;
+  showMenu(app, actions, { error, note, name: opts.name, code: inviteCode, map: urlMap(), settings: urlSettings(), save: readSave() });
 }
 
 async function boot() {

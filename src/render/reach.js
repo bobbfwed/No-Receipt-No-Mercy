@@ -11,7 +11,7 @@ import { BUILD, statsOf } from '../sim/index.js';
 
 /**
  * The reach to draw for the selected building, or null when there is none to draw: nothing
- * selected, the tile is empty, or the building reaches nothing (a belt, a machine, a crate).
+ * selected, the tile is empty, or the building reaches nothing (a Crate Stack).
  * @param {Object} s the game state
  * @param {{selected?: {x: number, y: number}|null}} view
  * @returns {{ai: number, b: Object}|null} the building's anchor tile and the building

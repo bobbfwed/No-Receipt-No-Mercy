@@ -9,7 +9,7 @@ import {
 
 /** Dave runs the store, Steve has taken the Head Office job. */
 function withOffice(seed = 4, map = { design: 'warehouse', size: 'm' }) {
-  const s = createGame({ seed, map, zones: false }); // these tests are not about where machines go
+  const s = createGame({ seed, map });
   addPlayer(s, 'Dave');
   addPlayer(s, 'Steve');
   assert.ok(applyCommand(s, 1, { c: 'side', side: 'office' }).ok);
@@ -95,12 +95,18 @@ test('Head Office cannot touch the store and takes no share of its money', () =>
   assert.equal(applyCommand(s, 1, { c: 'give', to: 0, n: 10 }).why, 'office');
   assert.equal(applyCommand(s, 1, { c: 'rebuild' }).why, 'office');
   assert.equal(shareCount(s), 1, 'the crowd and the bonus are sized for one store player');
-  for (const [k, x, y] of [['unpacker', 3, 3], ['belt', 4, 3], ['chute', 5, 3]]) applyCommand(s, 0, { c: 'place', k, x, y, d: 0 });
+  // A sales event: its refunds and its pay are all Dave's.
   const dave = s.players[0].cash, steve = s.players[1].cash;
-  let sales = 0;
-  for (let i = 0; i < 15 * TICK_HZ; i++) sales += step(s).filter((e) => e.e === 'sale').length;
-  assert.ok(sales > 0);
-  assert.ok(s.players[0].cash > dave, 'Dave gets all of it');
+  open(s);
+  let refunded = 0, paid = 0;
+  for (let i = 0; i < 180 * TICK_HZ && !paid; i++) {
+    for (const e of step(s)) {
+      if (e.e === 'escape') refunded += e.refund;
+      if (e.e === 'waveEnd') paid = e.pay + e.speed;
+    }
+  }
+  assert.ok(paid > 0);
+  assert.ok(Math.abs(s.players[0].cash - (dave - refunded + paid)) < 0.05, 'Dave gets all of it');
   assert.equal(s.players[1].cash, steve);
 });
 

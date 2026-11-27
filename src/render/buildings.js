@@ -1,10 +1,10 @@
-// Everything players build. Belts are drawn flat in the belt's own rotated frame; machines and
-// security are drawn upright (three-quarter view, like the mock-up) with a separate spout and
-// arrow showing the side they output to, so they look the same whichever way they face.
+// Everything players build on the shop floor: Crate Stacks and security, drawn upright
+// (three-quarter view, like the mock-up). Also the belt sprites, which The Back's belts use
+// (src/render/back.js; the shop floor has had no belts since 0.4).
 // Buildings bigger than a tile (the Barcode Laser, the TV Salesman) are drawn once, from their anchor
 // tile, across their whole footprint. On top of any building: the damage a gym bro has done this
 // wave, and, for security a stray dog has peed on, a puddle, drips and flies while it is off.
-import { DIRS, TUNE, TICK_HZ, BUILD, sizeOf, statsOf } from '../sim/index.js';
+import { DIRS, TICK_HZ, BUILD, sizeOf, statsOf } from '../sim/index.js';
 import {
   TILE, INK, C, rr, paint, box, circle, line, text, label, hazard, hash2, burstPath,
 } from './paint.js';
@@ -15,47 +15,6 @@ const HALF = T / 2;
 const ROT = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
 /** Chevron spacing on belts; divides the tile so the pattern lines up across neighbouring belts. */
 export const SP = T / 3;
-/** Belt movement per tick, as a share of a tile. */
-const BELT_ADV = TUNE.beltSpeed / TICK_HZ;
-/** Building kinds that push items out of their front (b.d). */
-const PUSHES = { belt: true, unpacker: true, press: true, packer: true };
-
-// ---------------------------------------------------------------------------------------------
-// Belts
-
-// The belt functions take the game state (or anything with grid, w and h) for the map size.
-
-/** True if the building at (x, y) pushes items in direction `dir`. */
-function pushesInto(s, x, y, dir) {
-  if (x < 0 || y < 0 || x >= s.w || y >= s.h) return false;
-  const b = s.grid[y * s.w + x];
-  return !!b && PUSHES[b.k] === true && b.d === dir;
-}
-
-/** True if whatever is at (x, y) accepts items arriving in direction `dir`. */
-function accepts(s, x, y, dir) {
-  if (x < 0 || y < 0 || x >= s.w || y >= s.h) return false;
-  const b = s.grid[y * s.w + x];
-  if (!b) return false;
-  if (b.k === 'belt') return b.d !== ((dir + 2) & 3);
-  if (b.k === 'press' || b.k === 'packer') return b.d !== ((dir + 2) & 3);
-  return b.k === 'chute';
-}
-
-/**
- * How a belt bends: 0 straight; 1 a corner fed from its right-hand side (local +y);
- * -1 a corner fed from its left-hand side. A belt fed from behind is always straight.
- */
-export function beltShape(s, x, y, d) {
-  const back = (d + 2) & 3, right = (d + 1) & 3, left = (d + 3) & 3;
-  if (pushesInto(s, x + DIRS[back][0], y + DIRS[back][1], d)) return 0;
-  const r = pushesInto(s, x + DIRS[right][0], y + DIRS[right][1], left);
-  const l = pushesInto(s, x + DIRS[left][0], y + DIRS[left][1], right);
-  if (r && !l) return 1;
-  if (l && !r) return -1;
-  return 0;
-}
-
 /** Chevron animation steps per chevron spacing; belts are pre-rendered for each step. */
 const PHASES = 8;
 const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
@@ -89,23 +48,6 @@ export function createBeltSprites() {
       return c;
     },
   };
-}
-
-/**
- * Draws one belt tile. `phase` (0..SP) is how far the chevrons have moved, so they visibly run
- * in the belt's direction. `base` is the world-to-screen transform {s, ox, oy}; the belt sprite
- * is placed with a single setTransform (rotated, and mirrored for left-hand corners), and the
- * world transform is restored afterwards.
- */
-export function drawBelt(ctx, s, x, y, d, shape, phase, sprites, base) {
-  let type = 4;
-  if (shape === 0) {
-    const back = (d + 2) & 3;
-    const backOpen = pushesInto(s, x + DIRS[back][0], y + DIRS[back][1], d);
-    const frontOpen = accepts(s, x + DIRS[d][0], y + DIRS[d][1], d);
-    type = (backOpen ? 0 : 1) | (frontOpen ? 0 : 2);
-  }
-  drawBeltTile(ctx, x, y, d, shape, type, phase, sprites, base);
 }
 
 /**
@@ -221,50 +163,19 @@ function cornerBelt(ctx, phase, bold) {
   ctx.stroke();
 }
 
-/**
- * Draws the items on a belt, upright, moved on by `alpha` of a tick so they glide smoothly.
- * Straight belts place items at tile centre + direction * (progress - 0.5); corners follow the curve.
- */
-export function drawBeltItems(ctx, b, x, y, shape, alpha, sprites) {
-  const it = b.it;
-  if (!it || !it.length) return;
-  const cx = x * T + HALF, cy = y * T + HALF, d = b.d;
-  const adv = BELT_ADV * alpha;
-  let prev = 2;
-  for (let j = 0; j < it.length; j++) {
-    const p0 = it[j][1];
-    const cap = j === 0 ? 1 : prev - 0.5;
-    const p = Math.max(p0, Math.min(cap, p0 + adv));
-    prev = p;
-    let lx, ly;
-    if (shape === 0) { lx = (p - 0.5) * T; ly = 0; } else {
-      const a = Math.PI + p * Math.PI / 2;
-      lx = HALF + HALF * Math.cos(a);
-      ly = (HALF + HALF * Math.sin(a)) * shape;
-    }
-    // Rotate the local offset into the belt's direction.
-    let wx = lx, wy = ly;
-    if (d === 1) { wx = -ly; wy = lx; } else if (d === 2) { wx = -lx; wy = -ly; } else if (d === 3) { wx = ly; wy = -lx; }
-    drawItem(ctx, sprites, it[j][0], cx + wx, cy + wy - 1);
-  }
-}
-
-
 // ---------------------------------------------------------------------------------------------
-// Machines and security
+// Crate Stacks and security
 //
 // Each kind has a `look` function that reduces a building and the current time to a small
 // integer (its visual state: facing, animation step, what is inside...) and fills in the shared
 // pose P, and a `paint` function that draws from P alone. The drawing for each (kind, look) is
-// cached as a sprite, so a big factory costs one drawImage per building.
+// cached as a sprite, so a big store costs one drawImage per building.
 
 const TAU = Math.PI * 2;
-const ITEM_IDS = { box: 1, gadget: 2, giftset: 3 };
-const ITEM_KINDS = [null, 'box', 'gadget', 'giftset'];
-/** Sprite box for one building, in logical pixels: a tile plus room for spouts, flags and tops. */
+/** Sprite box for one building, in logical pixels: a tile plus room for flags and tops. */
 const BOX = 56;
 /** Pose shared by look() and paint(), filled in fresh for every building. */
-const P = { d: 0, step: 0, on: false, n: 0, out: 0, inside: 0, light: -1, spray: false, off: 0 };
+const P = { d: 0, step: 0, spray: false, off: 0 };
 /** The usual sprite box: [width, height, centre x, centre y] in logical pixels. */
 const BOX_1 = [BOX, BOX, BOX / 2, BOX / 2];
 /** Barcode laser sprite boxes, lying along x (facing east or west) or along y. */
@@ -273,26 +184,12 @@ const SALES_BOX = [104, 116, 52, 62];
 /** Barcode laser charge shown in this many steps (0 empty .. RAIL_STEPS ready). */
 const RAIL_STEPS = 6;
 
-/** A dark steel spout from the machine body toward the output edge (the flow arrow covers its end). */
-function spout(ctx, d) {
-  ctx.save();
-  ctx.rotate(ROT[d]);
-  rr(ctx, 6, -7, 12, 14, 2);
-  paint(ctx, C.steelDark, 2);
-  ctx.restore();
-}
-
 // ---------------------------------------------------------------------------------------------
-// Flow arrows
+// The out arrow
 //
-// The owner found it hard to tell which way some machines send their goods, so every factory
-// building carries a mark drawn over everything else on it (cracks, bandages; the level badge
-// moves out of its way): a big yellow arrow on the side the goods come out of, small white
-// arrows pointing in on the sides a machine takes goods from, and on the Shipping Chute, which
-// takes from every side, four white arrows pointing in. Yellow means out, white means in.
-
-/** Kinds with a flow mark: 0 out only (unpacker, belt preview), 1 out plus in-marks, 2 in from every side. */
-export const FLOW = { unpacker: 0, press: 1, packer: 1, chute: 2 };
+// A big yellow arrow on the side a part puts things out of, drawn over the placement preview of
+// anything in The Back that has a facing, so which way it will send things is plain before it is
+// built. (Until 0.4 the shop floor's factory buildings wore it too, with white "in" marks.)
 
 /** The yellow "out" arrow along +x: a short stub and a big head whose tip just passes the tile edge. */
 function outArrowPath(ctx) {
@@ -307,43 +204,12 @@ function outArrowPath(ctx) {
   ctx.closePath();
 }
 
-/** One flow mark, centred on the tile (sprite painter): type as FLOW, d the output side. */
-function paintFlow(ctx, type, d) {
+/** The out arrow centred on the tile, pointing in direction d (sprite painter). */
+function paintOutArrow(ctx, d) {
   ctx.lineJoin = 'round';
-  if (type === 2) {
-    // Four white arrows on the rim, all pointing into the hole.
-    for (let e = 0; e < 4; e++) {
-      ctx.save();
-      ctx.rotate(ROT[e]);
-      ctx.beginPath();
-      ctx.moveTo(20.5, -7.5); ctx.lineTo(11, 0); ctx.lineTo(20.5, 7.5);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fill();
-      ctx.translate(-1, -1);
-      paint(ctx, '#ffffff', 2);
-      ctx.restore();
-    }
-    return;
-  }
-  if (type === 1) {
-    // Quieter "in" marks on the three sides goods may come in from.
-    for (let e = 0; e < 4; e++) {
-      if (e === d) continue;
-      ctx.save();
-      ctx.rotate(ROT[e]);
-      ctx.beginPath();
-      ctx.moveTo(20, -5); ctx.lineTo(13.5, 0); ctx.lineTo(20, 5);
-      ctx.closePath();
-      ctx.globalAlpha = 0.85;
-      paint(ctx, '#ffffff', 1.5);
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
-  }
   ctx.save();
   ctx.rotate(ROT[d]);
-  // A dark copy underneath, a little down and to the side, so it stands off any machine's colour.
+  // A dark copy underneath, a little down and to the side, so it stands off any part's colour.
   ctx.save();
   ctx.rotate(-ROT[d]);
   ctx.translate(1.5, 2.2);
@@ -364,28 +230,12 @@ function paintFlow(ctx, type, d) {
   ctx.restore();
 }
 
-/**
- * Draws the flow mark of a factory building (anchor tile i; F.w is the map width), if its kind
- * has one. `kind` overrides b.k (the placement preview of a belt shows the out arrow too).
- */
-export function drawFlow(ctx, b, i, F, sprites, kind = b.k) {
-  const type = kind === 'belt' ? 0 : FLOW[kind];
-  if (type === undefined) return;
-  const d = type === 2 ? 0 : b.d & 3;
-  P.step = type * 4 + d;
-  const img = sprites.get('flow', P.step, F.sprites, 0);
+/** Draws the out arrow on tile i (F.w is the map width), pointing in direction d. */
+export function drawOutArrow(ctx, d, i, F, sprites) {
+  P.step = d & 3;
+  const img = sprites.get('arrow', P.step, F.sprites, 0);
   const cx = (i % F.w) * T + HALF, cy = ((i / F.w) | 0) * T + HALF;
   ctx.drawImage(img, cx - BOX / 2, cy - BOX / 2, BOX, BOX);
-}
-
-/**
- * Which corner of its tile a building's level badge goes in, so it never sits on the flow arrow:
- * 0 top right (the usual place), 1 top left (output to the east), 2 bottom right (output north).
- */
-export function badgeCorner(b) {
-  if (FLOW[b.k] === undefined || FLOW[b.k] === 2) return 0;
-  const d = b.d & 3;
-  return d === 0 ? 1 : d === 3 ? 2 : 0;
 }
 
 /** A soft drop shadow under an upright building. */
@@ -393,12 +243,6 @@ function shadow(ctx, w = 34, h = 30) {
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   rr(ctx, -w / 2 + 3, -h / 2 + 6, w, h, 6);
   ctx.fill();
-}
-
-/** A finished item waiting at the spout of a press or packer. */
-function outItem(ctx, S) {
-  // Just inside the body: the flow arrow drawn over the output side would hide it at the edge.
-  if (P.out) drawItem(ctx, S, ITEM_KINDS[P.out], DIRS[P.d][0] * 3, DIRS[P.d][1] * 3 - 2, 15);
 }
 
 /** The eightyproof card's Free Sample table: the same shape as the plain one, as a cheap bar. */
@@ -430,142 +274,6 @@ function boozeTable(ctx) {
 }
 
 const KINDS = {
-  unpacker: {
-    look(b) {
-      // The next box pops up out of the open box just before it is pushed out.
-      const ready = b.t > 0 && b.t < 14 ? 1 - b.t / 14 : 0;
-      P.d = b.d | 0;
-      P.step = ready ? 1 + Math.min(3, (ready * 4) | 0) : 0;
-      return P.d * 5 + P.step;
-    },
-    paint(ctx, S) {
-      shadow(ctx);
-      spout(ctx, P.d);
-      // Wooden pallet.
-      box(ctx, -17, 5, 34, 11, 2, C.wood, 2.2);
-      ctx.fillStyle = C.woodDark;
-      ctx.fillRect(-11, 11, 6, 5);
-      ctx.fillRect(5, 11, 6, 5);
-      ctx.fillRect(-16, 9, 32, 1.5);
-      // Open box: flaps, dark inside, the box popping up, then the front face.
-      const jig = P.step ? (P.step % 2 ? 1 : -1) * P.step * 0.4 : 0;
-      ctx.save();
-      ctx.translate(jig, 0);
-      ctx.beginPath();
-      ctx.moveTo(-13, -9); ctx.lineTo(-19, -17); ctx.lineTo(-9, -18); ctx.lineTo(-5, -9);
-      ctx.closePath();
-      paint(ctx, C.cardboardLight, 2);
-      ctx.beginPath();
-      ctx.moveTo(13, -9); ctx.lineTo(19, -17); ctx.lineTo(9, -18); ctx.lineTo(5, -9);
-      ctx.closePath();
-      paint(ctx, C.cardboardLight, 2);
-      box(ctx, -13, -11, 26, 6, 1, '#5a3a1a', 2);
-      if (P.step) drawItem(ctx, S, 'box', 0, -8 - P.step * 2, 18);
-      box(ctx, -13, -7, 26, 14, 2, C.cardboard, 2.2);
-      ctx.fillStyle = C.cardboardLight;
-      ctx.fillRect(-2, -6, 4, 12);
-      ctx.restore();
-      // (The side it outputs to is shown by the flow arrow drawn over it: drawFlow.)
-    },
-  },
-
-  press: {
-    look(b, F) {
-      P.d = b.d | 0;
-      P.on = b.t > 0;
-      // Pump cycle: the ram goes down and up about 1.6 times a second while working.
-      P.step = P.on ? 1 + ((((F.time * 1.6) % 1) * 8) | 0) : 0;
-      P.light = P.on && ((F.time * 4) | 0) % 2 === 0 ? 1 : 0;
-      P.n = Math.min(2, b.n | 0);
-      P.out = b.out ? ITEM_IDS[b.out] || 0 : 0;
-      return (((P.d * 9 + P.step) * 2 + P.light) * 3 + P.n) * 4 + P.out;
-    },
-    paint(ctx, S) {
-      shadow(ctx);
-      spout(ctx, P.d);
-      const pump = P.step ? 0.5 - 0.5 * Math.cos(((P.step - 1) / 8) * TAU) : 0;
-      // Frame columns behind the body.
-      box(ctx, -15, -20, 5, 18, 1, '#6b7178', 2);
-      box(ctx, 10, -20, 5, 18, 1, '#6b7178', 2);
-      // Body with hazard stripes, and the bed where boxes get crushed.
-      box(ctx, -17, -6, 34, 22, 3, '#e8761a', 2.5);
-      hazard(ctx, -16, 9, 32, 6, 4);
-      box(ctx, -11, -8, 22, 5, 1, '#8a8f96', 2);
-      // Ram: rod and head plate.
-      const hy = -17 + pump * 7;
-      ctx.fillStyle = '#c9ced4';
-      ctx.fillRect(-2.5, -21, 5, hy + 22);
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(-2.5, -21, 5, hy + 22);
-      box(ctx, -10, hy, 20, 5, 1.5, '#9aa0a6', 2);
-      // Top crossbar and status light (red, flashing while pressing).
-      box(ctx, -17, -24, 34, 6, 2, '#4b5058', 2.2);
-      circle(ctx, 11, 1, 3, P.light ? '#ff3b30' : '#7a2a24', 1.5);
-      // Boxes waiting to be pressed.
-      if (P.n > 0) drawItem(ctx, S, 'box', -9, 3, 12);
-      if (P.n > 1) drawItem(ctx, S, 'box', -3, 3, 12);
-      outItem(ctx, S);
-    },
-  },
-
-  packer: {
-    look(b, F) {
-      P.d = b.d | 0;
-      P.on = b.t > 0;
-      P.step = P.on ? 1 + ((((F.time * 9) / Math.PI) % 1) * 8 | 0) : 0;
-      P.light = P.on ? ((F.time * 8) | 0) % 3 : 3;
-      P.out = b.out ? ITEM_IDS[b.out] || 0 : 0;
-      P.inside = P.out ? P.out : (P.on || b.n > 0) ? 2 : 0;
-      return (((P.d * 9 + P.step) * 4 + P.light) * 4 + P.inside) * 4 + P.out;
-    },
-    paint(ctx, S) {
-      shadow(ctx);
-      spout(ctx, P.d);
-      // Glass case with the item inside.
-      // (Purple, to match the Gift Wrap floor it stands on.)
-      rr(ctx, -17, -9, 34, 25, 8);
-      paint(ctx, '#ead9ff', 2.5);
-      if (P.inside) drawItem(ctx, S, ITEM_KINDS[P.inside], 0, 4, 20);
-      if (P.step) {
-        // A ribbon whirling round the gadget while it is being wrapped.
-        const a = ((P.step - 1) / 8) * Math.PI;
-        const w = Math.abs(Math.cos(a)) * 11;
-        ctx.fillStyle = '#ff5fa8';
-        ctx.fillRect(-w, 1, w * 2, 3);
-        ctx.fillStyle = C.yellow;
-        ctx.fillRect(-1.5 + Math.sin(a * 2) * 8, -3, 3, 12);
-      }
-      rr(ctx, -17, -9, 34, 25, 8);
-      ctx.fillStyle = 'rgba(192,132,252,0.5)';
-      ctx.fill();
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = INK;
-      ctx.stroke();
-      line(ctx, -12, -4, -12, 8, 'rgba(255,255,255,0.8)', 2); // shine on the glass
-      // Control unit on top with three lights that chase while working.
-      box(ctx, -15, -20, 30, 11, 3, '#7e22ce', 2.2);
-      for (let k = 0; k < 3; k++) circle(ctx, -8 + k * 8, -14.5, 2.6, k === P.light ? '#ff3b30' : '#8a2e28', 1.2);
-      outItem(ctx, S);
-    },
-  },
-
-  chute: {
-    look(b, F, i) {
-      const since = F.now - F.fx.saleAt[i];
-      P.step = since < 500 ? 1 + Math.min(4, ((1 - since / 500) * 5) | 0) : 0; // flash after a sale
-      return P.step;
-    },
-    paint(ctx) {
-      const flash = P.step / 5;
-      box(ctx, -18, -18, 36, 36, 6, flash ? '#6fdc7a' : C.green, 2.5);
-      // (Anything pushed in from any side is sold: the white arrows on the rim are drawFlow's.)
-      box(ctx, -12, -12, 24, 24, 4, '#123d1c', 2);
-      box(ctx, -8, -8, 16, 16, 3, '#06180b', 0);
-      label(ctx, '$', 0, 1, 15 + flash * 7, flash ? '#ffffff' : '#7CFC00', '#06180b', 3);
-    },
-  },
-
   crate: {
     look() { return 0; },
     paint(ctx) {
@@ -762,12 +470,12 @@ const KINDS = {
     paint(ctx) { salesStand(ctx, P.step, !!P.off); },
   },
 
-  // Not a building: the flow marks on factory buildings, cached the same way (look = type * 4 + d,
-  // set in P.step by drawFlow).
-  flow: {
+  // Not a building: the out arrow, cached the same way (look = its direction, set by drawOutArrow).
+  arrow: {
     look() { return P.step; },
-    paint(ctx) { paintFlow(ctx, P.step >> 2, P.step & 3); },
+    paint(ctx) { paintOutArrow(ctx, P.step); },
   },
+
 };
 
 /** Scanner colours: the charcoal plastic housing, its lighter top, the red of the laser. */
@@ -1097,7 +805,7 @@ function crate(ctx, x, y, w, h) {
 
 /**
  * Sprites of machines and security buildings, keyed by kind and look. Call setScale() on resize.
- * `items` are the item sprites (drawn into some machines).
+ * `items` are the item sprites (the box on the Forklift Turret's forks).
  */
 export function createBuildingSprites() {
   const map = new Map();
@@ -1175,7 +883,7 @@ export function rectOf(b, i, w) {
 }
 
 /**
- * Draws a non-belt building from its anchor tile i (F.w is the map width), across its footprint.
+ * Draws a building from its anchor tile i (F.w is the map width), across its footprint.
  * A building that is switched off gets a puddle under it and is drawn greyed out.
  */
 export function drawBuilding(ctx, b, i, F, sprites) {
@@ -1379,11 +1087,6 @@ function peedOn(ctx, i, t, x, y, w, h) {
 
 /** The main colours of each kind, for wreckage and debris: [body, trim, detail]. */
 export const KIND_COLOURS = {
-  belt: ['#34383d', C.steel, C.chevron],
-  unpacker: [C.wood, C.cardboard, C.woodDark],
-  press: ['#e8761a', '#9aa0a6', '#4b5058'],
-  packer: ['#ead9ff', '#7e22ce', '#c084fc'],
-  chute: [C.green, '#123d1c', '#ffffff'],
   crate: ['#b57a3c', C.wood, '#7a4f22'],
   sprinkler: [C.steel, C.red, '#7d848b'],
   forklift: [C.yellow, '#2b2f34', '#9aa0a6'],
@@ -1396,14 +1099,14 @@ export const KIND_COLOURS = {
 /**
  * A small badge with the building's level (2 and up) at the top right of its tile. `k` scales it
  * up when zoomed out, so the number stays readable on small tiles. `top`: every track it works at by
- * levels is stocked at the best tier (the badge turns pink). `corner` (see badgeCorner): 0 top right, 1 top left, 2 bottom
- * right of the tile centred on (cx, cy).
+ * levels is stocked at the best tier (the badge turns pink). It goes in the top right corner of the
+ * tile centred on (cx, cy).
  */
-export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0, top = false, corner = 0) {
+export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0, top = false) {
   const str = String(lv);
   const w = (str.length > 1 ? 21 : 16) * k, h = 13 * k;
-  const x = corner === 1 ? cx - HALF - 2 * k : cx + HALF - w + 2 * k;
-  const y = corner === 2 ? cy + HALF - h + 2 * k : cy - HALF - 2 * k;
+  const x = cx + HALF - w + 2 * k;
+  const y = cy - HALF - 2 * k;
   if (res > 0) {
     // Cached as a sprite at the sprite resolution `res` (device pixels per logical pixel): a
     // floor full of stocked towers would otherwise mean hundreds of text draws a frame.

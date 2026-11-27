@@ -12,9 +12,9 @@
 //   smashed, the doors about to open). The first one of each topic is always said; every one said
 //   makes the next one on that topic less likely (TALK.noteDecay), down to a small floor. So a
 //   thing seen for the first time at event 25 is still announced, but the twentieth slip is not.
-// - "Joke" topics carry no news (a remark about something a player built or sold, a go at one of
-//   the friends). They thin out as before, and on top of that every joke told this game makes
-//   any further joke less likely (TALK.jokeDecay), down to TALK.jokeFloor.
+// - "Joke" topics carry no news (a remark about something a player built or sold back, a go at
+//   one of the friends). They thin out as before, and on top of that every joke told this game
+//   makes any further joke less likely (TALK.jokeDecay), down to TALK.jokeFloor.
 // - The boss is announced when he walks in (bossIn, 12 seconds after the doors open), not when the
 //   doors open, with a bank for each of his titles; the first time, his trick is explained too.
 // - On the Food Court map a share of the wave openings (TALK.foodShare) come from its own bank,
@@ -132,7 +132,7 @@ export const TALK = {
  * `loud` ignores DEB's quiet time after other remarks (for things that happen at the same moment
  * as a must, like the dad line); `steady` is never thinned out by the topic's own count; `friend`
  * which of a friend's banks can stand in for the line (see FRIENDS).
- * A topic written 'placed:belt' uses the settings of 'placed' but is counted on its own.
+ * A topic written 'placed:crate' uses the settings of 'placed' but is counted on its own.
  */
 export const TOPICS = {
   // The doors opening and the ten-second warning are news, but they come every event, so they
@@ -155,7 +155,6 @@ export const TOPICS = {
   // Head Office and the store waiting on each other: an answer to someone pressing Ready.
   waiting: { steady: true, gap: 8 },
   idle: { joke: true, steady: true },
-  sale: { joke: true, chance: 0.05, gap: 60 },
   placed: { joke: true, chance: 0.12, gap: 12, friend: 'built' },
   removed: { joke: true, chance: 0.5, gap: 10, friend: 'sold' },
   removedOther: { note: true, gap: 8, friend: 'sold' },
@@ -375,7 +374,7 @@ export function createDirector(random = Math.random) {
         : place === 0 ? 'top' : place === ranked.length - 1 ? 'bottom' : 'middle';
       return {
         pid: p.id, name: p.name, role: p.role, color: p.color,
-        shipped: p.w.shipped, earned: p.w.earned, stopped: p.w.stopped, spent: p.w.spent,
+        earned: p.w.earned, built: p.w.built, stopped: p.w.stopped, spent: p.w.spent,
         stamp: pick(STAMPS[tier]),
       };
     });
@@ -384,8 +383,11 @@ export function createDirector(random = Math.random) {
     const ws = state.ws || {};
     if (ws.escaped === 0 && ws.stopped > 0) bank = LINES.reportPerfect;
     else if (worst && random() < 0.5) {
-      if (worst.w.stopped === 0 && worst.w.shipped > 0) { bank = LINES.reportNoStops; who = worst; }
-      else if (worst.w.shipped === 0 && worst.w.stopped > 0) { bank = LINES.reportNoShips; who = worst; }
+      // Half the time the last-placed player is singled out, when his row has something to say:
+      // he built things but they stopped nobody, or he did not build or spend anything at all.
+      const w = worst.w || {};
+      if (w.stopped === 0 && w.built > 0) { bank = LINES.reportNoStops; who = worst; }
+      else if (!(w.built > 0) && !(w.spent > 0)) { bank = LINES.reportNoBuild; who = worst; }
     }
     const name = who?.name || 'Someone';
     let deb = null;
@@ -645,16 +647,6 @@ export function createDirector(random = Math.random) {
       }
       case 'slip':
         say(out, state, 'slip', LINES.slip, {}, { mood: 'smug' });
-        break;
-      case 'sale':
-        // The first sale of the game is always remarked on; after that, only now and then.
-        if (!said.get('sale')) {
-          said.set('sale', 1);
-          topicAt.set('sale', state.tick);
-          jokes++;
-          out.push({ t: 'say', who: DEB, mood: 'flat', text: line(LINES.firstSale, { p: anyone(state)?.name || 'Someone' }) });
-          lastSay = state.tick;
-        } else say(out, state, 'sale', LINES.sale);
         break;
       case 'placed': {
         // Keyed by floor too (0.4): a part laid in The Back and a shop building removed from the

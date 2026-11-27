@@ -1,7 +1,7 @@
 // The lobby: what players see between joining a game and the game starting. Everyone can look
 // at the store (it is drawn behind, whole), the host can change its design and size, and each
 // player presses Ready. The game starts when every connected player is ready.
-import { MAP_DESIGNS, MAP_SIZES, ZONES, cardsOn } from '../sim/index.js';
+import { MAP_DESIGNS, MAP_SIZES, cardsOn } from '../sim/index.js';
 import { h, setText, setClass, safeColor } from './dom.js';
 import { createSettings, labelSizes } from './settings.js';
 
@@ -39,8 +39,9 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
       session.send({ c: 'ready', on: !(me && me.ready) });
     },
   });
-  const legend = h('ul', { class: 'lobby-legend' }, Object.values(ZONES).map((z) => h('li', null,
-    h('i', { style: { background: z.color } }), `${z.name}: ${z.kind === 'chute' ? 'Shipping Chutes' : z.kind === 'press' ? 'Presses' : `${z.kind[0].toUpperCase()}${z.kind.slice(1)}s`}`)));
+  // What the yellow marks on the store are (drawDropMarks in renderer.js).
+  const legend = h('ul', { class: 'lobby-legend' }, h('li', null,
+    h('i', { style: { background: '#facc15' } }), 'Returns Drop: where the junk comes down into The Back. Your supply lines start there.'));
 
   const el = h('section', { class: 'panel lobby hidden', 'aria-label': 'Before the game starts' },
     h('h3', null, 'BEFORE WE OPEN'),
@@ -53,7 +54,7 @@ export function createLobby(session, { renderer, playSound = () => {} }) {
       h('label', { for: 'lobby-size' }, h('span', null, 'Size'), sizeIn)),
     about, fit,
     h('h4', null, 'THE GAME'), settings.el,
-    h('h4', null, 'PAINTED FLOOR'), legend,
+    h('h4', null, 'THE BACK'), legend,
     h('h4', null, 'PLAYERS'), list,
     readyBtn, status);
 

@@ -60,8 +60,8 @@ export function readSave({ storage = browserStorage() } = {}) {
   try { save = JSON.parse(storage?.getItem(KEY) || 'null'); } catch { return null; }
   const s = save && save.state;
   // A save from a different version of the rules may not load properly: only trust what looks right.
-  // Version 3 (before 0.2.09) is still accepted: resuming it runs migrateSave (see HostSession).
-  if (!save || save.v !== 1 || !s || !(s.v === 3 || s.v === STATE_VERSION) || !worthSaving(s)) return null;
+  // (0.4 loads no save from before it, the owner's decision: see dropOldSave.)
+  if (!save || save.v !== 1 || !s || s.v !== STATE_VERSION || !worthSaving(s)) return null;
   if (!Array.isArray(s.players) || !s.players.length || !Array.isArray(s.grid) || s.grid.length !== s.w * s.h) return null;
   const host = s.players[s.host | 0] || s.players[0];
   const design = MAP_DESIGNS[s.map?.design], size = MAP_SIZES[s.map?.size];
@@ -71,6 +71,21 @@ export function readSave({ storage = browserStorage() } = {}) {
     players: s.players.map((p) => p.name), host: host.name,
     store: design && size ? `${design.name}, ${size.name}` : 'the original store',
   };
+}
+
+/**
+ * Throws away a save this version cannot carry on: one made under other rules (0.4 moved the
+ * factory under the shop, and loads nothing from before it). So the player is told once why his
+ * saved game is not offered, rather than finding it silently gone, and it is not kept to no use.
+ * @returns {string|null} the version of the game that made it ('' if it did not say), or null if
+ *   there was no such save
+ */
+export function dropOldSave({ storage = browserStorage() } = {}) {
+  let save = null;
+  try { save = JSON.parse(storage?.getItem(KEY) || 'null'); } catch { return null; }
+  if (!save || save.v !== 1 || !save.state || save.state.v === STATE_VERSION) return null;
+  clearSave({ storage });
+  return String(save.release || '');
 }
 
 /**

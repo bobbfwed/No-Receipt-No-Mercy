@@ -1,13 +1,11 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
 import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ, BUILD, HOLIDAYS } from './constants.js';
-import { makeMap, makeZones, makeDrops, MAP_DESIGNS, MAP_SIZES } from './maps.js';
+import { makeMap, makeDrops, MAP_DESIGNS, MAP_SIZES } from './maps.js';
 // (cards.js imports rand from this file. That is safe: neither uses the other while loading.)
 import { dealCards, cleanHand } from './cards.js';
 // (back.js imports from this file too; the same holds.)
-import { newDrop, syncAllLifts } from './back.js';
-// (upgrades.js reaches this file through cards.js; the same holds.)
-import { rebuildDeal } from './upgrades.js';
+import { newDrop } from './back.js';
 
 /**
  * A building. One bigger than a tile (BUILD[k].size) is held by the top-left tile of its
@@ -21,10 +19,6 @@ import { rebuildDeal } from './upgrades.js';
  * @property {number} [d] facing direction 0-3
  * @property {number} [hit] gym bro hits taken this wave (cleared when a wave ends)
  * @property {number} [off] ticks it stays switched off (a dog peed on it); absent when working
- * @property {Array<[string, number]>} [it] belt only: items as [itemKind, progress 0..1], front item first
- * @property {number} [t]   machines: ticks left on the current job; unpacker: ticks until next box
- * @property {number} [n]   press/packer: inputs waiting
- * @property {string|0} [out] press/packer: finished item waiting to leave
  * @property {number} [cd]  towers: ticks until it can fire again
  * @property {number} [a]   forklift: aim angle in radians (for drawing)
  * @property {number} [c]   what it cost to put down, only where a card made that differ from its
@@ -173,7 +167,7 @@ function blankWave() {
 }
 
 function blankStats() {
-  return { spent: 0, built: 0, sold: 0, shipped: 0, earned: 0, stopped: 0, annoy: 0 };
+  return { spent: 0, built: 0, sold: 0, earned: 0, stopped: 0, annoy: 0 };
 }
 
 /**
@@ -185,8 +179,6 @@ function blankStats() {
  * @param {{design?: string, size?: string, slots?: number}} [o.map] the floor plan (see maps.js).
  *   Left out, it is the original small warehouse with a single entrance, which the tutorial and
  *   most tests are written for.
- * @param {boolean} [o.zones] mark out the floor areas the factory machines must be built on.
- *   On by default when a map is given; off for the bare default map.
  * @param {{waves?: number, startCash?: number, difficulty?: string, cardsOn?: boolean}} [o.settings]
  *   the host's choices (see SETTINGS in constants.js); anything left out or not on the list is the
  *   default. cardsOn false (0.3.01, the host's "Cards: Off") means no deal even when `cards` is
@@ -202,12 +194,12 @@ function blankStats() {
  *   the URL option), tidied by cleanHand, with no deal phase. Left out (or anything else): no cards.
  *   A training game never has any.
  */
-export function createGame({ seed = 1, training = false, map = null, zones = !!map, lobby = false, settings = null, holiday = null, cards = null } = {}) {
+export function createGame({ seed = 1, training = false, map = null, lobby = false, settings = null, holiday = null, cards = null } = {}) {
   const design = (map && map.design) || 'warehouse', size = (map && map.size) || 'xs';
   const plan = makeMap(design, size, map ? map.slots ?? MAX_PLAYERS : 1);
   const set = cleanSettings(settings);
   const state = {
-    /** The version of the state's shape and rules (see STATE_VERSION and migrateSave). */
+    /** The version of the state's shape and rules (see STATE_VERSION). */
     v: STATE_VERSION,
     seed,
     training,
@@ -225,9 +217,6 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
      *  per tile as listed in DECOR in maps.js, or '' for a design without furniture. Furniture is
      *  '#' in `tiles`; this is only for drawing. */
     decor: plan.decor,
-    /** Marked floor for the factory machines: one character per tile, a key of ZONES or a
-     *  space. An empty string means the map has no marked floor and machines go anywhere. */
-    zones: zones ? makeZones(plan.w, plan.h, plan.tiles, plan.doors, design) : '',
     /** Entrances in the order they open, each a list of tile indexes; `open` of them are open. */
     doors: plan.doors,
     open: 0,
@@ -237,7 +226,7 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     /** The Back (0.4), the floor under the shop: like `grid`, one entry per tile, a Back part or 0
      *  (the parts' shapes are in back.js and docs/architecture.md, "The Back"). A game made with a
      *  map has its Returns Drops in it from the start (makeDrops in maps.js); the bare default map
-     *  has none for now. A save from before it loads with an empty one (migrateSave). */
+     *  has none. */
     back: blankBack(plan, map ? design : null),
     /** Goes up whenever a Back part is added, removed or turned; back.js caches its lane order
      *  against it, as path maps are cached against gridVer. */
@@ -260,8 +249,7 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
      *  player who pressed and paid) and `res` (whole dollars already taken from his cash and held
      *  for it). Without `by` it is not ordered. step() puts an ordered wreck back as soon as nothing
      *  is in the way (stepRebuilds in commands.js); if it stops being rubble any other way, the
-     *  held money goes back to him (releaseOrder). Saves from before 0.2.15 to 0.3.03 may carry
-     *  `at` (the tick it broke, for the old auto-rebuild's delay): nothing reads it any more. */
+     *  held money goes back to him (releaseOrder). */
     rubble: [],
     nextId: 1,
     /** Shoppers still to arrive this wave, as [tick, kind, super 0|1, entrance or -1 for any],
@@ -340,67 +328,11 @@ function blankBack(plan, design) {
 }
 
 /**
- * The version of the game state. 4 since 0.2.09, when the refund limit was halved (20, plus 5 a
- * player) with the crowd; saves of version 3 are brought up to date by migrateSave.
+ * The version of the game state's shape and rules. 5 since 0.4, which moved the factory to The Back
+ * and does not load older saves (the owner's decision): a save of any other version is not offered
+ * for resuming (readSave in src/ui/save.js), so there is nothing to bring up to date.
  */
-export const STATE_VERSION = 4;
-
-/**
- * Brings a saved game from an older version up to this one, once, when it is resumed. A save
- * from this version on is left alone.
- * From 3: the refund limit was 40 plus 10 a player, and the state keeps it (it is recalculated
- * only when a new player joins, which would then drop it to the new formula with the old count:
- * 25 of 40 would become 25 of 25). So the limit is set from today's formula for the save's
- * players and the refunds are scaled by the same ratio, rounded down: the save keeps the share of
- * its limit it had used.
- * Any version (0.3.04): auto-rebuild is gone, so a player's old `autoRebuild` switch and the
- * tick a wreck broke (`at`, only its delay read it) are dropped. Neither changes how the game
- * plays; it only keeps dead fields out of the state.
- * Any version (0.4): bought upgrades are gone, so a building's and a wreck's levels (`u`), the
- * free levels a card gave (`f`, `fn`) and what a wreck had cost with its upgrades (`spent`) are
- * dropped: it now works at its stock's levels and is rebuilt for a share of its price. A wreck
- * ordered while its payer was short of the old full price (an order could then hold less) is
- * cancelled and his money given back, since an order now always holds the whole price.
- * @returns {boolean} whether anything was changed
- */
-export function migrateSave(state) {
-  if (!state) return false;
-  let changed = false;
-  for (const p of state.players || []) if ('autoRebuild' in p) { delete p.autoRebuild; changed = true; }
-  for (const r of state.rubble || []) if ('at' in r) { delete r.at; changed = true; }
-  const dropLevels = (b) => {
-    let was = false;
-    for (const f of ['u', 'f', 'fn', 'spent']) if (f in b) { delete b[f]; was = true; }
-    return was;
-  };
-  for (const b of state.grid || []) if (b && dropLevels(b)) changed = true;
-  for (const r of state.rubble || []) {
-    if (dropLevels(r)) changed = true;
-    if (r.by !== undefined && (r.res | 0) < rebuildDeal(r, Infinity).pay) { releaseOrder(state, r); changed = true; }
-  }
-  // Any version (0.4): a save from before The Back has none; it gets an empty one (no drops: the
-  // marked floor it would place them by is part of the old factory such a save still runs).
-  if (!Array.isArray(state.back) || state.back.length !== state.w * state.h) {
-    state.back = new Array(state.w * state.h).fill(0);
-    state.backVer = 0;
-    changed = true;
-  }
-  // Any version (0.4, removal step 2): the running total of goods sold (`sales`, for the INCOME panel
-  // that is gone) and a shoplifter's detour toward a belt (`lf`, `lw`) are dropped. A save made
-  // mid-event after the last shopper came in starts the speed bonus's clock now.
-  if ('sales' in state) { delete state.sales; changed = true; }
-  for (const sh of state.shoppers || []) if ('lf' in sh || 'lw' in sh) { delete sh.lf; delete sh.lw; changed = true; }
-  if (state.phase === 'wave' && Array.isArray(state.spawnQ) && !state.spawnQ.length && state.lastIn === undefined) { state.lastIn = state.tick; changed = true; }
-  // Any version (0.4, stage 3): every security building with `lift`, and the rubble of one, gets its
-  // Dumbwaiters, as one placed now would.
-  if (Array.isArray(state.grid) && state.grid.length === state.w * state.h && syncAllLifts(state)) changed = true;
-  if ((state.v | 0) >= STATE_VERSION) return changed;
-  const limit = TUNE.refundLimit + TUNE.refundPerPlayer * Math.max(0, state.players.length - 1);
-  if (state.refundLimit > 0) state.refunds = Math.floor(((state.refunds || 0) * limit) / state.refundLimit);
-  state.refundLimit = limit;
-  state.v = STATE_VERSION;
-  return true;
-}
+export const STATE_VERSION = 5;
 
 /** Deterministic random number in [0, 1). The generator's state lives in the game state. */
 export function rand(state) {
@@ -499,7 +431,6 @@ export function setMap(state, design, size) {
   state.decor = plan.decor;
   state.doors = plan.doors;
   state.open = 0;
-  if (state.zones) state.zones = makeZones(plan.w, plan.h, plan.tiles, plan.doors, design);
   state.grid = new Array(plan.w * plan.h).fill(0);
   state.gridVer++;
   state.back = blankBack(plan, design);

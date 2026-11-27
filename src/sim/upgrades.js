@@ -56,8 +56,6 @@ export const spentOn = (b) => b.c ?? BUILD[b.k].cost;
  *                        of each shopper's chance not to stop (it stops with 1 - (1 - stop) *
  *                        stopLeft), and what each chance to hurry past is multiplied by
  *   slow, slip, slipDmg  wet floor sign (speed multiplier, chance a dad slips, patience he loses)
- *   period               unpacker: seconds between boxes
- *   time                 press and packer: seconds per item
  *   hits                 every building: gym bro hits it survives in one wave (Duct Tape soaks up
  *                        hits on top of these, one use a hit: see wreck in step.js)
  * With `state`, the game's cards are applied too (cardStats in cards.js: the premature and
@@ -80,8 +78,6 @@ export function statsOf(b, state = null) {
     slow: TUNE.wetSlow * (d.slow || 1) ** lv('dmg'),
     slip: Math.min(0.95, TUNE.slipChance + (d.slip || 0) * lv('dmg')),
     slipDmg: TUNE.slipDmg * (b.k === 'wetfloor' ? mul('dmg') : 1),
-    period: (def.period || 0) / mul('spd'),
-    time: (def.time || 0) / mul('spd'),
     hits: def.hits || 1,
   };
   return state ? cardStats(state, b, st) : st;

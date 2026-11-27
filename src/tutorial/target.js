@@ -9,12 +9,13 @@
 //   fix   'rebuild': wreckage that the Rebuild button puts back
 //
 // The answer is one of:
-//   { kind: 'none', why }             nothing to press: 'watch' (a wave is on), 'wait' (the
-//                                     factory is working), 'advancing' (the panel says done)
+//   { kind: 'none', why }             nothing to press: 'watch' (a wave is on), 'wait' (nothing
+//                                     to do yet), 'advancing' (the panel says done)
 //   { kind: 'button', k }             a build-bar button (a building, or 'rebuild')
 //   { kind: 'drag', k, x, y }         touch screens: drag that button onto tile (x, y)
 //   { kind: 'tile', x, y }            a floor tile
-//   { kind: 'swipe', from, to }       drag along tiles, from {x, y} to {x, y} (a line of belts)
+//   { kind: 'swipe', from, to }       a mouse drag along tiles, from {x, y} to {x, y} (a wall of
+//                                     Crate Stacks)
 //   { kind: 'control', name }         one of CONTROLS: a named button somewhere else on screen
 import { BUILD } from '../sim/index.js';
 
@@ -63,6 +64,25 @@ function wrongThere(a, m) {
 const same = (t, m) => !!t && t.x === m.x && t.y === m.y;
 
 /**
+ * The marks wanting building k on empty tiles, if there are several and they lie along one row or
+ * column with nothing between the first and the last but more of them and k already in place (a
+ * drag skips a tile that is built on): { from, to }. Otherwise null.
+ */
+function lineOf(s, marks, k) {
+  const empty = marks.filter((mk) => mk.k === k && !mk.fix && !buildingAt(s, mk.x, mk.y));
+  if (empty.length < 2) return null;
+  const a = empty[0], z = empty[empty.length - 1];
+  if (a.x !== z.x && a.y !== z.y) return null;
+  const steps = Math.abs(z.x - a.x) + Math.abs(z.y - a.y);
+  const dx = Math.sign(z.x - a.x), dy = Math.sign(z.y - a.y);
+  for (let n = 1; n < steps; n++) {
+    const x = a.x + dx * n, y = a.y + dy * n;
+    if (!empty.some((mk) => mk.x === x && mk.y === y) && buildingAt(s, x, y)?.k !== k) return null;
+  }
+  return { from: { x: a.x, y: a.y }, to: { x: z.x, y: z.y } };
+}
+
+/**
  * What the arrow points at.
  * @param {Object} st      the lesson (an entry of STEPS)
  * @param {Object} s       the game state
@@ -83,16 +103,11 @@ export function arrowTarget(st, s, marks, { tool = null, selected = null, touch 
     if (m.fix === 'rebuild') return { kind: 'button', k: 'rebuild' };
     const here = anchorAt(s, m.x, m.y);
     const b = here && here.b;
-    // Belts: a line laid (or laid again: dragging belt over belts turns them) by one drag along
-    // the tiles that still need one, with the Belt picked. Something else in the way is below.
-    if (m.k === 'belt' && !(b && b.k !== 'belt') && !same(selected, m)) {
-      if (tool !== 'belt') return { kind: 'button', k: 'belt' };
-      const line = marks.filter((mk) => { const o = buildingAt(s, mk.x, mk.y); return mk.k === 'belt' && (!o || o.k === 'belt'); });
-      if (line.length > 1) {
-        const a = line[0], z = line[line.length - 1];
-        return { kind: 'swipe', from: { x: a.x, y: a.y }, to: { x: z.x, y: z.y } };
-      }
-      return { kind: 'tile', x: m.x, y: m.y };
+    // A line of one-tile buildings (the wall of Crate Stacks): with a mouse, one drag along it lays
+    // them all, since a drag places one on every tile it crosses. A finger places one at a time.
+    if (!touch && tool === m.k && !b) {
+      const line = lineOf(s, marks, m.k);
+      if (line) return { kind: 'swipe', ...line };
     }
     const wrong = wrongThere(here, m);
     if (wrong) {
@@ -110,9 +125,11 @@ export function arrowTarget(st, s, marks, { tool = null, selected = null, touch 
     }
     if (!m.k || b) return { kind: 'tile', x: m.x, y: m.y };
     if (tool === m.k) return { kind: 'tile', x: m.x, y: m.y };
-    // On a touch screen a building is dragged from the bar onto its tile (a line of belts, above,
-    // is drawn on the floor once the Belt is picked, so the Belt is only tapped).
-    if (touch && BUILD[m.k]) return { kind: 'drag', k: m.k, x: m.x, y: m.y };
+    // On a touch screen a building is dragged from the bar onto its tile. One that must face
+    // another way than the right is picked first instead, so the rotate button at the end of the
+    // bar can turn it before it goes down (the lesson says so; a big one only turns end for end
+    // once built).
+    if (touch && BUILD[m.k] && !(BUILD[m.k].rot && (m.d | 0) !== 0)) return { kind: 'drag', k: m.k, x: m.x, y: m.y };
     return { kind: 'button', k: m.k };
   }
   if (s.phase === 'wave') return NONE('watch');

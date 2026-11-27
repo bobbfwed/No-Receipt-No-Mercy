@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, migrateSave, eventPay, speedBonus, speedPar, bossTier,
+  createGame, addPlayer, applyCommand, step, eventPay, speedBonus, speedPar, bossTier,
   SETTINGS, TUNE, TICK_HZ, ST,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
@@ -235,7 +235,7 @@ test('DEB has a line for all of the speed bonus and for none of it, and nothing 
   assert.deepEqual(say({ e: 'waveEnd', wave: 1, pay: 0, speed: 0, took: 0, training: true }), []);
 });
 
-test('a copy made while the clock runs plays on identically; the checksum sees the clock; old saves are tidied', () => {
+test('a copy made while the clock runs plays on identically; the checksum sees the clock', () => {
   const s = game();
   openOn(s, 2);
   step(s);
@@ -260,17 +260,4 @@ test('a copy made while the clock runs plays on identically; the checksum sees t
   assert.notEqual(checksum(t), sum);
   t.ws.stopped--;
   assert.equal(checksum(t), sum);
-  // A save from before: the old running total of goods sold and a shoplifter's detour go; a save
-  // made mid-event after the last shopper came in starts the clock now.
-  const old = game();
-  openOn(old, 2);
-  step(old);
-  delete old.lastIn;
-  old.sales = 1234;
-  old.shoppers[0].lf = 99;
-  old.shoppers[0].lw = 30;
-  assert.equal(migrateSave(old), true);
-  assert.equal('sales' in old, false);
-  assert.equal('lf' in old.shoppers[0] || 'lw' in old.shoppers[0], false);
-  assert.equal(old.lastIn, old.tick);
 });

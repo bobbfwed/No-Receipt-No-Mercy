@@ -7,8 +7,8 @@
 import { voice, tone, noise, bell, brass, formant, mtof, vary, say, babble } from './synth.js';
 import { thud, glass } from './shoppers.js';
 
-/** A metal clang (the same recipe as in effects.js). */
-function clang(v, t, f, peak = 0.14, d = 0.35, index = 2.5) {
+/** A metal clang (effects.js uses it too, for wrecks and shots). */
+export function clang(v, t, f, peak = 0.14, d = 0.35, index = 2.5) {
   bell(v, { t, f, ratio: 1.41, index, peak, d });
 }
 

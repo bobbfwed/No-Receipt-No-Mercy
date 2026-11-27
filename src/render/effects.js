@@ -84,7 +84,7 @@ export function createEffects() {
    * the till on that tile, so only the till the shopper reached flashes, whichever wall it is in);
    * bossEscAt: when a boss last reached a till (the renderer flashes the edges of the screen red).
    */
-  const timers = { sprayAt: null, shotAt: null, railAt: null, saleAt: null, tillAt: null, bossEscAt: -1e9 };
+  const timers = { sprayAt: null, shotAt: null, railAt: null, tillAt: null, bossEscAt: -1e9 };
   let W = 0, H = 0;
   let pitchAt = -1e9; // when the salesman last shouted
   /** Sizes the per-tile timers for a map (they are kept if the size has not changed). */
@@ -94,7 +94,6 @@ export function createEffects() {
     timers.sprayAt = new Float64Array(W * H).fill(-1e9);
     timers.shotAt = new Float64Array(W * H).fill(-1e9);
     timers.railAt = new Float64Array(W * H).fill(-1e9);
-    timers.saleAt = new Float64Array(W * H).fill(-1e9);
     timers.tillAt = new Float64Array(W * H).fill(-1e9);
   }
   /**
@@ -166,11 +165,6 @@ export function createEffects() {
       if (e.i >= W * H) continue; // from a different map
       let f;
       switch (e.e) {
-        case 'sale':
-          timers.saleAt[e.i] = now;
-          f = add(TEXT, now, (e.i % W) * T + T / 2, ((e.i / W) | 0) * T + 4);
-          if (f) { f.text = '+$' + e.v; f.color = '#4ade80'; }
-          break;
         case 'escape':
           timers.tillAt[tillNear(s, e.x, e.y)] = now;
           if (e.k === 'boss') {

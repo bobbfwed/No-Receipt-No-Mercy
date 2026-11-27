@@ -1,8 +1,10 @@
 // Shopper pathfinding. One flood fill from the tills gives every tile its walking distance to
 // the nearest till; shoppers simply step to the neighbour with the smallest number.
 // There are four such maps, because some shoppers get through things others cannot:
-//   NORMAL  most shoppers: belts, machines and crates all block
-//   HOP     dads: they step over conveyor belts
+//   NORMAL  most shoppers: security buildings (but Wet Floor Signs) and crates block
+//   DAD     dads. Until 0.4 they stepped over the shop floor's conveyor belts; with those gone
+//           this map blocks exactly what NORMAL blocks. It is kept apart because dads are to
+//           get rules of their own (walking through buildings, stopped only by Razor Wire).
 //   SMASH   gym bros: they walk through crate stacks (and wreck them), while they still can hit
 //           things; resting after a hit, or spent, they walk by NORMAL (see routeOf)
 //   GHOST   runaway children: only the store's own walls stop them
@@ -10,7 +12,7 @@ import { DIRS, BUILD, SHOPPERS, TUNE, defOf } from './constants.js';
 import { cardSmash } from './cards.js';
 
 export const UNREACHABLE = 65535;
-export const NORMAL = 0, HOP = 1, SMASH = 2, GHOST = 3;
+export const NORMAL = 0, DAD = 1, SMASH = 2, GHOST = 3;
 
 const cache = new WeakMap();
 
@@ -19,7 +21,7 @@ export function modeOf(kind) {
   // (The boss is not in SHOPPERS; he walks like anyone else.)
   const def = SHOPPERS[kind];
   if (!def) return NORMAL;
-  return def.hopsBelts ? HOP : def.smashes ? SMASH : NORMAL;
+  return def.dad ? DAD : def.smashes ? SMASH : NORMAL;
 }
 
 /**
@@ -48,7 +50,7 @@ export function routeOf(s, state = null) {
 
 /**
  * True if a shopper can stand on this tile.
- * @param {number} [mode] NORMAL, HOP, SMASH or GHOST
+ * @param {number} [mode] NORMAL, DAD, SMASH or GHOST
  */
 export function walkable(state, i, mode = NORMAL) {
   // (A shut entrance counts as floor, so the check that the maze leaves every entrance a way
@@ -57,7 +59,7 @@ export function walkable(state, i, mode = NORMAL) {
   if (mode === GHOST) return true;
   const b = state.grid[i];
   if (!b || !BUILD[b.k].blocks) return true;
-  return (mode === HOP && b.k === 'belt') || (mode === SMASH && b.k === 'crate');
+  return mode === SMASH && b.k === 'crate';
 }
 
 /**
@@ -93,7 +95,7 @@ function flood(state, isStart, extraBlocked, mode) {
  * Distance in tiles from every tile to the nearest till.
  * @param {number|number[]} extraBlocked a tile index, or a list of them, to treat as blocked (to
  *   test a placement), or -1
- * @param {number} [mode] NORMAL, HOP, SMASH or GHOST
+ * @param {number} [mode] NORMAL, DAD, SMASH or GHOST
  * @returns {Uint16Array}
  */
 export function computeDist(state, extraBlocked = -1, mode = NORMAL) {
@@ -150,7 +152,7 @@ function cacheOf(state) {
 
 /**
  * The distance map for the current layout, worked out only when the layout changes.
- * @param {number} [mode] NORMAL, HOP, SMASH or GHOST
+ * @param {number} [mode] NORMAL, DAD, SMASH or GHOST
  */
 export function getField(state, mode = NORMAL) {
   const hit = cacheOf(state);
@@ -187,5 +189,5 @@ export function getBackField(state) {
 
 /** The map most shoppers walk by. */
 export const getDist = (state) => getField(state, NORMAL);
-/** The map for dads, who step over belts. */
-export const getHopDist = (state) => getField(state, HOP);
+/** The map dads walk by (for now the same as getDist's: see DAD at the top). */
+export const getDadDist = (state) => getField(state, DAD);

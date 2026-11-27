@@ -18,12 +18,9 @@
 //   horseshoe  the Strip Mall: a U of store round an outdoor car park ('O' in state.decor),
 //              drawn as tarmac with bays, parked cars, shop fronts and a sign (drawLot); the
 //              walls round it are drawn as outside walls
-// Most games also have marked floor for the factory machines (state.zones): tinted patches with a
-// painted border and their name stencilled on, one colour per kind (ZONES in the rules).
 // Almost all of it never changes, so it is painted into cached chunks (createFloorCache); only the
 // entrance doors (open during a wave) and the till displays (each flashes on a refund there) are
 // drawn every frame (drawDynamic).
-import { ZONES } from '../sim/index.js';
 import {
   TILE, INK, C, rr, paint, box, text, hazard, hash2, FONT_FAMILY,
 } from './paint.js';
@@ -180,8 +177,6 @@ export function analyzeMap(s) {
     return { n: k, tiles: list.slice(), side, x0: ax, y0: ay, open: tiles[a] === 'D', frame };
   });
 
-  const zones = typeof s.zones === 'string' && s.zones.length === n ? s.zones : '';
-  const patches = zones ? findPatches(w, h, zones, doorway) : [];
   const blocks = decor ? findBlocks(w, h, decor) : [];
   const bays = decor && design === 'carpark' ? findBays(w, h, tiles, decor) : [];
   const runs = design === 'corridors' ? findRuns(w, h, wall) : [];
@@ -189,7 +184,7 @@ export function analyzeMap(s) {
 
   return {
     w, h, tiles, design, wall, doorway, tint, shelves, tills, tillTop, tillBot, tillLeft, tillRight,
-    doors, zones, patches, decor, blocks, bays, runs, lot,
+    doors, decor, blocks, bays, runs, lot,
   };
 }
 
@@ -200,7 +195,6 @@ const decorOf = (s) => (typeof s.decor === 'string' && s.decor.length === s.w * 
 export function mapChanged(info, s) {
   return !info || info.w !== s.w || info.h !== s.h || info.tiles !== s.tiles ||
     info.design !== ((s.map && s.map.design) || 'warehouse') ||
-    info.zones !== (typeof s.zones === 'string' && s.zones.length === s.w * s.h ? s.zones : '') ||
     info.decor !== decorOf(s);
 }
 
@@ -297,102 +291,6 @@ function findBays(w, h, tiles, decor) {
     rows.push(row);
   }
   return rows.sort((p, q) => p.x0 - q.x0);
-}
-
-/**
- * The marked floor for the factory machines, cut into patches: each patch is one connected area
- * of one kind (a wall through a patch makes two). Patches never change during a game, so all of
- * this is worked out once.
- * @returns {Array} patches: { ch, color, name, cells [i], inside (Set of cells), width (of the
- *   map), x0, y0, x1, y1 (tile bounds, exclusive
- *   end), edges [x1, y1, x2, y2, ...] (the outline in tiles), label { cx, cy, room } | null
- *   (where the name goes, in logical pixels, and how wide it may be) }
- */
-function findPatches(w, h, zones, doorway) {
-  const n = w * h;
-  const seen = new Uint8Array(n);
-  const patches = [];
-  const stack = [];
-  for (let i = 0; i < n; i++) {
-    const ch = zones[i];
-    if (seen[i] || !ZONES[ch]) continue;
-    const cells = [];
-    seen[i] = 1;
-    stack.push(i);
-    while (stack.length) {
-      const j = stack.pop();
-      cells.push(j);
-      const x = j % w, y = (j / w) | 0;
-      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const k = ny * w + nx;
-        if (seen[k] || zones[k] !== ch) continue;
-        seen[k] = 1;
-        stack.push(k);
-      }
-    }
-    const inside = new Set(cells);
-    const has = (x, y) => x >= 0 && y >= 0 && x < w && y < h && inside.has(y * w + x);
-    let x0 = w, y0 = h, x1 = 0, y1 = 0;
-    const edges = [];
-    for (const j of cells) {
-      const x = j % w, y = (j / w) | 0;
-      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + 1); y1 = Math.max(y1, y + 1);
-      if (!has(x, y - 1)) edges.push(x, y, x + 1, y);
-      if (!has(x, y + 1)) edges.push(x, y + 1, x + 1, y + 1);
-      if (!has(x - 1, y)) edges.push(x, y, x, y + 1);
-      if (!has(x + 1, y)) edges.push(x + 1, y, x + 1, y + 1);
-    }
-    patches.push({
-      ch, color: ZONES[ch].color, name: ZONES[ch].name.toUpperCase(), cells, inside, width: w, x0, y0, x1, y1, edges,
-      // A doorway's frame is drawn over the floor, so the name keeps off doorway tiles.
-      label: labelSpot((x, y) => has(x, y) && !doorway[y * w + x], x0, y0, x1, y1),
-    });
-  }
-  return patches;
-}
-
-/**
- * Where to stencil a patch's name: on the widest full run of floor, either along one row or
- * straddling two rows, preferring the middle of the patch. Returns null for a patch too small.
- * @returns {{cx, cy, room, two}|null} centre and usable width in logical pixels; `two` is the
- *   best spot two rows tall (or null)
- */
-function labelSpot(has, x0, y0, x1, y1) {
-  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
-  let best = null, best2 = null;
-  const consider = (ax, bx, cy, rows) => {
-    const wide = bx - ax, cx = (ax + bx) / 2;
-    const off = Math.abs(cx - mx) + Math.abs(cy - my);
-    const better = (b) => !b || wide > b.wide || (wide === b.wide && off < b.off);
-    if (better(best)) best = { wide, off, cx, cy };
-    if (rows === 2 && better(best2)) best2 = { wide, off, cx, cy };
-  };
-  for (let y = y0; y < y1; y++) {
-    for (const rows of [1, 2]) {
-      if (y + rows > y1) continue;
-      for (let x = x0; x < x1; x++) {
-        let ok = true;
-        for (let r = 0; r < rows; r++) if (!has(x, y + r)) ok = false;
-        if (!ok) continue;
-        let e = x;
-        while (e < x1) {
-          let all = true;
-          for (let r = 0; r < rows; r++) if (!has(e, y + r)) all = false;
-          if (!all) break;
-          e++;
-        }
-        consider(x, e, y + rows / 2, rows);
-        x = e;
-      }
-    }
-  }
-  if (!best || best.wide < 2) return null;
-  return {
-    cx: best.cx * T, cy: best.cy * T, room: best.wide * T,
-    // A spot two rows tall, for writing a two-word name on two lines when one line is too long.
-    two: best2 && best2.wide >= 2 ? { cx: best2.cx * T, cy: best2.cy * T, room: best2.wide * T } : null,
-  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -605,11 +503,6 @@ function drawConcrete(g, info, r, x0, y0, x1, y1, zoom) {
   g.setLineDash([14, 8]);
   g.strokeRect(T + 6, T + 6, (w - 2) * T - 12, (h - 2) * T - 12);
   g.setLineDash([]);
-  // The machines' marked floor, painted over the safety line where they meet.
-  for (const p of info.patches) {
-    if (p.x1 <= x0 || p.x0 >= x1 || p.y1 <= y0 || p.y0 >= y1) continue;
-    drawPatch(g, p, zoom);
-  }
   // In front of each till: the floor tile next to it, on the store side of whichever wall it is in.
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
@@ -640,108 +533,6 @@ function hatch(g, x, y, w, h) {
   for (let s = -h; s < w; s += 13) { g.moveTo(x + s, y + h); g.lineTo(x + s + h, y); }
   g.stroke();
   g.restore();
-}
-
-/** Paint for each kind of marked floor, worked out once from its colour. */
-const zonePaint = new Map();
-function zoneStyle(color) {
-  let st = zonePaint.get(color);
-  if (st) return st;
-  const n = parseInt(color.slice(1), 16);
-  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  const ink = [29, 33, 37];
-  const mix = (k) => c.map((v, j) => Math.round(v * (1 - k) + ink[j] * k)).join(',');
-  st = {
-    fill: `rgba(${c.join(',')},0.24)`,
-    band: `rgba(${c.join(',')},0.92)`,
-    // The lettering is a darker shade of the same paint, so it reads on grey concrete.
-    letters: `rgba(${mix(0.62)},0.92)`,
-  };
-  zonePaint.set(color, st);
-  return st;
-}
-
-/** How far in from a patch's edge its painted border starts and ends (logical pixels). */
-const BAND_IN = 2.5, BAND_OUT = 7.5;
-
-/**
- * One patch of marked floor: a tint over every tile, a painted border just inside its outline
- * (following any notch a wall cuts into it), and its name stencilled once across the middle.
- * Buildings cover the middle of a tile, so the tint and the border still show round them.
- */
-function drawPatch(g, p, zoom) {
-  const st = zoneStyle(p.color);
-  const W = p.width, inside = p.inside;
-  const has = (x, y) => x >= 0 && y >= 0 && x < W && inside.has(y * W + x);
-
-  g.fillStyle = st.fill;
-  g.beginPath();
-  for (const i of p.cells) g.rect((i % W) * T, ((i / W) | 0) * T, T, T);
-  g.fill();
-
-  // The border: one band per outside edge of each tile, lengthened or shortened at its ends so
-  // the bands meet cleanly at outside corners and wrap round inside corners. All the bands go into
-  // one path and are filled once, so where they overlap the paint is not doubled.
-  const A = BAND_IN, B = BAND_OUT;
-  g.beginPath();
-  for (const i of p.cells) {
-    const x = i % W, y = (i / W) | 0;
-    const X = x * T, Y = y * T;
-    // Ends of a band that runs across (top or bottom edge); oy is the row outside that edge.
-    const across = (oy) => {
-      const s0 = !has(x - 1, y) ? A : has(x - 1, oy) ? -B : 0;
-      const s1 = !has(x + 1, y) ? -A : has(x + 1, oy) ? B : 0;
-      return [X + s0, X + T + s1];
-    };
-    const down = (ox) => {
-      const s0 = !has(x, y - 1) ? A : has(ox, y - 1) ? -B : 0;
-      const s1 = !has(x, y + 1) ? -A : has(ox, y + 1) ? B : 0;
-      return [Y + s0, Y + T + s1];
-    };
-    if (!has(x, y - 1)) { const [a, b] = across(y - 1); g.rect(a, Y + A, b - a, B - A); }
-    if (!has(x, y + 1)) { const [a, b] = across(y + 1); g.rect(a, Y + T - B, b - a, B - A); }
-    if (!has(x - 1, y)) { const [a, b] = down(x - 1); g.rect(X + A, a, B - A, b - a); }
-    if (!has(x + 1, y)) { const [a, b] = down(x + 1); g.rect(X + T - B, a, B - A, b - a); }
-  }
-  g.fillStyle = st.band;
-  g.fill();
-
-  // The name, sized for the eye: big enough to read at 24 pixels a tile, no bigger on screen
-  // when zoomed right in, and left off when it would only be a smudge.
-  const lab = p.label;
-  if (!lab) return;
-  const base = Math.min(15, (17 * T) / Math.max(1, zoom));
-  const spacing = 1.5;
-  const spaced = 'letterSpacing' in g;
-  if (spaced) g.letterSpacing = `${spacing}px`;
-  g.font = `900 ${base}px ${FONT_FAMILY}`;
-  // The size that fits each line in a width (never above the base size).
-  const fit = (lines, room) => {
-    let wide = 0;
-    for (const s of lines) wide = Math.max(wide, g.measureText(s).width);
-    return Math.min(base, (base * (room - 2 * B - 6)) / wide);
-  };
-  let lines = [p.name], at = lab;
-  let size = fit(lines, lab.room);
-  // Too long for one line: two words on two lines, if there is a spot two rows tall.
-  const sp = p.name.indexOf(' ');
-  if (size < base && sp > 0 && lab.two) {
-    const two = [p.name.slice(0, sp), p.name.slice(sp + 1)];
-    const size2 = Math.min(fit(two, lab.two.room), (2 * T - 2 * B) / 2.6);
-    // Only worth it when the letters come out clearly bigger: one line reads better.
-    if (size2 > size * 1.25) { lines = two; at = lab.two; size = size2; }
-  }
-  if ((size * zoom) / T >= 8) {
-    g.font = `900 ${size}px ${FONT_FAMILY}`;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillStyle = st.letters;
-    // letterSpacing adds space after the last letter too; nudge back by half of it to centre.
-    const nudge = spaced ? spacing / 2 : 0;
-    const gap = size * 1.1;
-    lines.forEach((s, k) => g.fillText(s, at.cx + nudge, at.cy + 1 + (k - (lines.length - 1) / 2) * gap));
-  }
-  if (spaced) g.letterSpacing = '0px';
 }
 
 /** The outer walls: dark, with a lighter lip and an ink line where they meet the floor. */
@@ -1654,7 +1445,7 @@ function drawFountain(g, b) {
 
 const PARK = {
   // The tarmac is a little darker and bluer than the warehouse's concrete, but kept light enough
-  // that shoppers, buildings and the marked floor read on it as well as on any other floor.
+  // that shoppers and buildings read on it as well as on any other floor.
   floor: '#7f868f', grout: '#757c85', dot: '#6c737c',
   line: 'rgba(238,240,234,0.85)', zebra: 'rgba(238,240,234,0.8)', box: 'rgba(242,194,27,0.8)',
   glass: '#3c5266', mist: '#e2e9ec',
@@ -1787,7 +1578,7 @@ function parkFloor(g, info, r) {
  * build on empty bays and ways through.
  */
 function parkMarkings(g, info, r) {
-  const { w, h, tiles, zones } = info;
+  const { w, h, tiles } = info;
   const rows = info.bays;
   for (const row of rows) {
     if (row.x1 <= r.x0 || row.x0 >= r.x1 || row.y1 < r.y0 || row.y0 > r.y1) continue;
@@ -1815,7 +1606,7 @@ function parkMarkings(g, info, r) {
     g.strokeStyle = PARK.line; g.lineWidth = 2.5; g.stroke();
   }
   // Arrows down each lane between two rows: one way beside the left row, the other way beside
-  // the right one. That column is just outside the marked floor's band, so they never meet it.
+  // the right one.
   const walk = (h >> 1) - 1;
   for (let j = 1; j < rows.length; j++) {
     const a = rows[j - 1].x1, b = rows[j].x0 - 1;
@@ -1825,7 +1616,7 @@ function parkMarkings(g, info, r) {
       for (let y = Math.max(3, r.y0); y < Math.min(h - 3, r.y1); y++) {
         if (y % 5 !== 2 || (y >= walk - 1 && y <= walk + 2)) continue;
         const i = y * w + x;
-        if (tiles[i] !== '.' || (zones && zones[i] !== ' ')) continue;
+        if (tiles[i] !== '.') continue;
         laneArrow(g, x * T, y * T, down);
       }
     }

@@ -278,7 +278,7 @@ test('driving the boss out pays a bounty, shared like any income, and says so', 
 });
 
 test('Head Office cannot buy the boss, and he comes anyway', (t) => {
-  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' }, zones: false });
+  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' } });
   addPlayer(s, 'Dave');
   addPlayer(s, 'Steve');
   s.wave = 4;
@@ -308,7 +308,7 @@ test('a game with a boss in it stays identical on a copy made mid-wave', () => {
   addPlayer(g, 'Steve');
   for (const p of g.players) p.cash = 1e6;
   for (let x = 6; x <= 34; x += 7) {
-    place(g, 'crate', x, 5); place(g, 'belt', x, 6);
+    place(g, 'crate', x, 5); place(g, 'crate', x, 6);
     place(g, 'sprinkler', x, 12, 0, 1); place(g, 'samples', x + 1, 15, 0, 1); place(g, 'wetfloor', x + 2, 11, 0, 1);
   }
   assert.ok(place(g, 'salesman', 14, 9).ok);

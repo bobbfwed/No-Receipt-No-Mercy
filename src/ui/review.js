@@ -34,7 +34,7 @@ export function createReview(session, { onClose = () => {} } = {}) {
     const rows = Array.isArray(m.rows) ? m.rows : [];
     const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     const maxOf = (f) => Math.max(0, ...rows.map((r) => num(r[f])));
-    const mShip = maxOf('shipped'), mStop = maxOf('stopped'), mSpent = maxOf('spent');
+    const mBuilt = maxOf('built'), mStop = maxOf('stopped'), mSpent = maxOf('spent');
     const t = m.totals || {};
 
     const rowEls = rows.map((r, i) => {
@@ -46,7 +46,7 @@ export function createReview(session, { onClose = () => {} } = {}) {
           h('span', null, String(r.role ?? '')),
           h('i', { class: 'chip', style: { background: safeColor(r.color) } })),
         h('div', { class: 'pr-metrics' },
-          metric('Goods shipped', num(r.shipped), mShip, 'green'),
+          metric('Things built', num(r.built), mBuilt, 'green'),
           metric('Shoppers stopped', num(r.stopped), mStop, 'blue'),
           metric('Cash wasted', num(r.spent), mSpent, 'red', money)),
         h('div', { class: 'pr-stamp-wrap' },

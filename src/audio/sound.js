@@ -168,7 +168,6 @@ export function createSound() {
     for (const e of list) {
       if (!e || typeof e !== 'object') continue;
       switch (e.e) {
-        case 'sale': fire('sale', { kind: e.kind }, { sub: e.kind }); break;
         case 'spray': fire('spray'); break;
         case 'shot': fire('shot'); break;
         case 'escape':

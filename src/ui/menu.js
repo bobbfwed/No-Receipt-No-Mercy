@@ -16,6 +16,7 @@ import { howToPlay } from './overlays.js';
  * @param {(name, code) => Promise} actions.join
  * @param {Object} [o]
  * @param {string} [o.error]  an error to show straight away (from a URL option that failed)
+ * @param {string} [o.note]   something to tell the player straight away (an old save thrown out)
  * @param {string} [o.name]
  */
 const MAP_KEY = 'returns-dept.map';
@@ -31,7 +32,7 @@ function saveMap(m) {
   try { localStorage.setItem(MAP_KEY, JSON.stringify(m)); } catch { /* not remembered, no harm */ }
 }
 
-export function showMenu(mount, actions, { error = '', name = '', code = '', map = null, ...opts } = {}) {
+export function showMenu(mount, actions, { error = '', note = '', name = '', code = '', map = null, ...opts } = {}) {
   document.body.classList.remove('in-game');
 
   // ---- The store: a design and a size --------------------------------------------------------
@@ -171,5 +172,6 @@ export function showMenu(mount, actions, { error = '', name = '', code = '', map
     h('div', { class: 'hazard bottom', 'aria-hidden': 'true' })));
   if (error) setStatus(error, 'error');
   else if (code) setStatus(`You have been invited to room ${code}. Enter a name and press Join a game.`, 'busy');
+  else if (note) setStatus(note, 'busy');
   (!nameIn.value ? nameIn : code ? btnJoin : btnSolo).focus();
 }

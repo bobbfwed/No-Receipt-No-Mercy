@@ -155,7 +155,7 @@ const TEXT = {
   offatruck: {
     name: 'Fell Off the Back of a Truck',
     rule: (c) => `Every Returns Drop puts out junk ${off(c.drop, 'faster', 'slower')}.`,
-    joke: "More junk comes down the chute than anybody returned. Don't ask where from. Don't ask Gary. Gary has a van, and the van has no plates.",
+    joke: "More junk comes down the drops than anybody returned. Don't ask where from. Don't ask Gary. Gary has a van, and the van has no plates.",
   },
   mallcop: {
     name: 'Mall Cop Academy',

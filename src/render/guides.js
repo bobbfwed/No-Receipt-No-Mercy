@@ -1,7 +1,8 @@
 // Guides drawn over the store to explain it: the route shoppers will walk from every open
-// entrance, the shorter routes dads take (they step over belts), and highlighted tiles the
-// tutorial wants the player to use.
-import { DIRS, getDist, getHopDist, UNREACHABLE } from '../sim/index.js';
+// entrance, the dads' own route where it differs (DAD in path.js: until 0.4 they stepped over the
+// shop floor's belts; for now they walk like everyone else, so it is never drawn, but dads are to
+// get rules of their own), and highlighted tiles the tutorial wants the player to use.
+import { DIRS, getDist, getDadDist, UNREACHABLE } from '../sim/index.js';
 import { TILE, INK, rr, label, font } from './paint.js';
 
 const T = TILE;
@@ -41,15 +42,15 @@ function bestTile(door, field) {
 function routes(s) {
   const hit = cache.get(s);
   if (hit && hit.ver === s.gridVer && hit.tiles === s.tiles) return hit;
-  const dist = getDist(s), hop = getHopDist(s);
+  const dist = getDist(s), dadDist = getDadDist(s);
   const normal = [], dad = [];
   const doors = s.doors ? s.doors.slice(0, Math.max(1, s.open | 0)) : [];
   for (const door of doors) {
     if (s.tiles[door[0]] !== 'D') continue;
-    const a = bestTile(door, dist), b = bestTile(door, hop);
+    const a = bestTile(door, dist), b = bestTile(door, dadDist);
     if (a >= 0) normal.push(trace(s, dist, a));
     // Only show the dad route when it really is a short cut.
-    if (b >= 0 && (a < 0 || hop[b] < dist[a])) dad.push(trace(s, hop, b));
+    if (b >= 0 && (a < 0 || dadDist[b] < dist[a])) dad.push(trace(s, dadDist, b));
   }
   const out = { ver: s.gridVer, tiles: s.tiles, normal, dad };
   cache.set(s, out);
@@ -115,7 +116,7 @@ export function drawRoutes(ctx, s, time, alpha = 1, tags = true) {
 export function drawMarks(ctx, marks, now, W, H) {
   const pulse = 0.5 + 0.5 * Math.sin(now / 180);
   const bounce = Math.abs(Math.sin(now / 260)) * 7;
-  // With many marks (a run of belts) only the captioned ones get an arrow, or it turns to clutter.
+  // With many marks (a wall of crates) only the captioned ones get an arrow, or it turns to clutter.
   const arrows = marks.length <= 3;
   // (In a run, the captions are drawn last, over every outline: a caption beside one tile can run
   // over the next one, as the TV Salesman's does over his own other tiles.)

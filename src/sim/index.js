@@ -1,9 +1,9 @@
 // Public surface of the simulation. Everything outside src/sim imports from here.
 export * from './constants.js';
-export { createGame, migrateSave, STATE_VERSION, rand, addPlayer, setPlayerOnline, setMap, setSettings, cleanSettings, cardsOn, difficultyOf, isEndless, idxOf, inBounds, teamCash, heldFor, shareCount, doorOf, footprint, anchorOf, tilesOf, sizeOf, centreOf } from './state.js';
-export { MAP_SIZES, MAP_DESIGNS, DECOR, makeMap, makeZones, mapSize, recommendedSize } from './maps.js';
+export { createGame, STATE_VERSION, rand, addPlayer, setPlayerOnline, setMap, setSettings, cleanSettings, cardsOn, difficultyOf, isEndless, idxOf, inBounds, teamCash, heldFor, shareCount, doorOf, footprint, anchorOf, tilesOf, sizeOf, centreOf } from './state.js';
+export { MAP_SIZES, MAP_DESIGNS, DECOR, makeMap, mapSize, recommendedSize } from './maps.js';
 export { tracksOf, levelIn, stockLevel, levelOf, spentOn, statsOf, rebuildDeal } from './upgrades.js';
-export { getDist, getHopDist, getField, getFieldTo, modeOf, routeOf, smashReady, computeDist, tillBanks, banksOpen, walkable, UNREACHABLE, NORMAL, HOP, SMASH, GHOST } from './path.js';
+export { getDist, getDadDist, getField, getFieldTo, modeOf, routeOf, smashReady, computeDist, tillBanks, banksOpen, walkable, UNREACHABLE, NORMAL, DAD, SMASH, GHOST } from './path.js';
 export { applyCommand, canPlace, canPutBack } from './commands.js';
 export { step, waveSpec, beginWave, queueTrainingWave, setTrainingCash, patienceGrowth, patienceFor, patienceScaleAt, crowdShiftAt, babyPace, walkPace, edgeMul, kidFirst, bossTier, bossTitle, bossPatience, pitchStop, surgeHpAt, surgeCrowdAt } from './step.js';
 // Money (0.4): what beating a sales event pays, and the speed bonus on top.
@@ -24,5 +24,5 @@ export { getBackField } from './path.js';
 export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, overpassDirs, beltShape, feedsInto, takesFrom } from './back.js';
 export { makeDrops } from './maps.js';
 // The Back's supplies (0.4, stage 3): stock on the security buildings, Dumbwaiters, the dropUp price.
-export { SUPPLY_TRACKS, STOCK_TRACKS, usesPer, unitsIn, usesIn, takesSupply, addStock, useStock, useWork, syncLifts, syncAllLifts, stockCap, makeTicks, rebrandTicks } from './back.js';
+export { SUPPLY_TRACKS, STOCK_TRACKS, usesPer, unitsIn, usesIn, takesSupply, addStock, useStock, useWork, syncLifts, stockCap, makeTicks, rebrandTicks } from './back.js';
 export { dropUpCost } from './commands.js';

@@ -9,7 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, rebuildDeal, migrateSave,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, rebuildDeal,
   heldFor, anchorOf, tilesOf, setPlayerOnline, BUILD, TUNE, TICK_HZ, ST,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
@@ -394,26 +394,6 @@ test('Head Office may not press Rebuild, and a player who takes the job gets his
   steps(s, EVERY);
   assert.equal(s.rubble[0].by, undefined);
   assert.equal(s.players[1].cash, cash);
-});
-
-test('an old save carrying the auto-rebuild switch and rubble with the tick it broke loads and plays', () => {
-  const s = stage();
-  s.rubble.push({ ...crateRubble(5, 5), at: 0 });
-  const saved = JSON.parse(JSON.stringify(s));
-  saved.players[0].autoRebuild = true;
-  assert.equal(migrateSave(saved), true, 'the dead fields are dropped');
-  assert.equal('autoRebuild' in saved.players[0], false);
-  assert.equal('at' in saved.rubble[0], false);
-  assert.equal(migrateSave(saved), false, 'only once');
-  steps(saved, 5 * EVERY);
-  assert.equal(saved.grid[at(5, 5)], 0, 'nothing rebuilds by itself');
-  assert.equal(applyCommand(saved, 0, { c: 'rebuild' }).n, 1);
-  // Even without migrateSave (a joined client's copy), the old fields do no harm.
-  const raw = JSON.parse(JSON.stringify(s));
-  raw.players[0].autoRebuild = true;
-  steps(raw, 5 * EVERY);
-  assert.equal(raw.grid[at(5, 5)], 0);
-  assert.equal(applyCommand(raw, 0, { c: 'rebuild' }).n, 1);
 });
 
 test('the game ending gives back every held dollar (the end screen counts cash)', () => {

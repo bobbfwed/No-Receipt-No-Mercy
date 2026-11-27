@@ -1,5 +1,5 @@
 // Tests for the Food Court store design: its furniture, and that it never gets in the way of
-// the rules (shoppers reach the tills, the entrances and tills stay clear, marked floor is free).
+// the rules (shoppers reach the tills, the entrances and tills stay clear, the Returns Drops are free).
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -96,18 +96,20 @@ test('the floor in front of every entrance and every till is clear', () => {
   }
 });
 
-test('the marked floor is never under or beside furniture, however many entrances there are', () => {
+test('no Returns Drop is under or beside furniture, however many entrances there are', () => {
+  // (Until 0.4 this was the old factory's marked floor, which the furniture still keeps clear of:
+  // the drops stand on its Loading Bay patches.)
   for (const size of SIZES) for (let slots = 1; slots <= 7; slots++) {
     const s = createGame({ map: { design: 'food', size, slots } });
     let marked = 0;
-    for (let i = 0; i < s.zones.length; i++) {
-      if (s.zones[i] === ' ') continue;
+    for (let i = 0; i < s.back.length; i++) {
+      if (!s.back[i] || s.back[i].k !== 'drop') continue;
       marked++;
       const x = i % s.w, y = (i / s.w) | 0;
-      assert.equal(s.tiles[i], '.', `${size}: marked floor at ${x},${y} is solid`);
-      // A tile all round, for belts and for the machines' own fronts.
+      assert.equal(s.tiles[i], '.', `${size}: a drop at ${x},${y} is under something solid`);
+      // A tile all round: The Back's walls are the shop's, so its front must be open for a belt.
       for (let ny = y - 1; ny <= y + 1; ny++) {
-        for (let nx = x - 1; nx <= x + 1; nx++) assert.equal(s.decor[ny * s.w + nx], ' ', `${size}: furniture beside marked floor at ${nx},${ny}`);
+        for (let nx = x - 1; nx <= x + 1; nx++) assert.equal(s.decor[ny * s.w + nx], ' ', `${size}: furniture beside the drop at ${nx},${ny}`);
       }
     }
     assert.ok(marked > 0);

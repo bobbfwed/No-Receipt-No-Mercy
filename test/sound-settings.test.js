@@ -99,7 +99,7 @@ test('every effect belongs to exactly one known group, and every group has effec
   assert.deepEqual(GROUPS.map((g) => g.label), ['Money', 'Shoppers', 'Security and machines', 'Announcements', 'Store music', "DEB's voice"]);
   for (const g of EFFECT_GROUPS) assert.ok(GROUP_KEYS.includes(g));
   // The ones the owner named.
-  assert.equal(GROUP_OF.sale, 'money');
+  assert.equal(GROUP_OF.bought, 'money'); // (the owner named sales; the old factory's sale sound went in 0.4)
   assert.equal(GROUP_OF.escape, 'money');
   assert.equal(GROUP_OF.left, 'shoppers');
   assert.equal(GROUP_OF.spray, 'store');
@@ -222,7 +222,7 @@ test('a group turned down to 0 builds no sound at all; turned up, it does', asyn
     sound.preview('shoppers');
     assert.equal(built.nodes, before, 'the menu sample of a silent group built audio nodes');
     // The other groups are not affected.
-    ses.emit('fx', [{ e: 'sale', kind: 'box' }]);
+    ses.emit('fx', [{ e: 'bought', v: 50 }]);
     assert.ok(built.nodes > before, 'money at 1 built nothing');
     before = built.nodes;
     sound.set('shoppers', 0.5);
@@ -237,7 +237,7 @@ test('a group turned down to 0 builds no sound at all; turned up, it does', asyn
     sound.set('voice', 1);
     sound.set('volume', 0);
     before = built.nodes;
-    ses.emit('fx', [{ e: 'won' }, { e: 'sale', kind: 'gadget' }]);
+    ses.emit('fx', [{ e: 'won' }, { e: 'bought', v: 120 }]);
     sound.preview('money');
     assert.equal(built.nodes, before, 'the master at 0 built audio nodes');
     sound.set('volume', 0.7);

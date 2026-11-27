@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, step, queueTrainingWave,
   waveSpec, getField, getDist, makeMap, mapSize, recommendedSize, teamCash, statsOf, levelOf, usesIn, addStock, itemCode, patienceScaleAt, crowdShiftAt, bossPatience,
-  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, BACK, ITEMS, TUNE, TICK_HZ, kidFirst, NORMAL, UNREACHABLE, SETTINGS,
+  MAP_SIZES, MAP_DESIGNS, SHOPPERS, SUPERS, BOSS, BUILD, BACK, TUNE, eventPay, TICK_HZ, kidFirst, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
 /** A training game (no timer, cannot be lost) with plenty of cash, on the original small map. */
@@ -203,8 +203,8 @@ test('each player has his own money and pays for his own buildings', () => {
 
   // A broke player cannot spend a rich player's money.
   s.players[1].cash = 3;
-  assert.equal(canPlace(s, 'belt', 6, 6, 1), 'cash');
-  assert.equal(canPlace(s, 'belt', 6, 6, 0), null);
+  assert.equal(canPlace(s, 'crate', 6, 6, 1), 'cash');
+  assert.equal(canPlace(s, 'crate', 6, 6, 0), null);
 
   // Selling pays whoever bought it, whoever does the selling.
   assert.ok(applyCommand(s, 0, { c: 'remove', x: 5, y: 5 }).ok);
@@ -212,48 +212,42 @@ test('each player has his own money and pays for his own buildings', () => {
   assert.equal(s.players[1].cash, 3 + Math.floor(BUILD.forklift.cost * TUNE.sellBack));
 });
 
-test('sales and refunds are split evenly between the players, and each gets the whole event pay', () => {
+test('refunds are split evenly between the players, and each gets the whole event pay', () => {
   const s = createGame({ seed: 3 });
   for (const n of ['Dave', 'Steve', 'Gaz']) addPlayer(s, n);
-  // Dave alone builds a line; everyone earns from it.
-  place(s, 'unpacker', 3, 3, 0);
-  place(s, 'belt', 4, 3, 0);
-  place(s, 'chute', 5, 3);
-  const before = s.players.map((p) => p.cash);
-  let sales = 0, paid = 0;
-  for (let i = 0; i < 20 * TICK_HZ; i++) for (const e of step(s)) if (e.e === 'sale') { sales++; paid += e.v; }
-  assert.ok(sales >= 5);
-  assert.equal(paid, sales * 2, 'a box pays $2 on Normal');
-  const share = paid / 3;
-  for (const p of s.players) assert.ok(Math.abs(p.cash - before[p.id] - share) < 0.01, `${p.name} got a third`);
-
+  // (Until 0.4 Dave built a factory line here and everyone shared what it sold.)
   // A wave with no defence: every refund is split three ways, and the event pay (with its speed
   // bonus, none here: they were all refunded) is paid to each in full.
   applyCommand(s, 0, { c: 'start' });
   const mid = s.players.map((p) => p.cash);
-  let refunded = 0, earned = 0, bonus = 0;
-  for (let i = 0; i < 120 * TICK_HZ; i++) {
-    const ev = step(s);
-    for (const e of ev) {
-      if (e.e === 'escape') refunded += e.refund;
-      if (e.e === 'sale') earned += e.v;
-      if (e.e === 'waveEnd') bonus = e.pay + e.speed;
+  const wave = () => {
+    let refunded = 0, bonus = 0;
+    for (let i = 0; i < 120 * TICK_HZ; i++) {
+      const ev = step(s);
+      for (const e of ev) {
+        if (e.e === 'escape') refunded += e.refund;
+        if (e.e === 'waveEnd') bonus = e.pay + e.speed;
+      }
+      if (bonus) break;
     }
-    if (bonus) break;
-  }
-  assert.ok(refunded > 0 && bonus > 0);
+    return { refunded, bonus };
+  };
+  const a = wave();
+  assert.ok(a.refunded > 0 && a.bonus > 0);
   for (const p of s.players) {
-    const want = mid[p.id] + (earned - refunded) / 3 + bonus;
+    const want = mid[p.id] - a.refunded / 3 + a.bonus;
     assert.ok(Math.abs(p.cash - want) < 0.05, `${p.name}: ${p.cash} vs ${want}`);
   }
 
-  // A player who has dropped out neither earns nor pays.
+  // A player who has dropped out neither earns nor pays: the next event's refunds are split two
+  // ways, and its pay goes to the two who are here.
   setPlayerOnline(s, 2, false);
   const gaz = s.players[2].cash, dave = s.players[0].cash;
-  let more = 0;
-  for (let i = 0; i < 10 * TICK_HZ; i++) more += step(s).filter((e) => e.e === 'sale').length;
+  applyCommand(s, 0, { c: 'start' });
+  const b = wave();
+  assert.ok(b.refunded > 0 && b.bonus > 0);
   assert.equal(s.players[2].cash, gaz);
-  assert.ok(Math.abs(s.players[0].cash - dave - (more * 2) / 2) < 0.01, 'a box pays $2 on Normal, split two ways');
+  assert.ok(Math.abs(s.players[0].cash - (dave - b.refunded / 2 + b.bonus)) < 0.05, 'split two ways');
 });
 
 test('a player can give money to another, but not more than he has', () => {
@@ -444,20 +438,21 @@ test('a gym bro wrecks things next to his route: crates always, other things som
     }
     return { n: ev.length, first: ev.length ? ev[0].i % 30 : 99 };
   };
-  let crates = 0, belts = 0;
+  // (Free Samples tables stand for "other things": they block, and take one hit.)
+  let crates = 0, others = 0;
   for (let seed = 1; seed <= 6; seed++) {
-    const c = walk('crate', seed), b = walk('belt', seed);
+    const c = walk('crate', seed), b = walk('samples', seed);
     assert.equal(c.n, TUNE.smashMax, 'a crate stack beside him is always hit: he uses up every hit he has');
     assert.equal(c.first, 3, 'and the first crate stack he passes takes the first');
     crates += c.n;
-    belts += b.n;
+    others += b.n;
   }
-  assert.ok(belts >= 3, `wrecked ${belts} belts in six walks`);
-  assert.ok(crates > belts, 'crates go more often than other things');
+  assert.ok(others >= 3, `wrecked ${others} sample tables in six walks`);
+  assert.ok(crates > others, 'crates go more often than other things');
 
   // The chance for other things is a tuning number: at zero he leaves them alone.
   tune(t, { smashOther: 0 });
-  assert.equal(walk('belt', 3).n, 0);
+  assert.equal(walk('samples', 3).n, 0);
 });
 
 test('a super gym bro wrecks more than a normal one', () => {
@@ -475,8 +470,8 @@ test('a super gym bro wrecks more than a normal one', () => {
   assert.equal(wrecked(0, 'crate'), 6 * TUNE.smashMax);
   assert.equal(wrecked(1, 'crate'), 6 * SUPERS.gymbro.smashMax);
   // Other things: the Roid Rager rolls more often, with a better chance, and rests less.
-  const normal = wrecked(0, 'belt'), big = wrecked(1, 'belt');
-  assert.ok(big > normal && big >= 9, `super wrecked ${big} belts, normal ${normal}`);
+  const normal = wrecked(0, 'samples'), big = wrecked(1, 'samples');
+  assert.ok(big > normal && big >= 9, `super wrecked ${big} sample tables, normal ${normal}`);
 });
 
 test('Duct Tape soaks up gym bro hits; the damage is forgotten when the wave ends', (t) => {
@@ -534,7 +529,7 @@ test('what a gym bro wrecks can be rebuilt in one go by its owner, at half price
 
   // Building something else on a wrecked tile by hand clears that bit of rubble.
   const { i: tile } = s.rubble.find((r) => r.o === 0);
-  assert.ok(place(s, 'belt', tile % 30, (tile / 30) | 0).ok);
+  assert.ok(place(s, 'sprinkler', tile % 30, (tile / 30) | 0).ok);
   assert.equal(s.rubble.filter((r) => r.o === 0).length, mine - 1);
   applyCommand(s, 0, { c: 'remove', x: tile % 30, y: (tile / 30) | 0 });
   assert.equal(s.rubble.filter((r) => r.o === 0).length, mine - 1, 'and it stays cleared');
@@ -635,7 +630,7 @@ test('a game with everything in it stays identical on a copy made mid-wave', () 
     addPlayer(g, 'Steve');
     for (const p of g.players) p.cash = 100000;
     for (let x = 6; x <= 30; x += 4) {
-      place(g, 'crate', x, 5); place(g, 'belt', x, 6); place(g, 'sprinkler', x, 12, 0, 1);
+      place(g, 'crate', x, 5); place(g, 'crate', x, 6); place(g, 'sprinkler', x, 12, 0, 1);
       place(g, 'samples', x + 1, 15, 0, 1); place(g, 'wetfloor', x + 2, 11, 0, 1);
       // Stock from The Back on the sprinkler, as if it had come up its Dumbwaiter.
       const sp = g.grid[12 * g.w + x];
@@ -656,122 +651,7 @@ test('a game with everything in it stays identical on a copy made mid-wave', () 
   for (const e of ['kid', 'mess', 'spray']) assert.ok(seen.has(e), `saw ${e}`);
 });
 
-// ---------------------------------------------------------------- factory and sprinkler balance
-
-/** The tiles of one kind of marked floor, as [x, y] pairs. */
-function zoneTiles(s, ch) {
-  const out = [];
-  for (let i = 0; i < s.zones.length; i++) if (s.zones[i] === ch) out.push([i % s.w, (i / s.w) | 0]);
-  return out;
-}
-
-test('every map marks out floor for each machine, and the areas never touch', () => {
-  for (const design of Object.keys(MAP_DESIGNS)) {
-    for (const size of Object.keys(MAP_SIZES)) {
-      const s = createGame({ map: { design, size } });
-      assert.equal(s.zones.length, s.w * s.h);
-      for (const ch of Object.keys(ZONES)) {
-        const tiles = zoneTiles(s, ch);
-        assert.ok(tiles.length >= 6, `${design} ${size}: only ${tiles.length} tiles of ${ZONES[ch].name}`);
-        for (const [x, y] of tiles) {
-          assert.equal(s.tiles[y * s.w + x], '.', 'marked floor is always buildable floor');
-          // Nothing of another kind beside it, so two different machines can never be neighbours.
-          for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-            const other = s.zones[(y + dy) * s.w + x + dx];
-            assert.ok(other === ' ' || other === ch, `${design} ${size}: ${ZONES[ch].name} touches another area at ${x},${y}`);
-          }
-        }
-      }
-    }
-  }
-  assert.equal(createGame().zones, '', 'the bare default map has no marked floor');
-});
-
-test('every tile of marked floor on every map accepts its machine', () => {
-  let tiles = 0;
-  for (const design of Object.keys(MAP_DESIGNS)) {
-    for (const size of Object.keys(MAP_SIZES)) {
-      const s = createGame({ map: { design, size } });
-      addPlayer(s, 'Dave');
-      s.players[0].cash = 1e9;
-      for (let i = 0; i < s.zones.length; i++) {
-        const ch = s.zones[i];
-        if (ch === ' ') continue;
-        tiles++;
-        const x = i % s.w, y = (i / s.w) | 0;
-        assert.equal(canPlace(s, ZONES[ch].kind, x, y), null, `${design} ${size}: a ${ZONES[ch].kind} is refused on its own floor at ${x},${y}`);
-      }
-      // And a whole section can actually be built on: fill one patch of each kind completely.
-      for (const ch of Object.keys(ZONES)) {
-        const [x0, y0] = zoneTiles(s, ch)[0];
-        const patch = zoneTiles(s, ch).filter(([x, y]) => Math.abs(x - x0) < 4 && Math.abs(y - y0) < 3);
-        for (const [x, y] of patch) assert.ok(place(s, ZONES[ch].kind, x, y).ok, `${design} ${size}: filling a ${ZONES[ch].name} patch failed at ${x},${y}`);
-      }
-    }
-  }
-  assert.ok(tiles > 3000);
-});
-
-test('a machine only goes on its own marked floor; everything else goes anywhere', () => {
-  const s = createGame({ map: { design: 'warehouse', size: 's' } });
-  addPlayer(s, 'Dave');
-  s.players[0].cash = 100000;
-  const [ux, uy] = zoneTiles(s, 'u')[0], [px, py] = zoneTiles(s, 'p')[0];
-  const [kx, ky] = zoneTiles(s, 'k')[0], [cx, cy] = zoneTiles(s, 'c')[0];
-  assert.equal(canPlace(s, 'unpacker', px, py), 'zone');
-  assert.equal(canPlace(s, 'press', ux, uy), 'zone');
-  assert.equal(canPlace(s, 'packer', 3, 3), 'zone', 'not on plain floor either');
-  assert.equal(canPlace(s, 'chute', kx, ky), 'zone');
-  assert.equal(place(s, 'unpacker', px, py).why, 'zone');
-  for (const k of ['belt', 'crate', 'sprinkler', 'forklift', 'wetfloor', 'samples']) {
-    assert.equal(canPlace(s, k, 3, 3), null, `${k} on plain floor`);
-    assert.equal(canPlace(s, k, ux, uy), null, `${k} on marked floor`);
-  }
-  assert.ok(place(s, 'unpacker', ux, uy, 1).ok);
-  assert.ok(place(s, 'press', px, py, 1).ok);
-  assert.ok(place(s, 'packer', kx, ky, 1).ok);
-  assert.ok(place(s, 'chute', cx, cy).ok);
-});
-
-test('a production line across the marked floor needs belts, and sells at full price', () => {
-  // Straight down the first column of the first section: bay, press shop, gift wrap, shipping.
-  const s = createGame({ seed: 2, map: { design: 'warehouse', size: 's' } });
-  addPlayer(s, 'Dave');
-  s.players[0].cash = 100000;
-  const x = zoneTiles(s, 'p')[0][0];
-  const row = (ch) => zoneTiles(s, ch).find((t) => t[0] === x)[1];
-  const rows = { u: row('u'), p: row('p'), k: row('k'), c: row('c') };
-  assert.ok(rows.u < rows.p && rows.p < rows.k && rows.k < rows.c, 'the first section runs top to bottom');
-  let belts = 0;
-  for (let y = rows.u; y <= rows.c; y++) {
-    const k = y === rows.u ? 'unpacker' : y === rows.p ? 'press' : y === rows.k ? 'packer' : y === rows.c ? 'chute' : 'belt';
-    if (k === 'belt') belts++;
-    assert.ok(place(s, k, x, y, 1).ok, `${k} at ${x},${y}`);
-  }
-  assert.ok(belts >= 3, 'there is at least one belt between each pair of machines');
-  const sales = [];
-  for (let i = 0; i < 60 * TICK_HZ; i++) sales.push(...step(s).filter((e) => e.e === 'sale'));
-  assert.ok(sales.length >= 5);
-  // $15 on Normal: the base is 14.7 since 0.2.13 (17.6 before, when the Packer was slower) and Normal is x1.
-  assert.ok(sales.every((e) => e.kind === 'giftset' && e.v === 15 && e.v === Math.round(ITEMS.giftset.value * SETTINGS.difficulty.normal.pay)));
-  assert.equal(SETTINGS.difficulty.normal.pay, 1);
-});
-
-test('the Press and the Packer are a serious purchase', () => {
-  assert.ok(BUILD.press.cost >= TUNE.startCash * 0.4, 'a Press is a large part of the starting cash');
-  assert.ok(BUILD.packer.cost >= BUILD.press.cost * 2);
-  // Each must take a good while to pay for itself: at least forty items.
-  assert.ok(BUILD.press.cost / (ITEMS.gadget.value - ITEMS.box.value) >= 40);
-  assert.ok(BUILD.packer.cost / (ITEMS.giftset.value - ITEMS.gadget.value) >= 40);
-});
-
-test('every factory machine works at the same pace', () => {
-  const kinds = Object.keys(BUILD).filter((k) => BUILD[k].makes);
-  assert.deepEqual(kinds.sort(), ['packer', 'press', 'unpacker']);
-  // (Their speed levels went with bought upgrades in 0.4: each runs at its one pace.)
-  const secs = (k) => { const st = statsOf({ k }); return k === 'unpacker' ? st.period : st.time; };
-  for (const k of kinds) assert.equal(secs(k), 2.5, k);
-});
+// ---------------------------------------------------------------- sprinkler balance
 
 test('a sprinkler reaches only four shoppers at a time, the ones nearest the tills', () => {
   const s = stage(3);
@@ -825,7 +705,7 @@ test('a game with a lobby waits for every player to be ready, and the host can c
   assert.deepEqual(s.map, { design: 'showroom', size: 'l' });
   assert.equal(s.w, MAP_SIZES.l.w);
   assert.equal(s.grid.length, s.w * s.h);
-  assert.equal(s.zones.length, s.w * s.h);
+  assert.equal(s.back.length, s.w * s.h);
   assert.equal(s.open, 2, 'both players still have an entrance on the new map');
   assert.equal([...s.tiles].filter((c) => c === 'D').length, 4);
   assert.equal(s.players[1].ready, false, 'Steve has to look at the new store and say ready again');
@@ -833,7 +713,7 @@ test('a game with a lobby waits for every player to be ready, and the host can c
   addPlayer(same, 'Dave');
   addPlayer(same, 'Steve');
   assert.equal(s.tiles, same.tiles, 'the same store a game started on that map would have');
-  assert.equal(s.zones, same.zones);
+  assert.deepEqual(s.back, same.back, 'and the same Returns Drops under it');
 
   // One ready is not enough; un-readying works; everyone ready starts the game.
   applyCommand(s, 0, { c: 'ready' });
@@ -861,34 +741,6 @@ test('a player who has dropped out does not hold up the lobby; games without a l
   assert.deepEqual(step(s), [{ e: 'begun' }]);
   assert.equal(createGame().phase, 'build');
   assert.equal(createGame({ map: { design: 'warehouse', size: 's' } }).phase, 'build');
-});
-
-test('laying a belt over a belt turns it for free and keeps its goods', () => {
-  const s = createGame({ seed: 2 });
-  addPlayer(s, 'Dave');
-  place(s, 'unpacker', 3, 3, 0);
-  place(s, 'belt', 4, 3, 0);
-  place(s, 'belt', 5, 3, 0);
-  for (let i = 0; i < 6 * TICK_HZ; i++) step(s);
-  const belt = s.grid[at(5, 3)];
-  assert.ok(belt.it.length >= 1, 'there are goods on the belt');
-  const goods = belt.it.length, cash = s.players[0].cash;
-  assert.equal(canPlace(s, 'belt', 5, 3), null, 'the preview shows it is allowed');
-  const r = place(s, 'belt', 5, 3, 1);
-  assert.ok(r.ok && r.turned);
-  assert.equal(belt.d, 1);
-  assert.equal(s.grid[at(5, 3)], belt, 'it is the same belt');
-  assert.equal(belt.it.length, goods);
-  assert.equal(s.players[0].cash, cash, 'nothing was charged');
-  // It works with no money at all, and for a belt someone else laid.
-  addPlayer(s, 'Steve');
-  s.players[1].cash = 0;
-  assert.ok(place(s, 'belt', 5, 3, 2, 1).ok);
-  assert.equal(belt.d, 2);
-  assert.equal(belt.o, 0, 'it still belongs to Dave');
-  // Anything else on a belt, or a belt on anything else, is still refused.
-  assert.equal(place(s, 'crate', 5, 3).why, 'occupied');
-  assert.equal(place(s, 'belt', 3, 3, 0).why, 'occupied');
 });
 
 // ---------------------------------------------------------------- mom on her knees, players leaving
@@ -1022,12 +874,10 @@ test('the host sets the number of waves, the starting cash and the difficulty', 
   const s = createGame({ seed: 2, settings: { waves: 10, startCash: 1200, difficulty: 'hard' } });
   addPlayer(s, 'Dave');
   assert.equal(s.players[0].cash, 1200);
-  // Hard: more patient shoppers, and goods sell for less.
-  place(s, 'unpacker', 3, 3, 0); place(s, 'belt', 4, 3, 0); place(s, 'chute', 5, 3);
+  // Hard: more patient shoppers, and a sales event pays less.
+  assert.equal(eventPay(s, 1), Math.round((TUNE.payBase + TUNE.payStep) * SETTINGS.difficulty.hard.pay));
   applyCommand(s, 0, { c: 'start' });
-  let sale = null;
-  for (let i = 0; i < 20 * TICK_HZ && !(sale && s.shoppers.length); i++) for (const e of step(s)) if (e.e === 'sale') sale = e;
-  assert.equal(sale.v, Math.round(ITEMS.box.value * SETTINGS.difficulty.hard.pay));
+  for (let i = 0; i < 20 * TICK_HZ && !s.shoppers.length; i++) step(s);
   assert.ok(Math.abs(s.shoppers[0].mhp - SHOPPERS[s.shoppers[0].k].hp * SETTINGS.difficulty.hard.hp * patienceScaleAt(1)) < 1e-9);
 
   // Ten waves means the game is won after the tenth.

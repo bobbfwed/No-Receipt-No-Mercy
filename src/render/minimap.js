@@ -1,7 +1,7 @@
 // The minimap: the whole store drawn small on its own canvas, for a corner of the interface.
-// Walls, floor, the machines' marked floor tinted in each kind's colour, tills, entrances (light
-// when open, dark when shut), buildings coloured by group over their whole footprint
-// (factory orange, security blue), shoppers as dots (dads light blue, supers bigger and gold, the
+// Walls, floor, the Returns Drops of The Back below (yellow, where nothing stands over them: where
+// the junk comes in matters to the layout), tills, entrances (light when open, dark when shut),
+// buildings coloured by group over their whole footprint (Crate Stacks brown, security blue), shoppers as dots (dads light blue, supers bigger and gold, the
 // boss a big pink star, a Pregnant Lady's babies tiny and pale pink), the food court's furniture in its own colours (tables white, stalls red,
 // the fountain blue...), the car park's tarmac and what is parked on it (cars in two tones, so a
 // row reads as a row of cars; the prick's car gold, the burger van orange, trolley shelters glassy
@@ -11,12 +11,12 @@
 //   mini.draw();                  a few times a second
 //   mini.tileAt(clientX, clientY) -> {x, y} tile under a click on the minimap, or null
 //                                 (then renderer.centerOn(x + 0.5, y + 0.5))
-import { BUILD, ZONES, sizeOf } from '../sim/index.js';
+import { BUILD, sizeOf } from '../sim/index.js';
 import { INK } from './paint.js';
 
 const COL = {
   wall: [45, 52, 60], floor: [141, 144, 147], till: [217, 55, 43], shut: [70, 76, 84], open: [236, 240, 244],
-  factory: [245, 140, 30], security: [60, 150, 255], rubble: [110, 96, 80], food: [190, 178, 154],
+  walls: [181, 122, 60], security: [60, 150, 255], drop: [250, 204, 21], rubble: [110, 96, 80], food: [190, 178, 154],
   park: [127, 134, 143],
 };
 /**
@@ -35,15 +35,6 @@ const FURN = {
 const CAR_DARK = { c: FURN.c.map((v) => Math.round(v * 0.82)), C: FURN.C.map((v) => Math.round(v * 0.8)) };
 const SHOPPER = '#ff4d4d', DAD = '#5cc8ff', SUPER = '#ffd23f', BOSS_COL = '#ff2a6d', BABY = '#ffb3d9';
 
-const rgb = (hex) => {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-};
-/** Marked floor for the machines: the floor grey well mixed with each kind's colour. */
-const ZONE_COL = {};
-for (const [ch, z] of Object.entries(ZONES)) {
-  ZONE_COL[ch] = rgb(z.color).map((v, j) => Math.round(v * 0.6 + COL.floor[j] * 0.4));
-}
 
 /**
  * @param {HTMLCanvasElement} canvas the minimap's own canvas (sized by the page with CSS)
@@ -86,7 +77,7 @@ export function createMinimap(canvas, session, renderer) {
       const c = d < s.open ? COL.open : COL.shut;
       for (const i of door) doorCol.set(i, c);
     });
-    const zones = s.zones && s.zones.length === n ? s.zones : '';
+    const back = Array.isArray(s.back) && s.back.length === n ? s.back : null;
     // The food court and the car park: their own floor colours, and their furniture in colours of its own.
     const decor = typeof s.decor === 'string' && s.decor.length === n ? s.decor : '';
     const design = s.map && s.map.design;
@@ -96,9 +87,9 @@ export function createMinimap(canvas, session, renderer) {
       let c = ch === '#' ? (decor && FURN[decor[i]]) || COL.wall : ch === 'T' ? COL.till : ch === 'D' || ch === 'd' ? (doorCol.get(i) || COL.shut) : floor;
       // Parked cars touch nose to tail; every other row a shade darker keeps them apart.
       if (decor && (decor[i] === 'c' || decor[i] === 'C') && ((i / s.w) | 0) & 1) c = c === FURN.c ? CAR_DARK.c : CAR_DARK.C;
-      if (zones && c === floor && ZONE_COL[zones[i]]) c = ZONE_COL[zones[i]];
+      if (back && back[i] && back[i].k === 'drop') c = COL.drop;
       const b = grid[i];
-      if (b && BUILD[b.k]) c = BUILD[b.k].group === 'security' ? COL.security : COL.factory;
+      if (b && BUILD[b.k]) c = BUILD[b.k].group === 'security' ? COL.security : COL.walls;
       const o = i * 4;
       px[o] = c[0]; px[o + 1] = c[1]; px[o + 2] = c[2]; px[o + 3] = 255;
     }

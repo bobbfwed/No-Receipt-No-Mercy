@@ -102,8 +102,8 @@ import { built } from '../src/audio/synth.js';
 
 const SR = 44100;
 /** Sounds that can happen many times in a few seconds: each must vary from play to play. */
-const OFTEN = ['sale', 'spray', 'shot', 'escape', 'left', 'slip', 'grab', 'sample', 'mess', 'kid', 'caught', 'bolt', 'smash', 'place', 'remove', 'pitch', 'shield', 'pee', 'flash', 'fall', 'kidtv', 'rail', 'pep', 'bossOut', 'bossEscape', 'pop', 'nopop', 'waah', 'babyTill'];
-const FREQUENT = ['sale', 'spray', 'shot', 'mess', 'pitch', 'shield', 'pep', 'waah', 'babyTill'];
+const OFTEN = ['spray', 'shot', 'escape', 'left', 'slip', 'grab', 'sample', 'mess', 'kid', 'caught', 'bolt', 'smash', 'place', 'remove', 'pitch', 'shield', 'pee', 'flash', 'fall', 'kidtv', 'rail', 'pep', 'bossOut', 'bossEscape', 'pop', 'nopop', 'waah', 'babyTill'];
+const FREQUENT = ['spray', 'shot', 'mess', 'pitch', 'shield', 'pep', 'waah', 'babyTill'];
 const RARE = ['waveStart', 'won', 'lost'];
 let failures = 0;
 const results = [];
@@ -384,7 +384,6 @@ const CROWDS = [
   { label: 'left (mixed kinds) x30 in 2 s', list: crowdTimes(30, 2, 5).map((t, i) => ({ name: 'left', opts: { k: KINDS[(i * 7) % NK], sup: i % 5 === 0 ? 1 : 0 }, t })) },
   { label: 'left (gymbro) x20 in one tick', list: Array.from({ length: 20 }, () => ({ name: 'left', opts: { k: 'gymbro' }, t: 0 })) },
   { label: 'escape (hunter) x30 in 2 s', list: crowdTimes(30, 2, 13).map((t) => ({ name: 'escape', opts: { k: 'hunter' }, t })) },
-  { label: 'sale (box) x30 in 2 s', list: crowdTimes(30, 2, 17).map((t) => ({ name: 'sale', opts: { kind: 'box' }, t })) },
   { label: 'left (new kinds, supers too) x30 in 2 s', list: crowdTimes(30, 2, 29).map((t, i) => ({ name: 'left', opts: { k: KINDS[9 + (i % 5)], sup: i % 3 === 0 ? 1 : 0 }, t })) },
   { label: 'pitch (stop) x30 in 2 s', list: crowdTimes(30, 2, 31).map((t) => ({ name: 'pitch', opts: { r: 'stop' }, t })) },
   { label: 'pitch (stop and rush mixed) x60 in 2 s', list: crowdTimes(60, 2, 37).map((t, i) => ({ name: 'pitch', opts: { r: i % 3 ? 'stop' : 'rush' }, t })) },
@@ -400,10 +399,10 @@ const stormList = (extra) => {
   const list = [];
   for (let n = 0; n < 90; n++) {
     const t = n / 30;
-    list.push({ name: 'sale', opts: { kind: ['box', 'gadget', 'giftset'][n % 3] }, t }, { name: 'spray', t }, { name: 'spray', t }, { name: 'shot', t });
+    list.push({ name: 'spray', t }, { name: 'spray', t }, { name: 'shot', t });
     if (n % 2 === 0) list.push({ name: 'left', opts: { k: KINDS[n % NK], sup: n % 10 === 0 ? 1 : 0 }, t });
     if (n % 5 === 0) list.push({ name: 'escape', opts: { k: KINDS[(n * 4) % NK] }, t }, { name: 'mess', t }, { name: 'grab', t });
-    if (n % 9 === 0) list.push({ name: 'sample', t }, { name: 'slip', t }, { name: 'smash', opts: { k: ['crate', 'belt', 'press', 'railgun', 'salesman'][n % 5] }, t });
+    if (n % 9 === 0) list.push({ name: 'sample', t }, { name: 'slip', t }, { name: 'smash', opts: { k: ['crate', 'sprinkler', 'samples', 'railgun', 'salesman'][n % 5] }, t });
     list.push({ name: 'pitch', opts: { r: n % 3 ? 'stop' : 'rush' }, t }, { name: 'pitch', opts: { r: 'stop' }, t });
     if (n % 4 === 0) list.push({ name: 'shield', t }, { name: 'shield', t });
     if (n % 15 === 0) list.push({ name: 'rail', opts: { n: 3 }, t }, { name: 'pee', t }, { name: 'fall', t }, { name: 'kidtv', t }, { name: 'flash', opts: { n: 2 }, t });
@@ -599,7 +598,7 @@ const mm = analyse(mx, 0, Math.round(seam * SR));
   }
   // Short sounds on their own, through the chain at volume 1, against their dry peak.
   const single = [];
-  for (const n of ['click', 'sale', 'place', 'tutorial', 'report', 'lost']) {
+  for (const n of ['click', 'spray', 'place', 'tutorial', 'report', 'lost']) {
     const c = cases.find((k) => k.name === n);
     const dry = results.find((r) => r.name === c.label).peak;
     const y = await render(WARM + Math.max(1, c.max + 0.3), (ctx) => {
@@ -655,7 +654,7 @@ const mm = analyse(mx, 0, Math.round(seam * SR));
   const unknown = names.filter((n) => !EFFECT_GROUPS.includes(GROUP_OF[n]));
   const count = EFFECT_GROUPS.map((g) => `${g} ${names.filter((n) => GROUP_OF[n] === g).length}`).join(', ');
   check(unknown.length === 0, `every effect has a known group (${names.length} effects: ${count})${unknown.length ? '; none for ' + unknown.join(', ') : ''}`);
-  const ONE = { money: ['sale', { kind: 'box', seed: 3 }], shoppers: ['left', { k: 'karen', seed: 2 }], store: ['spray', { seed: 4 }], events: ['waveStart', {}], voice: ['deb', { mood: 'angry', seed: 9 }], music: null };
+  const ONE = { money: ['kerching', { seed: 3 }], shoppers: ['left', { k: 'karen', seed: 2 }], store: ['spray', { seed: 4 }], events: ['waveStart', {}], voice: ['deb', { mood: 'angry', seed: 9 }], music: null };
   const VOL = 0.3;
   const groupRender = (g, level, direct = false) => render(WARM + (g === 'music' ? BAR : 2), (ctx) => {
     const ch = createChain(ctx, ctx.destination, VOL, { [g]: level });
@@ -691,7 +690,7 @@ const mm = analyse(mx, 0, Math.round(seam * SR));
   const freq = pick(FREQUENT), rare = pick(RARE);
   const fPeak = Math.max(...freq.map((r) => r.peak)), rPeak = Math.min(...rare.map((r) => r.peak));
   const fDur = Math.max(...freq.map((r) => r.dur)), rDur = Math.min(...rare.map((r) => r.dur));
-  check(fPeak < rPeak, `frequent sounds (sale, spray, shot, mess) quieter than rare ones (waveStart, won, lost): loudest frequent ${fPeak.toFixed(3)} < quietest rare ${rPeak.toFixed(3)}`);
+  check(fPeak < rPeak, `frequent sounds (spray, shot, mess) quieter than rare ones (waveStart, won, lost): loudest frequent ${fPeak.toFixed(3)} < quietest rare ${rPeak.toFixed(3)}`);
   check(fDur < rDur, `frequent sounds shorter than rare ones: longest frequent ${fDur.toFixed(3)} s < shortest rare ${rDur.toFixed(3)} s`);
   const med = (a) => { const s = a.slice().sort((p, q) => p - q); return s[Math.floor(s.length / 2)]; };
   const ePeak = med(fx.map((r) => r.peak)), eRms = med(fx.map((r) => r.rms));
@@ -796,11 +795,10 @@ async function liveSelfTest() {
     emit(type, msg) { for (const fn of hs[type] || []) fn(msg); },
   };
   const storm = async (ms) => {
-    const kinds = ['box', 'gadget', 'giftset'];
     for (let n = 0; n * 33 < ms; n++) {
-      ses.emit('fx', [{ e: 'sale', kind: kinds[n % 3] }, { e: 'spray' }, { e: 'spray' }, { e: 'shot' }, { e: 'grab' },
-        { e: 'left', k: 'dad' }, { e: 'escape', k: 'hunter' }, { e: 'placed', k: 'belt' }, { e: 'nonsense' }, null,
-        { e: 'mess', i: 3 }, { e: 'kid' }, { e: 'caught' }, { e: 'bolt' }, { e: 'smash', i: 9, k: 'belt' }, { e: 'left', k: 'gymbro', sup: 1 },
+      ses.emit('fx', [{ e: 'spray' }, { e: 'spray' }, { e: 'shot' }, { e: 'grab' },
+        { e: 'left', k: 'dad' }, { e: 'escape', k: 'hunter' }, { e: 'placed', k: 'crate' }, { e: 'nonsense' }, null,
+        { e: 'mess', i: 3 }, { e: 'kid' }, { e: 'caught' }, { e: 'bolt' }, { e: 'smash', i: 9, k: 'crate' }, { e: 'left', k: 'gymbro', sup: 1 },
         { e: 'left', k: 'karen' }, { e: 'left', k: 'teen' }, { e: 'rebuilt', n: 2, by: 1 },
         { e: 'escape', k: 'dad', sup: 1 }, { e: 'sample' }, { e: 'slip' }, { e: 'pitch', r: 'stop' }, { e: 'pitch', r: 'rush' }, { e: 'shield' },
         { e: 'left', k: 'dog' }, { e: 'smash', i: 2, k: 'salesman', left: 0 }]);
@@ -1011,10 +1009,10 @@ btn(modBox, 'fourteen shoppers storm out, then fourteen supers', () => {
   });
 });
 btn(modBox, 'gym bro wrecks one of everything', () => {
-  ['crate', 'belt', 'press', 'sprinkler', 'forklift', 'wetfloor', 'samples', 'railgun', 'salesman'].forEach((k, i) => {
+  ['crate', 'sprinkler', 'forklift', 'wetfloor', 'samples', 'railgun', 'salesman'].forEach((k, i) => {
     setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5, k, left: 0 }]), i * 1100);
   });
-  setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5, k: 'forklift', left: 2 }]), 9 * 1100);
+  setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5, k: 'forklift', left: 2 }]), 7 * 1100);
 });
 btn(modBox, 'my own rebuild: event then button (plays once)', () => {
   fake.emit('fx', [{ e: 'rebuilt', n: 2, by: fake.me }]);
@@ -1071,11 +1069,10 @@ btn(modBox, 'Head Office: taken, then quit', () => {
 });
 btn(modBox, '20 gym bros leave in one tick', () => fake.emit('fx', Array.from({ length: 20 }, () => ({ e: 'left', k: 'gymbro', sup: 0 }))));
 btn(modBox, 'late-wave storm (3 s)', () => {
-  // Every tick: sales, sprays and shots, the odd escape, slip and grab. Tests the rate limiting.
+  // Every tick: sprays and shots, the odd escape, slip and grab. Tests the rate limiting.
   let n = 0;
-  const kinds = ['box', 'gadget', 'giftset'];
   const id = setInterval(() => {
-    const ev = [{ e: 'sale', kind: kinds[n % 3] }, { e: 'spray' }, { e: 'spray' }, { e: 'shot' }];
+    const ev = [{ e: 'spray' }, { e: 'spray' }, { e: 'shot' }];
     if (n % 7 === 0) ev.push({ e: 'left', k: n % 2 ? 'dad' : 'hunter' });
     if (n % 11 === 0) ev.push({ e: 'escape', k: n % 22 ? 'clipper' : 'dad' });
     if (n % 13 === 0) ev.push({ e: 'slip' });

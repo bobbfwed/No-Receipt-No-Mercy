@@ -93,7 +93,12 @@ test("The Back's build bar: two groups, every part a player can buy once, keys l
   assert.equal(new Set(BACK_HOTKEYS).size, BACK_HOTKEYS.length, 'no key twice');
   assert.equal(hotkeyOf('rebrand'), '-');
   assert.equal(hotkeyOf('still'), '6');
-  assert.equal(hotkeyOf('belt'), HOTKEYS[BUILD_KEYS.indexOf('belt')]);
+  // The shop floor's own keys (0.4, with the old factory gone): 1 Crates, then security, in the
+  // order of its bar.
+  assert.deepEqual(BUILD_KEYS, ['crate', 'sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman']);
+  assert.deepEqual(HOTKEYS, ['1', '2', '3', '4', '5', '6', '7']);
+  assert.equal(hotkeyOf('crate'), '1');
+  assert.equal(hotkeyOf('salesman'), '7');
   for (const k of BACK_KEYS) {
     assert.ok(BACK_HOW[k] && BACK_HOW[k].does.length > 30 && BACK_HOW[k].use.length > 30, `card text for ${k}`);
   }

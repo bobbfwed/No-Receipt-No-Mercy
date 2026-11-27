@@ -1,13 +1,15 @@
-// The Employee Handbook: every shopper, factory building and piece of security, with its numbers.
-// How patient each shopper is as the sales events go by, how many turn up, what the super
-// version changes, and what each tier of supply from The Back does for each piece of security.
-// Opened from the menu and from the game (the book button, or the ? screen). In a game it uses
-// that game's length, difficulty and number of players; from the menu, the standard game.
-import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
-import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
+// The Employee Handbook: every shopper, the shop floor's buildings and The Back's parts, with
+// their numbers. How patient each shopper is as the sales events go by, how many turn up, what the
+// super version changes, what each tier of supply from The Back does for each piece of security,
+// and what each part of The Back does. Opened from the menu and from the game (the book button, or
+// the ? screen). In a game it uses that game's length, difficulty and number of players; from the
+// menu, the standard game.
+import { BUILD, SHOPPERS, TUNE, SETTINGS, SUPPLY_TRACKS, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
+import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
-  SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  tierRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText, edgeFacts, payText,
+  SHOPPER_ORDER, WALL_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
+  tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST,
+  paceText, edgeFacts, payText,
 } from '../content/facts.js';
 import { releaseWaves } from '../content/facts.js';
 import { trackName, SUPPLIES } from '../content/supplies.js';
@@ -19,7 +21,8 @@ import { shopperPortrait } from './portrait.js';
 import { HOLIDAY_INFO, outfitText } from '../content/holidays.js';
 import { cardsNote } from '../content/cards.js';
 
-const TABS = [['shoppers', 'Known offenders'], ['factory', 'Factory'], ['security', 'Security']];
+// (0.4: The Back has its own tab; the Crate Stack is with the shop floor's security.)
+const TABS = [['shoppers', 'Known offenders'], ['security', 'Shop floor'], ['back', 'The Back']];
 const pct = (m) => `${Math.round(m * 100)}%`;
 const table = (cls, head, rows) => h('div', { class: 'hb-scroll' }, h('table', { class: `hb-table ${cls}` },
   h('thead', null, h('tr', null, head.map((t) => h('th', null, t)))),
@@ -146,21 +149,68 @@ function bossCard(ctx) {
     table('hb-waves', ['Sales event', ...b.waves.map((w) => String(w.n))], rows));
 }
 
-function buildingHead(k) {
+/**
+ * The Dumbwaiter's hatch (nobody buys one, so the build bar has no icon for it): a steel door in a
+ * hazard frame with a yellow up arrow, as The Back draws it.
+ */
+const LIFT_ICON = `<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+  <rect x="2" y="2" width="36" height="36" rx="3" fill="#f2c21b" stroke="#111" stroke-width="2"/>
+  <path d="M3 11l8-8M3 21l18-18M3 31l28-28M7 37l30-30M17 37l20-20M27 37l10-10" stroke="#222" stroke-width="3"/>
+  <rect x="8" y="8" width="24" height="24" rx="2" fill="#8f979f" stroke="#111" stroke-width="2"/>
+  <path d="M20 9v22" stroke="#5b6168" stroke-width="1.5"/>
+  <path d="M20 11l7.5 8.5h-4.5v8h-6v-8h-4.5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+
+/** A building's or part's heading: its icon, name and price (or, for the ones nobody buys, none). */
+function buildingHead(k, where = '') {
   const def = BUILD[k];
-  return h('header', { class: 'hb-head' }, h('span', { class: 'hb-icon', html: buildingIcon(k) }),
-    h('div', null, h('h3', null, def.name),
-      def.zone ? h('p', { class: 'hb-when' }, h('i', { class: 'hb-swatch', style: { background: ZONES[def.zone].color } }), ` ${ZONES[def.zone].name} floor only`) : null),
-    h('div', { class: 'hb-stats' }, stat('Price', money(def.cost)), stat('Sold back', money(Math.floor(def.cost * TUNE.sellBack)))));
+  return h('header', { class: 'hb-head' }, h('span', { class: 'hb-icon', html: k === 'lift' ? LIFT_ICON : buildingIcon(k) }),
+    h('div', null, h('h3', null, def.name), where ? h('p', { class: 'hb-when' }, where) : null),
+    def.fixed ? h('div', { class: 'hb-stats' }, stat('Price', 'not for sale'))
+      : h('div', { class: 'hb-stats' }, stat('Price', money(def.cost)), stat('Sold back', money(Math.floor(def.cost * TUNE.sellBack)))));
 }
 
-function factoryCard(k, ctx) {
-  return h('article', { class: 'hb-card' }, buildingHead(k),
+/** The Crate Stack: the shop floor's plain wall. */
+function crateCard(k) {
+  return h('article', { class: 'hb-card' }, buildingHead(k, 'Shop floor: a wall'),
     h('p', null, worded(HOW[k].does)),
     h('p', null, h('b', null, 'How: '), worded(HOW[k].use)),
-    // The sentences above quote Normal prices; the numbers below are for this game's difficulty.
-    ctx.pay !== 1 && /$/.test(HOW[k].does) ? h('p', { class: 'hb-small' }, `The prices in the text are for Normal difficulty. On ${ctx.name}:`) : null,
-    facts(factoryFacts(k, ctx.pay).slice(2).filter(([label]) => label !== 'Goes on')));
+    facts(crateFacts()));
+}
+
+/** One of The Back's parts: what it does, how to use it, and its numbers. */
+function backCard(k) {
+  const def = BUILD[k];
+  const where = k === 'drop' ? 'The Back: put down by the store' : k === 'lift' ? 'The Back: under every security building'
+    : def.supply ? `The Back: makes ${SUPPLIES[SUPPLY_TRACKS[def.supply]].name}` : 'The Back';
+  return h('article', { class: 'hb-card' }, buildingHead(k, where),
+    h('p', null, worded(BACK_HOW[k].does)),
+    h('p', null, h('b', null, 'How: '), worded(BACK_HOW[k].use)),
+    facts(backFacts(k)));
+}
+
+/**
+ * The five supplies and the four brand tiers, all on one card at the top of The Back: what each
+ * supply is for and who takes it, what each tier counts as, and how long a unit lasts.
+ */
+function suppliesCard() {
+  const list = (names) => names.join(', ');
+  const say = (s) => {
+    if (s.track === 'dur') return `From the ${s.maker}. Each use soaks up one gym bro hit instead of the building taking it (it still counts as one of his hits). Taken by ${list(s.takers)}.`;
+    if (!s.works) return `From the ${s.maker}. For the dads, coming soon: for now it just sits in the Dumbwaiter taking up room, like you at a team meeting. Every Dumbwaiter takes it anyway (${list(s.takers)}).`;
+    if (s.track === 'dmg') return `From the ${s.maker}. More damage from a gun; on the others more of whatever they do (a slipperier sign, a longer free sample, a better pitch). Taken by ${list(s.takers)}.`;
+    return `From the ${s.maker}. More ${s.gives}. Taken by ${list(s.takers)}.`;
+  };
+  const tiers = tierFacts();
+  const plural = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`;
+  return h('article', { class: 'hb-card hb-supplies' },
+    h('header', { class: 'hb-head' }, h('div', null, h('h3', null, 'Supplies'), h('p', { class: 'hb-when' }, 'What The Back makes, and what it does upstairs'))),
+    facts(supplyFacts().map((s) => [[h('i', { class: 'hb-swatch', style: { background: s.color } }), ` ${s.name}`], say(s)])),
+    h('h4', null, 'Brand tiers'),
+    table('hb-levels', ['Tier', 'Spite, Cola, Cord count as', 'A roll of Duct Tape soaks up', 'A unit of Razor Wire stops (coming soon)', 'Clearance Bin pays', 'Made by'],
+      tiers.map((t, i) => [t.name, `+${t.level} levels`, plural(t.tape, 'gym bro hit'), plural(t.wire, 'dad'), `$${t.bin.toFixed(2)}`,
+        t.secs ? `a Rebrander, ${fmt(t.secs)} s from ${tiers[i - 1].name}` : 'the machines'])),
+    h('h4', null, 'How long a unit of Spite, Cola or Cord lasts (whatever the tier)'),
+    table('hb-levels', ['Building', 'A unit lasts'], unitFacts().map((u) => [u.name, `${u.uses} ${u.per}`])));
 }
 
 /** One piece of security: what it does as built, and a table for each supply it takes. */
@@ -230,13 +280,14 @@ export function handbook({ state = null, onClose }) {
         + `Every shopper's patience grows each sales event: ×${fmt(toughnessAt(2))} in the second, ×${fmt(toughnessAt(10))} by the tenth, ×${fmt(toughnessAt(20))} by the twentieth, ×${fmt(toughnessAt(LONGEST))} by event ${LONGEST}${ctx.waves > 0 ? '' : `, ×${fmt(toughnessAt(LONGEST + 10))} by event ${LONGEST + 10}`}. `
         + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds do not grow from event to event. ${paceText()} A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
-    } else if (id === 'factory') {
-      // (0.4: how money is made now, on this game's difficulty, before the old factory's prices.)
-      note.textContent = `${payText(ctx.difficulty)} Prices goods sell for are for ${game} (${ctx.name} difficulty); every sale is split evenly between the players. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
-      body.replaceChildren(...FACTORY_ORDER.map((k) => factoryCard(k, ctx)));
+    } else if (id === 'back') {
+      // (0.4: The Back makes no money, so how money is made, on
+      // this game's difficulty, is said here.)
+      note.textContent = `The Back is the floor under the shop: Tab, or the floor switch at the bottom right, takes you down. Nothing down here is in a shopper's way. Returns Drops put out junk; belts carry it to the machines, which make supplies; more belts carry those to the Dumbwaiters under your security, which send them up. Security works as built until it is stocked, and better while it is. The Back makes no money, bar a Clearance Bin's pennies. ${payText(ctx.difficulty)} Selling a part back returns ${pct(TUNE.sellBack)} of what was spent on it. The numbers here are for a game without cards.`;
+      body.replaceChildren(suppliesCard(), ...BACK_ORDER.map((k) => backCard(k)));
     } else {
-      note.textContent = `Security gets stronger only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range) and Duct Tape (soaks up gym bro hits). Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
-      body.replaceChildren(...SECURITY_ORDER.map((k) => securityCard(k)));
+      note.textContent = `Crate Stacks and security are the maze: shoppers walk round them, and only gym bros go through. Security gets stronger only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range) and Duct Tape (soaks up gym bro hits). Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
+      body.replaceChildren(...WALL_ORDER.map((k) => crateCard(k)), ...SECURITY_ORDER.map((k) => securityCard(k)));
     }
     body.dataset.tab = id;
     card.scrollTop = 0;

@@ -111,7 +111,7 @@ test('a won game can be carried on as an endless one', () => {
 });
 
 test('Head Office cannot carry the game on, but gets a budget for the next wave when it is', () => {
-  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' }, zones: false, settings: { waves: 10 } });
+  const s = createGame({ seed: 4, map: { design: 'warehouse', size: 'm' }, settings: { waves: 10 } });
   addPlayer(s, 'Dave');
   addPlayer(s, 'Steve');
   s.wave = 9;

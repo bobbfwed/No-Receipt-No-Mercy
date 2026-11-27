@@ -20,17 +20,16 @@
                    map with six entrances, as a real game does; without either it is the original
                    30 x 16 warehouse with one entrance, which the demo layout is made for)
     &size=m        map size: xs, s, m, l, xl, xxl, huge, titan
-    &zones=1       mark out the floor the factory machines must go on (loading bay, press shop,
-                   gift wrap, shipping). Maps chosen with design or size have it already; zones=0
-                   takes it away. On the small default map the demo layout's machines will mostly
-                   not fit it (use demo=0 to see the bare markings)
     &players=3     that many players in all (so that many entrances open)
+    &floor=1       look at The Back (the floor under the shop, 0.4) instead of the shop floor
     &cam=40,20,30  camera: centre on tile 40,20 at 30 CSS pixels per tile (any part may be empty)
     &fitview=1     start fully zoomed out
     &mini=1        show the minimap in the bottom-right corner (click it to move the view)
     &demo=0        do not build the demo layout (on other maps it is placed where it fits)
-    &extra=1       also build belt corners and spare machines, two Barcode Lasers (one lying east-west,
-                   one north-south) and a TV Salesman (to see every building kind)
+    &extra=1       also build a few more Crate Stacks and a Free Samples table, two Barcode Lasers (one
+                   lying east-west, one north-south) and a TV Salesman (to see every building kind),
+                   and on The Back a loop of belts turning right and a line turning left, each fed
+                   by a Splitter (corners and turns; see them with &floor=1)
     &stock=1       stock every security building with supplies from The Back, a different mix of
                    supplies and tiers on each, so their level badges and supply pips show
     &damage=1      as if gym bros had hit every other building: some once, some down to their
@@ -45,7 +44,8 @@
     &supers=1      make every third shopper a super shopper
     &nostart=1     stay in the build phase
     &ff=600        run that many ticks before the first frame
-    &tool=belt&hx=10&hy=5&dir=1   placement preview (tool may be 'remove');
+    &tool=crate&hx=10&hy=5&dir=1   placement preview (tool may be 'remove'; a Back part such as
+                   conv with &floor=1);
                    no hx/hy = follow the mouse. dir is the facing (it turns a Barcode Laser's footprint)
     &cash=5000     the player's money (previews of expensive things show red without it)
     &route=1       draw the shopper routes
@@ -111,10 +111,11 @@
   Debugging and stress tests:
     &freeze=1      do not run the game after the fast-forward (still drawn every frame)
     &frames=N      stop the game and drawing after N frames
-    &keep=dad,karen  keep only these shopper kinds; &fx=sale,shot  keep only these pending events
+    &keep=dad,karen  keep only these shopper kinds; &fx=spray,shot  keep only these pending events
     &clone=150     copy shoppers up to this many; &fill=300  scatter buildings up to this many
     &bench=N       draw N frames back to back (forcing rasterisation) and print ms per frame
-  Keys: 1-9,0 pick a building, g Barcode Laser, t TV Salesman, x remove, Esc no tool, r rotate.
+  Keys: 1-7 pick a building (the game's hotkeys: Crates, Sprinkler, Forklift, Laser, Wet Floor,
+        Samples, Salesman), g Barcode Laser, t TV Salesman, x remove, Esc no tool, r rotate.
         Click places.
         WASD or arrow keys pan, mouse wheel or +/- zooms, f fits the whole map, m toggles the minimap.
   Errors are printed in big red text on the page. Note: headless Edge screenshots (tools/shot.ps1)
@@ -179,11 +180,8 @@ if (q.get('null') === '1') {
   session = { state: null, me: 0, drainFx: () => [], alpha: () => 0, start() {} };
 } else {
   const map = q.has('design') || q.has('size') ? { design: q.get('design') || 'warehouse', size: q.get('size') || 'xs' } : null;
-  // &zones=1 / &zones=0 turn the machines' marked floor on or off; by default a game has it
-  // exactly when it has a chosen map, as in the real game.
-  const zones = q.has('zones') ? q.get('zones') === '1' : !!map;
   const cards = q.has('cards') ? q.get('cards').split(',') : CARDSHOW ? CARDSHOW_HANDS[CARDSHOW] || null : null;
-  const state = createGame({ seed: num('seed', 7), map, zones, holiday: q.get('holiday'), cards });
+  const state = createGame({ seed: num('seed', 7), map, holiday: q.get('holiday'), cards });
   session = new HostSession({ name: 'Dave', director: createDirector(), state });
   const s = session.state;
   const me = s.players[0];
@@ -200,20 +198,27 @@ if (q.get('null') === '1') {
     me.cash += 5000;
     const E = 0, S = 1, Wd = 2, N = 3;
     const extra = [
-      // Right-turning loop in the top-right corner.
-      ['unpacker', 24, 1, E], ['belt', 25, 1, E], ['belt', 26, 1, E], ['belt', 27, 1, S], ['belt', 27, 2, S],
-      ['belt', 27, 3, Wd], ['belt', 26, 3, Wd], ['belt', 25, 3, Wd], ['chute', 24, 3, 0],
-      ['crate', 25, 2, 0], ['crate', 26, 2, 0],
-      // Left-turning line in the top-left corner.
-      ['unpacker', 1, 1, S], ['belt', 1, 2, S], ['belt', 1, 3, E], ['belt', 2, 3, E], ['belt', 3, 3, N],
-      ['belt', 3, 2, N], ['chute', 3, 1, 0],
-      ['samples', 17, 12, 0], ['packer', 2, 13, E], ['press', 3, 13, E],
+      ['crate', 25, 2, 0], ['crate', 26, 2, 0], ['crate', 2, 13, 0], ['crate', 3, 13, 0],
+      ['samples', 17, 12, 0],
       // The big ones: a Barcode Laser lying east-west, one north-south, and a TV Salesman.
-      ['railgun', 15, 11, E], ['railgun', 24, 10, N], ['salesman', 17, 1, 0],
+      // (The east-west one at 14,12: one row up, it would stand on the demo Back's Clearance Bin.)
+      ['railgun', 14, 12, E], ['railgun', 24, 10, N], ['salesman', 17, 1, 0],
     ];
     for (const [k, x, y, d] of extra) {
       const r = place(k, x, y, d);
       if (!r.ok) console.warn('extra', k, x, y, r.why);
+    }
+    // On The Back (f: 1): a right-turning loop in the top-right corner and a left-turning line
+    // lower down on the left, each starting at a Splitter and ending in a Clearance Bin.
+    const back = [
+      ['split', 24, 1, E], ['conv', 25, 1, E], ['conv', 26, 1, E], ['conv', 27, 1, S], ['conv', 27, 2, S],
+      ['conv', 27, 3, Wd], ['conv', 26, 3, Wd], ['conv', 25, 3, Wd], ['bin', 24, 3, 0],
+      ['split', 1, 8, S], ['conv', 1, 9, S], ['conv', 1, 10, E], ['conv', 2, 10, E], ['conv', 3, 10, N],
+      ['conv', 3, 9, N], ['bin', 3, 8, 0],
+    ];
+    for (const [k, x, y, d] of back) {
+      const r = applyCommand(s, 0, { c: 'place', k, x, y, d, f: 1 });
+      if (!r.ok) console.warn('extra (The Back)', k, x, y, r.why);
     }
   }
   // &wall=3  a wall of crate stacks down column 3 (gap in the top row): gym bros smash through it
@@ -221,14 +226,14 @@ if (q.get('null') === '1') {
     me.cash += 5000;
     for (let y = 2; y < s.h - 1; y++) place('crate', num('wall', 3), y, 0);
   }
-  // &fill=300  scatter belts and machines over free floor until there are this many buildings
+  // &fill=300  scatter Crate Stacks and security over free floor until there are this many buildings
   if (q.has('fill')) {
-    const kinds = ['belt', 'belt', 'belt', 'press', 'sprinkler', 'crate', 'packer', 'forklift', 'chute', 'unpacker', 'samples', 'wetfloor'];
+    const kinds = ['crate', 'crate', 'crate', 'sprinkler', 'crate', 'forklift', 'samples', 'wetfloor'];
     let count = s.grid.filter(Boolean).length;
     for (let i = 0; i < s.grid.length && count < num('fill', 300); i++) {
       if (s.tiles[i] !== '.' || s.grid[i] || (i * 7) % 5 === 0) continue;
       const k = kinds[i % kinds.length];
-      s.grid[i] = { k, o: 0, d: i % 4, it: k === 'belt' ? [['box', 0.3]] : undefined, t: 10, n: 1, out: 0, cd: 0, a: i };
+      s.grid[i] = { k, o: 0, d: i % 4, t: 10, n: 1, out: 0, cd: 0, a: i };
       count++;
     }
   }
@@ -302,7 +307,7 @@ if (q.get('null') === '1') {
   if (POP.on) stagePop(s);
   // &supers=1  every third shopper becomes a super one
   if (q.get('supers') === '1') s.shoppers.forEach((sh, n) => { if (n % 3 === 0) sh.sup = 1; });
-  // &fx=sale,shot  only pass these event types to the renderer (debugging); fx=none drops them all
+  // &fx=spray,shot  only pass these event types to the renderer (debugging); fx=none drops them all
   if (q.has('fx')) {
     const allow = q.get('fx').split(',');
     session.fx = session.fx.filter((e) => allow.includes(e.e));
@@ -352,8 +357,10 @@ miniCanvas.addEventListener('mousedown', (e) => {
   if (t) { renderer.centerOn(t.x + 0.5, t.y + 0.5); mini.draw(); }
 });
 
-const tools = ['belt', 'unpacker', 'press', 'packer', 'chute', 'crate', 'sprinkler', 'forklift', 'wetfloor', 'samples'];
+// The game's hotkeys, 1 to 7 in the build bar's order.
+const tools = ['crate', 'sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman'];
 const view = {
+  floor: num('floor', 0) === 1 ? 1 : 0,
   tool: q.get('tool') || null,
   dir: num('dir', 0),
   hover: q.has('hx') ? { x: num('hx', 0), y: num('hy', 0) } : null,
@@ -366,8 +373,9 @@ canvas.addEventListener('mouseleave', () => { if (!fixedHover) view.hover = null
 canvas.addEventListener('click', (e) => {
   const t = renderer.tileAt(e.clientX, e.clientY);
   if (!t || !session.send) return;
-  if (view.tool === 'remove') session.send({ c: 'remove', x: t.x, y: t.y });
-  else if (BUILD[view.tool]) session.send({ c: 'place', k: view.tool, x: t.x, y: t.y, d: view.dir });
+  const f = view.floor === 1 ? { f: 1 } : {};
+  if (view.tool === 'remove') session.send({ c: 'remove', x: t.x, y: t.y, ...f });
+  else if (BUILD[view.tool]) session.send({ c: 'place', k: view.tool, x: t.x, y: t.y, d: view.dir, ...f });
 });
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -376,7 +384,7 @@ canvas.addEventListener('wheel', (e) => {
 const held = new Set();
 addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (e.key >= '0' && e.key <= '9') view.tool = tools[(Number(e.key) + 9) % 10];
+  if (e.key >= '1' && e.key <= String(tools.length)) view.tool = tools[Number(e.key) - 1];
   else if (k === 'g') view.tool = 'railgun';
   else if (k === 't') view.tool = 'salesman';
   else if (k === 'x') view.tool = 'remove';
@@ -408,7 +416,6 @@ let total = 0, n = 0;
 if (q.get('allfx') === '1' && session.fx) {
   const W = session.state.w;
   const inject = () => session.fx.push(
-    { e: 'sale', i: 11 * W + 6, v: 24, kind: 'giftset' },
     { e: 'escape', k: 'dad', x: W - 0.8, y: 7.5, refund: 25 },
     { e: 'left', k: 'dad', x: 16.5, y: 6.5, by: 0, why: 'bored' },
     { e: 'left', k: 'karen', x: 19, y: 12.5, by: 0, why: 'annoyed' },
@@ -422,7 +429,7 @@ if (q.get('allfx') === '1' && session.fx) {
     { e: 'caught', x: 22.5, y: 13.5 },
     { e: 'bolt', x: 6.5, y: 2.5 },
     { e: 'smash', i: 13 * W + 24, x: 24.5, y: 13.5, k: 'crate', owner: 0, left: 0 },
-    { e: 'smash', i: 9 * W + 24, x: 24.5, y: 9.5, k: 'press', owner: 0, left: 0 },
+    { e: 'smash', i: 9 * W + 24, x: 24.5, y: 9.5, k: 'samples', owner: 0, left: 0 },
     { e: 'smash', i: 5 * W + 24, x: 24.5, y: 5.5, k: 'sprinkler', owner: 0, left: 1 },
     // The newer events (placed for &showcase=1, but they draw anywhere).
     { e: 'rail', i: 1 * W + 6, d: 3, len: 10, n: 2 },
@@ -599,7 +606,7 @@ if (q.get('lineup') === '1') {
     // Messes: fresh (splashing in), settled (both flavours), fading out.
     drawMesses(g, [[ti(27, 14), life - 2], [ti(29, 14), 200], [ti(31, 14), 150], [ti(33, 14), 14]], 0, messSprites, LW);
     // Wreckage of each kind (a barcode laser's and a salesman's over their footprints), and badges.
-    ['crate', 'press', 'sprinkler', 'belt', 'forklift'].forEach((k, n) => drawRubble(g, ti(26 + n, 15), k, LW));
+    ['crate', 'samples', 'sprinkler', 'wetfloor', 'forklift'].forEach((k, n) => drawRubble(g, ti(26 + n, 15), k, LW));
     drawRubble(g, ti(31, 15), 'railgun', LW, 0);
     drawRubble(g, ti(34, 15), 'salesman', LW, 0, true); // paid for and waiting: the cone
     [[2, false], [5, false], [13, false], [9, true]].forEach(([lv, top], n) => {
@@ -647,7 +654,7 @@ if (q.get('lineup') === '1') {
     };
     // Effects, in several systems, as each kind is capped on screen.
     run([
-      { e: 'sale', i: ti(27, 1), v: 24 }, { e: 'escape', x: 28.05, y: 3.3, refund: 25 },
+      { e: 'escape', x: 28.05, y: 3.3, refund: 25 },
       { e: 'left', k: 'dad', x: 27.5, y: 5.1 }, { e: 'left', k: 'karen', x: 27.5, y: 6.6 },
       { e: 'slip', x: 27.5, y: 7.9 }, { e: 'grab', x: 27.5, y: 9.3 }, { e: 'sample', x: 27.5, y: 10.6 },
       { e: 'spray', i: ti(30, 2) }, { e: 'shot', i: ti(29, 5), x: 31.5, y: 5.5 },
@@ -658,9 +665,9 @@ if (q.get('lineup') === '1') {
       { e: 'left', k: 'blind', x: 33.5, y: 5.1 }, { e: 'left', k: 'gymbro', x: 33.5, y: 6.6 },
       { e: 'kid', x: 33, y: 8.1 }, { e: 'caught', x: 33.5, y: 9.4 }, { e: 'bolt', x: 33.1, y: 10.9 },
     ]);
-    // Wreckage of a machine, a hit it survives (CLANG: one hit left), and the new events.
+    // Wreckage of a Free Samples table, a hit it survives (CLANG: one hit left), and the new events.
     run([
-      { e: 'smash', i: ti(31, 11), x: 31.5, y: 11.5, k: 'press', left: 0 },
+      { e: 'smash', i: ti(31, 11), x: 31.5, y: 11.5, k: 'samples', left: 0 },
       { e: 'smash', i: ti(34, 11), x: 34.5, y: 11.5, k: 'sprinkler', left: 1 },
       { e: 'rail', i: ti(26, 18), d: 0, len: 8, n: 3 },
       { e: 'pee', i: ti(27, 19), x: 27.5, y: 19.5, k: 'sprinkler' },
@@ -832,16 +839,14 @@ function buildShowcase(s, me) {
   put('salesman', 11, 1);
   put('salesman', 14, 1, 0, { off: 99999 });
   put('salesman', 25, 1, 0, { hit: 1, s: { dur: [1, 1] } });
-  // Stocked, damaged and switched-off smaller things. (Crate Stacks and the old factory have no
-  // stock and go at one hit, so they are shown whole.)
+  // Stocked, damaged and switched-off smaller things. (Crate Stacks have no stock and go at one
+  // hit, so they are shown whole.)
   put('sprinkler', 17, 2, 0, { s: { dmg: [2, 20], rng: [1, 20] }, off: 99999 });
   put('forklift', 19, 2, 0, { s: { spd: [3, 6], dur: [2, 2] } });
   put('crate', 21, 2, 0);
   put('crate', 22, 2, 0);
   put('crate', 23, 2, 0);
-  for (let x = 16; x < 20; x++) put('belt', x, 4, E);
-  put('unpacker', 15, 4, E);
-  put('chute', 21, 5, 0);
+  for (let x = 15; x < 20; x++) put('crate', x, 4, 0);
   put('forklift', 24, 5, 0, { off: 99999 });
   put('samples', 26, 5, 0, { off: 99999, s: { rng: [1, 8] } });
   // Rubble of a Barcode Laser that faced north, and of a salesman.
@@ -909,7 +914,8 @@ function showcaseCrowd(s) {
 
 /** The first id from `from` that a card picks (or, with inShare false, leaves out). */
 function idFor(card, inShare = true, from = 100) {
-  for (let id = from; ; id++) if ((idShare(id, card, state.seed) < CARDS[card].share) === inShare) return id;
+  // (session.state: the game's `state` is a const inside the block that makes it, out of reach here.)
+  for (let id = from; ; id++) if ((idShare(id, card, session.state.seed) < CARDS[card].share) === inShare) return id;
 }
 
 /** The buildings of a &cardshow= scene. */

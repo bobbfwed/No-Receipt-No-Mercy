@@ -2,17 +2,24 @@
 // Handbook in the game and the lists in README.md both read them from here, so neither can
 // drift from what the simulation actually does. No DOM; runs in Node too.
 import {
-  SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, priceOf,
+  SHOPPERS, SUPERS, BUILD, TUNE, SETTINGS, TICK_HZ, waveSpec, statsOf, priceOf,
   tracksOf, usesPer, BACK, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
   patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize, eventPay, speedPar,
+  makeTicks, rebrandTicks, stockCap, dropUpCost, SUPPLY_TRACKS,
 } from '../sim/index.js';
 import { EDGE_HELP } from './help.js';
-import { TIER_NAMES } from './supplies.js';
+import { TIER_NAMES, SUPPLIES, stockTracks, junkPerMinute } from './supplies.js';
 
 /** The order shoppers are listed in: the order they first turn up. */
 export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'trader', 'flasher', 'preggo', 'cosplay'];
-export const FACTORY_ORDER = ['belt', 'unpacker', 'press', 'packer', 'chute', 'crate'];
+/** The shop floor's buildings: the one plain wall, then the security (together, every SHOP_KINDS). */
+export const WALL_ORDER = ['crate'];
 export const SECURITY_ORDER = ['sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman'];
+/**
+ * The Back's parts (0.4), in the order the junk meets them: the Returns Drop, what carries it, the
+ * machines and the Rebrander, and the Dumbwaiter that takes the supplies up.
+ */
+export const BACK_ORDER = ['drop', 'conv', 'split', 'over', 'intern', 'bin', 'still', 'cannery', 'spooler', 'winder', 'bender', 'rebrand', 'lift'];
 
 /** How much more patient shoppers are in wave n than in wave 1, by growth alone (the simulation's own). */
 export { patienceGrowth };
@@ -36,7 +43,7 @@ export function patienceAt(k, sup, n, hpMul = 1) {
  * A Pregnant Lady's babies (not one of SHOPPERS: nobody picks them, Head Office cannot buy them).
  * hp is their patience as the first sales event's would be at that difficulty, before it grows.
  */
-export function babyFacts(hpMul = 1) {
+function babyFacts(hpMul = 1) {
   return { name: BABY.name, hp: BABY.hp * patienceScaleAt(1) * hpMul, speed: BABY.speed, refund: BABY.refund };
 }
 
@@ -67,7 +74,7 @@ export const eventOf = (n, waves) => (waves > 0 ? `${n} / ${waves}` : `${n}`);
 export const LONGEST = Math.max(...SETTINGS.waves.filter((n) => n > 0));
 
 /** The waves shown for an endless game (waves 0), which has no last one to stop at: 1, 5, then every tenth to past the longest game. */
-export const ENDLESS_SAMPLE = [1, 5];
+const ENDLESS_SAMPLE = [1, 5];
 for (let n = 10; n <= LONGEST + 10; n += 10) ENDLESS_SAMPLE.push(n);
 
 /**
@@ -200,7 +207,7 @@ export function releaseWaves(waves = SETTINGS.defaults.waves) {
  * number sharing the store; `waves` the game's length (0: endless), which picks the sample events.
  *   waves: [{ n, no, size }] each sample release: its sales event, which release it is, the mob
  */
-export function releaseFacts({ players = 1, waves = SETTINGS.defaults.waves } = {}) {
+function releaseFacts({ players = 1, waves = SETTINGS.defaults.waves } = {}) {
   return {
     from: TUNE.releaseFrom, every: TUNE.releaseEvery, at: TUNE.releaseAt, secs: TUNE.releaseSecs,
     first: TUNE.releaseFirst, step: TUNE.releaseStep, crowd: TUNE.releaseCrowd,
@@ -238,7 +245,6 @@ export function shopperTraits(k, sup = 0) {
   if (d.steady) out.push(['Wet floors and messes', 'not affected']);
   else if (d.ignoresSigns) out.push(['Wet floors and messes', `not slowed; ${pct(TUNE.slipChance)} chance to slip (stunned ${fmt(TUNE.slipSecs)} s)`]);
   else out.push(['Wet floors and messes', `slowed to ${pct(TUNE.wetSlow)} speed`]);
-  if (d.hopsBelts) out.push(['Conveyor belts', 'steps over them']);
   if (d.drain) {
     // It grows with the patience multiplier, so wasting his time works as well all game.
     const late = d.drain * TUNE.patienceScale;
@@ -256,7 +262,7 @@ export function shopperTraits(k, sup = 0) {
   if (d.bolts) out.push(['Dog bolts when sprayed', `${fmt(v('boltSecs'))} s at ${fmt(d.speed * v('boltSpeed'))} tiles a second${d.boltsOnAny ? ' (forklift and barcode laser hits too)' : ''}`]);
   if (d.smashes) {
     const max = v('smashMax');
-    out.push(['Hits', `${max === 1 ? 'one' : `up to ${max}`} a visit, at least ${fmt(v('smashWait'))} s apart; one a Durability level soaks up still counts`]);
+    out.push(['Hits', `${max === 1 ? 'one' : `up to ${max}`} a visit, at least ${fmt(v('smashWait'))} s apart; one that Duct Tape soaks up still counts`]);
     out.push(['Wrecking', `with a hit ready, stops to hit any crate stack in his way, and any crate stack beside him; every ${fmt(v('smashEvery'))} s a ${pct(v('smashOther'))} chance of hitting something else. Resting after a hit, or spent, walks round crates like anyone else`]);
   }
   if (d.sways) {
@@ -337,28 +343,113 @@ export function tierRows(k, track) {
   return rows;
 }
 
-/** Plain facts about a factory building, as [label, value] pairs. `pay` is the difficulty's income multiplier. */
-export function factoryFacts(k, pay = 1) {
+/** Plain facts about the Crate Stack, the shop floor's one plain wall, as [label, value] pairs. */
+export function crateFacts() {
+  return [
+    ['Shoppers', 'blocked, dads included'],
+    ['Gym bros', `with a hit ready, stop, flatten it with one hit and walk through (a Gym Bro has ${TUNE.smashMax} hits a visit, a ${SUPERS.gymbro.name} ${SUPERS.gymbro.smashMax ?? TUNE.smashMax}); resting after a hit, they walk round`],
+    ['Supplies', 'none: no Dumbwaiter under it, so nothing to stock and nothing to steal'],
+  ];
+}
+
+// ---- The Back (0.4) ---------------------------------------------------------------------------
+
+/** A game with no cards, for the rules' functions that read cards from a game (the plain numbers). */
+const PLAIN = {};
+/** Ticks as seconds. */
+const secs = (t) => t / TICK_HZ;
+/** Dollars and cents: "$0.25", "$1.00". */
+const cents = (v) => `$${v.toFixed(2)}`;
+/** Every security building that takes this supply (its track, or Razor Wire), by name. */
+const takers = (track) => SECURITY_ORDER.filter((k) => stockTracks(k).includes(track)).map((k) => BUILD[k].name);
+/** The machine that makes a supply (BUILD[k].supply is its type). */
+const makerOf = (track) => Object.keys(BUILD).find((k) => BUILD[k].supply === SUPPLIES[track].type);
+
+/** The speed of a belt lane, in tiles a second (an Overpass's lanes are belts too). */
+const laneSpeed = () => (BACK.step * TICK_HZ) / BACK.sub;
+
+/**
+ * Plain facts about one of The Back's parts, as [label, value] pairs, worked out from the rules
+ * (BACK and the functions in back.js), for a game without cards. The price is not among them: the
+ * handbook shows it in the part's heading.
+ */
+export function backFacts(k) {
   const def = BUILD[k], out = [];
-  const worth = (item) => Math.max(1, Math.round(ITEMS[item].value * pay));
-  out.push(['Price', `$${def.cost}`], ['Sold back for', `$${Math.floor(def.cost * TUNE.sellBack)}`]);
-  if (def.zone) out.push(['Goes on', `${ZONES[def.zone].name} floor only`]);
-  out.push(['Shoppers', k === 'belt' ? 'blocked, except dads (who step over) ' : 'blocked']);
-  if (k === 'belt') out.push(['Speed', `${fmt(TUNE.beltSpeed)} tiles a second`], ['Holds', '2 items']);
-  if (k === 'unpacker') {
-    const perMin = 60 / def.period;
-    out.push(['Makes', `1 ${ITEMS.box.name} every ${fmt(def.period)} s (${fmt(perMin)} a minute)`]);
-    out.push(['Worth, sold as boxes', `$${fmt(perMin * worth('box'))} a minute`]);
-  }
-  if (k === 'press' || k === 'packer') {
-    const gain = worth(def.makes) - worth(def.takes);
-    out.push(['Turns', `${ITEMS[def.takes].name} ($${worth(def.takes)}) into ${ITEMS[def.makes].name} ($${worth(def.makes)})`]);
-    out.push(['Takes', `${fmt(def.time)} s each (${fmt(60 / def.time)} a minute at most)`]);
-    out.push(['Adds', `$${gain} an item; pays for itself after ${Math.ceil(def.cost / Math.max(1, gain))} items`]);
-  }
-  if (k === 'chute') out.push(['Sells', Object.keys(ITEMS).map((i) => `${ITEMS[i].name} $${worth(i)}`).join(', ')]);
-  if (k === 'crate') {
-    out.push(['Gym bros', `with a hit ready, stop, flatten it with one hit and walk through (a Gym Bro has ${TUNE.smashMax} hits a visit, a ${SUPERS.gymbro.name} ${SUPERS.gymbro.smashMax ?? TUNE.smashMax}); resting after a hit, they walk round`]);
+  const lane = `${fmt(laneSpeed())} tiles a second, ${Math.floor(BACK.sub / BACK.gap)} items to a tile`;
+  if (k === 'drop') {
+    out.push(['Junk', `${fmt(junkPerMinute(0))} pieces a minute as the store built it`]);
+    const ups = [];
+    for (let lv = 0; lv < BACK.dropUpMax; lv++) ups.push(`${money(dropUpCost(lv))} (${fmt(junkPerMinute(lv + 1))} a minute)`);
+    out.push(['MORE JUNK', `any player can pay to speed it up, ${BACK.dropUpMax} times at most: ${ups.join(', ')}. Nobody gives that money back`]);
+    out.push(['Where', 'put down by the store; nobody buys, moves or removes one, and anyone can turn it']);
+  } else if (k === 'conv') {
+    out.push(['Carries', lane]);
+    out.push(['Takes from', 'behind and both sides, never head-on']);
+  } else if (k === 'split') {
+    out.push(['Holds', 'one item at a time']);
+    out.push(['Deals out', 'to the front, the left and the right in turn, skipping a way that will not take it']);
+  } else if (k === 'over') {
+    out.push(['Carries', `two lanes that never mix, east-west and north-south, each ${lane}`]);
+    out.push(['Which way', 'each lane runs the way the belt feeding it runs']);
+  } else if (k === 'intern') {
+    out.push(['Holds', `one item for ${fmt(BACK.internSecs)} s, then hands it to the tile in front of him`]);
+    out.push(['Picks', 'the front-most item on the belt behind him that the tile in front wants; belts only, not an Overpass']);
+  } else if (k === 'bin') {
+    out.push(['Pays', `${TIER_NAMES.slice(1).map((name, t) => `${name} ${cents(BACK.binPay[t + 1])}`).join(', ')} a supply; junk nothing. Shared between the players like any income`]);
+    out.push(['Takes from', 'any side, and never fills up']);
+  } else if (def.supply) {
+    const track = SUPPLY_TRACKS[def.supply], s = SUPPLIES[track], t = secs(makeTicks(PLAIN));
+    out.push(['Makes', `${s.name} (${TIER_NAMES[1]}) from one junk every ${fmt(t)} s (${fmt(60 / t)} a minute)`]);
+    out.push(['Takes', 'junk only, at the back and both sides; the supply comes out of the front']);
+    out.push(['Stocks', takers(track).join(', ')]);
+  } else if (k === 'rebrand') {
+    out.push(['Raises', [1, 2, 3].map((t) => `${TIER_NAMES[t]} to ${TIER_NAMES[t + 1]} in ${fmt(secs(rebrandTicks(PLAIN, t)))} s`).join(', ')]);
+    out.push(['Takes', `any supply below ${TIER_NAMES[TIER_NAMES.length - 1]}, never junk, at the back and both sides; out of the front one tier up`]);
+  } else if (k === 'lift') {
+    out.push(['Where', 'under every tile of every security building, put there and taken away with it; none under a Crate Stack']);
+    out.push(['Holds', `up to ${stockCap(null)} units of each supply its building takes; it takes the next only once a whole unit is used up`]);
+    out.push(['Takes from', 'any side']);
+    out.push(['Lost', 'everything in it when the building above is wrecked or removed']);
   }
   return out;
+}
+
+/**
+ * The five supplies, from the rules: [{ track, name, color, gives, maker (the machine's name),
+ * takers (the security buildings that take it, by name), works (false for Razor Wire, which is
+ * only stored for now) }], in STOCK_TRACKS order.
+ */
+export function supplyFacts() {
+  return Object.keys(SUPPLIES).map((track) => ({
+    track, name: SUPPLIES[track].name, color: SUPPLIES[track].color, gives: SUPPLIES[track].gives,
+    maker: BUILD[makerOf(track)].name, takers: takers(track), works: track !== 'wire',
+  }));
+}
+
+/**
+ * One row per brand tier, from Store Brand to Platinum: { tier, name, level (the levels it counts
+ * as for Bottled Spite, Rage Cola and Extension Cord), tape (gym bro hits a roll of Duct Tape soaks
+ * up), wire (dads a unit of Razor Wire is to turn away), bin (what a Clearance Bin pays for it),
+ * secs (the Rebrander's time to make it from the tier below; 0 for Store Brand, which the machines
+ * make) }.
+ */
+export function tierFacts() {
+  const out = [];
+  for (let tier = 1; tier < TIER_NAMES.length; tier++) {
+    out.push({
+      tier, name: TIER_NAMES[tier], level: BACK.tierLevel[tier],
+      tape: usesPer(null, 'dur', tier), wire: usesPer(null, 'wire', tier), bin: BACK.binPay[tier],
+      secs: tier > 1 ? secs(rebrandTicks(PLAIN, tier - 1)) : 0,
+    });
+  }
+  return out;
+}
+
+/**
+ * How long one unit of Bottled Spite, Rage Cola or Extension Cord lasts in each security building
+ * ([{ k, name, uses, per ('shots' or 'shoppers') }]): a tower's shots, or the shoppers anything else
+ * acts on. Whatever the tier; the tier sets how much it does.
+ */
+export function unitFacts() {
+  return SECURITY_ORDER.map((k) => ({ k, name: BUILD[k].name, uses: usesPer(k, 'dmg', 1), per: BUILD[k].tower ? 'shots' : 'shoppers' }));
 }

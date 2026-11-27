@@ -115,7 +115,7 @@ test('on the Car Park every floor tile and every entrance reaches both banks of 
   }
 });
 
-test('the floor in front of every entrance and every till is clear, and never marked for a machine', () => {
+test('the floor in front of every entrance and every till is clear', () => {
   for (const size of SIZES) for (let slots = 1; slots <= 7; slots++) {
     const s = createGame({ map: { design: 'carpark', size, slots } });
     const { w, h } = s;
@@ -130,24 +130,26 @@ test('the floor in front of every entrance and every till is clear, and never ma
       for (const t of bank) {
         for (const f of front(t)) {
           assert.equal(s.tiles[f], '.', `${size}: in front of the till at ${t % w},${(t / w) | 0}`);
-          assert.equal(s.zones[f], ' ', `${size}: marked floor in front of the till at ${t % w},${(t / w) | 0}`);
+          assert.equal(s.back[f], 0, `${size}: a Returns Drop in front of the till at ${t % w},${(t / w) | 0}`);
         }
       }
     }
   }
 });
 
-test('the marked floor is never under or beside a car, however many entrances there are', () => {
+test('no Returns Drop is under or beside a car, however many entrances there are', () => {
+  // (Until 0.4 this was the old factory's marked floor, which the furniture still keeps clear of:
+  // the drops stand on its Loading Bay patches.)
   for (const size of SIZES) for (let slots = 1; slots <= 7; slots++) {
     const s = createGame({ map: { design: 'carpark', size, slots } });
     let marked = 0;
-    for (let i = 0; i < s.zones.length; i++) {
-      if (s.zones[i] === ' ') continue;
+    for (let i = 0; i < s.back.length; i++) {
+      if (!s.back[i] || s.back[i].k !== 'drop') continue;
       marked++;
       const x = i % s.w, y = (i / s.w) | 0;
-      assert.equal(s.tiles[i], '.', `${size}: marked floor at ${x},${y} is solid`);
+      assert.equal(s.tiles[i], '.', `${size}: a drop at ${x},${y} is under something solid`);
       for (let ny = y - 1; ny <= y + 1; ny++) {
-        for (let nx = x - 1; nx <= x + 1; nx++) assert.equal(s.decor[ny * s.w + nx], ' ', `${size}: a car beside marked floor at ${nx},${ny}`);
+        for (let nx = x - 1; nx <= x + 1; nx++) assert.equal(s.decor[ny * s.w + nx], ' ', `${size}: a car beside the drop at ${nx},${ny}`);
       }
     }
     assert.ok(marked > 0);

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Tutorial played by simulated mouse and keyboard (test page)</title>
+<title>Tutorial part 1 played by simulated mouse and keyboard (test page)</title>
 <style>
   html, body { margin: 0; height: 100%; background: #111; }
   iframe { border: 0; width: 100%; height: 100%; display: block; }
@@ -11,12 +11,14 @@
 </head>
 <body>
 <!--
-  A test page: opens the training shift and plays its first lessons with made-up mouse and keyboard
-  events, exactly as a new player would be told to: pick the tool, rotate, click or drag on the
-  highlighted tiles, right-click to remove. It reports the lesson reached. If the tutorial's
-  instructions were wrong or a control did not work, the lesson number would stop going up.
+  A test page: opens the training shift and plays part 1 (every lesson up to "Jump to part 2") with
+  made-up mouse and keyboard events, exactly as a new player would be told to: number keys to pick
+  the tool, R to rotate, click or drag on the highlighted tiles, right-click to remove, and the OPEN
+  THE DOORS button. It reports the lesson reached. If the tutorial's instructions were wrong or a
+  control did not work, the lesson number would stop going up.
+  The game runs at 3x speed (the speed buttons at the top) to keep the page quick.
   Open through the dev server: http://localhost:5173/tools/tutorial-test.html
-  (Use tools/realshot.mjs to photograph it: the lessons wait in real time for goods to be sold.)
+  (Use tools/realshot.mjs to photograph it, waiting about 120 seconds.)
 -->
 <iframe id="game" src="../index.html?tutorial=1&name=Tester" title="Game"></iframe>
 <div id="log"></div>
@@ -46,28 +48,35 @@
     const until = async (before, ms) => { const end = Date.now() + ms; while (Date.now() < end) { if (lesson() !== before) return true; await wait(150); } return false; };
     const stepDone = async (what, ms = 4000) => { const before = lesson(); const ok = await until(before, ms); log((ok ? 'ok   ' : 'STUCK ') + what + ' -> ' + lesson()); return ok; };
 
+    const doors = async () => { await wait(300); log(press('OPEN THE DOORS') ? 'ok   pressed OPEN THE DOORS' : 'STUCK no OPEN THE DOORS button'); };
+
     log('start: ' + lesson());
     let b = lesson(); press('Next'); await until(b, 2000); log('ok   Next -> ' + lesson());
+    press('3x');
 
-    key('2', 'Digit2'); key('r'); click(10, 2);                 // unpacker, rotated once to face south
-    if (!await stepDone('unpacker placed facing down')) return;
-    key('1', 'Digit1'); await drag(10, 3, 10, 10);               // belts by dragging
-    if (!await stepDone('belt dragged down 8 tiles')) return;
-    key('5', 'Digit5'); click(10, 11);                           // chute; then two boxes must sell
-    if (!await stepDone('chute placed, two boxes sold', 25000)) return;
-    click(10, 5, 2); key('3', 'Digit3'); click(10, 5);           // right-click the belt away, press in its place
-    if (!await stepDone('belt removed, press placed, gadget sold', 25000)) return;
-    click(10, 8, 2); key('4', 'Digit4'); click(10, 8);
-    if (!await stepDone('packer placed, gift set sold', 30000)) return;
-    b = lesson(); press('Next'); await until(b, 2000); log('ok   Next -> ' + lesson());
-    key('6', 'Digit6'); click(10, 1); click(10, 12); click(10, 13);
-    if (!await stepDone('three crates placed')) return;
+    key('1', 'Digit1'); await drag(10, 1, 10, 13);              // crates, one drag down the column
+    if (!await stepDone('wall of crates dragged down 13 tiles')) return;
     click(10, 14);                                               // must be refused
     if (!await stepDone('blocking the last gap was refused')) return;
-    key('7', 'Digit7'); click(9, 13);
-    await wait(300);
-    log(press('OPEN THE DOORS') ? 'ok   pressed OPEN THE DOORS' : 'STUCK no OPEN THE DOORS button');
-    if (!await stepDone('sprinkler placed, clippers wave finished', 40000)) return;
+    click(10, 13, 2); key('2', 'Digit2'); click(10, 13);         // right-click the crate away, sprinkler in its place
+    await doors();
+    if (!await stepDone('crate removed, sprinkler placed, clippers wave finished', 40000)) return;
+    key('5', 'Digit5'); click(10, 14); key('2', 'Digit2'); click(9, 13);
+    await doors();
+    if (!await stepDone('wet floor sign and second sprinkler, ten clippers', 40000)) return;
+    key('6', 'Digit6'); click(8, 13);
+    await doors();
+    if (!await stepDone('free samples, sixteen clippers', 40000)) return;
+    key('7', 'Digit7'); click(4, 13); key('2', 'Digit2'); click(5, 12);
+    await doors();
+    if (!await stepDone('salesman and sprinkler, thirty clippers', 60000)) return;
+    key('2', 'Digit2'); click(7, 13);
+    await doors();
+    if (!await stepDone('third sprinkler, eight super clippers', 40000)) return;
+    key('4', 'Digit4'); key('r'); click(6, 4);                   // the laser, turned once to face down
+    key('Escape', 'Escape');
+    await doors();
+    if (!await stepDone('laser facing down, thirty super clippers', 60000)) return;
     log('DONE: reached ' + lesson());
   });
 </script>

@@ -17,12 +17,12 @@ test('a selected building that reaches something shows its reach; nothing select
   const s = game();
   applyCommand(s, 0, { c: 'place', k: 'sprinkler', x: 5, y: 5 });
   applyCommand(s, 0, { c: 'place', k: 'crate', x: 8, y: 5 });
-  applyCommand(s, 0, { c: 'place', k: 'belt', x: 9, y: 5, d: 0 });
+  applyCommand(s, 0, { c: 'place', k: 'wetfloor', x: 9, y: 5, d: 0 });
   assert.equal(selectedReach(s, {}), null);
   assert.equal(selectedReach(s, { selected: null }), null);
   assert.equal(selectedReach(s, { selected: { x: 6, y: 6 } }), null, 'bare floor');
   assert.equal(selectedReach(s, { selected: { x: 8, y: 5 } }), null, 'a crate reaches nothing');
-  assert.equal(selectedReach(s, { selected: { x: 9, y: 5 } }), null, 'nor does a belt');
+  assert.equal(selectedReach(s, { selected: { x: 9, y: 5 } }), null, 'nor does a Wet Floor Sign (it acts on its own tile)');
   assert.equal(selectedReach(s, { selected: { x: -1, y: 5 } }), null, 'off the map');
   const r = selectedReach(s, { selected: { x: 5, y: 5 } });
   assert.equal(r.ai, at(s, 5, 5));

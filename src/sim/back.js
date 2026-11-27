@@ -173,9 +173,8 @@ function feeds(back, od, j, dir) {
 
 /**
  * Every belt's shape, by tile: 0 straight, 1 a corner fed from its right, -1 a corner fed from its
- * left (the shop floor's belts use the same numbers, beltShape in src/render/buildings.js). A belt
- * with nothing feeding it from behind and exactly one feeder at one side is a corner: what comes in
- * from that side comes in as if from behind, so a line goes round it without a jump. With a feeder
+ * left. A belt with nothing feeding it from behind and exactly one feeder at one side is a corner:
+ * what comes in from that side comes in as if from behind, so a line goes round it without a jump. With a feeder
  * behind as well, or one at each side, it is a merge, and the sides drop items in at the middle.
  */
 function beltShapes(back, W, H, od) {
@@ -672,9 +671,9 @@ export function stepBack(state, ev = null) {
       }
       case MACHINE:
       case REBRAND: {
-        // Finishing, handing over and starting the next all happen in the same tick (as the shop
-        // floor's Press does it), so one takes exactly its time. What is made waits in `out` while
-        // the tile in front will not take it, and nothing new is started meanwhile.
+        // Finishing, handing over and starting the next all happen in the same tick, so one takes
+        // exactly its time. What is made waits in `out` while the tile in front will not take it,
+        // and nothing new is started meanwhile.
         if (p.t > 0 && --p.t === 0) p.out = kind === MACHINE ? itemCode(BUILD[p.k].supply, 1) : p.q.shift() + 1;
         const front = to[m * 3];
         if (p.out && front >= 0 && give(state, front, p.out, d, 0)) p.out = 0;
@@ -881,27 +880,6 @@ export function syncLifts(state, tiles) {
   return changed;
 }
 
-/** syncLifts over the whole store: every standing building, every wreck and every Dumbwaiter. */
-export function syncAllLifts(state) {
-  if (!state.back) return false;
-  const tiles = [];
-  for (let i = 0; i < state.grid.length; i++) {
-    const b = state.grid[i];
-    if (b && b.part === undefined && BUILD[b.k] && BUILD[b.k].lift) {
-      const under = footprint(state, b.k, i % state.w, (i / state.w) | 0, b.d | 0);
-      if (under) tiles.push(...under);
-    }
-    const q = state.back[i];
-    if (q && q.k === 'lift') tiles.push(i);
-  }
-  for (const r of state.rubble || []) {
-    if (!BUILD[r.k] || !BUILD[r.k].lift) continue;
-    const under = footprint(state, r.k, r.i % state.w, (r.i / state.w) | 0, r.d | 0);
-    if (under) tiles.push(...under);
-  }
-  return syncLifts(state, tiles);
-}
-
 // ---------------------------------------------------------------------------------------------
 // Placing
 
@@ -911,7 +889,7 @@ export function syncAllLifts(state) {
  * @returns {string|null} null if allowed, otherwise the reason: 'over', 'lobby', 'cards', 'paused'
  *   as for canPlace; 'kind' not a Back part a player may buy (the Returns Drop is the map's, a
  *   Dumbwaiter its building's); 'bounds' off the map or a wall (the store's walls and shelves go
- *   all the way down); 'occupied' (a Dumbwaiter's tile too); 'cash'. A belt laid on a belt just turns it, free, as on the shop floor.
+ *   all the way down); 'occupied' (a Dumbwaiter's tile too); 'cash'. A belt laid on a belt just turns it, free.
  */
 export function canPlaceBack(state, k, x, y, pid = 0, d = 0) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';

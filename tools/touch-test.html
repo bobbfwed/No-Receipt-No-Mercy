@@ -23,10 +23,11 @@
     an occupied tile, none when lifted over a button); the Rotate button and the "another finger
     cancels" hint show while a finger is placing, away from the finger, and go when it lifts; a
     tap on that Rotate button turns the building without cancelling; a second finger on the floor
-    cancels a placement and then pinches; a belt drag lays a line facing the way it was dragged,
-    and a second finger stops it where it is; the bar's rotate button turns what is held, and a
-    tapped building; tapping a building opens its sheet, which shows what it works at and whose
-    button removes it (0.4: bought upgrades are gone); the Remove tool removes
+    cancels a placement and then pinches; in The Back (0.4, reached with the floor switch button),
+    a belt drag lays a line facing the way it was dragged, and a second finger stops it where it
+    is; the bar's rotate button turns what is held, and a tapped building (a Barcode Laser, the
+    shop's one building that turns); tapping a building opens its sheet, which shows what it works
+    at and whose button removes it (0.4: bought upgrades are gone); the Remove tool removes
     exactly one building, where the finger lifts, by tap or drag (a bigger one tapped off its
     top-left tile too) without an error banner; tapping the held tool's button again puts it down,
     as does the put-down button; the map and home buttons move the view.
@@ -34,7 +35,7 @@
     it and the building goes there, not under the finger; a finger that does not drag places on the
     tapped tile however long it rests, and one that drags and comes back stays lifted; a building
     dragged up out of its bar button follows the finger lifted and lifting places exactly one (a
-    Barcode Laser and a TV Salesman centred on the lifted point, the belt one belt), with what was
+    Barcode Laser and a TV Salesman centred on the lifted point, The Back's belt one belt), with what was
     held before held again after; a sideways swipe on the bar places nothing; a second finger
     cancels a bar drag; a preview lifted off the floor places nothing; a pointercancel leaves nothing
     held or previewed; a finger held at an edge of the floor slides the view slowly and it stops
@@ -48,7 +49,7 @@
 <iframe id="game" src="../index.html?solo=1&name=Thumbs&seed=3&size=xs" title="Game"></iframe>
 <div id="log"></div>
 <script type="module">
-  import { canPlace } from '../src/sim/index.js';
+  import { BUILD, canPlace, canPlaceBack } from '../src/sim/index.js';
   import { selectedReach } from '../src/render/reach.js';
   import { LIFT, EDGE, liftPx } from '../src/ui/lift.js';
   const frame = document.getElementById('game');
@@ -88,8 +89,14 @@
     // top-left tile is (tx, ty): below it by the lift.
     const liftNow = () => liftPx(renderer.cam.zoom);
     const under = (tx, ty, w = 1, h = 1) => { const c = at(tx + (w - 1) / 2, ty + (h - 1) / 2); return { x: c.x, y: c.y + liftNow() }; };
-    const count = () => s().grid.filter(Boolean).length;
-    const b = (x, y) => s().grid[y * s().w + x];
+    // What is built on the floor being looked at: the shop's grid, or The Back (0.4).
+    const grid = () => (input.floor ? s().back : s().grid);
+    const count = () => grid().filter(Boolean).length;
+    const b = (x, y) => grid()[y * s().w + x];
+    /** Whether the rules would let me put kind k on (x, y) facing d (a Back part on The Back). */
+    const fits = (k, x, y, d = 0) => (BUILD[k]?.back ? canPlaceBack : canPlace)(s(), k, x, y, me, d) === null;
+    /** The floor switch button (on a touch screen the only way between the floors). */
+    const toFloor = async (f) => { if (input.floor !== f) click(doc.querySelector('.floor-switch')); await wait(300); };
     const fire = (type, id, x, y) => canvas.dispatchEvent(new win.PointerEvent(type, {
       pointerType: 'touch', pointerId: id, isPrimary: id === 11, clientX: x, clientY: y,
       button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
@@ -155,7 +162,7 @@
         for (let x = Math.ceil(r.x0) + 2; x < Math.floor(r.x1) - 2 && out.length < n; x++) {
           if (near && (Math.abs(x - near.x) > 6 || Math.abs(y - near.y) > 6)) continue;
           if (onFloor(x, y)) floor++; else continue;
-          if (!b(x, y) && canPlace(s(), kind, x, y, me, d) === null) { free++; out.push({ x, y }); }
+          if (!b(x, y) && fits(kind, x, y, d)) { free++; out.push({ x, y }); }
         }
       }
       if (!out.length) throw new Error(`no free tile for ${kind} (view ${[r.x0, r.y0, r.x1, r.y1].map((v) => v.toFixed(1))}, ${floor} on the floor)`);
@@ -164,12 +171,12 @@
     /** A straight run of `len` free tiles going east. */
     function freeRun(kind, len) {
       const r = renderer.viewRect();
-      // (Not the row beside the top wall: a run of belts there can cover the front of a shopper
-      // entrance, and the rules rightly refuse the belt that would wall it in.)
+      // (Not the row beside the top wall: a run of shop buildings there can cover the front of a
+      // shopper entrance, and the rules rightly refuse the one that would wall it in.)
       for (let y = Math.max(3, Math.ceil(r.y0) + 2); y < Math.floor(r.y1) - 2; y++) {
         for (let x = Math.max(3, Math.ceil(r.x0) + 1); x + len < Math.floor(r.x1) - 1; x++) {
           let ok = true;
-          for (let i = 0; i < len && ok; i++) ok = canPlace(s(), kind, x + i, y, me) === null && !b(x + i, y) && onFloor(x + i, y);
+          for (let i = 0; i < len && ok; i++) ok = fits(kind, x + i, y) && !b(x + i, y) && onFloor(x + i, y);
           if (ok) return { x, y };
         }
       }
@@ -224,17 +231,20 @@
     await pick('crate');
     check('tapping the held tool again puts it down', input.tool === null);
 
-    // 6. A drag lays a belt line facing the way it was dragged.
-    await pick('belt');
-    const run5 = freeRun('belt', 5);
+    // 6. In The Back (0.4), a drag lays a belt line facing the way it was dragged. (The belt is the
+    // only thing in the game a drag lays in a line.)
+    await toFloor(1);
+    check('the floor switch button goes to The Back', input.floor === 1);
+    await pick('conv');
+    const run5 = freeRun('conv', 5);
     await finger([at(run5.x, run5.y), at(run5.x + 4, run5.y)]);
     const line = [0, 1, 2, 3, 4].map((i) => b(run5.x + i, run5.y));
-    check('a one-finger drag lays a line of 5 belts', line.every((t) => t && t.k === 'belt'), `from ${run5.x},${run5.y}`);
+    check('a one-finger drag lays a line of 5 belts', line.every((t) => t && t.k === 'conv'), `from ${run5.x},${run5.y}`);
     check('... all facing east, the way it was dragged', line.every((t) => t && t.d === 0), line.map((t) => (t ? t.d : '-')).join(''));
 
     // 6b. A second finger during a belt drag stops the line where it is: what is laid stays, the
     // belt still under the finger is not laid, and nothing more is laid while the fingers pinch.
-    const run4 = freeRun('belt', 6);
+    const run4 = freeRun('conv', 6);
     n0 = count();
     fire('pointerdown', 11, at(run4.x, run4.y).x, at(run4.x, run4.y).y);
     await slide(11, at(run4.x, run4.y), at(run4.x + 2, run4.y));
@@ -249,8 +259,8 @@
     fire('pointerup', 11, at(run4.x + 5, run4.y).x, at(run4.x + 5, run4.y).y);
     await wait(40);
     check('a second finger stops a belt line: the two already laid stay, nothing more is laid',
-      laid === 'belt,belt,-' && count() === n0 + 2 && !b(run4.x + 2, run4.y) && !b(run4.x + 3, run4.y), `laid ${laid}; ${count() - n0} new`);
-    check('... and the belt stays picked', input.tool === 'belt');
+      laid === 'conv,conv,-' && count() === n0 + 2 && !b(run4.x + 2, run4.y) && !b(run4.x + 3, run4.y), `laid ${laid}; ${count() - n0} new`);
+    check('... and the belt stays picked', input.tool === 'conv');
     renderer.fit(); input.goHome(); // (the pinch moved the view)
     await wait(80);
 
@@ -258,30 +268,47 @@
     const d0 = input.dir;
     click(doc.querySelector('.tc-rotate'));
     check('the rotate button turns the held building', input.dir === ((d0 + 1) & 3));
-    const [c2] = freeTiles('belt', 1);
+    const [c2] = freeTiles('conv', 1);
     await tap(at(c2.x, c2.y));
-    check('a single tap places one belt facing the turned way', b(c2.x, c2.y)?.k === 'belt' && b(c2.x, c2.y).d === input.dir, `d=${b(c2.x, c2.y)?.d}`);
+    check('a single tap places one belt facing the turned way', b(c2.x, c2.y)?.k === 'conv' && b(c2.x, c2.y).d === input.dir, `d=${b(c2.x, c2.y)?.d}`);
 
     // 8. The put-down button.
     click(doc.querySelector('.tc-drop'));
     check('the put-down button drops the tool', input.tool === null);
 
-    // 9. Tap a building with nothing held: its sheet; rotate and remove from it.
-    await tap(at(run5.x + 2, run5.y));
+    // 12. The Remove tool removes exactly one thing, where the finger lifts (here a belt in The Back).
+    await pick('remove');
+    n0 = count();
+    const rowNow = () => [0, 1, 2, 3, 4].map((i) => b(run5.x + i, run5.y)?.k || '-').join(',');
+    const rowBefore = rowNow();
+    await finger([at(run5.x, run5.y), at(run5.x + 4, run5.y)]);
+    check('a drag with the Remove tool removes exactly one belt, where the finger lifts', count() === n0 - 1 && !b(run5.x + 4, run5.y) && !!b(run5.x, run5.y) && !!b(run5.x + 1, run5.y),
+      `${rowBefore} -> ${rowNow()}`);
+    click(doc.querySelector('.tc-drop'));
+    await toFloor(0);
+    check('the floor switch button goes back to the shop floor, with nothing held', input.floor === 0 && input.tool === null);
+
+    // 9. Tap a building with nothing held: its sheet; rotate and remove from it. (A Barcode Laser:
+    // since 0.4 the one building on the shop floor that turns. It turns end for end.)
+    s().players[me].cash += 3000;
+    const [lz] = freeTiles('railgun', 1, null, 0);
+    session.send({ c: 'place', k: 'railgun', x: lz.x, y: lz.y, d: 0 });
+    await wait(80);
+    await tap(at(lz.x, lz.y));
     await wait(80);
     const sheet = doc.querySelector('.touch-sheet');
-    check('tapping a building with nothing held selects it', input.selected && input.selected.x === run5.x + 2);
+    check('tapping a building with nothing held selects it', input.selected && input.selected.x === lz.x && input.selected.y === lz.y);
     check('... and opens its sheet', !sheet.classList.contains('hidden'));
-    const dB = b(run5.x + 2, run5.y).d;
+    const dB = b(lz.x, lz.y).d;
     click(doc.querySelector('.tc-rotate'));
-    check('the rotate button turns the tapped building', b(run5.x + 2, run5.y).d === ((dB + 1) & 3));
+    check('the rotate button turns the tapped building', b(lz.x, lz.y).d === ((dB + 2) & 3));
     const sheetRot = [...sheet.querySelectorAll('.ts-btn')].find((x) => x.textContent.includes('Rotate'));
     click(sheetRot);
-    check("the sheet's Rotate button turns it too", b(run5.x + 2, run5.y).d === ((dB + 2) & 3));
+    check("the sheet's Rotate button turns it too", b(lz.x, lz.y).d === dB);
     n0 = count();
     click(sheet.querySelector('.ts-remove'));
     await wait(80);
-    check("the sheet's Remove button removes it", !b(run5.x + 2, run5.y) && count() === n0 - 1);
+    check("the sheet's Remove button removes it", !b(lz.x, lz.y) && count() === n0 - 3);
     check('... and the sheet closes', sheet.classList.contains('hidden'));
     // (Chosen before the sheet opens: on a phone the sheet and DEB above it cover most of the
     // floor at this zoom.)
@@ -464,20 +491,12 @@
     check('tapping bare floor takes it away', reachNow() === null && sheet.classList.contains('hidden'));
     input.select(null);
 
-    // 12. The Remove tool removes exactly one building, where the finger lifts.
-    renderer.fit(); input.goHome();
-    await wait(80);
-    await pick('remove');
-    n0 = count();
-    const rowNow = () => [0, 1, 2, 3, 4].map((i) => b(run5.x + i, run5.y)?.k || '-').join(',');
-    const rowBefore = rowNow();
-    await finger([at(run5.x, run5.y), at(run5.x + 4, run5.y)]);
-    check('a drag with the Remove tool removes exactly one building, where the finger lifts', count() === n0 - 1 && !b(run5.x + 4, run5.y) && !!b(run5.x, run5.y) && !!b(run5.x + 1, run5.y),
-      `${rowBefore} -> ${rowNow()}`);
-
     // 12b. The Remove tool removes with a single tap too: a one-tile building, and a bigger one
     // tapped on a tile that is not its top-left. (Until 0.2.09 a tap threw an error instead, which
     // the page showed as a red banner across the top, and nothing was removed.)
+    renderer.fit(); input.goHome();
+    await wait(80);
+    await pick('remove');
     const errRows = () => [...doc.querySelectorAll('.err-banner .err-row code')].map((c) => c.textContent);
     const errs0 = errRows().length;
     s().players[me].cash += 3000;
@@ -487,7 +506,6 @@
     session.send({ c: 'place', k: 'salesman', x: ts.x, y: ts.y, d: 0 });
     await wait(80);
     check('(set-up) a wet floor sign and a TV Salesman to remove', b(wf.x, wf.y)?.k === 'wetfloor' && b(ts.x, ts.y)?.k === 'salesman');
-    // The Remove tool is still held from the drag above.
     await tap(at(wf.x, wf.y));
     await wait(80);
     check('a tap with the Remove tool removes a one-tile building', !b(wf.x, wf.y), `at ${wf.x},${wf.y}: ${b(wf.x, wf.y)?.k || 'gone'}`);
@@ -577,13 +595,15 @@
     check('a TV Salesman (2 x 2) dragged from the bar goes with its footprint centred on the lifted point', b(t2.x, t2.y)?.k === 'salesman' && b(t2.x + 1, t2.y + 1)?.k === 'salesman' && count() === n0 + 4, `at ${t2.x},${t2.y}`);
     check('... and the crate is still held', input.tool === 'crate');
 
-    // The belt from the bar: one belt where the lifted preview is, facing the current way.
-    const [e1] = freeTiles('belt', 1);
-    n0 = count();
-    await barDrag('belt', under(e1.x, e1.y));
-    check('the belt dragged from the bar places one belt at the lifted tile, facing the current way', b(e1.x, e1.y)?.k === 'belt' && b(e1.x, e1.y).d === input.dir && count() === n0 + 1);
+    // The belt from The Back's bar: one belt where the lifted preview is, facing the current way.
     input.setTool(null);
-    await wait(60);
+    await toFloor(1);
+    const [e1] = freeTiles('conv', 1);
+    n0 = count();
+    await barDrag('conv', under(e1.x, e1.y));
+    check('the belt dragged from the bar places one belt at the lifted tile, facing the current way', b(e1.x, e1.y)?.k === 'conv' && b(e1.x, e1.y).d === input.dir && count() === n0 + 1);
+    input.setTool(null);
+    await toFloor(0);
 
     // A sideways swipe on the bar: the browser scrolls the bar and cancels the finger. Nothing built.
     n0 = count();
@@ -634,7 +654,9 @@
     await wait(80);
     const cr = canvas.getBoundingClientRect();
     const camE = { ...renderer.cam };
-    const se = await barDrag('crate', { x: mid.x, y: mid.y }, { end: null });
+    // (Dragged from the Sprinkler's button: since 0.4 Crates is the first button in the bar, so close
+    // to the left edge that a finger coming up out of it already slides the view left.)
+    const se = await barDrag('sprinkler', { x: mid.x, y: mid.y }, { end: null });
     const camMid = { ...renderer.cam };
     await (async () => { for (let i = 1; i <= 8; i++) { btnFire(se, 'pointermove', 21, mid.x + ((cr.right - 6 - mid.x) * i) / 8, mid.y); await wait(4); } })();
     await wait(500);
@@ -654,7 +676,7 @@
     for (let i = 0; i < 8 && renderer.viewRect().y1 - renderer.viewRect().y0 > s().h * 0.6; i++) renderer.zoomBy(1.5);
     renderer.centerOn(s().w / 2, s().h / 2);
     await wait(60);
-    const b2 = await barDrag('crate', { x: mid.x, y: cr.bottom - 10 }, { end: null });
+    const b2 = await barDrag('sprinkler', { x: mid.x, y: cr.bottom - 10 }, { end: null });
     const camLow = { ...renderer.cam };
     await wait(400);
     check('a building just picked up from the bar does not at once slide the view down', Math.abs(renderer.cam.y - camLow.y) < 0.01);
@@ -694,9 +716,10 @@
     click(doc.querySelector('.tc-home'));
     check('the home button moves the view to my entrance', renderer.cam.x < far.x);
 
-    // Leave a held belt and a placed line on screen for the picture.
+    // Leave a held belt and the line laid in The Back on screen for the picture.
+    await toFloor(1);
     renderer.fit(); input.goHome();
-    await pick('belt');
+    await pick('conv');
 
     // 14. The training shift (0.3.03 follow-up): a held building's card never covers a tile the
     // lesson has marked, so a tap on that tile builds there, even with the card unfolded.
@@ -704,7 +727,8 @@
   }
 
   async function trainingCard() {
-    frame.src = '../index.html?tutorial=1&step=3&name=Thumbs';
+    // (Lesson 5, counting from 0: Free Samples on the marked tile 8,13, low on the floor.)
+    frame.src = '../index.html?tutorial=1&step=5&name=Thumbs';
     await new Promise((r) => frame.addEventListener('load', r, { once: true }));
     const win = frame.contentWindow, doc = frame.contentDocument;
     for (let i = 0; i < 50 && !win.__game; i++) await wait(100);
@@ -712,28 +736,29 @@
     const { session, renderer, input } = win.__game;
     const canvas = doc.querySelector('canvas.world');
     const card = doc.querySelector('.bb-info');
-    const btn = doc.querySelector('.bb-btn[data-k="chute"]');
+    const btn = doc.querySelector('.bb-btn[data-k="samples"]');
     btn.dispatchEvent(new win.PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));
     btn.dispatchEvent(new win.PointerEvent('pointerup', { pointerType: 'touch', bubbles: true }));
     btn.click();
     await wait(300);
     check('a phone starts the held building\'s card folded', card.classList.contains('folded'));
-    // Unfolded, it would stand over the bottom of the floor, where the Chute's tile is.
+    // Unfolded, it would stand over the bottom of the floor, where the Free Samples' tile is.
     doc.querySelector('.bbi-fold').click();
     await wait(300);
     const cam = renderer.cam, cr = canvas.getBoundingClientRect();
-    const p = { x: cr.left + cr.width / 2 + (10 + 0.5 - cam.x) * cam.zoom, y: cr.top + cr.height / 2 + (11 + 0.5 - cam.y) * cam.zoom };
+    const p = { x: cr.left + cr.width / 2 + (8 + 0.5 - cam.x) * cam.zoom, y: cr.top + cr.height / 2 + (13 + 0.5 - cam.y) * cam.zoom };
     const kr = card.getBoundingClientRect();
     check('training: the unfolded card is not over the marked tile', !(p.x >= kr.left && p.x <= kr.right && p.y >= kr.top && p.y <= kr.bottom), `tile at ${p.x | 0},${p.y | 0}; card ${kr.left | 0}-${kr.right | 0}, ${kr.top | 0}-${kr.bottom | 0}`);
     const fire = (type) => canvas.dispatchEvent(new win.PointerEvent(type, {
       pointerType: 'touch', pointerId: 31, isPrimary: true, clientX: p.x, clientY: p.y,
       button: 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true,
     }));
-    check('... and the tile is the floor itself there, not the card', doc.elementFromPoint(p.x, p.y) === canvas);
+    const over = doc.elementFromPoint(p.x, p.y);
+    check('... and the tile is the floor itself there, not the card', over === canvas, over === canvas ? '' : `covered by ${over?.closest('[class]')?.className || over?.tagName}`);
     fire('pointerdown'); fire('pointerup');
     await wait(100);
     const s = session.state;
-    check('... so a tap on it builds the Chute there', s.grid[11 * s.w + 10]?.k === 'chute');
+    check('... so a tap on it builds the Free Samples there', s.grid[13 * s.w + 8]?.k === 'samples');
     input.setTool(null);
   }
 </script>

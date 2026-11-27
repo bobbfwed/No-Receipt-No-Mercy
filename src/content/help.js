@@ -2,7 +2,7 @@
 // building is picked in the build bar, and used by the tutorial. These are the "manual": keep them
 // clear first and funny second. If a number in src/sim/constants.js changes, update the text here
 // (the gym bro's limits are read from the rules below).
-import { TUNE, SUPERS, BACK } from '../sim/index.js';
+import { TUNE, SUPERS, BACK, TICK_HZ } from '../sim/index.js';
 
 /** A small count as a word ("two"), for text that reads better that way. */
 const word = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
@@ -13,34 +13,9 @@ const secs = (n) => `${n} second${n === 1 ? '' : 's'}`;
 
 /** Per building: `does` = what it is for, `use` = how to place it so it works. */
 export const HOW = {
-  belt: {
-    does: 'Carries goods one way, in the direction of its arrows. Each machine only goes on its own marked floor, and the marked areas are apart, so belts are how goods get from one machine to the next.',
-    use: 'Drag to lay a line: the belts follow your drag. Goods wait on the belt if the next tile cannot take them. Turning a belt is free: drag belt over it again in the new direction, or point at it and press R.',
-    maze: 'Blocks shoppers, except dads, who step over it.',
-  },
-  unpacker: {
-    does: 'The start of every production line. Makes a Mystery Box ($2) every 2.5 seconds, for free.',
-    use: 'It only goes on LOADING BAY floor (blue). It pushes boxes out of the side with the arrow. Put a belt on that side. Press R before placing to choose the side.',
-    maze: 'Blocks all shoppers.',
-  },
-  press: {
-    does: 'Turns a Mystery Box ($2) into a Gadget ($8).',
-    use: 'It only goes on PRESS SHOP floor (orange). Run a belt of boxes into its back or either side. The Gadget comes out of the side with the arrow, so put a belt there. It is expensive: it takes 37 Gadgets to pay for itself.',
-    maze: 'Blocks all shoppers.',
-  },
-  packer: {
-    does: 'Turns a Gadget ($8) into a Gift Set ($15).',
-    use: 'It only goes on GIFT WRAP floor (purple). It only accepts Gadgets, so it comes after a Press. Feed it from the back or either side; the Gift Set comes out of the side with the arrow.',
-    maze: 'Blocks all shoppers.',
-  },
-  chute: {
-    does: 'The end of every production line. Anything pushed into it is sold on the spot and the cash is split evenly between the players.',
-    use: 'It only goes on SHIPPING floor (green). Point the last belt of a line at it. It accepts goods from all four sides. Nothing earns money until it reaches a chute.',
-    maze: 'Blocks all shoppers.',
-  },
   crate: {
-    does: 'A wall, and nothing else.',
-    use: 'Use it to shape the route shoppers must walk. It is the cheapest way to stop a dad, who steps over belts but not crates.',
+    does: 'A wall, and nothing else. No Dumbwaiter, no supplies, nothing for a thief to steal.',
+    use: 'Use it to shape the route shoppers must walk: the longer the walk past your security, the better. Nothing in The Back is in anyone\'s way, so crates and security are the whole maze, and crates are the cheap part of it.',
     maze: 'Blocks all shoppers, dads included, except a gym bro with a hit left in him, who smashes through.',
   },
   sprinkler: {
@@ -76,13 +51,18 @@ export const HOW = {
 };
 
 /**
- * The Back's parts (0.4), for the same info card when one is picked on The Back's build bar. Nothing
- * in The Back blocks shoppers, so they have no `maze` line. If BACK in constants.js changes (belt
- * speed, items to a tile), update the numbers here.
+ * The Back's parts (0.4), for the same info card when one is picked on The Back's build bar, and
+ * for the Employee Handbook (which also shows the two nobody buys: the Returns Drop and the
+ * Dumbwaiter). Nothing in The Back blocks shoppers, so they have no `maze` line. The numbers are
+ * read from BACK in constants.js.
  */
 export const BACK_HOW = {
+  drop: {
+    does: 'Where everything the customers dumped on the returns desk comes down: one piece of junk at a time, onto the tile in front of it. It waits while that tile has no room. The store puts them where it likes and you cannot move one, so plan round them.',
+    use: 'Run a belt away from the side with the arrow. It turns like anything else in The Back, and anyone may turn it. MORE JUNK on its card makes it faster, for a price, a few times over.',
+  },
   conv: {
-    does: 'Carries whatever is put on it, in the direction of its arrows: two tiles a second, three items to a tile. Returned junk comes down the Returns Drops onto belts.',
+    does: `Carries whatever is put on it, in the direction of its arrows: ${word((BACK.step * TICK_HZ) / BACK.sub)} tiles a second, ${word(Math.floor(BACK.sub / BACK.gap))} items to a tile. Returned junk comes down the Returns Drops onto belts.`,
     use: 'Drag to lay a line: the belts follow your drag and go round corners by themselves. Items wait at the end of a belt that has nowhere to go. Turning a belt is free: drag belt over it again in the new direction, or point at it and press R.',
   },
   split: {
@@ -126,6 +106,10 @@ export const BACK_HOW = {
     does: `Takes any supply below Platinum and puts the same thing out one tier up, with a better label: Store Brand to Name Brand in ${secs(BACK.rebrandSecs[1])}, Name Brand to Premium in ${secs(BACK.rebrandSecs[2])}, Premium to Platinum in ${secs(BACK.rebrandSecs[3])}. It never takes junk.`,
     use: 'Put it in a supply line after a machine. Two in a row make Premium, three Platinum, but each pass is slower than the last. In at the back or the sides, out of the side with the arrow. Press R before placing to turn it.',
   },
+  lift: {
+    does: 'The hatch under every tile of a security building (not a Crate Stack). It takes the supplies that building uses, from any side, and sends them up to it, until it is full. It comes and goes with the building, and so does whatever is in it.',
+    use: 'Nothing to buy: build security upstairs and its Dumbwaiters appear down here. Point a belt, a machine or an Unpaid Intern at one. It only takes what its building can use, so send the rest on past it.',
+  },
 };
 
 /**
@@ -134,15 +118,15 @@ export const BACK_HOW = {
  */
 export const SHOPPER_HELP = {
   hunter: { trick: 'The ordinary shopper. Stops for free samples, and helps himself to a unit of stock from any security building he walks past: whatever supply it holds the most of.', beat: 'Anything. Slow them at a gap and spray them. Hit them before they reach your best-stocked buildings: a crowd walking along a stocked wall strips it bare.' },
-  dad: { trick: 'Arrives in a single-file line, walks fast, ignores samples, and steps over conveyor belts.', beat: 'Time: his patience drains by itself. Crates and machines block him. He slips on wet floor signs. Cover his short cut.' },
+  dad: { trick: 'Arrives in a single-file line, walks fast and ignores free samples. He wants one thing, the tills, and nothing in this shop is going to distract him.', beat: 'Time: his patience drains by itself, so make the walk long. He ignores wet floor signs and slips on them. An Exhibitionist stops him dead, and so, now and then, does a TV Salesman.' },
   clipper: { trick: 'Fast, weak, and there are a lot of them.', beat: 'Sprinklers. Anything that hits a crowd.' },
-  mom: { trick: 'Her kid escapes the cart and runs ahead, straight through your belts, machines and crates, then waits further along the route. She sprints round the maze to reach him and ignores free samples on the way. If her patience runs out while he is loose, she does not leave: she crawls to him, nothing can hurt her, and security wastes its shots on her. When she reaches him she gets up with a third of her patience back, without her cart, and carries him from then on. He runs away once only, he never runs all the way to the tills, and she will not take her refund without him.', beat: 'Finish her while the kid is in the cart. Forklifts and wet floor signs. Samples only work while the kid is in the cart. A TV Salesman stops most runaway kids.' },
+  mom: { trick: 'Her kid escapes the cart and runs ahead, straight through your crates and security, then waits further along the route. She sprints round the maze to reach him and ignores free samples on the way. If her patience runs out while he is loose, she does not leave: she crawls to him, nothing can hurt her, and security wastes its shots on her. When she reaches him she gets up with a third of her patience back, without her cart, and carries him from then on. He runs away once only, he never runs all the way to the tills, and she will not take her refund without him.', beat: 'Finish her while the kid is in the cart. Forklifts and wet floor signs. Samples only work while the kid is in the cart. A TV Salesman stops most runaway kids.' },
   teen: { trick: 'Slow. Spills a slushie every few seconds; the mess slows every other shopper and dads slip on it.', beat: 'Let him loiter in range. His messes work for you.' },
   karen: { trick: 'Enormous patience. Security near her works at half speed while she asks for the manager.', beat: 'Long routes and forklifts out of her reach. Do not rely on one cluster of towers.' },
   blind: { trick: 'The guide dog steers him around puddles and messes, and he cannot see free samples. Pepper spray makes the dog bolt, dragging him along fast.', beat: 'Forklifts. Sprinklers make him faster.' },
   scooter: { trick: 'Cannot be slowed by anything.', beat: 'Raw damage over a long route.' },
   gymbro: {
-    trick: `Walks straight through crate stacks, wrecking any in his way and any he passes, and now and then something else beside him: a belt, a machine, a tower. But he only has ${word(TUNE.smashMax)} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else.`,
+    trick: `Walks straight through crate stacks, wrecking any in his way and any he passes, and now and then something else beside him: a sprinkler, a sample table, a forklift. But he only has ${word(TUNE.smashMax)} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else.`,
     beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts, even one that Duct Tape from The Back soaks up (the damage is forgotten every sales event), so a taped-up building where he first meets your maze takes a hit off him for nothing. A crate stack goes down in one hit. Press B to rebuild what he wrecked for half of what you paid.',
   },
   drinker: { trick: 'Weaves along at a speed that keeps changing. At corners of the route he may fall over and lie there for 4 seconds, and everyone else has to squeeze past him at a third of their speed.', beat: 'Corners near your security: when he goes down, the queue behind him stands in the spray.' },

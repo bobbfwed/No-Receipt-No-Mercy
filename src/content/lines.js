@@ -59,8 +59,8 @@ export const LINES = {
     '{n} dads, single file, like ducks with back problems.',
     "Dad line: {n}. They won't fight you. They'll just sigh until someone dies.",
     '{n} dads coming through. The only thing that stops a dad is time. Waste his.',
-    "{n} dads. They don't walk around a conveyor belt. They step over it, mutter \"'scuse me\", and keep going.",
-    'Dad line, {n} strong. Your belts are not a wall to these men. They are a mild inconvenience, like their children.',
+    "{n} dads. They don't browse. They don't stop. They mutter \"'scuse me\" at your crate stacks and keep going.",
+    'Dad line, {n} strong. Your maze is not a wall to these men. It is a mild inconvenience, like their children.',
     "{n} dads inbound. Every one of them said \"it's the principle of the thing\" in the car.",
     '{n} dads on the way. Cargo shorts, a receipt in the left pocket, and a stare that has outlasted two mortgages.',
     'Dad line: {n}. They have been to the dump, the hardware store and the bank today. You are the last errand. Act like it.',
@@ -71,11 +71,11 @@ export const LINES = {
     '{n} dads. Each one parked miles from the door "for the walk". He will mention the walk.',
     '{n} dads. They will not stop for samples. A dad does not trust free things. He is right not to.',
     "Here come {n} dads, jangling their keys. That's not impatience. That's a mating call that stopped working in 2009.",
-    '{n} dads, fast and focused, stepping over your belts the way they step over their feelings.',
+    '{n} dads, fast and focused, walking past your free samples the way they walk past their feelings.',
     u('{n} dads, every one doing the "I\'m being very patient" face. It is not patience. It is a man rationing his last nerve.'),
     u("{n} dads. Somewhere, {n} wives said 'take your time'. They did not mean it. Neither do I."),
     u('{n} dads coming. If one of them says "they don\'t make them like they used to", he gets his refund. That\'s just the law.'),
-    u('{n} dads. Every one of them knows a shortcut. Every one of them is going to take it. Over your belts.'),
+    u('{n} dads. Every one of them knows a shortcut. Every one of them is going to take it. Make sure the long way is the only way.'),
     r("{n} dads. One of them will explain the return policy to me. I wrote the return policy. I'll be smiling the smile that ends marriages."),
     r('{n} dads in a line. Studies show a dad loses a year of life per minute in line, and gains one opinion about how the line should be run.'),
     r('Dad line: {n}. Each has a garage full of things he will "get to". This return is the first he has got to since 2011. Respect it. Then stop it.'),
@@ -101,8 +101,8 @@ export const LINES = {
     r('{n} refunds in a row. A man just got his money back, walked out, came back in and got a refund on the refund. Because of you.'),
     r("{n} refunds. I've started a support group for the tills. They're traumatised. They've seen things. Mostly money leaving."),
   ],
-  // A shoplifter helped himself to a unit of a security building's stock (0.4; until then goods off
-  // a belt). {k} the building, {s} the supply he took, {p} anyone.
+  // A shoplifter helped himself to a unit of a security building's stock (0.4). {k} the building,
+  // {s} the supply he took, {p} anyone.
   grab: [
     'A shopper just lifted {s} straight out of the {k}. {p}, guard your stock like you guard your browser history.',
     "Shoplifting at the {k}. I'd say which one, but I don't respect your security enough to number it.",
@@ -149,7 +149,7 @@ export const LINES = {
     'A toddler has escaped. Mom is no longer a customer. She is a heat-seeking missile in leggings.',
     "Runaway child, straight through your machines, {p}. He'll wait for her further on. Kids always wait just out of reach.",
     u('Kid loose. The cart is empty. The mother is shouting his full name. Middle name included. Someone is in trouble.'),
-    u('A small boy is sprinting through the factory. The first thing in this building working at full speed.'),
+    u('A small boy is sprinting through the store. The first thing in this building working at full speed.'),
     r("The kid's out. He'll stop near the end and wait for her, the way you all waited outside the bar for your dads. History, {p}. It repeats."),
   ],
   // A mom ran out of patience with her child loose, and is crawling to him. Nothing can touch her.
@@ -389,35 +389,10 @@ export const LINES = {
       u('Pepper sprinkler from {p}. It sprays everyone near it. Whoever designed it was clearly inspired by {p} after a curry.'),
       r("{p} built a pepper sprinkler. Legally it's a 'customer experience device'. Ethically it's a war crime with a warranty."),
     ],
-    packer: [
-      'A Packer. Same Gadget, nicer box, nearly twice the price. {p} finally understands retail. And dating.',
-      '{p} built a Packer. Wraps a Gadget in a bow and doubles the price. The same thing, presented well. {p} could learn from it.',
-      u('A Packer from {p}. It turns any old thing into a gift. If only it worked on {p}.'),
-    ],
     wetfloor: [
       "A wet floor sign. {p}'s most effective security measure is a piece of yellow plastic.",
       '{p} put down a wet floor sign. A dad will slip on it, and {p} will pretend he planned it.',
       u("{p}'s wet floor sign. Yellow. Plastic. Cheaper than him and better at the job."),
-    ],
-    belt: [
-      "{p} is laying belt. It's the most action that floor has seen in years.",
-      "{p} laid some belt. It goes from A to B. Unlike {p}'s career.",
-      u('{p} is laying belt. Dads will step right over it. Like they step over the dog.'),
-    ],
-    unpacker: [
-      '{p} built an Unpacker. It opens boxes all day and never complains. The perfect employee. Nothing like {p}.',
-      u("{p} placed an Unpacker. A Mystery Box every few seconds. Nobody knows what's in them. Least of all {p}."),
-      r("{p} built an Unpacker. It makes something useful out of nothing, for free, forever. It's the opposite of {p}."),
-    ],
-    press: [
-      '{p} bought a Press. Expensive, loud, and it will take ages to pay for itself. A bit like a son.',
-      u("{p} has a Press. It crushes things flat under enormous pressure. {p} knows the feeling. He's met his mother-in-law."),
-      r("{p} bought a Press. It takes thirty-seven Gadgets to pay for itself. He's done the math. He did it wrong, but he did it."),
-    ],
-    chute: [
-      "{p} built a shipping chute. Things go in, money comes out. It's the only hole in this building that pays.",
-      u('A chute, from {p}. Everything that goes down it gets sold. {p}, stay away from the edge.'),
-      r("{p} placed a shipping chute. I've been asked to remind staff not to throw each other down it. I was asked by {p}'s colleagues. Unanimously."),
     ],
     // The Barcode Laser: a supermarket scanner turned up far too high (its key is still railgun).
     railgun: [
@@ -434,27 +409,6 @@ export const LINES = {
       r("{p} built a TV salesman. He's selling a knife that cuts through a shoe. Nobody has ever needed to cut through a shoe. Six people just stopped walking."),
     ],
   },
-  // The first sale of the game. {p} anyone
-  firstSale: [
-    "A product has shipped. I'm as surprised as you are.",
-    'First sale of the day. Frame the receipt. It may be the last.',
-    'First sale. Money has entered the building. Try not to frighten it.',
-    "Something's been sold. Don't get emotional. It's one sale. {p}, put your shirt back on.",
-    u('First product shipped. Somewhere, someone will open that box and feel nothing. Like your customers. Like you.'),
-    r("First sale. I've sent a memo to corporate. Subject: 'Against all odds'. Body: '{p} was not involved.'"),
-  ],
-  // Any later sale, remarked on only now and then. {p} anyone
-  sale: [
-    'Another sale. Somebody is paying the wages. It is not {p}.',
-    'Ka-ching. The chute is the hardest-working thing in this building, and it is a hole.',
-    "Sales are up. Don't look so smug. It's the machines doing it.",
-    "Money's coming in. {p}, don't touch it. You'll spend it on crates.",
-    'Another one shipped. The factory works. Nobody knows why. Leave it alone.',
-    u("Steady sales. I've stopped being surprised. Now I'm just suspicious."),
-    u('More sales. Keep this up and corporate may let you keep the lights on. Some of them.'),
-    r('Another sale. I ran the numbers: the factory earns more an hour than {p} does. The factory is a belt and a hole. Think about that on the drive home.'),
-    r("Sold. Someone just bought a Gift Set. It's a Gadget in a bow. They'll regift it, and in a year it'll come back to this desk. The circle of life."),
-  ],
   // Ten seconds before the doors open. {p} anyone
   buildEnding: [
     "Doors open in ten seconds. Whatever {p} is building, it won't help.",
@@ -534,19 +488,19 @@ export const LINES = {
     u('{p}, please see me after this event. Bring a chair. Bring a lawyer. Bring tissues.'),
     r("I showed this event's footage to a focus group. One man left, one woman cried, and a teenager asked if it was satire. It isn't. It's just you."),
     r("If this team were a sandwich, it'd be the one left in the fridge after a long weekend. Nobody wants it, and everybody knows it's {p}'s."),
-    r('I compared your results with the previous team. The previous team was a raccoon that got into the warehouse. The raccoon shipped more.'),
+    r('I compared your results with the previous team. The previous team was a raccoon that got into the warehouse. The raccoon stopped more.'),
   ],
-  // {p} is the worst player, who stopped nobody
+  // {p} is the worst player, who built things this event but stopped nobody
   reportNoStops: [
     '{p} stopped nobody this event. A wet floor sign stopped more, and it has no pension.',
-    "{p} didn't stop a single shopper this event. He shipped goods, though. A delivery driver with delusions.",
+    "{p} didn't stop a single shopper this event. Maybe he was down in The Back fondling belts. Maybe he was in the toilet. Same smell.",
     u('Shoppers stopped by {p}: none. He has stopped nobody, the same way he has never stopped at one drink.'),
   ],
-  // {p} is the worst player, who shipped nothing
-  reportNoShips: [
-    '{p} shipped nothing this event. In fairness, that matches his output at home.',
-    '{p} shipped nothing. He stood near a belt and hoped. Hope is not a business plan, {p}.',
-    u("{p}'s shipping total: zero. The chute has started talking about him in the past tense."),
+  // {p} is the worst player, who built nothing and spent nothing this event
+  reportNoBuild: [
+    '{p} built nothing this event. Not a crate, not a belt, not a thought. In fairness, that matches his output at home.',
+    "{p} didn't spend a cent this event. He stood there with his wallet clenched and hoped. Hope is not a business plan, {p}.",
+    u("{p}'s total this event: nothing built, nothing bought, nothing done. The interns have started talking about him in the past tense."),
   ],
   // No refunds this wave. {p} anyone
   reportPerfect: [
@@ -554,7 +508,6 @@ export const LINES = {
     "No refunds this event. Not one. I don't trust it. Turn out your pockets.",
     u("A perfect event. Zero refunds. I'm putting it down to a fault in the cameras. Corporate is sending a technician."),
   ],
-  // A stray dog peed on security and switched it off. {k} what it was (may be missing), {p} anyone
   // A security building has used up the last of one supply from The Back (0.4: the stockOut event),
   // by track. {k} is the building, {p} whoever owns it.
   stockOut: {
@@ -594,6 +547,7 @@ export const LINES = {
       "The {k}'s wire is spent, {p}. The dads will go through it like a hardware store on a Sunday.",
     ],
   },
+  // A stray dog peed on security and switched it off. {k} what it was (may be missing), {p} anyone
   pee: [
     "A stray dog just pissed on your {k}. It's off for a few seconds. The dog has better aim than your security.",
     'Dog pee on the {k}. Switched off. Somebody is going to have to clean that, {p}. Guess who.',
@@ -848,7 +802,7 @@ export const LINES = {
     'Sales event {w}, in the Food Court. The floor is sticky. Not all of it is soda.',
     'Doors open on the Food Court. The kebab stall has been here since 1994. So has the kebab.',
     'Event {w}. Shoppers are weaving round the tables like a buffet line. {p}, you know all about buffet lines.',
-    'Food Court, event {w}. Keep the goods away from the booths. The booths have seen things. The booths are damp.',
+    'Food Court, event {w}. Keep your stock away from the booths. The booths have seen things. The booths are damp.',
     "Sales event {w}. The Food Court smells of grease, bleach and broken dreams. Mostly {p}'s.",
     'Event {w}. Somewhere in this Food Court a man is eating a pretzel the size of his regrets. Shoppers incoming.',
     'Doors open on the Food Court. Every table wobbles. Fold a napkin under {p}. He wobbles too.',
@@ -994,8 +948,8 @@ export const LINES = {
     u("{n} card traders through one door. That's more men in one place than at {p}'s last birthday party, and they smell better."),
     r("The Midnight Release has arrived: {n} virgins and one guy who swears he isn't. He is."),
   ],
-  // A Card Trader ripped the best-branded unit of stock out of a security building (0.4; until then a
-  // Mystery Box off a belt) and is gloating over it. {n} how many others stopped to watch (missing
+  // A Card Trader ripped the best-branded unit of stock out of a security building (0.4) and is
+  // gloating over it. {n} how many others stopped to watch (missing
   // when none did), {s} what he took ("Platinum Bottled Spite"), {k} the building, {p} anyone.
   rip: [
     'A card trader just ripped the {s} out of your {k}. Pull rate: one of one. He is treating it like a holographic rare.',
@@ -1146,7 +1100,7 @@ export const SUPER_INTRO = {
 /** Customer reviews when a shopper reaches the tills and gets a refund. [stars, text, weight?] */
 export const ESCAPE_REVIEWS = {
   hunter: [
-    [1, "Walked straight through. Staff were too busy touching each other's conveyor belts."],
+    [1, "Walked straight through. Staff were all down in the basement touching each other's conveyor belts."],
     [1, 'Got a full refund on a thing I found in the car park. Would exploit again.'],
     [1, 'No one stopped me. No one even looked up. Like being married.'],
     [1, 'Security was a wet floor sign and a man called {p}. I feared neither.'],
@@ -1182,7 +1136,7 @@ export const ESCAPE_REVIEWS = {
     [5, 'Did not have to ask for directions. Would not have anyway.'],
     [5, 'Parked by the door. In and out. Engine still warm.'],
     [5, "Didn't take my coat off. Didn't need to."],
-    [5, 'Stepped over a conveyor belt. Felt like a young man again.'],
+    [5, 'Overtook a mobility scooter. Felt like a young man again.'],
     [5, 'Refund done before half time. Unbeaten.'],
     [5, 'Nobody asked if I wanted a loyalty card. Marry me.'],
     [5, 'Had the receipt. Had the box. Had the instructions, still in the bag. They had no chance.'],
@@ -1226,7 +1180,7 @@ export const ESCAPE_REVIEWS = {
   mom: [
     [1, 'Lost my son. Found him. Got my refund. Nobody offered to help, they just watched.'],
     [1, "Free samples? I haven't sat down since 2019."],
-    [1, 'My child licked a conveyor belt. Nobody stopped him. One star, and a tetanus shot.'],
+    [1, 'My child licked a wet floor sign. Nobody stopped him. One star, and a tetanus shot.'],
     [1, 'My child ran straight through a machine. Machine is fine. Child is fine. I am not fine.'],
     [1, 'Sprinted the whole maze in sandals. Got my refund. I deserve a medal and a large wine.'],
     [1, 'The staff watched my child run off and did nothing. Like his father.'],
@@ -1250,7 +1204,7 @@ export const ESCAPE_REVIEWS = {
     [1, "Staff wouldn't spot me. Couldn't stop me either."],
     [1, 'Hit a forklift. Forklift lost. Got refund. Got pump.'],
     [1, 'Staff looked at my arms, then looked at their arms. I get it, bro. I get it.'],
-    [5, "Five stars. Destroyed three walls, two belts and a man's spirit. Great warm-up.", U],
+    [5, "Five stars. Destroyed three walls, two sprinklers and a man's spirit. Great warm-up.", U],
     [1, 'Returned my creatine because it made me "too intense". Smashed a crate on the way out to prove it wrong.', R],
   ],
   dog: [
@@ -1310,7 +1264,7 @@ export const ESCAPE_REVIEWS = {
     [1, 'Waited eleven hours in line. Got my refund. The cards were not mint. Neither was the staff. One star.'],
     [5, 'Five stars. Pulled a holo, got a refund AND a girl looked at me. It was {p}. Close enough.'],
     [1, 'Corner of the box was dinged. I returned it. I would return my own birth certificate for a dinged corner.'],
-    [1, "Staff kept saying 'sir, please step away from the belt'. I was not on the belt. I was spiritually on the belt."],
+    [1, "Staff kept saying 'sir, please step away from the forklift'. I was not on the forklift. I was spiritually on the forklift."],
     [5, 'Ripped three of your packs before I got to the tills. Smelled every one. Refund. Best night of my life, and I have had one other.'],
     [1, 'No sleeves at the till. Had to hold my refund naked. Like an animal.'],
     [1, 'They called security on my body odour. It is not body odour. It is the scent of a forty-hour tournament. Respect it.'],
@@ -1330,7 +1284,7 @@ export const LEFT_REVIEWS = {
     [1, 'Sprayed twice, rammed once, ate the little smokies. Gave up. Kept the smokies.'],
     [1, 'I came for a refund and left with an eye condition.'],
     [1, 'This store wore me down. Like my husband. Like my job. Like this country.'],
-    [1, 'Lost the will to live somewhere near the press shop.', U],
+    [1, 'Lost the will to live somewhere around the fourth crate stack.', U],
     [1, 'Walked the maze for twenty minutes. Passed the same crate four times. The crate was smirking.', U],
     [1, 'Gave up. Went to the car. Cried. Came back for one more free sample. Gave up again.', R],
   ],
@@ -1564,17 +1518,6 @@ export const NOPE = {
     "That's the host's call, {p}. You're a guest. Wipe your feet.",
     u('The host picks the store, {p}. You pick your nose. Everyone has a role.'),
   ],
-  zone: [
-    "Not there, {p}. That machine only goes on its own painted floor. The floor has words on it. Sound them out.",
-    "Wrong floor, {p}. Each machine has its own marked patch. It's colour-coded, for people exactly like you.",
-    "That goes on the painted floor with its name on it, {p}. Putting things in the wrong place is how you ended up with three kids.",
-    "Wrong patch, {p}. Read the floor. It's literally written on the floor.",
-    'That machine has its own painted patch, {p}. Like a dog has a basket. Use the basket.',
-    "Not on that floor, {p}. Everything here has a place. Yours is apparently 'wrong'.",
-    u("Wrong zone. There are words painted on the floor in capitals, {p}. You'd think. You'd really think."),
-    u("That's not its floor, {p}. Machines are fussy about where they go. Like your wife about where you sleep."),
-    r("Wrong floor again, {p}. I've had the floor repainted in bigger letters. Next comes a picture. Then, if needed, a puppet show."),
-  ],
   // The Back (0.4): somebody tried to remove a Returns Drop, which the store put there and nobody
   // can take out (it can only be turned).
   fixed: [
@@ -1599,7 +1542,9 @@ export const NOPE = {
     "That doesn't go on this floor, {p}. Belts live downstairs now. Security lives upstairs. Like your marriage.",
     'Wrong floor, {p}. Press Tab and look where you are. Then look where that goes.',
     "You can't build that here, {p}. Upstairs things go upstairs. Downstairs things go downstairs. It's a store, not a mind map.",
+    "Not on that floor, {p}. Everything here has a place. Yours is apparently 'wrong'.",
     u("Wrong floor, {p}. You've done the drunk thing where you walk into the wrong house, but with a conveyor belt."),
+    u("That's not its floor, {p}. Machines are fussy about where they go. Like your wife about where you sleep."),
   ],
   // A big building does not fit there.
   fit: [

@@ -95,7 +95,6 @@ function tidyRubble(state, r) {
  *   'over' game finished, 'lobby' the game has not started, 'cards' the cards are being dealt,
  *   'paused' the game is paused (state.pause), 'kind' unknown building, 'bounds' not a floor tile, 'occupied',
  *   'fit' part of a bigger building's footprint is off the floor or occupied,
- *   'zone' that machine only goes on its own marked floor,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
  *   'blocked' it would wall off the tills from an entrance or from a shopper,
  *   'bank' it would wall off one of the two banks of tills (the car park),
@@ -126,11 +125,7 @@ function placeCheck(state, k, x, y, pid, d, paid) {
   if (!at.tiles) return 'fit';
   for (const t of at.tiles) {
     if (state.tiles[t] !== '.') return 'fit';
-    // The four factory machines only go on their own marked floor (on maps that have it).
-    if (def.zone && state.zones && state.zones[t] !== def.zone) return 'zone';
   }
-  // Laying a belt over a belt just turns it, which is free and always allowed.
-  if (k === 'belt' && state.grid[at.i] && state.grid[at.i].k === 'belt') return null;
   for (const t of at.tiles) if (state.grid[t]) return t === own ? 'occupied' : 'fit';
   // (0.4) A building with Dumbwaiters needs The Back under it clear for them. Dumbwaiters already
   // there belong to rubble (nothing stands above them), which this building clears away.
@@ -180,9 +175,6 @@ function newBuilding(k, owner, d, card = null) {
     if (card.c !== undefined) b.c = card.c;
     if (card.bz) b.bz = 1;
   }
-  if (k === 'belt') b.it = [];
-  if (k === 'unpacker') b.t = Math.round(def.period * TICK_HZ);
-  if (k === 'press' || k === 'packer') { b.n = 0; b.t = 0; b.out = 0; }
   if (def.tower) b.cd = 0;
   if (k === 'forklift') b.a = 0;
   return b;
@@ -331,8 +323,7 @@ export function stepRebuilds(state, ev) {
  * Commands (x, y may be any tile of a building bigger than one tile, except for 'place'):
  *   { c: 'place', k, x, y, d }  build something with the top-left of its footprint on (x, y)
  *                               (d = facing 0-3, only for things that rotate; it also decides a
- *                               bigger building's footprint). A belt placed on a belt turns it to
- *                               face d, free of charge. Placed on rubble of the same kind, it goes
+ *                               bigger building's footprint). Placed on rubble of the same kind, it goes
  *                               back where and how it was, at the rebuild price (see rebuildDeal)
  *   { c: 'remove', x, y }       sell a building back (the money goes to whoever paid for it)
  *   { c: 'rotate', x, y }       turn a building a quarter turn clockwise (half a turn if it is
@@ -535,12 +526,6 @@ export function applyCommand(state, pid, cmd, ev = []) {
       if (why) return { ok: false, why };
       const def = BUILD[cmd.k];
       const at = placement(state, cmd.k, cmd.x, cmd.y, cmd.d | 0);
-      if (state.grid[at.i]) {
-        // A belt laid over a belt: turn the one that is there. Nothing is charged, and the goods
-        // on it stay on it.
-        state.grid[at.i].d = cmd.d & 3;
-        return { ok: true, turned: true };
-      }
       // On its own rubble it comes back as it was, at the rebuild price. If somebody had already
       // paid to rebuild that wreck (0.3.04), the held money goes back to him first: when that is
       // the placer, it is part of what he pays with now, so he pays once.

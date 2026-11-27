@@ -42,8 +42,8 @@ const VARS = {
   gave: 'pqn', rebuilt: 'pn', officeTaken: 'p',
   officeLeft: 'p', officeWave: 'pn', officeNoPlan: 'p', officeWaiting: 'p', storeWaiting: 'p',
   begun: 'p', cramped: 'pnm', superArrive: 'pk', mess: 'p', bolt: 'p', removed: 'p',
-  removedOther: 'p', placed: 'p', firstSale: 'p', sale: 'p', buildEnding: 'p', joined: 'p', quit: 'p',
-  won: 'p', lost: 'p', nearLimit: 'pn', report: 'p', reportNoStops: 'p', reportNoShips: 'p',
+  removedOther: 'p', placed: 'p', buildEnding: 'p', joined: 'p', quit: 'p',
+  won: 'p', lost: 'p', nearLimit: 'pn', report: 'p', reportNoStops: 'p', reportNoBuild: 'p',
   reportPerfect: 'p', pee: 'pk', flash: 'pn', fall: 'p', pitchStop: 'pk', pitchRush: 'pk',
   kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
   pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw',
@@ -64,9 +64,9 @@ const AT_LEAST = {
   waveStart: 24, dadLine: 27, manyEscapes: 18, grab: 12, slip: 12, kid: 9, crawl: 9, smash: 9,
   smashOther: 12, gave: 6, rebuilt: 6, officeTaken: 6, officeLeft: 6,
   officeWave: 9, officeNoPlan: 3, officeWaiting: 3, storeWaiting: 3, begun: 6, cramped: 3,
-  superArrive: 3, mess: 6, bolt: 6, removed: 12, removedOther: 6, firstSale: 6, buildEnding: 6,
-  joined: 6, quit: 6, won: 6, lost: 6, report: 21, reportNoStops: 3, reportNoShips: 3,
-  reportPerfect: 3, dented: 9, caught: 6, caughtCarry: 6, sale: 9, nearLimit: 9,
+  superArrive: 3, mess: 6, bolt: 6, removed: 12, removedOther: 6, buildEnding: 6,
+  joined: 6, quit: 6, won: 6, lost: 6, report: 21, reportNoStops: 3, reportNoBuild: 3,
+  reportPerfect: 3, dented: 9, caught: 6, caughtCarry: 6, nearLimit: 9,
   pee: 9, flash: 9, fall: 9, pitchStop: 6, pitchRush: 6, kidtv: 6, rail: 12, shield: 9,
   // Version 0.2.06: the boss, endless games and the Food Court (opening early lost its lines in 0.4).
   'bossIn.manager': 8, 'bossIn.director': 8, 'bossIn.vp': 8, 'bossIn.ceo': 10, bossOut: 8,
@@ -146,12 +146,17 @@ test('every bank has about three times the lines it had, and every new event and
   }
   assert.ok(STAMPS.top.length >= 12 && STAMPS.middle.length >= 12 && STAMPS.bottom.length >= 15);
   assert.ok(EMPLOYEES_OF_THE_WAVE.length >= 18);
-  const oldNope = { cash: 3, blocked: 2, zone: 3 };
+  const oldNope = { cash: 3, blocked: 2 };
   for (const [k, list] of Object.entries(NOPE)) assert.ok(list.length >= 3 * (oldNope[k] || 1), `refusals for ${k}`);
-  for (const k of ['fit', 'zone', 'max', 'bank']) assert.ok(NOPE[k]?.length >= 3, `refusal ${k}`);
+  for (const k of ['fit', 'max', 'bank', 'kind', 'back', 'fixed']) assert.ok(NOPE[k]?.length >= 3, `refusal ${k}`);
   // (0.4) Bought upgrades are gone, and every line about buying them with them.
   for (const k of ['upgraded', 'upgradedBy', 'maxed', 'rebuiltShort']) assert.equal(LINES[k], undefined, k);
   assert.equal(NOPE.noup, undefined);
+  // (0.4) So is the shop-floor factory: no sales, no goods shipped, no marked floor, no lines for
+  // placing its belts and machines.
+  for (const k of ['sale', 'firstSale', 'reportNoShips']) assert.equal(LINES[k], undefined, k);
+  assert.equal(NOPE.zone, undefined);
+  for (const k of ['belt', 'unpacker', 'press', 'packer', 'chute']) assert.equal(LINES.placed[k], undefined, `placed ${k}`);
 });
 
 test('no line is repeated, every placeholder gets filled, and nothing is too long to read at a glance', () => {
@@ -645,7 +650,7 @@ test('the director handles every new event, with all its fields or none, and ign
 
   // Every event with its fields missing, plus nonsense, and nothing breaks.
   const names = ['pee', 'flash', 'fall', 'pitch', 'kidtv', 'rail', 'shield', 'smash', 'rebuilt', 'caught',
-    'waveStart', 'crawl', 'kid', 'begun', 'side', 'ready', 'gave', 'mess', 'bolt', 'escape', 'left', 'grab', 'slip', 'sale',
+    'waveStart', 'crawl', 'kid', 'begun', 'side', 'ready', 'gave', 'mess', 'bolt', 'escape', 'left', 'grab', 'slip',
     'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'bossIn', 'bossOut', 'pep', 'endless', 'rip',
     'pop', 'nopop', 'rebuildHeld', 'watching', 'somethingNew', undefined];
   for (const random of [() => 0, () => 0.999, seeded(1)]) {
@@ -860,11 +865,45 @@ test('refusals: the same rules, and a refusal does not repeat straight away', ()
   let same = 0;
   let last = '';
   for (let i = 0; i < 200; i++) {
-    const t = nopeLine('zone', 'Kev', random);
+    const t = nopeLine('back', 'Kev', random);
     if (t === last) same++;
     last = t;
   }
   assert.ok(same < 20, `the same refusal twice running ${same} times in 200`);
+});
+
+test('nothing DEB says still talks about the shop-floor factory (0.4)', () => {
+  // Goods, the machines that made them and the marked floor they stood on are gone, and dads no
+  // longer step over anything. (The Back's own belts and machines are fine.)
+  const gone = /mystery box|gadget|gift set|unpacker|\bpacker\b|shipping chute|\bpress shop\b|\bshipp(ed|ing)\b|marked (floor|patch)|painted (floor|patch)|step(s|ping)? over (a |your |the )?(conveyor )?belt/i;
+  for (const [name, list] of allBanks()) for (const l of list) assert.ok(!gone.test(textOf(l)), `${name}: "${textOf(l)}"`);
+});
+
+test('the end-of-wave report singles out the last-placed player only when his row says something true', () => {
+  const report = (w0, ws = { escaped: 2, stopped: 5 }) => {
+    const state = game('Dave', 'Steve');
+    Object.assign(state.players[0].w, { spent: 0, built: 0, sold: 0, earned: 0, stopped: 0, annoy: 0 }, w0);
+    Object.assign(state.players[1].w, { spent: 200, built: 4, sold: 0, earned: 90, stopped: 6, annoy: 30 });
+    state.ws = { ...state.ws, ...ws };
+    // Random 0: the 50-50 roll to single him out always succeeds.
+    const out = createDirector(() => 0).handle([{ e: 'waveEnd', wave: 3, pay: 300, speed: 80, took: 30 }], state);
+    return out.find((m) => m.t === 'report');
+  };
+  const from = (bank, name) => new Set(bank.map((l) => fill(textOf(l), { p: name })));
+  // He built things, and they stopped nobody.
+  assert.ok(from(LINES.reportNoStops, 'Dave').has(report({ built: 3, spent: 120 }).deb));
+  // He built nothing and spent nothing.
+  assert.ok(from(LINES.reportNoBuild, 'Dave').has(report({}).deb));
+  // He spent money on something other than building (a rebuild, say), stopped nobody, built nothing: neither fits.
+  const plain = report({ spent: 50 }).deb;
+  assert.ok(!from(LINES.reportNoStops, 'Dave').has(plain) && !from(LINES.reportNoBuild, 'Dave').has(plain), plain);
+  // No refunds at all beats both.
+  const perfect = report({}, { escaped: 0, stopped: 9 }).deb;
+  assert.ok(LINES.reportPerfect.some((l) => fill(textOf(l), { p: 'Dave' }) === perfect || fill(textOf(l), { p: 'Steve' }) === perfect), perfect);
+  // Each row carries what the review screen shows, and nothing about goods shipped.
+  const row = report({ built: 3, spent: 120 }).rows[0];
+  assert.deepEqual([row.earned, row.stopped, row.spent], [0, 0, 120]);
+  assert.equal('shipped' in row, false);
 });
 
 test('a quick removal is only joked about on the floor it was placed on (0.4: The Back is a floor of its own)', () => {

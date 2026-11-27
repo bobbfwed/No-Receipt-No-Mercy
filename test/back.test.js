@@ -3,9 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, migrateSave, makeDrops, makeMap, overpassDirs,
+  createGame, addPlayer, applyCommand, step, makeDrops, makeMap, overpassDirs,
   BACK, BUILD, TUNE, TICK_HZ, MAP_DESIGNS, MAP_SIZES, JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, canPlace,
-  beltShape,
+  beltShape, rebrandTicks,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
 
@@ -110,13 +110,6 @@ test('a new game has an empty Back the size of its grid; the default map has no 
   const drops = m.back.filter((p) => p && p.k === 'drop');
   assert.equal(drops.length, 3);
   for (const p of drops) assert.ok(!('o' in p), 'owned by nobody');
-  // A save from before The Back loads with an empty one.
-  const old = JSON.parse(JSON.stringify(m));
-  delete old.back; delete old.backVer;
-  assert.equal(migrateSave(old), true);
-  assert.equal(old.back.length, old.w * old.h);
-  assert.ok(old.back.every((p) => p === 0));
-  stepBack(old);
 });
 
 test('makeDrops: at least one Returns Drop on every design at every size, never on a wall, facing open floor', () => {
@@ -127,7 +120,6 @@ test('makeDrops: at least one Returns Drop on every design at every size, never 
       assert.ok(drops.length >= 1, `${design} ${size}`);
       for (const { i, d } of drops) {
         assert.notEqual(s.tiles[i], '#', `${design} ${size}: not on a wall`);
-        assert.equal(s.zones[i], 'u', `${design} ${size}: where the Loading Bay was`);
         const x = (i % s.w) + [1, 0, -1, 0][d], y = ((i / s.w) | 0) + [0, 1, 0, -1][d];
         assert.notEqual(s.tiles[y * s.w + x], '#', `${design} ${size}: faces open floor`);
         assert.deepEqual(s.back[i], { k: 'drop', d, t: dropTicks(0), lv: 0 });
@@ -411,6 +403,79 @@ test('Splitter: one in, two or three out, shared evenly; a blocked way is skippe
   assert.equal(n.front + n.left, 20 * 6, 'all of it, at the full rate');
   assert.ok(Math.abs(n.front - n.left) <= 1);
   assert.equal(at(s, 7, 10).it.length, 6, 'the dead end is full');
+});
+
+// The owner asked for the Splitter's sharing to be pinned (2026-11-26): every connected output gets
+// the same share; one that is backed up is passed over and the others share what it would have had.
+
+test('Splitter: an output that is slow, not stopped, gets exactly what it can take; the others share the rest evenly', () => {
+  const s = blank();
+  row(s, 1, 6, 7, E);
+  lay(s, 7, 7, 'split', E);
+  row(s, 8, 10, 7, E); lay(s, 11, 7, 'bin');
+  col(s, 7, 4, 6, N); lay(s, 7, 3, 'bin');
+  // The right-hand way is slow: its belt runs into a Rebrander, which takes a Store Brand unit
+  // only every rebrandTicks(1) (with two waiting), and puts the Name Brand result into a bin.
+  col(s, 7, 8, 10, S); lay(s, 7, 11, 'rebrand', S); lay(s, 7, 12, 'bin');
+  const front = 7 * s.w + 11, left = 3 * s.w + 7, right = 12 * s.w + 7;
+  // Long enough for the slow way to back up all the way to the Splitter.
+  feed(s, 1, 7, E, 11, 30 * TICK_HZ);
+  let given = 0;
+  const ev = [];
+  const secs = 60;
+  for (let t = 0; t < secs * TICK_HZ; t++) {
+    if (give(s, 7 * s.w + 1, 11, E, 0)) given++;
+    stepBack(s, ev);
+    checkGaps(s);
+  }
+  const n = (i) => ev.filter((e) => e.i === i).length;
+  const slow = n(right), fast = [n(front), n(left)];
+  // What the Rebrander can do in that time, give or take the one it is part way through.
+  const can = (secs * TICK_HZ) / rebrandTicks(s, 1);
+  assert.ok(Math.abs(slow - can) <= 1, `the slow way took ${slow}, it can do ${can}`);
+  assert.ok(Math.abs(fast[0] - fast[1]) <= 1, `the other two share evenly: ${fast}`);
+  assert.ok(given >= secs * 6 - 1, `the line in runs at the full rate (${given})`);
+  // Everything that came in went out of one of the three, or is still on its way.
+  assert.ok(given - (slow + fast[0] + fast[1]) <= 12, 'nothing piles up beyond the slow line itself');
+});
+
+test('Splitter: a backed-up output rejoins the rotation when it moves again; with every output backed up the line in backs up and loses nothing', () => {
+  const s = blank();
+  row(s, 1, 6, 7, E);
+  lay(s, 7, 7, 'split', E);
+  row(s, 8, 10, 7, E); lay(s, 11, 7, 'bin');
+  col(s, 7, 4, 6, N); lay(s, 7, 3, 'bin');
+  col(s, 7, 8, 10, S); // the right-hand way is a dead end for now
+  const bins = { front: 7 * s.w + 11, left: 3 * s.w + 7, right: 11 * s.w + 7 };
+  const tally = (ev) => Object.fromEntries(Object.entries(bins).map(([k, i]) => [k, ev.filter((e) => e.i === i).length]));
+  feed(s, 1, 7, E, 14, 20 * TICK_HZ, [], true);
+  assert.equal(at(s, 7, 10).it.length, 6, 'the dead end is full');
+  let n = tally(feed(s, 1, 7, E, 14, 10 * TICK_HZ));
+  assert.equal(n.right, 0);
+  assert.ok(Math.abs(n.front - n.left) <= 1 && n.front + n.left === 10 * 6, `two share it all: ${JSON.stringify(n)}`);
+  // A bin at the end: the right-hand way moves again and is back in the even rotation.
+  lay(s, 7, 11, 'bin');
+  feed(s, 1, 7, E, 14, 5 * TICK_HZ, [], true); // its backlog drains
+  n = tally(feed(s, 1, 7, E, 14, 30 * TICK_HZ, [], true));
+  const counts = Object.values(n);
+  assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, `three share evenly again: ${JSON.stringify(n)}`);
+  assert.equal(counts.reduce((a, b) => a + b, 0), 30 * 6, 'at the full rate');
+  // Every way backed up: take the three bins away.
+  for (const i of Object.values(bins)) s.back[i] = 0;
+  s.backVer++;
+  const before = codes(s).length;
+  let given = 0, refused = 0;
+  const ev = [];
+  for (let t = 0; t < 30 * TICK_HZ; t++) {
+    if (give(s, 7 * s.w + 1, 14, E, 0)) given++; else refused++;
+    stepBack(s, ev);
+    checkGaps(s);
+  }
+  assert.equal(ev.length, 0, 'nothing went anywhere');
+  assert.equal(codes(s).length, before + given, 'not one item lost or made');
+  assert.ok(refused > 0, 'the line in is full and takes no more');
+  for (let x = 1; x <= 6; x++) assert.equal(at(s, x, 7).it.length, 6, `the line in is backed up to tile ${x}`);
+  assert.ok(at(s, 7, 7).h, 'the Splitter holds one, waiting');
 });
 
 test('Overpass: two streams cross without mixing, in all four direction combinations', () => {

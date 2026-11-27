@@ -108,11 +108,10 @@ check(await js('return __game.input.tool;') === 'crate', 'tapping a bar button p
 await tap(await tileAt(tx, ty));
 check((await at(tx, ty))?.k === 'crate', `a tap with Crates picked builds one (tile ${tx},${ty})`);
 
-await pick('belt');
-await drag(await tileAt(tx - 2, ty + 2), await tileAt(tx + 2, ty + 2), 10);
-const belts = [];
-for (let x = tx - 2; x <= tx + 2; x++) belts.push((await at(x, ty + 2))?.k === 'belt');
-check(belts.every(Boolean), `a one-finger drag with Belt picked lays a line of 5 (${belts.filter(Boolean).length} laid)`);
+// Two more crates, at each end of a row, for the Remove check below. (Until 0.4 a drag with the
+// shop floor's Belt laid that row; belts are in The Back now.)
+for (const x of [tx - 2, tx + 2]) await tap(await tileAt(x, ty + 2));
+check((await at(tx - 2, ty + 2))?.k === 'crate' && (await at(tx + 2, ty + 2))?.k === 'crate', 'two more taps with Crates picked build two more');
 
 // Since 0.3.01 every other building is placed one at a time: the preview follows the finger and
 // one is built where it lifts. A second finger on the floor cancels; the Rotate button turns it.
@@ -165,10 +164,10 @@ check(laser?.k === 'railgun' && laser.d === d1, `... lifting places it facing th
 await pick('remove');
 n0 = await count();
 await drag(await tileAt(tx - 2, ty + 2), await tileAt(tx + 2, ty + 2), 10);
-check(await count() === n0 - 1 && !(await at(tx + 2, ty + 2)) && (await at(tx - 2, ty + 2))?.k === 'belt', 'a drag with Remove removes one building, where the finger lifts');
-await pick('belt');
+check(await count() === n0 - 1 && !(await at(tx + 2, ty + 2)) && (await at(tx - 2, ty + 2))?.k === 'crate', 'a drag with Remove removes one building, where the finger lifts');
+await pick('crate');
 
-await tap(await centreOf('[data-k="belt"]'));
+await tap(await centreOf('[data-k="crate"]'));
 check(await js('return __game.input.tool;') === null, 'tapping the picked tool again puts it down');
 await tap(await tileAt(tx, ty));
 const sheet = await js("const e = [...document.querySelectorAll('button')].find((b) => /Remove/.test(b.textContent) && b.offsetParent && !b.closest('.buildbar')); return e ? e.textContent.trim() : '';");

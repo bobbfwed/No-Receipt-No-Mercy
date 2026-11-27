@@ -12,12 +12,12 @@
 //             time it ends. A pure function of a BaseAudioContext, so it runs the same live and in
 //             an OfflineAudioContext. opts.level (default 1) scales the whole sound.
 //
-// Loudness plan (peak at level 1, measured by the test page): frequent sounds (sale, spray, shot,
+// Loudness plan (peak at level 1, measured by the test page): frequent sounds (spray, shot,
 // UI ticks) stay small and short; rare moments (waveStart, won, lost) are the loudest and longest.
 // The shoppers' own voices are in shoppers.js.
 import { voice, tone, noise, bell, brass, formant, gain, mtof, rng, vary, say, babble } from './synth.js';
 import { SHAPES, LEFT_ABOUT, bark, thud, knock, leftVoice, escapeVoice, walkout } from './shoppers.js';
-import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, carryUp } from './newfx.js';
+import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, carryUp, clang } from './newfx.js';
 import { bossWave, bossIn, pep, bossOut, bossEscape, endless } from './boss.js';
 import { popSound, noPop, waah, babyTill, nursery } from './preggo.js';
 import { releaseSound, ripSound } from './trader.js';
@@ -33,7 +33,6 @@ export const KINDS = ['hunter', 'clipper', 'dad', 'karen', 'scooter', 'teen', 'm
 
 /** What a gym bro can wreck, grouped by what it sounds like. */
 const WRECK = {
-  belt: 'belt', unpacker: 'machine', press: 'machine', packer: 'machine', chute: 'machine',
   crate: 'crate', sprinkler: 'sprinkler', forklift: 'forklift', wetfloor: 'wetfloor', samples: 'samples',
   railgun: 'scanner', salesman: 'tv', // (the key 'railgun' is the Barcode Laser's)
 };
@@ -64,30 +63,8 @@ function rebuildSound(ctx, dest, t, o = {}) {
 
 export const SOUNDS = {
   // ---------------------------------------------------------------- simulation events
-  sale: {
-    about: 'A tiny cash-register "bli-ding" on a random note of the scale, so a line of sales plays a little tune. Box low, gadget higher, gift set highest with a sparkle.',
-    max: 0.3,
-    shapes: 3,
-    variants: [
-      { label: 'box', opts: { kind: 'box' } },
-      { label: 'gadget', opts: { kind: 'gadget' } },
-      { label: 'giftset', opts: { kind: 'giftset' } },
-    ],
-    play(ctx, dest, t, o = {}) {
-      const v = voice(ctx, dest, o.level);
-      const x = vary(o.seed, 3);
-      // The version is the note, so two sales in a row are never on the same one.
-      const notes = { box: [84, 86, 88], gadget: [89, 91, 93], giftset: [96, 98, 100] }[o.kind] || [84, 86, 88];
-      const f = mtof(notes[x.shape]) * x.j(0.004);
-      if (x.r() < 0.75) tone(v, { t, f: f * 0.75, type: 'triangle', peak: 0.1, a: 0.002, d: 0.03 }); // the "bli"
-      bell(v, { t: t + 0.035 * x.j(0.2), f, peak: 0.17 * x.j(0.1), d: 0.17 * x.j(0.2), ratio: 2, index: x.between(0.4, 0.8) }); // the "ding"
-      if (o.kind === 'giftset') bell(v, { t: t + 0.075, f: f * 1.5, peak: 0.07, d: 0.13, ratio: 2, index: 0.4 });
-      return v.end;
-    },
-  },
-
   kerching: {
-    about: 'Many sales at once (played over the single dings when they pile up): an old till going "ka-CHING", drawer flying open, coins rattling.',
+    about: 'An old till going "ka-CHING", drawer flying open, coins rattling: the sample of the money sounds in the sound settings.',
     max: 0.7,
     shapes: 1,
     play(ctx, dest, t, o = {}) {
@@ -409,13 +386,11 @@ export const SOUNDS = {
   },
 
   smash: {
-    about: 'A gym bro wrecks something. Crates: wood cracking and planks clattering. Belts: a rubber slap and metal rollers. Machines: a crunch, a clang, sparks and the motor dying. Sprinklers: a clank and a gush of water. Forklift: a heavy crash and its horn dying. Wet floor sign: plastic clattering flat. Samples: the table and the plates. A building that takes the hit and still stands (or Duct Tape soaking it up): one clang and a bolt bouncing away.',
+    about: 'A gym bro wrecks something. Crates: wood cracking and planks clattering. Sprinklers: a clank and a gush of water. Forklift: a heavy crash and its horn dying. Wet floor sign: plastic clattering flat. Samples: the table and the plates. A building that takes the hit and still stands (or Duct Tape soaking it up): one clang and a bolt bouncing away.',
     max: 0.9,
     shapes: 3,
     variants: [
       { label: 'crate', opts: { k: 'crate' }, about: 'Crate stack: wood cracking, a thump, planks clattering down.' },
-      { label: 'belt', opts: { k: 'belt' }, about: 'Belt: a rubber slap and metal rollers rattling away.' },
-      { label: 'machine', opts: { k: 'press' }, about: 'Unpacker, press, packer, chute: a crunch and a clang, then the motor dying with sparks, gears spilling with steam, or its error beep slowing down.' },
       { label: 'sprinkler', opts: { k: 'sprinkler' }, about: 'Pepper sprinkler: a clank and a gush of water (with a glug), or the pepper escaping and somebody coughing.' },
       { label: 'forklift', opts: { k: 'forklift' }, about: 'Forklift turret: a heavy crash, then its horn dying, its reversing beeper giving up, or a tyre going down.' },
       { label: 'wetfloor', opts: { k: 'wetfloor' }, about: 'Wet floor sign: plastic clattering flat.' },
@@ -440,27 +415,6 @@ export const SOUNDS = {
         scannerWreck(v, t, x);
       } else if (kind === 'tv') {
         tvWreck(v, t, x);
-      } else if (kind === 'belt') {
-        noise(v, { t, type: 'lowpass', f: 450, q: 0.7, peak: 0.35, a: 0.002, d: 0.07 }); // rubber slap
-        tone(v, { t, f: 95 * x.j(0.1), f1: 50, glide: 0.1, peak: 0.28, a: 0.003, d: 0.12 });
-        for (let i = 0; i < 4; i++) clang(v, t + 0.06 + i * x.between(0.06, 0.11), x.between(1200, 2400), 0.09 * (1 - i * 0.15), 0.09, 1.2);
-      } else if (kind === 'machine') {
-        noise(v, { t, type: 'bandpass', f: 900 * x.j(0.2), q: 0.7, peak: 0.5, a: 0.002, d: 0.12 }); // crunch
-        tone(v, { t, f: 100 * x.j(0.15), f1: 40, glide: 0.12, peak: 0.3, a: 0.003, d: 0.14 });
-        clang(v, t + 0.02, 330 * x.j(0.15), 0.14, 0.4, 3);
-        if (x.shape === 0) {
-          tone(v, { t: t + 0.05, f: 240 * x.j(0.1), f1: 40, glide: 0.55, type: 'sawtooth', lp: 900, peak: 0.12, a: 0.01, h: 0.1, d: 0.42 }); // motor dying
-          noise(v, { t: t + 0.05, type: 'highpass', f: 6000, q: 0.7, peak: 0.08, a: 0.002, h: 0.05, d: 0.1 }); // sparks
-        } else if (x.shape === 1) {
-          // Gears spilling out, and a hiss of steam.
-          for (let i = 0; i < 4; i++) clang(v, t + 0.1 + i * x.between(0.05, 0.09), x.between(700, 1500), 0.07, 0.1, 1.5);
-          noise(v, { t: t + 0.08, type: 'highpass', f: 3500 * x.j(0.15), q: 0.7, peak: 0.1, a: 0.02, h: 0.15, d: 0.2 });
-        } else {
-          // The machine's error beep, slowing and dropping as it dies.
-          [[880, 0.12], [740, 0.3], [560, 0.5]].forEach(([f, dt]) => {
-            tone(v, { t: t + dt, f: f * x.j(0.04), type: 'square', lp: 2000, peak: 0.06, a: 0.004, h: 0.07, d: 0.04 });
-          });
-        }
       } else if (kind === 'sprinkler') {
         noise(v, { t, type: 'bandpass', f: 1400 * x.j(0.2), q: 0.8, peak: 0.4, a: 0.002, d: 0.08 });
         clang(v, t, 700 * x.j(0.15), 0.12, 0.3);
@@ -787,7 +741,7 @@ export const SOUNDS = {
   },
 
   babyTill: {
-    about: 'One of her babies reaches a till ($5, not a refund toward the limit): one coin and a giggle ("hee", "hee-hee") or a raspberry. As small as a sale.',
+    about: 'One of her babies reaches a till ($5, not a refund toward the limit): one coin and a giggle ("hee", "hee-hee") or a raspberry. Small.',
     max: 0.35,
     shapes: 3,
     play: babyTill,
@@ -844,7 +798,7 @@ export const SOUNDS = {
   },
 
   pupTill: {
-    about: 'One puppy reaches a till ($5, not a refund toward the limit): one coin and a yap or two. As small as a sale.',
+    about: 'One puppy reaches a till ($5, not a refund toward the limit): one coin and a yap or two. Small.',
     max: 0.35,
     shapes: 3,
     play: pupTill,
@@ -1263,7 +1217,7 @@ export const SOUNDS = {
  */
 export const GROUP_OF = {
   // Money.
-  sale: 'money', kerching: 'money', escape: 'money', gave: 'money', bought: 'money',
+  kerching: 'money', escape: 'money', gave: 'money', bought: 'money',
   // Shoppers. (A baby or a puppy at a till is a coin and a giggle or a yap, but it goes with the
   // rest of its litter: past a handful they merge into `nursery` / `kennel`, which are shoppers.)
   babyTill: 'shoppers', pupTill: 'shoppers',
@@ -1286,5 +1240,5 @@ export const GROUP_OF = {
   deb: 'voice',
 };
 
-/** The same sounds as plain functions: sfx.sale(ctx, dest, t, opts). */
+/** The same sounds as plain functions: sfx.spray(ctx, dest, t, opts). */
 export const sfx = Object.fromEntries(Object.entries(SOUNDS).map(([k, s]) => [k, s.play]));

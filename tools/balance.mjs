@@ -13,85 +13,74 @@
 //              deals a hand from the seed as a real game does, through the deal (the bots skip it).
 //              Left out: no cards. Each result line names the hand.
 //
-// Bots:
+// Bots (0.4.00: the shop floor's maze is Crate Stacks and security only, and none of the bots
+// builds anything in The Back yet, so their security never holds stock; a later stage gives them
+// supply lines):
 //   nothing   builds nothing (the game should be lost quickly)
-//   honest    builds a fixed plan as money allows (production lines that wall the floor into a
-//             zigzag, with security at every gap and on the dads' short cut), patches what gym
-//             bros wreck, and then stops spending
-//   keen      the same, then keeps buying forklifts on a loose grid
-//   focus     until 0.4 like keen, but it poured its upgrade money into the sprinklers nearest the
-//             entrance (how the owner plays). Bought upgrades are gone (0.4) and the bots do not yet
-//             build supply lines in The Back (a later stage rewrites them), so it now plays exactly
-//             as keen; it is kept so the earlier results and tools/cardtest.mjs still line up
+//   honest    builds a fixed plan as money allows (walls of Crate Stacks across the store, each with
+//             a one-tile gap at alternate ends, so shoppers zigzag; security packed round every gap,
+//             where every shopper has to pass), patches what gym bros wreck, and then stops spending
+//   keen      the same, then keeps buying forklifts on a loose grid over the whole floor
+//   focus     the same as keen, but its forklifts go in the channels nearest the entrance first
+//             (until 0.4 it poured its upgrade money into the sprinklers nearest the entrance, which
+//             is how the owner plays; bought upgrades are gone, so it now concentrates buildings
+//             there instead)
 //   stalls    like keen, but before its forklifts it also puts a TV Salesman, two Free Sample
 //             tables and four Wet Floor Signs in each channel of the maze (to measure the cards
 //             about those buildings; tools/cardtest.mjs stalls)
 // None of the others builds the Barcode Laser or the TV Salesman. The
 // honest plan already has a Free Sample table at each gap but the first, and Wet Floor Signs.
 // Any bot may be given the steady opening by adding "+steady" to its name (keen+steady): it never
-// sits on cash that would buy its next Press while nothing else in its plan is affordable. Without
-// it a bot's first sales events are a knife edge: $25 more or less to start with moves keen's
-// average ending by several events, and a card that changes prices tips most seeds over it. With
-// it no seed collapses without cards, so it is the second opinion on the cards about money.
+// sits on cash while the next thing in its plan is out of reach and a later, cheaper one is not: it
+// buys the cheaper one meanwhile and comes back for the other. Without it a bot waits for each
+// purchase in turn, as a person following a plan does.
 // --bots=keen,focus+steady chooses the bots (default: nothing, honest, keen, focus).
 import { pathToFileURL } from 'node:url';
 import {
   createGame, addPlayer, applyCommand, step, canPlace, buildPrice, TICK_HZ, MAP_SIZES, mapSize,
 } from '../src/sim/index.js';
 
-const S = 1, N = 3;
-
 /**
- * The honest bot's plan for a map: `list` is what it buys in order, as [kind, x, y, facing];
- * `machines` are the Presses and Packers to swap in later, as [kind, x, y, facing, how far down
- * the list its line is finished].
+ * The columns the maze's walls stand in, ten tiles apart, and which end each one's gap is at: the
+ * first at the bottom, then alternating, so shoppers walk down one channel and up the next. (The
+ * same columns and ends as the bots' walls before 0.4, so the earlier results still compare.)
+ * @returns {{x: number, gy: number, s: number}[]} gy: the gap's row; s: +1 if the store lies below
+ *   the gap (a gap at the top), -1 if above it.
  */
-function plan(s) {
-  const { w, h } = s, mid = h >> 1;
-  const list = [], machines = [];
-  // One production line per section of marked floor, down the third column of its patches.
+function wallColumns(s) {
+  const out = [];
   let k = 0;
-  for (let x0 = 9; x0 + 3 <= w - 4; x0 += 10) {
-    const x = x0 + 2;
-    const rowsOf = (ch) => { const out = []; for (let y = 1; y < h - 1; y++) if (s.zones[y * w + x] === ch) out.push(y); return out; };
-    const u = rowsOf('u'), p = rowsOf('p'), pk = rowsOf('k'), c = rowsOf('c');
-    if (!u.length || !p.length || !pk.length || !c.length) continue; // a wall cut this section up
-    // Loading Bay above Shipping: the line runs down and its gap is at the bottom; otherwise up.
-    const down = u[0] < c[0];
-    const d = down ? S : N, step = down ? 1 : -1;
-    const from = down ? u[0] : u[u.length - 1], to = down ? c[c.length - 1] : c[0];
-    const press = down ? p[0] : p[p.length - 1], packer = down ? pk[0] : pk[pk.length - 1];
-    // The line is laid with belts all the way first, so it earns at once. The Press and the
-    // Packer are expensive, so they are swapped in for a belt later.
-    const swaps = [];
-    for (let y = from; y !== to + step; y += step) {
-      list.push([y === from ? 'unpacker' : y === to ? 'chute' : 'belt', x, y, d]);
-      if (y === press) swaps.push(['press', x, y, d]);
-      if (y === packer && k > 0) swaps.push(['packer', x, y, d]);
-    }
-    // Crates carry the wall on to the far side, leaving one gap; and close anything behind
-    // the unpacker.
-    const gy = down ? h - 2 : 1;
-    for (let y = to + step; y !== gy; y += step) list.push(['crate', x, y, 0]);
-    for (let y = from - step; y >= 1 && y <= h - 2; y -= step) list.push(['crate', x, y, 0]);
-    // Where in the list this line is all laid: its machines can be bought from then on.
-    const laid = list.length;
-    // Security at the gap.
-    const inY = down ? gy - 1 : gy + 1;
-    list.push(['sprinkler', x - 1, inY, 0], ['sprinkler', x + 1, inY, 0], ['wetfloor', x, gy, 0]);
-    // Dads step over the belts and walk straight across from the entrance: guard that lane too.
-    list.push(['wetfloor', x - 1, mid - 1, 0], ['wetfloor', x - 1, mid, 0],
-      ['sprinkler', x - 1, mid - 2, 0], ['sprinkler', x - 1, mid + 1, 0], ['forklift', x + 2, mid - 2, 0]);
-    if (k > 0) list.push(['samples', x - 2, inY, 0], ['forklift', x + 2, mid + 1, 0]);
-    for (const m of swaps) machines.push([m[0], m[1], m[2], m[3], laid]);
-    k++;
+  for (let x0 = 9; x0 + 3 <= s.w - 4; x0 += 10, k++) {
+    const gy = k % 2 ? 1 : s.h - 2;
+    out.push({ x: x0 + 2, gy, s: gy === 1 ? 1 : -1 });
   }
-  // Presses before Packers: a Packer does nothing without a Press upstream.
-  machines.sort((a, b) => (a[0] === 'press' ? 0 : 1) - (b[0] === 'press' ? 0 : 1) || a[4] - b[4]);
-  return { list, machines };
+  return out;
 }
 
-/** The keen bot's extra shopping: forklifts on a loose grid over the whole floor. */
+/**
+ * The honest bot's plan for a map: what it buys in order, as [kind, x, y, facing]. Per wall: the
+ * wall itself (cheap), then the security round its gap, nearest the gap first. Every shopper walks
+ * through every gap, so that is where security earns its keep. Anything the game refuses (a pillar,
+ * a Returns Drop under a security building, a wall that would cut the route) is skipped.
+ */
+function plan(s) {
+  const list = [];
+  for (const [k, { x, gy, s: d }] of wallColumns(s).entries()) {
+    // The wall: the whole column but the gap, from the far end towards the gap.
+    for (let y = gy + d * (s.h - 3); y !== gy; y -= d) list.push(['crate', x, y, 0]);
+    // The gap: a sprinkler either side of it and a Wet Floor Sign in it. Shoppers come along the
+    // outer wall to reach it, so the buildings beside the gap turn that into a short corridor.
+    list.push(['sprinkler', x - 1, gy + d, 0], ['sprinkler', x + 1, gy + d, 0], ['wetfloor', x, gy, 0]);
+    list.push(['wetfloor', x - 1, gy, 0], ['wetfloor', x + 1, gy, 0]);
+    list.push([k > 0 ? 'samples' : 'sprinkler', x - 2, gy + d, 0], ['sprinkler', x + 2, gy + d, 0]);
+    // A forklift either side, a little way in, covers the gap and the channels on both sides of it.
+    list.push(['forklift', x + 2, gy + 3 * d, 0]);
+    if (k > 0) list.push(['forklift', x - 2, gy + 3 * d, 0]);
+  }
+  return list;
+}
+
+/** The keen bot's extra shopping: forklifts on a loose grid over the whole floor, row by row. */
 function extras(s) {
   const out = [];
   for (let y = 2; y <= s.h - 3; y += 3) for (let x = 2; x <= s.w - 3; x += 3) out.push(['forklift', x, y, 0]);
@@ -99,16 +88,23 @@ function extras(s) {
 }
 
 /**
+ * The focus bot's extra shopping: the same forklifts, but column by column from the entrance's side
+ * of the store, so the channels shoppers reach first fill up before any further on.
+ */
+function front(s) {
+  return extras(s).sort((a, b) => a[1] - b[1] || a[2] - b[2]);
+}
+
+/**
  * The stalls bot's extra shopping, before the keen bot's forklifts: a TV Salesman in the middle of
- * each channel between two production lines, a Free Sample table near each end of the channel and
- * a few Wet Floor Signs in it, all where every shopper walks. It exists to measure the cards about
- * those buildings (eightyproof, warranty, mopmike, sensibleshoes), which the other bots barely use.
+ * each channel between two walls, a Free Sample table near each end of the channel and a few Wet
+ * Floor Signs in it, all where every shopper walks. It exists to measure the cards about those
+ * buildings (eightyproof, warranty, mopmike, sensibleshoes), which the other bots barely use.
  * Anything that would wall off the route is refused by the game and skipped.
  */
 function stalls(s) {
   const out = [], mid = s.h >> 1;
-  for (let x0 = 9; x0 + 3 <= s.w - 4; x0 += 10) {
-    const x = x0 + 2;
+  for (const { x } of wallColumns(s)) {
     if (x + 6 >= s.w - 1) break;
     out.push(['salesman', x + 4, mid - 1, 0], ['samples', x + 4, 3, 0], ['samples', x + 4, s.h - 4, 0],
       ['wetfloor', x + 5, 5, 0], ['wetfloor', x + 5, s.h - 6, 0], ['wetfloor', x + 3, mid + 2, 0], ['wetfloor', x + 6, mid - 3, 0]);
@@ -125,14 +121,14 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
   addPlayer(s, 'Bot');
   const me = s.players[0];
   const buyer = bot !== 'nothing';
-  const made = buyer ? plan(s) : { list: [], machines: [] };
-  const list = made.list.concat(bot === 'stalls' ? stalls(s) : [], bot === 'keen' || bot === 'focus' || bot === 'stalls' ? extras(s) : []);
-  const machines = made.machines;
-  const total = list.length + machines.length;
-  let fund = 0, lastCash = me.cash;
+  const more = bot === 'stalls' ? stalls(s).concat(extras(s)) : bot === 'keen' ? extras(s) : bot === 'focus' ? front(s) : [];
+  const list = buyer ? plan(s).concat(more) : [];
+  const total = list.length;
+  const done = new Set(); // what the steady opening bought out of turn
   let next = 0; // how far down the list it has got
   let bought = 0, rebuilt = 0, wrecked = 0, stolen = 0;
-  // Units of stock Card Traders ripped out of security (0.4; Mystery Boxes off belts until then), in all and this wave.
+  // Units of stock Card Traders ripped out of security, in all and this wave. (The bots never stock
+  // their security yet, so this stays at nought until they build in The Back.)
   let ripped = 0, rippedNow = 0;
   const rows = [];
   let byKind = {};
@@ -147,35 +143,33 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
       const r = applyCommand(s, 0, { c: 'rebuild' });
       if (r.ok) rebuilt += r.n;
     }
-    // Half of everything it earns goes into a fund for the expensive machines; the rest pays
-    // for the plan in order. So it neither starves its factory nor leaves the doors unguarded.
-    if (me.cash > lastCash) fund += (me.cash - lastCash) * 0.5;
-    // It saves only for a machine it could place now, and no more than that machine costs.
-    // (Prices are the game's: its cards may change them.)
+    // Prices are the game's: its cards may change them.
     const price = (k) => buildPrice(s, k);
-    const want = machines.length && machines[0][4] <= next ? price(machines[0][0]) : 0;
-    fund = Math.min(fund, want, me.cash);
-    for (let j = 0; j < machines.length; j++) {
-      const [k, x, y, d, line] = machines[j];
-      // The steady opening never sits on cash that would buy its next Press while nothing else in
-      // its plan is affordable: it buys the Press then, whatever it has saved.
-      const idle = steady && k === 'press' && me.cash >= price(k) && (next >= list.length || me.cash - fund < price(list[next][0]));
-      if (line > next || (fund < price(k) && !idle)) break; // its line is not laid yet, or not enough saved
-      const there = s.grid[y * s.w + x];
-      if (there && there.k === 'belt') applyCommand(s, 0, { c: 'remove', x, y });
-      const cost = price(k);
-      if (applyCommand(s, 0, { c: 'place', k, x, y, d }).ok) { bought++; fund = Math.max(0, fund - cost); }
-      machines.splice(j--, 1);
-    }
-    while (next < list.length) {
-      const [k, x, y, d] = list[next];
-      if (me.cash - (machines.length ? fund : 0) < price(k)) break;
+    /** Buys list item j if it can: true when it is dealt with (bought or refused for good). */
+    const tryBuy = (j) => {
+      const [k, x, y, d] = list[j];
       const why = canPlace(s, k, x, y, 0);
-      if (why === 'shopper') break; // try again shortly
+      if (why === 'shopper' || why === 'cash') return false; // try again shortly
+      // A wall that would shut a shopper in during a sales event can go up once he has moved on
+      // (the plan always leaves each wall its gap, so this never waits for good).
+      if (why === 'blocked' && k === 'crate' && s.phase === 'wave') return false;
       if (!why && applyCommand(s, 0, { c: 'place', k, x, y, d }).ok) bought++;
+      return true;
+    };
+    while (next < list.length) {
+      if (done.has(next)) { next++; continue; }
+      if (me.cash < price(list[next][0])) break;
+      if (!tryBuy(next)) break;
       next++;
     }
-    lastCash = me.cash;
+    // The steady opening: while the next purchase is out of reach, anything later in the plan that
+    // it can afford is bought now rather than left for later.
+    if (steady && next < list.length && me.cash < price(list[next][0])) {
+      for (let j = next + 1; j < list.length; j++) {
+        if (done.has(j) || me.cash < price(list[j][0])) continue;
+        if (tryBuy(j)) done.add(j);
+      }
+    }
   }
 
   while (s.phase !== 'won' && s.phase !== 'lost' && s.tick < limit) {
@@ -206,7 +200,8 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
         stolen += s.ws.stolen;
         rows.push({
           wave: s.wave, escaped: s.ws.escaped, stopped: s.ws.stopped, wrecked: s.ws.wrecked, stolen: s.ws.stolen,
-          earned: s.ws.earned, cash: Math.round(me.cash), refunds: s.refunds, built: bought, ripped: rippedNow,
+          // (Since 0.4 most of the money is the event's pay and speed bonus, paid as it ends.)
+          earned: s.ws.earned + (s.ws.pay | 0) + (s.ws.speed | 0), cash: Math.round(me.cash), refunds: s.refunds, built: bought, ripped: rippedNow,
           who: Object.entries(byKind).map(([k, n]) => k + ' ' + n).join(', '),
         });
         rippedNow = 0;

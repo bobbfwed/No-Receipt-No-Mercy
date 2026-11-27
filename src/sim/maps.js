@@ -33,7 +33,7 @@ export const MAP_DESIGNS = {
   },
   showroom: {
     name: 'Flat-Pack Showroom',
-    desc: 'Walled rooms joined by doorways that everyone, and every belt, has to go through. Good choke points, awkward factories.',
+    desc: 'Walled rooms joined by doorways that everyone has to go through. Good choke points. The walls go all the way down, so The Back is just as awkward.',
   },
   aisles: {
     name: 'Supermarket Aisles',
@@ -41,7 +41,7 @@ export const MAP_DESIGNS = {
   },
   food: {
     name: 'Food Court',
-    desc: 'Little tables, sticky booths, kebab stalls and a fountain full of pennies. The crowd weaves through it all; so do your belts.',
+    desc: 'Little tables, sticky booths, kebab stalls and a fountain full of pennies. The crowd weaves through it all, and so do your belts downstairs.',
   },
   carpark: {
     name: 'Car Park',
@@ -49,7 +49,7 @@ export const MAP_DESIGNS = {
   },
   corridors: {
     name: 'The Back Passage',
-    desc: 'Staff only. Long service corridors with a few gaps in the walls, and every kind of painted floor in a different corridor: your belts squeeze through the same gaps as the crowd. The plot is taller than most, to fit more corridors in.',
+    desc: 'Staff only. Long service corridors with a few gaps in the walls, which go all the way down: your belts in The Back squeeze through the same gaps as the crowd. The plot is taller than most, to fit more corridors in.',
   },
   horseshoe: {
     name: 'The Strip Mall',
@@ -388,9 +388,9 @@ function reserve(w, h, g, spots) {
   const banded = new Uint8Array(w);
   const tiles = g.join('');
   for (let n = 1; n <= allDoors.length; n++) {
-    const zones = makeZones(w, h, tiles, allDoors.slice(0, n));
-    for (let i = 0; i < zones.length; i++) {
-      if (zones[i] === ' ') continue;
+    const marks = factoryPatches(w, h, tiles, allDoors.slice(0, n));
+    for (let i = 0; i < marks.length; i++) {
+      if (marks[i] === ' ') continue;
       const x = i % w, y = (i / w) | 0;
       clear(x - 1, y - 1, x + 1, y + 1);
       for (let k = -1; k <= 1; k++) if (x + k >= 0 && x + k < w) banded[x + k] = 1;
@@ -581,7 +581,12 @@ function shelves(w, h, mid, wall) {
 }
 
 /**
- * Marks out the floor the factory machines must be built on (see ZONES in constants.js).
+ * The patches of the marked floor the shop had until 0.4, when the old factory's machines could
+ * only be built on their own kind of floor. Nothing is painted or enforced on them any more; they
+ * are worked out for two things only, so that every store stays exactly as it was: the Returns
+ * Drops go on the Loading Bay patches ('u', see makeDrops), and the food court's and car park's
+ * furniture keeps clear of every patch (reserve). "Marked floor" and "production lines" in this
+ * file's comments mean these patches and the lines that used to run between them.
  * The floor is divided into sections ten tiles apart. Each section has four patches, four tiles
  * wide, one above the other: Loading Bay at the top, then Press Shop, Gift Wrap, and Shipping
  * near the bottom. Every other section is upside down, so production lines run down one section
@@ -590,14 +595,15 @@ function shelves(w, h, mid, wall) {
  * No patch touches the outer wall: the Loading Bay is a tile in from it, or two in front of an
  * entrance or a till in that wall, so there is always a walkway round the edge, in through the
  * doors and up to the tills.
- * The designs with a layout of their own (the Back Passage) lay their marked floor their own way;
- * say which design it is to get it.
+ * The designs with a layout of their own (the Back Passage, the Strip Mall) lay their patches their
+ * own way; say which design it is to get it.
  * @param {string} [design] a key of MAP_DESIGNS; left out, the ordinary layout
- * @returns {string} one character per tile: a key of ZONES, or a space
+ * @returns {string} one character per tile: 'u' Loading Bay, 'p' Press Shop, 'k' Gift Wrap,
+ *   'c' Shipping, or a space
  */
-export function makeZones(w, h, tiles, doors, design) {
-  if (design === 'corridors') return passageZones(w, h, tiles, doors);
-  if (design === 'horseshoe') return stripZones(w, h, tiles, doors);
+function factoryPatches(w, h, tiles, doors, design) {
+  if (design === 'corridors') return passagePatches(w, h, tiles, doors);
+  if (design === 'horseshoe') return stripPatches(w, h, tiles, doors);
   const z = new Array(w * h).fill(' ');
   const tall = h >= 30 ? 3 : 2, wide = 4;
   for (let n = 0, x0 = 9; x0 + wide - 1 <= w - 4; n++, x0 += 10) {
@@ -638,18 +644,17 @@ export function makeZones(w, h, tiles, doors, design) {
 }
 
 /**
- * Where The Back's Returns Drops go (0.4): one under each Loading Bay patch of marked floor, on the
- * patch's tile nearest its middle (patch tiles are always open floor, never a wall). It works the
- * patches out with the same layout code as makeZones rather than reading `state.zones`, because the
- * marked floor itself is removed in a later stage of 0.4 and the drops must stay where they are.
+ * Where The Back's Returns Drops go (0.4): one under each Loading Bay patch of the old marked floor
+ * (factoryPatches), on the patch's tile nearest its middle (patch tiles are always open floor,
+ * never a wall). test/back.test.js pins every drop on every design and size.
  * Each drop faces the middle of the store from top to bottom, where the rest of a production line
  * used to be (the Loading Bay is at the top or bottom of its section); if that tile is a wall it
  * faces the next way that is open: toward the middle from side to side, then the others.
- * Same arguments as makeZones.
+ * Same arguments as factoryPatches.
  * @returns {Array<{i: number, d: number}>} tile index and facing (0-3, as DIRS), by tile index
  */
 export function makeDrops(w, h, tiles, doors, design) {
-  const z = makeZones(w, h, tiles, doors, design);
+  const z = factoryPatches(w, h, tiles, doors, design);
   const seen = new Uint8Array(w * h);
   const out = [];
   for (let s = 0; s < w * h; s++) {
@@ -696,7 +701,7 @@ export function makeDrops(w, h, tiles, doors, design) {
 
 /**
  * The Back Passage's layout, worked out from the width and height alone, so the walls (passages)
- * and the marked floor (passageZones) always agree. Long walls run across the store, leaving a hall
+ * and the marked floor (passagePatches) always agree. Long walls run across the store, leaving a hall
  * three tiles wide along the left wall (in front of the entrances) and the right (in front of the
  * tills), and cut it into corridors, as many as fit (four on the smallest store, fifteen on the
  * biggest: the design's plot is taller than the size's rectangle, see passageSize); the layout is
@@ -836,9 +841,9 @@ function passages(w, h, wall) {
  * clear of the two rows in front of an entrance in that wall where the corridor is wide enough.
  * Where it is not (the Outlet, where one tile is lost), the tiles in front of the entrance are
  * left off it.
- * @returns {string} one character per tile: a key of ZONES, or a space
+ * @returns {string} one character per tile, as factoryPatches
  */
-function passageZones(w, h, tiles, doors) {
+function passagePatches(w, h, tiles, doors) {
   const z = new Array(w * h).fill(' ');
   const { tall, bands } = passagePlan(w, h);
   const K = bands.length;
@@ -961,7 +966,7 @@ function stripDoors(w, h) {
 }
 
 /**
- * One section of marked floor in a band of rows, laid exactly as makeZones lays a section over
+ * One section of marked floor in a band of rows, laid exactly as factoryPatches lays a section over
  * the whole height of an ordinary store: `y0` and `y1` are the wall rows above and below the
  * band. Returns false (and lays nothing) if the four patches do not fit in the band.
  */
@@ -991,9 +996,9 @@ function laySection(z, w, tiles, doors, x0, n, y0, y1, tall) {
  * patches are thinner there on the smaller stores, where the bend is low). Every other section,
  * counting from the left, is upside down. Patches stay a tile clear of every wall, the car park
  * included, of each other, and of the floor in front of the entrances and the tills.
- * @returns {string} one character per tile: a key of ZONES, or a space
+ * @returns {string} one character per tile, as factoryPatches
  */
-function stripZones(w, h, tiles, doors) {
+function stripPatches(w, h, tiles, doors) {
   const z = new Array(w * h).fill(' ');
   const { L, R, top } = lotPlan(w, h);
   const tall = h >= 30 ? 3 : 2;

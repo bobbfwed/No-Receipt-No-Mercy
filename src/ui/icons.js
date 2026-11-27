@@ -5,24 +5,6 @@ import { safeColor } from './dom.js';
 const S = 'stroke="#111" stroke-width="2"';
 
 const BUILDING = {
-  belt: `<rect x="2" y="9" width="36" height="22" rx="3" fill="#2b2f36" ${S}/>
-    <path d="M8 14l5 6-5 6M17 14l5 6-5 6M26 14l5 6-5 6" fill="none" stroke="#facc15" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`,
-  unpacker: `<path d="M8 11L4 4l9 5zM32 11l4-7-9 5z" fill="#c8915a" stroke="#111" stroke-width="1.5"/>
-    <rect x="3" y="10" width="34" height="23" rx="4" fill="#2b7bd6" ${S}/>
-    <rect x="7" y="15" width="14" height="11" rx="2" fill="#dbeafe"/>
-    <path d="M24 20.5h9M29 16.5l4 4-4 4" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
-  press: `<rect x="13" y="3" width="14" height="9" fill="#4b5563" ${S}/>
-    <rect x="4" y="12" width="32" height="14" rx="2" fill="#f97316" ${S}/>
-    <rect x="4" y="26" width="32" height="9" fill="#facc15" ${S}/>
-    <path d="M8 35l5-9M16 35l5-9M24 35l5-9M32 35l4-7" stroke="#111" stroke-width="2.6"/>
-    <circle cx="31" cy="18" r="2.2" fill="#dc2626"/>`,
-  packer: `<rect x="9" y="3" width="22" height="7" rx="2" fill="#7e22ce"/>
-    <circle cx="14" cy="6.5" r="1.6" fill="#ef4444"/><circle cx="20" cy="6.5" r="1.6" fill="#ef4444"/><circle cx="26" cy="6.5" r="1.6" fill="#ef4444"/>
-    <rect x="4" y="10" width="32" height="25" rx="8" fill="#c084fc" ${S}/>
-    <rect x="12" y="16" width="16" height="12" rx="1" fill="#c8915a" stroke="#7c4a1e" stroke-width="1.6"/>
-    <path d="M20 16v12M12 22h16" stroke="#dc2626" stroke-width="2"/>`,
-  chute: `<path d="M4 7h32l-6 28H10z" fill="#16a34a" ${S} stroke-linejoin="round"/>
-    <path d="M20 11v15M13.5 20l6.5 6.5 6.5-6.5" stroke="#fff" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
   crate: `<rect x="5" y="5" width="30" height="30" fill="#c8915a" stroke="#6b3f17" stroke-width="2.5"/>
     <rect x="9.5" y="9.5" width="21" height="21" fill="none" stroke="#6b3f17" stroke-width="2"/>
     <path d="M9.5 9.5l21 21M30.5 9.5l-21 21" stroke="#6b3f17" stroke-width="2"/>`,

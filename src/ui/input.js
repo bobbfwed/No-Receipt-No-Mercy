@@ -6,7 +6,7 @@
 //   - two fingers always move the view (drag) and zoom it (pinch), and never build
 //   - one finger with nothing held drags the view; a tap on a building selects it (touch.js then
 //     shows what it is working at and offers rotate and remove for it)
-//   - one finger with a building held (not the belt), or the Remove tool, places: the
+//   - one finger with a building held (not The Back's belt), or the Remove tool, places: the
 //     preview follows the finger while it is down, and the building is placed (or removed) once,
 //     where the finger lifts. Lifted off the floor, or over a button or
 //     panel, it does nothing. (The owner's request, 0.3.01: a drag used to build a row.)
@@ -20,7 +20,7 @@
 //     preview follows the finger over the floor, and lifting places one. What was held before is
 //     held again afterwards. A sideways swipe on the bar still scrolls it.
 //   - while a building is being placed, a finger held near an edge of the floor slides the view
-//   - with the belt held, a tap lays one and a drag lays a line under the finger, as the mouse does
+//   - with The Back's belt held, a tap lays one and a drag lays a line under the finger, as the mouse does
 //   - a second finger on the floor while the first is placing cancels it: nothing more is built
 //     when either lifts (belts already laid by a drag stay), and the two fingers move the view
 // Nothing is built until the finger has either lifted or (a belt) moved a little, so a second
@@ -34,11 +34,13 @@ import { rebuildStatus } from './rebuild.js';
 
 // The shop floor's kinds. The Back's parts (0.4) have their own bar and keys: BACK_KEYS below.
 export const BUILD_KEYS = SHOP_KINDS;
-/** Hotkeys 1-9 then 0, in the order of BUILD. */
-// (The first ten keep the keys they have always had; the two newer buildings follow on the same row.)
-const KEY_OF = { belt: '1', unpacker: '2', press: '3', packer: '4', chute: '5', crate: '6', sprinkler: '7', forklift: '8', wetfloor: '9', samples: '0', railgun: '-', salesman: '=' };
-export const HOTKEYS = BUILD_KEYS.map((k) => KEY_OF[k] || '');
-/** The parts a player can build in The Back (0.4; not the map's Returns Drops), keys 1 to 5 there. */
+/** The keys along the top row, in the order of the bar: 1 to 9, then 0, -, =. */
+const ROW = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+/**
+ * The shop floor's hotkeys, in the order of its bar (BUILD's): 1 Crates, then the security from 2.
+ * (Until 0.4 the old factory had 1 to 5 and Crates 6; with it gone they were renumbered from 1.)
+ */
+export const HOTKEYS = BUILD_KEYS.map((k, i) => ROW[i] || '');
 /**
  * The Back's build bar in two groups (0.4): what moves things (belts, Splitter, Overpass, Intern,
  * Bin) and what makes them (the five machines and the Rebrander). Every part a player can buy is in
@@ -49,13 +51,12 @@ export const BACK_GROUPS = [
   { id: 'machines', label: 'MACHINES', keys: Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed && (BUILD[k].supply || k === 'rebrand')) },
 ];
 export const BACK_KEYS = BACK_GROUPS.flatMap((g) => g.keys);
-/** The keys along the top row, as the shop floor's bar uses them: 1 to 9, then 0, -, =. */
-const ROW = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+/** The parts a player can build in The Back (not the map's Returns Drops), keys 1 to 9, 0, - there. */
 export const BACK_HOTKEYS = BACK_KEYS.map((k, i) => ROW[i] || '');
 /** A buildable kind's hotkey on its own floor, or ''. */
 export const hotkeyOf = (k) => (BUILD[k]?.back ? BACK_HOTKEYS[BACK_KEYS.indexOf(k)] : HOTKEYS[BUILD_KEYS.indexOf(k)]) || '';
-/** The kinds laid in lines by dragging: the shop floor's belt and The Back's. */
-const isLine = (k) => k === 'belt' || k === 'conv';
+/** The kind laid in lines by dragging: The Back's belt. */
+const isLine = (k) => k === 'conv';
 /** Tools that are not buildings. */
 const TOOLS = ['remove'];
 

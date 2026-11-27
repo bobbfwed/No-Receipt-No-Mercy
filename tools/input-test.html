@@ -12,10 +12,13 @@
 <body>
 <!--
   A test page: loads a solo game and plays it with made-up mouse and keyboard events, the same
-  events a real player produces. It builds a small production line by dragging, places security,
-  rotates a belt, removes one thing with the right mouse button, and opens the doors.
+  events a real player produces. In The Back (Tab) it builds a small supply line by dragging belts
+  from the Returns Drop at 10,3 into a Spite Still and on into a Clearance Bin, and turns a belt
+  with R; back on the shop floor it places security and Crate Stacks, removes one with the right
+  mouse button, and opens the doors.
   Open through the dev server: http://localhost:5173/tools/input-test.html
-  The green box in the corner lists each step; the picture should show the line it built.
+  The green box in the corner lists each step; the picture shows the shop floor (The Back shows
+  through faintly), and the last lines count what was built on each floor.
 -->
 <iframe id="game" src="../index.html?solo=1&name=Tester&seed=3&size=xs" title="Game"></iframe>
 <div id="log"></div>
@@ -48,26 +51,33 @@
       mouse('pointerup', x1, y1);
     };
 
-    key('2', 'Digit2'); click(4, 3);                 log('unpacker at 4,3 (facing east)');
-    key('1', 'Digit1'); await drag(5, 3, 9, 3);      log('belt dragged 5,3 -> 9,3');
-    key('3', 'Digit3'); click(10, 3);                log('press at 10,3');
-    key('1', 'Digit1'); await drag(11, 3, 11, 7);    log('belt dragged 11,3 -> 11,7 (turns south)');
-    key('5', 'Digit5'); click(11, 8);                log('chute at 11,8');
-    key('7', 'Digit7'); click(3, 6); click(3, 9);    log('two sprinklers by the doors');
-    key('8', 'Digit8'); click(6, 8);                 log('forklift at 6,8: must be REFUSED, not enough cash left');
-    key('9', 'Digit9'); click(2, 7);                 log('wet floor sign at 2,7');
-    key('6', 'Digit6'); click(20, 10); click(21, 10); log('two crates at 20,10 and 21,10');
+    // The Back's keys: 1 Belt, 5 Clearance Bin, 6 Spite Still. The shop's: 1 Crates, 2 Sprinkler,
+    // 4 Barcode Laser, 5 Wet Floor, 6 Free Samples.
+    key('Tab', 'Tab');                               log('Tab: The Back');
+    key('1', 'Digit1'); await drag(10, 4, 10, 7);    log('belt dragged 10,4 -> 10,7 (south, from the Returns Drop at 10,3)');
+    key('6', 'Digit6'); key('r', 'KeyR'); click(10, 8); log('Spite Still at 10,8, turned with R to face south');
+    key('1', 'Digit1'); await drag(10, 9, 14, 9);    log('belt dragged 10,9 -> 14,9 (east)');
+    key('5', 'Digit5'); click(15, 9);                log('Clearance Bin at 15,9');
+    key('1', 'Digit1'); click(15, 12);               log('single belt at 15,12 (facing south, the way turned for the still)');
+    key('Escape', 'Escape'); mouse('pointermove', 15, 12); key('r', 'KeyR');  log('R with nothing held turns the belt at 15,12 to face west');
+    key('Tab', 'Tab');                               log('Tab: back to the shop floor');
+    key('2', 'Digit2'); click(3, 6); click(3, 9);    log('two sprinklers by the doors');
+    key('4', 'Digit4'); click(6, 8);                 log('Barcode Laser at 6,8: must be REFUSED, not enough cash left');
+    key('5', 'Digit5'); click(2, 7);                 log('wet floor sign at 2,7');
+    key('1', 'Digit1'); click(20, 10); click(21, 10); log('two crates at 20,10 and 21,10');
     click(21, 10, 2);                                log('right-click removes the crate at 21,10');
     key('Escape', 'Escape');
-    mouse('pointermove', 20, 10);
-    key('1', 'Digit1'); click(15, 12);               log('single belt at 15,12');
-    key('Escape', 'Escape'); mouse('pointermove', 15, 12); key('r', 'KeyR');  log('R rotates the belt at 15,12 to face south');
-    key('0', 'Digit0'); mouse('pointermove', 8, 10); log('free samples selected, preview at 8,10');
+    key('6', 'Digit6'); mouse('pointermove', 8, 10); log('free samples selected, preview at 8,10');
     await wait(400);
     const open = [...doc.querySelectorAll('button')].find((b) => /open the doors/i.test(b.textContent));
     if (open) { open.click(); log('clicked OPEN THE DOORS'); } else log('FAIL: no OPEN THE DOORS button');
     const cash = doc.body.textContent.match(/\$\s?[\d,]+/);
-    log('cash shown: ' + (cash ? cash[0] : '?') + '  (500 at start; about 22 left after building, plus sales)');
+    log('cash shown: ' + (cash ? cash[0] : '?') + '  (500 at start; about 217 left after building)');
+    const s = win.__game.session.state, kinds = (list) => list.filter(Boolean).map((b) => b.k);
+    const back = kinds(s.back).filter((k) => k !== 'drop' && k !== 'lift');
+    log(`The Back: ${back.length} parts (expect 12: 10 belts counting the turned one, the still and the bin): ${[...new Set(back)].join(', ')}`);
+    log(`turned belt at 15,12 faces ${s.back[12 * s.w + 15]?.d} (expect 2, west)`);
+    log(`shop floor: ${kinds(s.grid).join(', ')} (expect 2 sprinklers, a wet floor sign, 1 crate)`);
   });
 </script>
 </body>

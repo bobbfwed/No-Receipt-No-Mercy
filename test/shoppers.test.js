@@ -175,13 +175,13 @@ test('a gym bro walks through crate stacks and wrecks them; others go around', (
   for (let y = 1; y <= 13; y++) assert.equal(t.grid[at(12, y)].k, 'crate', 'the wall is intact after hunters');
 });
 
-test('machines and belts still stop a gym bro, and building stays possible while he is about', (t) => {
+test('security still stops a gym bro, and building stays possible while he is about', (t) => {
   // (He also wrecks other things now and then; that is switched off here and tested in expansion.test.js.)
   const chance = TUNE.smashOther;
   TUNE.smashOther = 0;
   t.after(() => { TUNE.smashOther = chance; });
   const s = stage(2);
-  for (let y = 1; y <= 13; y++) place(s, y % 2 ? 'press' : 'belt', 12, y, 1);
+  for (let y = 1; y <= 13; y++) place(s, 'samples', 12, y, 1);
   assert.equal(getField(s, SMASH)[at(12, 7)], UNREACHABLE);
   send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   let checked = false;

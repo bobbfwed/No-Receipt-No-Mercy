@@ -106,7 +106,7 @@ test('every named control has a place on screen', () => {
 // ---- What it points at -------------------------------------------------------------------------
 
 function trainingSession(seed = 9) {
-  return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
+  return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true }) });
 }
 const TOOLS = new Set(['rebuild']);
 
@@ -185,16 +185,18 @@ test('every lesson has something to point at, in every state it goes through', (
   // A few lessons in full, so a change to them is seen.
   assert.deepEqual(seen['Welcome to the Returns Department'].desk, ['control:next']);
   assert.deepEqual(seen['Training complete'].desk, ['control:play']);
-  assert.deepEqual(seen['Security: the Pepper Sprinkler'].desk.slice(0, 3), ['button:sprinkler', 'tile:9,13', 'control:doors']);
-  assert.deepEqual(seen['Security: the Pepper Sprinkler'].touch.slice(0, 3), ['drag:sprinkler:9,13', 'tile:9,13', 'control:doors']);
-  assert.ok(seen['Belts carry goods'].desk.includes('swipe:10,3:10,10'), 'the belt line is a drag along the tiles');
-  assert.ok(seen['Belts carry goods'].touch.includes('button:belt'), 'a phone taps the Belt first, then drags on the floor');
+  // The Sprinkler goes where a crate of the wall stands: that crate first (its card removes it).
+  assert.deepEqual(seen['Security: the Pepper Sprinkler'].desk.slice(0, 2), ['tile:10,13', 'control:doors']);
+  assert.deepEqual(seen['Security: the Pepper Sprinkler'].touch.slice(0, 3), ['tile:10,13', 'control:drop', 'control:doors']);
+  assert.ok(seen['Build the maze: Crate Stacks'].desk.includes('swipe:10,1:10,13'), 'the wall is a drag along the tiles');
+  assert.ok(seen['Build the maze: Crate Stacks'].touch.includes('drag:crate:10,1'), 'a phone places them one at a time');
   assert.ok(seen['Gym Bros'].desk.includes('button:rebuild'), 'the Rebuild button after the gym bro');
   assert.ok(seen.Dads.desk.includes('control:doors'));
-  // The two big buildings (0.3.03): the button, their top-left tile, then the doors; a finger drags.
+  // The two big buildings (0.3.03): the button, their top-left tile, then the doors. A finger drags
+  // the Salesman, and taps the Laser's button first so it can be turned to face down before it is placed.
   const laser = seen['Aim down the line: the Barcode Laser'];
-  assert.deepEqual(laser.desk.slice(0, 3), ['button:railgun', 'tile:12,7', 'control:doors']);
-  assert.deepEqual(laser.touch.slice(0, 3), ['drag:railgun:12,7', 'tile:12,7', 'control:doors']);
+  assert.deepEqual(laser.desk.slice(0, 3), ['button:railgun', 'tile:6,4', 'control:doors']);
+  assert.deepEqual(laser.touch.slice(0, 3), ['button:railgun', 'tile:6,4', 'control:doors']);
   const sales = seen['Hold them up: the TV Salesman'];
   assert.deepEqual(sales.desk.slice(0, 2), ['button:salesman', 'tile:4,13']);
   assert.deepEqual(sales.touch.slice(0, 2), ['drag:salesman:4,13', 'tile:4,13']);
@@ -212,63 +214,7 @@ test('a lesson with two buildings to place goes on to the second once the first 
     assert.equal(tut.tool(), then.k, `${title}: the panel lights up the next button`);
   };
   check('Hold them up: the TV Salesman', [{ c: 'place', k: 'salesman', x: 4, y: 13, d: 0 }], { k: 'sprinkler', x: 5, y: 12 });
-  check('Stopping dads', [{ c: 'place', k: 'forklift', x: 12, y: 6, d: 0 }, { c: 'place', k: 'wetfloor', x: 9, y: 7, d: 0 }, { c: 'place', k: 'wetfloor', x: 9, y: 8, d: 0 }],
-    { k: 'crate', x: 9, y: 9 });
-});
-
-test('the Barcode Laser: turned round on its card, or removed when it lies the wrong way or in the wrong place', async () => {
-  const { forTouch } = await import('../src/content/touch.js');
-  const session = trainingSession();
-  const tut = createTutorial(session);
-  tut.autoplay(STEPS.findIndex((st) => st.title === 'Aim down the line: the Barcode Laser'));
-  const st = tut.step, s = session.state;
-  const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
-  // Three tiles marked, the top-left one saying what it wants.
-  assert.deepEqual(tut.marks().map((m) => [m.x, m.y]), [[12, 7], [13, 7], [14, 7]]);
-  assert.deepEqual({ k: tut.marks()[0].k, d: tut.marks()[0].d }, { k: 'railgun', d: 2 });
-  // Dropped facing right (as a finger's drag lands it): Rotate on its card turns it round.
-  assert.ok(session.send({ c: 'place', k: 'railgun', x: 12, y: 7, d: 0 }).ok);
-  assert.deepEqual(at({}), { kind: 'tile', x: 12, y: 7 });
-  assert.deepEqual(at({ selected: { x: 12, y: 7 } }), { kind: 'control', name: 'spin' });
-  assert.deepEqual(at({ tool: 'railgun' }), { kind: 'button', k: 'railgun' }, 'a mouse puts the Laser down first');
-  assert.deepEqual(at({ tool: 'railgun', touch: true }), { kind: 'control', name: 'drop' });
-  assert.match(tut.hint(), /The Laser's arrow must point left\. .*click ⟳ Rotate on its card until the arrow points left\./);
-  assert.ok(session.send({ c: 'rotate', x: 12, y: 7 }).ok);
-  assert.equal(tut.marks().length, 0, 'turned round: done');
-  // Standing up and down: Rotate only turns it end for end, so it has to come up.
-  session.send({ c: 'remove', x: 12, y: 7 });
-  assert.ok(session.send({ c: 'place', k: 'railgun', x: 12, y: 7, d: 1 }).ok);
-  assert.deepEqual(at({ selected: { x: 12, y: 7 } }), { kind: 'control', name: 'remove' });
-  assert.match(tut.hint(), /Right-click it to remove it, press R until the arrow on the preview points left, and place it again/);
-  assert.match(forTouch(tut.hint()), /Tap it and choose Remove, tap the rotate button at the end of the bar until its arrow points left, and place it again/);
-  // One tile too far left: its own top-left is (11, 7), and its card (opened there) removes it.
-  session.send({ c: 'remove', x: 12, y: 7 });
-  assert.ok(session.send({ c: 'place', k: 'railgun', x: 11, y: 7, d: 2 }).ok);
-  assert.deepEqual(at({}), { kind: 'tile', x: 12, y: 7 });
-  assert.deepEqual(at({ selected: { x: 11, y: 7 } }), { kind: 'control', name: 'remove' });
-  assert.match(tut.hint(), /The Laser is not on the highlighted tiles/);
-  // Something else on one of its other tiles: that is marked first, to be removed.
-  session.send({ c: 'remove', x: 11, y: 7 });
-  assert.ok(session.send({ c: 'place', k: 'crate', x: 14, y: 7, d: 0 }).ok);
-  assert.deepEqual(tut.marks()[0], { x: 14, y: 7, label: 'Remove', k: 'railgun', d: 2 });
-  assert.deepEqual(at({ selected: { x: 14, y: 7 } }), { kind: 'control', name: 'remove' });
-  assert.match(tut.hint(), /Something else is on a highlighted tile/);
-});
-
-test('a wrong building on the tile: its sheet fixes it (Remove, or Rotate), and a finger puts its tool down first', () => {
-  const session = trainingSession();
-  const tut = createTutorial(session);
-  tut.start();
-  tut.next(); // the Unpacker
-  const st = tut.step, s = session.state;
-  session.send({ c: 'place', k: 'unpacker', x: 10, y: 2, d: 0 }); // facing east, not down
-  const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
-  assert.deepEqual(at({}), { kind: 'tile', x: 10, y: 2 });
-  assert.deepEqual(at({ selected: { x: 10, y: 2 } }), { kind: 'control', name: 'spin' });
-  assert.deepEqual(at({ touch: true, tool: 'unpacker' }), { kind: 'control', name: 'drop' });
-  session.send({ c: 'remove', x: 10, y: 2 });
-  session.send({ c: 'place', k: 'crate', x: 10, y: 2, d: 0 });
-  assert.deepEqual(at({ selected: { x: 10, y: 2 } }), { kind: 'control', name: 'remove' });
+  check('Slow them down: the Wet Floor Sign', [{ c: 'place', k: 'wetfloor', x: 10, y: 14, d: 0 }], { k: 'sprinkler', x: 9, y: 13 });
 });
 
 test('super shoppers: the Sprinkler button (a drag on a touch screen), its tile beside the samples, then the doors', () => {
@@ -292,7 +238,7 @@ test('several tiles: the one the held tool is for, else the first not yet done',
   const st = tut.step, s = session.state;
   const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
   assert.deepEqual(at({}), { kind: 'button', k: 'wetfloor' });
-  assert.deepEqual(at({ tool: 'sprinkler' }), { kind: 'tile', x: 11, y: 13 }, 'holding a Sprinkler: the Sprinkler\'s tile');
+  assert.deepEqual(at({ tool: 'sprinkler' }), { kind: 'tile', x: 9, y: 13 }, 'holding a Sprinkler: the Sprinkler\'s tile');
   assert.deepEqual(at({ touch: true }), { kind: 'drag', k: 'wetfloor', x: 10, y: 14 });
   session.send({ c: 'place', k: 'wetfloor', x: 10, y: 14, d: 0 });
   assert.deepEqual(at({ tool: 'wetfloor' }), { kind: 'button', k: 'sprinkler' }, 'the sign is down: on to the Sprinkler');
@@ -308,38 +254,91 @@ test('an edge arrow slides along the edge, clear of DEB and the panel, when it c
   assert.equal(a.fits, true);
 });
 
+
 test('a building facing the wrong way: the words and the arrow agree on the one thing to do next', async () => {
+  // (Until 0.4 this was the Unpacker; the Barcode Laser is now the only shop building that turns.)
   const { forTouch } = await import('../src/content/touch.js');
   const session = trainingSession();
   const tut = createTutorial(session);
-  tut.start();
-  tut.next(); // the Unpacker
+  tut.autoplay(STEPS.findIndex((st) => st.title === 'Aim down the line: the Barcode Laser'));
   const st = tut.step, s = session.state;
-  session.send({ c: 'place', k: 'unpacker', x: 10, y: 2, d: 0 }); // lands facing right
+  // Three tiles down column 6, the top one saying what it wants.
+  assert.deepEqual(tut.marks().map((m) => [m.x, m.y]), [[6, 4], [6, 5], [6, 6]]);
+  assert.deepEqual({ k: tut.marks()[0].k, d: tut.marks()[0].d }, { k: 'railgun', d: 1 });
+  assert.ok(session.send({ c: 'place', k: 'railgun', x: 6, y: 4, d: 3 }).ok); // on the tiles, but pointing up
   const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
-  // A mouse still holding the Unpacker: click its button again to put it down (the words say so).
-  assert.deepEqual(at({ tool: 'unpacker' }), { kind: 'button', k: 'unpacker' });
-  assert.match(tut.hint(), /Put down what you are holding \(Esc, or click its button again\), click the Unpacker, and click ⟳ Rotate on its card/);
-  assert.deepEqual(at({}), { kind: 'tile', x: 10, y: 2 });
-  assert.deepEqual(at({ selected: { x: 10, y: 2 } }), { kind: 'control', name: 'spin' });
-  // A finger: DROP, the Unpacker, Rotate; and the words say exactly that, with no key in them.
-  assert.deepEqual(at({ touch: true, tool: 'unpacker' }), { kind: 'control', name: 'drop' });
+  // A mouse still holding the Laser: click its button again to put it down (the words say so).
+  assert.deepEqual(at({ tool: 'railgun' }), { kind: 'button', k: 'railgun' });
+  assert.match(tut.hint(), /The Laser's arrow must point down\. Put down what you are holding \(Esc, or click its button again\), click the Laser, and click ⟳ Rotate on its card until the arrow points down\./);
+  assert.deepEqual(at({}), { kind: 'tile', x: 6, y: 4 });
+  assert.deepEqual(at({ selected: { x: 6, y: 4 } }), { kind: 'control', name: 'spin' });
+  // A finger: DROP, the Laser, Rotate; and the words say exactly that, with no key in them.
+  assert.deepEqual(at({ touch: true, tool: 'railgun' }), { kind: 'control', name: 'drop' });
   const touchHint = forTouch(tut.hint());
-  assert.match(touchHint, /Tap DROP if you are holding something, tap the Unpacker, and tap ⟳ Rotate on its card/);
+  assert.match(touchHint, /Tap DROP if you are holding something, tap the Laser, and tap ⟳ Rotate on its card/);
   assert.ok(!/\bEsc\b|click/i.test(touchHint), touchHint);
-  // The touch lesson says it in that order: drag it, then turn it on its card.
-  assert.match(st.touch[0], /^Do this: drag Unpacker .* It lands facing right: tap it, then tap ⟳ Rotate on its card until its arrow points DOWN\.$/);
+  // The touch lesson says it in that order: the button, the rotate button, then the tile.
+  assert.match(st.touch[0], /^Do this: tap Laser in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, then tap the top one of the three highlighted tiles\./);
+  assert.ok(session.send({ c: 'rotate', x: 6, y: 4 }).ok);
+  assert.equal(tut.marks().length, 0, 'turned round: done');
 });
 
-test('belts facing the wrong way are laid again by one drag along the line', () => {
+test('the Barcode Laser: removed when it lies the wrong way or in the wrong place', async () => {
+  const { forTouch } = await import('../src/content/touch.js');
   const session = trainingSession();
   const tut = createTutorial(session);
-  tut.autoplay(2); // the belt lesson
+  tut.autoplay(STEPS.findIndex((st) => st.title === 'Aim down the line: the Barcode Laser'));
   const st = tut.step, s = session.state;
-  for (const y of [3, 4, 5, 6, 7, 8, 9, 10]) session.send({ c: 'place', k: 'belt', x: 10, y, d: 0 }); // all facing right
   const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
-  assert.deepEqual(at({}), { kind: 'button', k: 'belt' });
-  assert.deepEqual(at({ tool: 'belt' }), { kind: 'swipe', from: { x: 10, y: 3 }, to: { x: 10, y: 10 } });
-  assert.deepEqual(at({ tool: 'belt', touch: true }), { kind: 'swipe', from: { x: 10, y: 3 }, to: { x: 10, y: 10 } });
-  assert.match(tut.hint(), /drag again from the first highlighted tile down to the last/);
+  // Lying across the top tile (it cannot face right from there: a pillar is in the way): its card
+  // removes it.
+  assert.equal(session.send({ c: 'place', k: 'railgun', x: 6, y: 4, d: 0 }).ok, false, 'a pillar in the way');
+  assert.ok(session.send({ c: 'place', k: 'railgun', x: 4, y: 4, d: 0 }).ok);
+  assert.deepEqual(at({}), { kind: 'tile', x: 6, y: 4 });
+  assert.deepEqual(at({ selected: { x: 4, y: 4 } }), { kind: 'control', name: 'remove' });
+  assert.match(tut.hint(), /The Laser is not on the highlighted tiles\. Right-click it to remove it, press R until the arrow on the preview points down, and place it again/);
+  assert.match(forTouch(tut.hint()), /Tap it and choose Remove, tap the rotate button at the end of the bar until its arrow points down, and place it again/);
+  // One tile too high: its own top-left is (6, 3), and its card (opened there) removes it.
+  session.send({ c: 'remove', x: 4, y: 4 });
+  assert.ok(session.send({ c: 'place', k: 'railgun', x: 6, y: 3, d: 1 }).ok);
+  assert.deepEqual(at({}), { kind: 'tile', x: 6, y: 4 });
+  assert.deepEqual(at({ selected: { x: 6, y: 3 } }), { kind: 'control', name: 'remove' });
+  // Something else on one of its other tiles: that is marked first, to be removed.
+  session.send({ c: 'remove', x: 6, y: 3 });
+  assert.ok(session.send({ c: 'place', k: 'crate', x: 6, y: 6, d: 0 }).ok);
+  assert.deepEqual(tut.marks()[0], { x: 6, y: 6, label: 'Remove', k: 'railgun', d: 1 });
+  assert.deepEqual(at({ selected: { x: 6, y: 6 } }), { kind: 'control', name: 'remove' });
+  assert.match(tut.hint(), /Something else is on a highlighted tile/);
+});
+
+test('a wrong building on the tile: its sheet removes it, and a finger puts its tool down first', () => {
+  // The Sprinkler lesson: a Crate Stack from the wall stands where the Sprinkler goes.
+  const session = trainingSession();
+  const tut = createTutorial(session);
+  tut.autoplay(STEPS.findIndex((st) => st.title === 'Security: the Pepper Sprinkler'));
+  const st = tut.step, s = session.state;
+  const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
+  assert.equal(s.grid[13 * s.w + 10].k, 'crate');
+  assert.deepEqual(at({}), { kind: 'tile', x: 10, y: 13 });
+  assert.deepEqual(at({ selected: { x: 10, y: 13 } }), { kind: 'control', name: 'remove' });
+  assert.deepEqual(at({ touch: true, tool: 'crate' }), { kind: 'control', name: 'drop' });
+  assert.match(tut.hint(), /The Crate Stack is still there\. Right-click it to remove it, then place the Sprinkler\./);
+  // Gone: on to the Sprinkler.
+  assert.ok(session.send({ c: 'remove', x: 10, y: 13 }).ok);
+  assert.deepEqual(at({ tool: 'sprinkler' }), { kind: 'tile', x: 10, y: 13 });
+});
+
+test('a wall of Crate Stacks is laid by one drag, carrying on from the first tile not yet done', () => {
+  const session = trainingSession();
+  const tut = createTutorial(session);
+  tut.autoplay(STEPS.findIndex((st) => st.title === 'Build the maze: Crate Stacks'));
+  const st = tut.step, s = session.state;
+  const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
+  assert.deepEqual(at({ tool: 'crate' }), { kind: 'swipe', from: { x: 10, y: 1 }, to: { x: 10, y: 13 } });
+  for (const y of [1, 2, 3]) session.send({ c: 'place', k: 'crate', x: 10, y });
+  assert.deepEqual(at({}), { kind: 'button', k: 'crate' });
+  assert.deepEqual(at({ tool: 'crate' }), { kind: 'swipe', from: { x: 10, y: 4 }, to: { x: 10, y: 13 } });
+  // A finger places them one at a time: the next tile.
+  assert.deepEqual(at({ touch: true }), { kind: 'drag', k: 'crate', x: 10, y: 4 });
+  assert.deepEqual(at({ tool: 'crate', touch: true }), { kind: 'tile', x: 10, y: 4 });
 });
