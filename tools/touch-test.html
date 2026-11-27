@@ -621,13 +621,16 @@
     n0 = count(); nope0 = nopes;
     const cb = await barDrag('sprinkler', under(g2.x, g2.y), { end: null });
     const other = at(g2.x + 2, g2.y + 1);
+    // (The second finger's tile may already hold something from an earlier check: what counts is that it is unchanged.)
+    const otherHad = b(g2.x + 2, g2.y + 1)?.k || '-';
     fire('pointerdown', 12, other.x, other.y);
     await wait(30);
     const cancelledNow = !input.carrying && input.placing === null;
     fire('pointerup', 12, other.x, other.y);
     btnFire(cb, 'pointerup', 21, under(g2.x, g2.y).x, under(g2.x, g2.y).y);
     await wait(60);
-    check('a second finger on the floor cancels a drag from the bar: nothing is built when either lifts', cancelledNow && count() === n0 && !b(g2.x, g2.y) && !b(g2.x + 2, g2.y + 1));
+    check('a second finger on the floor cancels a drag from the bar: nothing is built when either lifts', cancelledNow && count() === n0 && !b(g2.x, g2.y) && (b(g2.x + 2, g2.y + 1)?.k || '-') === otherHad,
+      `cancelled ${cancelledNow}, built ${count() - n0}, tile ${g2.x},${g2.y}: ${b(g2.x, g2.y)?.k || '-'}, second finger's: ${otherHad} -> ${b(g2.x + 2, g2.y + 1)?.k || '-'}`);
     check('... nothing is held after, and nothing refused', input.tool === null && nopes === nope0);
 
     // Lifted with the preview off the floor (the finger near the top of the floor): nothing, quietly.

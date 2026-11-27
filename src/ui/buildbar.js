@@ -8,6 +8,13 @@ import { WIRE_KEY, REINFORCE_KEY } from './wiretool.js';
 import { longPress, touchedLast } from './touch.js';
 import { HOW, BACK_HOW, HOW_REMOVE, HOW_REBUILD, HOW_WIRE, HOW_REINFORCE } from '../content/help.js';
 import { worded, isTouch, PLACE_BY_TOUCH } from '../content/touch.js';
+import { prefs as sharedPrefs, barPress } from './prefs.js';
+
+/** What the card's "Don't show these" button says it does (a notice, from game.js). */
+export const CARDS_HIDDEN = {
+  mouse: 'Cards hidden. Double-click a button to see one anyway. Sound & settings brings them back.',
+  touch: 'Cards hidden. Double-tap a button (or hold a finger on it) to see one anyway. Sound & settings brings them back.',
+};
 
 // On a phone the info card is a sheet over the floor; the player can fold it down to one line,
 // and it stays folded for the next tool too.
@@ -40,8 +47,23 @@ const one = (n) => (Math.round(n * 10) / 10).toString();
 /**
  * @param {Object} input the input controller (tool, dir, hover, setTool)
  * @param {Object} session
+ * @param {Object} [o]
+ * @param {Object} [o.prefs] the player's screen choices (prefs.js): whether cards open by themselves
+ * @param {() => void} [o.onCardsOff] the player has just turned the cards off with the card's button
  */
-export function createBuildBar(input, session) {
+export function createBuildBar(input, session, { prefs = sharedPrefs(), onCardsOff = () => {} } = {}) {
+  // With the cards turned off (0.4, the owner: "useful information, but only on rare occasion"), a
+  // double click or double tap on a button shows its card this once (barPress in prefs.js): until
+  // something else is held.
+  let lastPress = null;
+  let once = null;
+  function press(k) {
+    const now = performance.now();
+    const what = barPress(lastPress, k, now, input.tool, prefs.get('cards'));
+    lastPress = { k, at: now };
+    if (what === 'card') { once = k; showInfo(k); return; }
+    input.setTool(what === 'drop' ? null : k);
+  }
   const tip = h('div', { class: 'tip hidden', role: 'tooltip', id: 'build-tip' });
   const buttons = new Map();
   // What each building costs in this game: a card can change it (0.3.01: shrinkflation,
@@ -90,7 +112,7 @@ export function createBuildBar(input, session) {
       type: 'button', class: `bb-btn grp-${def ? def.group : 'tool'} tool-${k}`, 'aria-pressed': 'false',
       'aria-describedby': 'build-tip', 'data-k': k,
       'aria-label': def ? `${def.name}, $${def.cost}, key ${key}` : `${t.name} tool, key ${key}`,
-      onclick: () => (t && t.action ? input.rebuild() : input.setTool(input.tool === k ? null : k)),
+      onclick: () => (t && t.action ? input.rebuild() : press(k)),
       // A finger has no hover, and a tapped button keeps focus on some phones: the tooltip comes
       // from a long press instead (below).
       onpointerenter: (e) => { if (e.pointerType !== 'touch') showTip(btn, k); }, onpointerleave: hideTip,
@@ -152,12 +174,20 @@ export function createBuildBar(input, session) {
   let lastCash = null, lastTool, lastDir, lastRubble = '';
   const rebuildBtn = buttons.get('rebuild'), rebuildNote = rebuildBtn.querySelector('.bb-price');
 
+  /** The card's "Don't show these" button (0.4): cards stay away until turned back on in settings. */
+  const offBtn = () => h('button', {
+    type: 'button', class: 'bbi-off', title: 'Stop this card opening whenever you pick something up. Double-click a button to see it anyway; Sound & settings turns cards back on.',
+    onclick: (e) => { e.stopPropagation(); once = null; prefs.set('cards', false); onCardsOff(); },
+  }, "Don't show these");
+
   function showInfo(k) {
     const def = BUILD[k];
     const how = def ? howOf(k) : TOOLS[k] ? TOOLS[k].how : null;
-    setClass(info, 'hidden', !how);
+    // Turned off, the card shows only after a double click on its button (`once`).
+    const want = !!how && (prefs.get('cards') || once === k);
+    setClass(info, 'hidden', !want);
     setClass(hint, 'hidden', !!how);
-    if (!how) return;
+    if (!want) return;
     info.replaceChildren(
       h('div', { class: 'bbi-head' },
         h('span', { class: 'bbi-icon', html: buildingIcon(k) }),
@@ -165,6 +195,7 @@ export function createBuildBar(input, session) {
         // What it means for the maze, in two words.
         def ? h('span', { class: 'bbi-maze' }, def.back ? 'The Back' : !def.blocks ? 'Walkable' : 'Blocks everyone') : null,
         def ? h('span', { class: 'bbi-cost' }, `${priceOf(k)}`) : null,
+        prefs.get('cards') ? offBtn() : null,
         foldBtn()),
       h('p', null, worded(how.does)),
       h('p', null, h('b', null, 'How: '), worded(how.use)));
@@ -227,6 +258,8 @@ export function createBuildBar(input, session) {
     }
     if (input.tool !== lastTool) {
       lastTool = input.tool;
+      // A card shown by a double click lasts while that building is held.
+      if (once !== input.tool) once = null;
       for (const [k, btn] of buttons) {
         const on = k === input.tool;
         setClass(btn, 'on', on);
@@ -256,6 +289,9 @@ export function createBuildBar(input, session) {
       dirEl.textContent = `${DIR_ARROWS[input.dir]} ${DIR_NAMES[input.dir]}`;
     }
   }
+
+  // Cards turned on or off in the settings menu: the held tool's card follows at once.
+  prefs.on(() => { if (prefs.get('cards')) once = null; showInfo(input.tool); });
 
   return { el, tip, info, update, highlight };
 }

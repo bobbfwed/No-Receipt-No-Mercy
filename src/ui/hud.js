@@ -3,6 +3,7 @@ import { TUNE, ROLES, SPEEDS, officePlayer, isEndless, bossTier, bossTitle } fro
 import { eventOf } from '../content/facts.js';
 import { h, setText, setClass, setStyle, money, clock, safeColor, copyButton, copyText } from './dom.js';
 import { GROUPS, DEFAULTS as DEFAULT_LEVELS } from '../audio/groups.js';
+import { prefs, shiftLine } from './prefs.js';
 
 const CASH_TITLE = 'Your own money. Everything the store earns or refunds is split evenly between the players; what you build comes out of yours.';
 /** How many steps the top bar can take to fit a short window (the .fit-N rules in style.css). */
@@ -102,7 +103,8 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
   }
 
   const help = h('button', { type: 'button', class: 'btn-help', 'aria-label': 'How to play', title: 'How to play', onclick: () => { setMore(false); onHelp(); } }, '?');
-  const audio = sound ? createSoundMenu(sound) : null;
+  // (The menu also holds the screen switches, 0.4, so it is there even if sound failed to load.)
+  const audio = createSoundMenu(sound);
   const book = onHandbook ? h('button', {
     type: 'button', class: 'btn-help btn-book', 'aria-label': 'Employee Handbook', title: 'Employee Handbook: every shopper and building, with its numbers',
     onclick: () => { setMore(false); onHandbook(); },
@@ -287,10 +289,29 @@ export function createTopBar(session, { roomCode = null, roomKind = null, onHelp
  * short sample of that group, so the player hears what he has set.
  * The menu's text never changes (the marks and the percentages are drawn in CSS), because the top
  * bar measures its own text to know when to fit itself again (fit() above).
- * @param {Object} sound the sound module (get/set/toggle/preview, unlock)
+ * Under the sliders (0.4), the player's own switches for what pops up on screen: customer reviews,
+ * and the card that opens when a building is picked (prefs.js). They are what the "Hide reviews"
+ * and "Don't show these" buttons turn off, so this is where they come back.
+ * @param {Object|null} sound the sound module (get/set/toggle/preview, unlock), or null if it failed
+ *   to load (then only the switches)
  */
 function createSoundMenu(sound) {
-  const rows = [{ key: 'volume', label: 'Volume' }, ...GROUPS];
+  const p = prefs();
+  const SWITCHES = [
+    { key: 'reviews', label: 'Customer reviews pop up', title: 'The NEW REVIEW cards at the top right. The end-of-event review always shows.' },
+    { key: 'cards', label: 'A card when you pick a building', title: 'The card over the floor that says what the building or tool does. Off: double-click (double-tap) its button to see it.' },
+  ];
+  const switches = SWITCHES.map(({ key, label, title }) => {
+    const id = `set-${key}`;
+    const box = h('input', { type: 'checkbox', id, onchange: () => p.set(key, box.checked) });
+    return { key, box, el: h('div', { class: 'set-row', title }, box, h('label', { for: id }, label)) };
+  });
+  const syncSwitches = () => { for (const s of switches) if (s.box.checked !== !!p.get(s.key)) s.box.checked = !!p.get(s.key); };
+  syncSwitches();
+  p.on(syncSwitches);
+  const screen = h('div', { class: 'set-screen', role: 'group', 'aria-label': 'On screen' },
+    h('small', { class: 'set-head' }, 'ON SCREEN'), switches.map((s) => s.el));
+  const rows = sound ? [{ key: 'volume', label: 'Volume' }, ...GROUPS] : [];
   const pct = (key) => Math.round((Number(sound.get(key)) || 0) * 100);
   const sync = [];
 
@@ -324,21 +345,21 @@ function createSoundMenu(sound) {
     return el;
   }
 
-  const reset = h('button', {
+  const reset = sound ? h('button', {
     type: 'button', class: 'snd-reset', title: 'Every slider back to how the game came',
     onclick: () => {
       sound.unlock();
       for (const { key } of rows) sound.set(key, DEFAULT_LEVELS[key]);
       refresh();
     },
-  }, 'Reset');
-  const menu = h('div', { class: 'snd-menu hidden', role: 'group', 'aria-label': 'Sound settings' },
-    rows.map(row), h('div', { class: 'snd-foot' }, reset));
+  }, 'Reset') : null;
+  const menu = h('div', { class: 'snd-menu hidden', role: 'group', 'aria-label': 'Sound and settings' },
+    rows.map(row), reset ? h('div', { class: 'snd-foot' }, reset) : null, screen);
   const btn = h('button', {
-    type: 'button', class: 'btn-help btn-sound', 'aria-label': 'Sound settings', title: 'Sound settings', 'aria-expanded': 'false',
+    type: 'button', class: 'btn-help btn-sound', 'aria-label': 'Sound and settings', title: 'Sound and settings', 'aria-expanded': 'false',
     onclick: (e) => {
       e.stopPropagation();
-      sound.unlock();
+      sound?.unlock();
       setOpen(menu.classList.contains('hidden'));
     },
   });
@@ -357,7 +378,7 @@ function createSoundMenu(sound) {
   }
   function refresh() {
     for (const f of sync) f();
-    const muted = !(sound.get('volume') > 0) || GROUPS.every(({ key }) => !(sound.get(key) > 0));
+    const muted = !sound || !(sound.get('volume') > 0) || GROUPS.every(({ key }) => !(sound.get(key) > 0));
     const icon = muted ? '🔇' : '🔊';
     if (btn.textContent !== icon) btn.textContent = icon;
   }
@@ -396,7 +417,26 @@ export function createPlayersPanel(session, { playSound = () => {} } = {}) {
     type: 'button', class: 'players-pill', 'aria-expanded': 'false', 'aria-label': 'Players on shift',
     onclick: () => { const open = !el.classList.contains('open'); setClass(el, 'open', open); pill.setAttribute('aria-expanded', String(open)); },
   }, h('span', { class: 'pp-icon', 'aria-hidden': 'true' }, '👥'), pillCount, h('span', { class: 'pp-caret', 'aria-hidden': 'true' }));
-  const el = h('section', { class: 'panel players', 'aria-label': 'Players' }, pill, h('h3', null, 'ON SHIFT'), list, lights, foot);
+  // On a big screen the heading folds the panel down to one line, "ON SHIFT · 2 players" (0.4, the
+  // owner), and the choice is remembered (prefs.js). (On a small screen the button above does the job.)
+  const pf = prefs();
+  const headText = h('span', { class: 'fold-text' }, 'ON SHIFT');
+  const head = h('button', {
+    type: 'button', class: 'fold-head', 'aria-expanded': 'true', title: 'Fold this panel down to one line, or open it again',
+    onclick: () => pf.setFolded('players', !pf.folded('players')),
+  }, headText, h('span', { class: 'fold-caret', 'aria-hidden': 'true' }));
+  const el = h('section', { class: 'panel players', 'aria-label': 'Players' }, pill, h('h3', null, head), list, lights, foot);
+  let foldedNow = null, online = -1;
+  function showFold() {
+    const f = pf.folded('players');
+    if (f !== foldedNow) {
+      foldedNow = f;
+      setClass(el, 'folded', f);
+      head.setAttribute('aria-expanded', String(!f));
+    }
+    setText(headText, f ? shiftLine(online) : 'ON SHIFT');
+  }
+  pf.on(showFold);
   let sig = '';
   const cashEls = new Map(); // player id -> the element showing his cash
   let statusEl = null; // what Head Office is doing, on his row
@@ -429,7 +469,8 @@ export function createPlayersPanel(session, { playSound = () => {} } = {}) {
       setText(officeLight, s.office.ready ? 'HEAD OFFICE ✓' : 'HEAD OFFICE …');
       setClass(officeLight, 'on', !!s.office.ready);
     }
-    const online = s.players.filter((p) => p.on).length;
+    const nowOnline = s.players.filter((q) => q.on).length;
+    if (nowOnline !== online || foldedNow === null) { online = nowOnline; showFold(); }
     setText(pillCount, String(online));
     setText(foot, online === 1 ? '1 player online. Says a lot.'
       : boss ? `${online} players online · event pay to each store player, other income split between them`

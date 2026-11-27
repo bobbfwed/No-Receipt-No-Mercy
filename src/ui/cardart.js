@@ -227,6 +227,9 @@ export function blockedRects(state, cam, w, h, top = 0, bottom = h, doors = stat
  * When that would cover an entrance, a till or anything else in `rects`, or run off the floor, it
  * goes beside the panel instead: to its right, top-aligned; then lower down in that place (under
  * the boss bar, say); then along to the right to the nearest clear place.
+ * (Not used by the game since 0.4, stage 5a: the owner wants the strip and EVENT PAY always below,
+ * and each panel folds instead; game.js no longer places them. Kept, with its test, in case a
+ * panel ever needs to step aside again.)
  * @param {{x: number, y: number, w: number, h: number}|null} panel the players panel (CSS pixels
  *   from the floor's top left), or null when it is not shown
  * @param {{w: number, h: number}} size the strip

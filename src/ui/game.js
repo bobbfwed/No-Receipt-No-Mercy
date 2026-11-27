@@ -17,7 +17,7 @@ import { createLobby } from './lobby.js';
 import { createDeal } from './deal.js';
 import { createHandStrip, handPanel, handRow } from './hand.js';
 import { createPayPanel } from './eventpay.js';
-import { handOf, blockedRects, sidePlace } from './cardart.js';
+import { handOf } from './cardart.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
 import { createBossBar } from './bossbar.js';
@@ -27,9 +27,17 @@ import { forTouch, isTouch } from '../content/touch.js';
 import { createTouchControls, isCoarse } from './touch.js';
 import { createPointer } from './pointer.js';
 import { BUILD, statsOf, sizeOf } from '../sim/index.js';
+import { CARDS_HIDDEN } from './buildbar.js';
+import { hostAwayLine, hostBackLine, HOST_AWAY_NOTICE } from '../content/lines.js';
 
-/** A phone-sized screen (the same limits as the narrow layout in style.css). */
-const narrow = () => innerWidth < 1100 || innerHeight < 560;
+/**
+ * A phone-sized screen (the same limits as the narrow layout in style.css). Read from a media query
+ * that is told when it changes: reading the window's size every frame, after the interface had
+ * changed something, forced the browser to lay the page out again (the stutter investigation of
+ * 2026-11-26 found 4 s of a phone's 116 busy seconds there).
+ */
+const smallQuery = typeof matchMedia === 'function' ? matchMedia('(max-width: 1099px), (max-height: 559px)') : { matches: false, addEventListener() {} };
+const narrow = () => smallQuery.matches;
 
 /**
  * Shows the game for a session that is ready (a host, or a client after 'ready').
@@ -97,12 +105,13 @@ export function startGame(session, {
   const planner = createPlanner(session, { playSound });
   const top = createTopBar(session, { roomCode, roomKind, onHelp: toggleHelp, onHandbook: () => openHandbook(session.state), sound, playSound, budgetLeft: planner.left });
   const players = createPlayersPanel(session, { playSound });
-  const bar = createBuildBar(input, session);
+  const toasts = createToasts({ getState: () => session.state });
+  // The card's "Don't show these" button (0.4): say how to see one anyway, and how to undo it.
+  const bar = createBuildBar(input, session, { onCardsOff: () => toasts.notice(isTouch() ? CARDS_HIDDEN.touch : CARDS_HIDDEN.mouse) });
   // Buttons for what the keyboard and the right mouse button do, for touch screens only.
   const touchUi = createTouchControls({ input, session, renderer, playSound });
   bar.el.append(touchUi.bar);
   const deb = createDeb();
-  const toasts = createToasts({ getState: () => session.state });
   const training = tutorial && session.isHost
     ? createTutorialPanel(session, { onExit, highlight: bar.highlight, playSound })
     : null;
@@ -184,15 +193,29 @@ export function startGame(session, {
   // The game's cards: five slots under the players panel for the whole game, filled by the deal
   // between the lobby and the first build phase (which covers the whole screen while it runs).
   const strip = createHandStrip({ onOpen: openCards });
-  stage.append(strip.el);
   const deal = createDeal(session, { strip, playSound });
-  // What the sales event pays, and the speed bonus (0.4; the INCOME panel of 0.3.03 had this place):
-  // under the strip of cards (or the players panel), placed with it.
+  // What the sales event pays, and the speed bonus (0.4; the INCOME panel of 0.3.03 had this place).
   const pay = createPayPanel(session);
-  stage.append(pay.el);
-
+  // The three panels at the top left (0.4, the owner): ON SHIFT, the hand of cards, EVENT PAY. On a
+  // big screen they always stand in one column in that order (EVENT PAY used to be put beside the
+  // hand when the column would cover an entrance; the owner wants it below, and each panel folds
+  // down to one line instead); on a small screen they are one row of chips. The style sheet lays
+  // the box out either way (.left-col), so nothing is measured or placed from here.
   // In training the lesson panel sits where the players list normally is.
-  stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet, touchUi.aid);
+  const leftCol = h('div', { class: 'left-col' }, training ? null : players.el, strip.el, pay.el);
+  stage.append(leftCol);
+  let smallNow = null;
+  function applySmall() {
+    const small = narrow();
+    if (small === smallNow) return;
+    smallNow = small;
+    strip.setSide(!small);
+    pay.setChip(small);
+  }
+  applySmall();
+  smallQuery.addEventListener?.('change', applySmall);
+
+  stage.append(...[training ? training.el : null, toasts.el, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet, touchUi.aid].filter(Boolean));
   const root = h('div', { class: `game${training ? ' is-training' : ''}` }, top.el, stage, bar.el, planner.el, bar.tip, planner.tip, deal.el);
   mount.replaceChildren(root);
   document.body.classList.add('in-game');
@@ -224,6 +247,23 @@ export function startGame(session, {
   });
   session.on('review', (m) => toasts.review(m));
   session.on('players', (m) => toasts.notice(m.text));
+  // The host's page is in the background (0.4): his browser then runs the game about once a second,
+  // so for everyone else it crawls. A joined player is told why, by a notice that stays until the
+  // host is back, and by DEB. (The host himself cannot see his own hidden page.)
+  let awayDown = null;
+  session.on('away', (m) => {
+    if (session.isHost) return;
+    const s = session.state;
+    const host = s?.players[s.host | 0]?.name || 'The host';
+    if (m.on && !awayDown) {
+      awayDown = toasts.standing(HOST_AWAY_NOTICE.replace('{name}', host));
+      deb.say({ who: 'DEB (HR)', text: hostAwayLine(host, Math.random), mood: 'angry' });
+    } else if (!m.on && awayDown) {
+      awayDown();
+      awayDown = null;
+      deb.say({ who: 'DEB (HR)', text: hostBackLine(host, Math.random), mood: 'smug' });
+    }
+  });
   // The host took everyone back to the lobby: the finished game's leftovers go. (The end screen
   // itself comes down in the drawing loop, which sees the phase change.)
   session.on('lobby', () => {
@@ -309,7 +349,7 @@ export function startGame(session, {
   // ---- Drawing loop --------------------------------------------------------------------------------
   const touchWords = isTouch();
   let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false, wasBoss = false;
-  let dealFilled = Infinity, wasHand = false, wasPay = false;
+  let dealFilled = Infinity, wasHand = false;
   let endEl = null; // the end screen, while it is up
   function frame(now) {
     if (dead) return;
@@ -335,20 +375,7 @@ export function startGame(session, {
     planner.update(s);
     touchUi.update(s);
     rebuildPop.update(s);
-    // It stands on the held tool's card, which floats over the bottom of the floor too.
-    if (!rebuildPop.el.classList.contains('hidden')) {
-      const card = !office && !bar.info.classList.contains('hidden') ? bar.info.offsetHeight : 0;
-      const lift = card ? `${card + 16}px` : '';
-      if (rebuildPop.el.style.bottom !== lift) rebuildPop.el.style.bottom = lift;
-    }
-    // The floor switch stands on the held tool's card too, where the card reaches across under it
-    // (a phone, where the card is as wide as the floor).
-    {
-      const card = !office && !bar.info.classList.contains('hidden') ? bar.info.getBoundingClientRect() : null;
-      const me = card ? floorBtn.getBoundingClientRect() : null;
-      const lift = card && card.right > me.left && card.left < me.right ? `${card.height + 16}px` : '';
-      if (floorBtn.style.bottom !== lift) floorBtn.style.bottom = lift;
-    }
+    updateDock();
     // A sheet over the bottom of the floor (the held tool's card, or a tapped building's actions):
     // on a phone DEB's bubble makes room for it.
     const up = touchUi.sheetOpen || (!!input.tool && !office);
@@ -362,8 +389,7 @@ export function startGame(session, {
     const handUp = strip.update(s, dealFilled);
     if (handUp !== wasHand) { wasHand = handUp; root.classList.toggle('has-hand', handUp); }
     dealFilled = deal.update(s);
-    wasPay = pay.update(s);
-    placeStrip(s);
+    pay.update(s);
     // In the lobby the floor is drawn to the right of the panel, whole, so the store can be seen.
     const inLobby = lobby.update(s);
     if (inLobby !== wasLobby) {
@@ -449,8 +475,74 @@ export function startGame(session, {
     } else if (!view.marks || !view.marks.length) marksSig = '';
     renderer.draw(view);
     if (pointer) pointer.update(now);
+    if (training) keepOffMarks(view.marks, now);
   }
   requestAnimationFrame(frame);
+
+  // ---- The bottom of the floor (0.4) ---------------------------------------------------------------
+  // The held tool's card and a tapped building's sheet stand over the bottom of the floor. What
+  // lives there (on a phone: the small map, DEB, the floor switch, the chat, the REBUILD button; on
+  // a big screen the REBUILD button) stands on top of them instead of under them: the style sheet
+  // lifts it by --dock-lift. Their heights come from a ResizeObserver, which reports them after the
+  // browser has laid the page out anyway, so no frame forces a layout to find them out.
+  let cardH = 0, sheetH = 0, dockLift = -1, popLift = -1;
+  const sizes = new ResizeObserver((entries) => {
+    for (const e of entries) {
+      const hgt = e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height;
+      if (e.target === bar.info) cardH = hgt; else if (e.target === touchUi.sheet) sheetH = hgt;
+    }
+  });
+  sizes.observe(bar.info);
+  sizes.observe(touchUi.sheet);
+  function updateDock() {
+    const cardUp = !office && !touchUi.sheetOpen && cardH > 0 && !bar.info.classList.contains('hidden') && !bar.info.classList.contains('tut-top');
+    const sheetUp = touchUi.sheetOpen && sheetH > 0 && !touchUi.sheet.classList.contains('at-top');
+    // (The gap between them: the card floats 0.4rem over the bar, the sheet 0.5rem over the floor.)
+    const lift = Math.round(Math.max(cardUp ? cardH + 12 : 0, sheetUp ? sheetH + 14 : 0));
+    if (lift !== dockLift) { dockLift = lift; root.style.setProperty('--dock-lift', `${lift}px`); }
+    // On a big screen the REBUILD button stands on the card (it is in the same place, the middle of
+    // the bottom); the sheet has its own rule in the style sheet.
+    const pop = cardUp && !narrow() ? Math.round(cardH + 16) : 0;
+    if (pop !== popLift) { popLift = pop; rebuildPop.el.style.bottom = pop ? `${pop}px` : ''; }
+  }
+
+  // ---- The training shift's marked tiles stay clear (0.4) -------------------------------------------
+  // A lesson marks the tile it wants used. If DEB's bubble or the floor switch stands over it (on a
+  // phone the camera may not be able to move far enough to bring the tile clear of the bottom of the
+  // floor), that one steps up to the top of the floor while it would. Looked at four times a second,
+  // and only in training.
+  let dodgeAt = 0;
+  const dodgers = [deb.el, floorBtn];
+  function keepOffMarks(marks, now) {
+    if (now - dodgeAt < 250) return;
+    dodgeAt = now;
+    const cr = canvas.getBoundingClientRect(), cam = renderer.cam, z = cam.zoom || 30;
+    const tiles = (marks || []).map((m) => ({
+      l: cr.left + cr.width / 2 + (m.x - cam.x) * z, t: cr.top + cr.height / 2 + (m.y - cam.y) * z, size: z,
+    }));
+    const st = stage.getBoundingClientRect();
+    // The top of the floor in the stage (on a phone held upright the lesson panel is above it): the
+    // reviews and notices stand there in training (style.css), and anything dodging goes there.
+    const floorTop = Math.round(cr.top - st.top);
+    if (floorTop !== shownFloorTop) { shownFloorTop = floorTop; root.style.setProperty('--floor-top', `${floorTop}px`); }
+    // The held tool's card may have gone to the top of the floor for the same reason (pointer.js):
+    // then what dodges stands under it.
+    const card = bar.info.classList.contains('tut-top') && !bar.info.classList.contains('hidden') ? bar.info.getBoundingClientRect() : null;
+    for (const el of dodgers) {
+      const was = el.classList.contains('dodge');
+      if (!tiles.length) { if (was) { el.classList.remove('dodge'); el.style.top = ''; } continue; }
+      // Where it stands when not dodging, so the decision does not flicker.
+      if (was) { el.classList.remove('dodge'); el.style.top = ''; }
+      const r = el.getBoundingClientRect();
+      const hits = (y0, y1) => tiles.some((t) => t.l < r.right && t.l + t.size > r.left && t.t < y1 && t.t + t.size > y0);
+      if (!(r.width > 0) || !hits(r.top, r.bottom)) continue;
+      let top = floorTop + 6;
+      if (card && card.left < r.right && card.right > r.left) top = Math.max(top, Math.round(card.bottom - st.top + 8));
+      el.classList.add('dodge');
+      el.style.top = `${top}px`;
+    }
+  }
+  let shownFloorTop = null;
 
   // On a phone the building sheet covers the bottom of the floor (0.3.02). When a building is
   // tapped low on the screen, its reach (or the building itself) would be under the sheet, so as the
@@ -488,85 +580,6 @@ export function startGame(session, {
     // The camera stops at the map's edge (and cannot move at all when the store's height fits on
     // screen): if the reach is still under the sheet, the sheet goes to the top of the floor.
     if (screenY(bottom) > touchUi.sheet.getBoundingClientRect().top - 10) touchUi.sheet.classList.add('at-top');
-  }
-
-  // On a big screen the strip of cards sits under the ON SHIFT panel, lined up with it and as wide,
-  // so the two read as one column (the owner, 0.3.02), and follows the panel down as it grows. If
-  // that would cover an open entrance, a till, the boss bar or the small map, or run off the floor
-  // (a tall panel in a big game), it goes beside the panel instead (sidePlace in cardart.js). On a
-  // small screen it has a corner of its own, beside the players button (style.css).
-  // The EVENT PAY panel (0.4; the INCOME panel's place, 0.3.03) is the third in that column: under
-  // the strip (under the panel in a game without cards), as wide as the panel, or, when that would
-  // cover something, beside the one above it by the same rules (sidePlace). On a small screen it is
-  // a chip in the row at the top left, after the cards (placeChip).
-  let stripKey = '', stripPlaced = false;
-  /** An element's box in CSS pixels from the floor's top left, or null if it is not showing. */
-  const boxIn = (el, at) => {
-    if (!el || !el.isConnected || !el.offsetWidth) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.left - at.left, y: r.top - at.top, w: r.width, h: r.height };
-  };
-  function placeStrip(s) {
-    const small = narrow();
-    if ((!wasHand || small) && stripPlaced) { stripPlaced = false; strip.place(null); root.classList.remove('hand-mid'); }
-    if (small) { stripKey = ''; placeChip(); return; }
-    if (!wasHand && !wasPay) { if (stripKey) { stripKey = ''; pay.place(null); } return; }
-    const cam = renderer.cam;
-    const at = stage.getBoundingClientRect();
-    const W = stage.clientWidth, H = stage.clientHeight;
-    // (In training the lesson panel sits where the players list goes; nothing is under it then.)
-    const panel = boxIn(training ? null : players.el, at);
-    const others = [wasBoss && bossBar.el, mapShown && mapBox, chat.el.querySelector('.chat-open'), chat.el.querySelector('.chat-form')]
-      .map((el) => el && boxIn(el, at)).filter(Boolean);
-    const sig = (b) => (b ? [b.x, b.y, b.w, b.h].map(Math.round).join(' ') : '-');
-    const key = [cam.x, cam.y, cam.zoom, W, H, sig(panel), others.map(sig).join('|'), s.gridVer, s.w, s.open,
-      wasHand, wasPay && pay.el.offsetHeight].join();
-    if (key === stripKey) return;
-    stripKey = key;
-    // Only the entrances in use: a locked one is a wall until another player joins (s.open changes).
-    const pad = (b) => [b.x - 4, b.y - 4, b.x + b.w + 4, b.y + b.h + 4];
-    const rects = blockedRects(s, cam, W, H, 0, H, (s.doors || []).slice(0, s.open || 1)).concat(others.map(pad));
-    let above = panel; // what the EVENT PAY panel goes under
-    if (wasHand) {
-      // As wide as the panel; its height follows from that (the slots keep their shape).
-      const w = panel ? panel.w : strip.el.offsetWidth;
-      strip.place({ x: panel ? panel.x : 8, y: panel ? panel.y + panel.h + 8 : 8, w });
-      stripPlaced = true;
-      const h = strip.el.offsetHeight;
-      const p = sidePlace(panel, { w, h }, { w: W, h: H }, rects);
-      strip.place({ x: p.x, y: p.y, w });
-      // Beside the panel at the top, it may reach the middle, where the notices drop down from: they
-      // move down out of its way, as they did when the strip sat in the middle.
-      root.classList.toggle('hand-mid', !p.below && p.y < 90);
-      above = { x: p.x, y: p.y, w, h };
-    }
-    if (wasPay) {
-      const w = panel ? panel.w : above ? above.w : pay.el.offsetWidth;
-      pay.place({ x: above ? above.x : 8, y: above ? above.y + above.h + 8 : 8, w });
-      const h = pay.el.offsetHeight;
-      // Nor over the players panel or the strip it follows.
-      const q = sidePlace(above, { w, h }, { w: W, h: H }, rects.concat([panel, above].filter(Boolean).map(pad)));
-      pay.place({ x: q.x, y: q.y, w });
-    }
-  }
-
-  // On a small screen the EVENT PAY chip goes in the row at the top left, after the strip of cards
-  // (after the players button without cards), or, if the row has no room for it, on a second row
-  // under the players button.
-  function placeChip() {
-    if (!wasPay) return;
-    const at = stage.getBoundingClientRect(), W = stage.clientWidth, gap = 5;
-    const pill = boxIn(players.el.querySelector('.players-pill'), at);
-    const cards = wasHand ? boxIn(strip.el.querySelector('.hand-strip'), at) : null;
-    const row = cards || pill;
-    if (!row) { pay.place(null); return; }
-    const w = pay.el.offsetWidth;
-    let x = row.x + row.w + gap, y = row.y;
-    if (x + w > W - gap) {
-      x = pill ? pill.x : row.x;
-      y = Math.max(pill ? pill.y + pill.h : 0, cards ? cards.y + cards.h : 0) + gap;
-    }
-    pay.place({ x, y, h: row.h });
   }
 
   /** The page options for the first frame (see main.js): which floor, and for screenshots a view and a held kind. */
@@ -614,6 +627,7 @@ export function startGame(session, {
   }
   /** The player meant to leave (a button did it): do not ask. */
   const allowLeave = () => { leaving = true; };
-  globalThis.__game = { session, renderer, input, allowLeave };
+  // (marks: the tiles the training shift has marked, for tools/layout.mjs.)
+  globalThis.__game = { session, renderer, input, allowLeave, marks: () => (training ? training.marks() : null) };
   return { session, renderer, input, destroy, allowLeave };
 }

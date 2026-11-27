@@ -16,6 +16,7 @@ import { stockRows, dropInfo, trackName, trackNumbers, crateInfo, wireWhyText } 
 import { h, setText, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { WIRE_CYCLE, wireArrow, wireName, wirePicker } from './wiretool.js';
+import { prefs } from './prefs.js';
 
 const coarse = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : { matches: false };
 /** True on a device whose main pointer is a finger. */
@@ -87,7 +88,7 @@ export const CANCEL_HINT = 'Tap the floor with another finger to cancel';
  * @param {(name: string) => void} [o.playSound]
  * @returns {{ pad: HTMLElement, bar: HTMLElement, sheet: HTMLElement, aid: HTMLElement, update(s): void, readonly sheetOpen: boolean }}
  */
-export function createTouchControls({ input, session, renderer, playSound = () => {} }) {
+export function createTouchControls({ input, session, renderer, playSound = () => {}, prefs: pf = prefs() }) {
   const btn = (cls, label, icon, text, onclick) => h('button', {
     type: 'button', class: `tc-btn ${cls}`, 'aria-label': label, title: label, onclick,
   }, h('span', { class: 'tc-icon', 'aria-hidden': 'true' }, icon), text ? h('span', { class: 'tc-text' }, text) : null);
@@ -167,7 +168,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
   });
   const sheetWire = h('div', { class: 'ts-wire hidden' },
     h('b', { class: 'ts-wlabel' }, 'WIRE'), h('div', { class: 'ts-wbtns', role: 'group', 'aria-label': 'Razor Wire direction' }, wireBtns), wireNote);
-  const sheet = h('section', { class: 'touch-sheet hidden', 'aria-label': 'Building' }, sheetHead, sheetNums, sheetNote, sheetStock, sheetWire, sheetBtns);
+  const sheet = h('section', { class: `touch-sheet hidden${pf.get('sheetMore') ? '' : ' compact'}`, 'aria-label': 'Building' }, sheetHead, sheetNums, sheetNote, sheetStock, sheetWire, sheetBtns);
   let sheetSig = '';
   let measuredSig = '';
   let sheetOpen = false;
@@ -243,6 +244,9 @@ export function createTouchControls({ input, session, renderer, playSound = () =
       lv > 1 ? h('span', { class: 'ts-lv' }, `level ${lv}`) : null,
       crate && crate.r > 0 ? h('span', { class: 'ts-lv' }, `level ${crate.r} of ${crate.max}`) : null,
       owner && s.players.length > 1 ? h('span', { class: 'ts-owner' }, `${owner.name}'s`) : null,
+      // On a phone (0.4): the stock in one line of dots, the rows themselves behind DETAILS.
+      stockSummary(stock),
+      detailsBtn(),
       h('button', { type: 'button', class: 'ts-x', 'aria-label': 'Close', onclick: () => input.select(null) }, '×'),
     ].filter(Boolean));
     sheetNums.replaceChildren(...nums.map(([name, v]) => h('span', null, h('b', null, `${name}: `), v)));
@@ -269,6 +273,34 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     setText(sheetNote, notes.join(' '));
     setClass(sheetNote, 'hidden', !notes.length);
     renderStock(stock);
+  }
+
+  /**
+   * A phone's sheet is compact (0.4, the owner: with its stock rows and wire picker it covered most
+   * of the floor): the heading, the stock as a row of dots with their units, the wire picker and
+   * the buttons. DETAILS opens the numbers and the stock rows, and the choice is remembered. On a
+   * big screen the style sheet always shows everything and hides the button.
+   */
+  function detailsBtn() {
+    const more = !!pf.get('sheetMore');
+    return h('button', {
+      type: 'button', class: 'ts-details', 'aria-expanded': String(more), title: 'The numbers it works at, and its stock',
+      onclick: () => { pf.set('sheetMore', !pf.get('sheetMore')); setCompact(); },
+    }, more ? 'LESS ▴' : 'DETAILS ▾');
+  }
+  function setCompact() {
+    const more = !!pf.get('sheetMore');
+    setClass(sheet, 'compact', !more);
+    const b = sheetHead.querySelector('.ts-details');
+    if (b) { b.setAttribute('aria-expanded', String(more)); setText(b, more ? 'LESS ▴' : 'DETAILS ▾'); }
+    measuredSig = ''; // its height changes
+  }
+  /** The stock as dots: one per supply, in its colour (dark when empty), with its units. */
+  function stockSummary(rows) {
+    if (!rows.length) return null;
+    return h('span', { class: 'ts-sum', 'aria-label': rows.map((r) => `${r.name} ${r.units} of ${r.cap}`).join(', ') },
+      ...rows.map((r) => h('span', { class: `ts-sumi${r.units ? '' : ' empty'}`, title: `${r.name}: ${r.units} of ${r.cap}${r.tierName ? `, ${r.tierName}` : ''}` },
+        h('i', { style: { background: r.color } }), String(r.units))));
   }
 
   /**

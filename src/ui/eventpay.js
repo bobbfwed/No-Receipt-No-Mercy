@@ -6,15 +6,17 @@
 // (eventPay and speedBonus, the very functions endWave pays with), so the panel and the money that
 // arrives cannot disagree.
 //
-// On a big screen game.js places it in the left column (under the strip of cards, or under the
-// players panel in a game without cards), as wide as the players panel, or beside them when there
-// is no room below; hovering or focusing it shows how it works. On a small screen it is a chip in
+// On a big screen it is the third panel of the column at the top left (under the strip of cards, or
+// under the players panel in a game without cards), always below them (0.4, the owner: it was often
+// put beside them), and its heading folds it down to its figure; hovering or focusing it shows how
+// it works. On a small screen it is a chip in
 // the row at the top left, beside the cards ("$465 +$233"); tapping it opens a small card with the
 // rest, which stays until the chip is tapped again, something else is tapped, or its close mark is
 // pressed. It floats, so it never resizes anything, and a click or tap on it never reaches the
 // floor.
 import { TUNE, TICK_HZ, shareCount, eventPay, speedBonus, speedPar } from '../sim/index.js';
 import { h, setText, setClass, money, clock } from './dom.js';
+import { prefs } from './prefs.js';
 
 /** Seconds as the panel shows them: "0:42". */
 const mmss = (secs) => clock(Math.round(secs * TICK_HZ));
@@ -47,16 +49,32 @@ export function payView(s) {
  *   `w`, as the big screen's panel; without, as the small screen's chip, `h` tall; null hides it
  *   until placed again)
  */
-export function createPayPanel(session) {
+export function createPayPanel(session, { prefs: pf = prefs() } = {}) {
   const when = h('span', { class: 'pay-when' });
   const fig = h('b', { class: 'pay-fig' });
   const each = h('small', { class: 'pay-each' });
   const speed = h('span', { class: 'pay-speed' });
   const sub = h('span', { class: 'pay-sub' });
   const chip = h('span', { class: 'pay-chip', 'aria-hidden': 'true' });
+  // On a big screen the heading folds the panel down to its figure, as the phone's chip shows it
+  // (0.4, the owner); remembered (prefs.js). Folded, a click anywhere on it opens it again.
+  const foldBtn = h('button', {
+    type: 'button', class: 'fold-head pay-fold', 'aria-label': 'Fold event pay down to its figure', title: 'Fold this panel down to its figure, or open it again',
+    onclick: (e) => { e.stopPropagation(); pf.setFolded('pay', !pf.folded('pay')); },
+  }, h('span', { class: 'fold-text' }, 'EVENT PAY'), h('span', { class: 'fold-caret', 'aria-hidden': 'true' }));
   const panel = h('section', {
     class: 'panel eventpay', tabindex: '0', role: 'group', 'aria-label': 'Event pay', 'aria-describedby': 'eventpay-tip', 'aria-expanded': 'false',
-  }, h('h3', null, 'EVENT PAY', when), h('div', { class: 'pay-main' }, fig, each), speed, sub, chip);
+  }, h('h3', null, foldBtn, when), h('div', { class: 'pay-main' }, fig, each), speed, sub, chip);
+  let foldedNow = null;
+  function showFold() {
+    const f = pf.folded('pay');
+    if (f === foldedNow) return;
+    foldedNow = f;
+    setClass(panel, 'folded', f);
+    foldBtn.setAttribute('aria-expanded', String(!f));
+  }
+  pf.on(showFold);
+  showFold();
 
   // Under it: on a big screen the tooltip (the whole explanation), on a small one the card.
   const tip = h('div', { class: 'pay-tip hidden', id: 'eventpay-tip' });
@@ -73,6 +91,7 @@ export function createPayPanel(session) {
     h('div', { class: 'pay-main' }, cFig, cEach), cSpeed, cSub, cRule);
   const el = h('div', { class: 'eventpay-wrap hidden unplaced' }, panel, tip);
 
+  let lastKey = '';
   let open = false; // tapped or clicked open (the card, or the tooltip pinned)
   let hover = false;
   let tipText = '';
@@ -108,7 +127,12 @@ export function createPayPanel(session) {
   panel.addEventListener('focus', () => { hover = true; show(); });
   panel.addEventListener('blur', () => { hover = false; show(); });
   // A tap or a click opens it and keeps it open; another closes it. Nothing under it gets the click.
-  panel.addEventListener('click', (e) => { e.stopPropagation(); setOpen(!open); });
+  panel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Folded on a big screen: the click opens the panel again (the chip on a phone opens its card).
+    if (!isChip() && pf.folded('pay')) { pf.setFolded('pay', false); return; }
+    setOpen(!open);
+  });
   panel.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open); }
     if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); }
@@ -128,6 +152,10 @@ export function createPayPanel(session) {
 
     const office = s.players[session.me]?.side === 'office';
     const ways = shareCount(s);
+    // The same figures as last frame: nothing to write (most frames).
+    const key = `${v.n}|${v.pay}|${v.next}|${v.running}|${v.max}|${v.bonus}|${Math.round(v.took * 10)}|${v.par}|${Math.round(v.clean * 100)}|${v.coming}|${office}|${ways}`;
+    if (key === lastKey) return true;
+    lastKey = key;
     // (Short: a long word here wraps the title and pushes the panel off its place in the column.)
     const whenText = v.next ? 'NEXT' : v.running ? `⏱ ${mmss(v.took)}` : `EVENT ${v.n}`;
     const eachText = office ? ' each store player' : ways > 1 ? ` each, all ${ways} of you` : '';
@@ -167,19 +195,18 @@ export function createPayPanel(session) {
     return true;
   }
 
-  function place(p) {
-    const chipNow = !!p && p.w === undefined;
-    setClass(el, 'unplaced', !p);
-    setClass(el, 'is-side', !!p && !chipNow);
+  /**
+   * A big screen's panel (the third in the column at the top left) or a small screen's chip (in the
+   * row at the top left). The style sheet places it either way (.left-col): nothing is measured.
+   * @param {boolean} chipNow
+   */
+  function setChip(chipNow) {
+    setClass(el, 'unplaced', false);
+    setClass(el, 'is-side', !chipNow);
     setClass(el, 'is-chip', chipNow);
-    el.style.left = p ? `${Math.round(p.x)}px` : '';
-    el.style.top = p ? `${Math.round(p.y)}px` : '';
-    el.style.width = p && !chipNow ? `${Math.round(p.w)}px` : '';
-    // The chip is as tall as the row it sits in.
-    panel.style.minHeight = p && p.h ? `${Math.round(p.h)}px` : '';
     // Switched between a big screen and a small one while open: the other body, in its place.
-    if (p && (chipNow ? 'chip' : 'side') !== mode && !tip.classList.contains('hidden')) { mode = ''; show(); position(); }
+    if ((chipNow ? 'chip' : 'side') !== mode && !tip.classList.contains('hidden')) { mode = ''; show(); position(); }
   }
 
-  return { el, update, place };
+  return { el, update, setChip };
 }

@@ -2169,6 +2169,41 @@ export const SOUND_CHECK = [
   'That is the level you pick? Typical.',
 ];
 
+/**
+ * The host's page has gone into the background (0.4): his browser now runs the whole store about
+ * once a second, so the joined players' game crawls. Said to the joined players only, by their own
+ * browser (the host's director is the one asleep). {p} the host.
+ */
+export const HOST_AWAY = [
+  '{p} has wandered off to another tab. The store now runs at the speed of his attention span.',
+  "{p} minimised us. Probably porn. Definitely not spreadsheets. Everything's frozen till he finishes.",
+  'Your host {p} has left the building. Not literally. Just mentally, which for him is a short trip.',
+  "{p} put the store in the background. Like his marriage. It'll crawl until he looks at it again.",
+  u("{p} is 'just checking something'. Gentlemen, we all know what a man checks in a hidden tab."),
+  r('Host {p} is away from his keyboard. Nobody touch anything. Especially not yourselves.'),
+];
+/** The host's page is in front again. {p} the host. */
+export const HOST_BACK = [
+  '{p} is back. Wash your hands, {p}.',
+  'And {p} returns, refreshed and ashamed. Full speed again.',
+  "{p}'s back. Whatever that was, it was quicker than his building.",
+  u('Welcome back, {p}. The store missed you. Nobody else did.'),
+];
+/** The standing notice while the host is away. {name} the host. */
+export const HOST_AWAY_NOTICE = '{name} has the game in the background: everything crawls until he comes back.';
+// (DEB's lines above are picked in the joined player's browser, so they are kept out of the
+// director's repeat counts; a test checks every line here fills its placeholder.)
+
+const awayUsed = new Map();
+/** One of DEB's lines for the host's page going to the background. */
+export function hostAwayLine(name, random = Math.random) {
+  return fill(textOf(choose(HOST_AWAY, random, { used: awayUsed })), { p: name });
+}
+/** One of DEB's lines for the host's page coming back. */
+export function hostBackLine(name, random = Math.random) {
+  return fill(textOf(choose(HOST_BACK, random, { used: awayUsed })), { p: name });
+}
+
 /** Names for buildings that may not be in BUILD yet (the director prefers BUILD's own name). */
 export const BUILDING_NAMES = { railgun: 'Barcode Laser', salesman: 'TV Salesman' };
 

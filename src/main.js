@@ -76,6 +76,9 @@ const defaultName = () => opts.name || loadName() || 'New Guy';
 
 /** The store a new game is played in unless the player picks another: sized for one player. */
 const DEFAULT_MAP = { design: 'warehouse', size: 's' };
+/** Where a host learns that his page is hidden (0.4): the page itself, if there is one. */
+const pageVisibility = () => (typeof document !== 'undefined' ? document : null);
+
 /** A store named in the URL, if any. */
 function urlMap() {
   const design = q.get('map'), size = q.get('size');
@@ -97,7 +100,8 @@ function newHost(name, map = urlMap() || DEFAULT_MAP, lobby = flag('lobby'), set
   const inLobby = lobby && !!map;
   // Games through the lobby (every game from the menu) are dealt cards; the URL can say otherwise.
   const cards = urlCards() ?? inLobby;
-  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: inLobby, settings, holiday: holidayNow(), cards });
+  // (visibility: while this page is hidden, everyone else is told why the game crawls, 0.4.)
+  return new HostSession({ name, seed: opts.seed, director: createDirector(), map, lobby: inLobby, settings, holiday: holidayNow(), cards, visibility: pageVisibility() });
 }
 
 /**
@@ -186,7 +190,7 @@ function hostLost(kind, code) {
     const staying = s.players.filter((p) => p.on && p.id !== gone);
     const successor = staying.length ? staying[0].id : old.me;
     if (successor === old.me) {
-      const session = new HostSession({ name, director: createDirector(), state: JSON.parse(JSON.stringify(s)), takeOver: true });
+      const session = new HostSession({ name, director: createDirector(), state: JSON.parse(JSON.stringify(s)), takeOver: true, visibility: pageVisibility() });
       const accept = (conn) => session.accept(conn);
       // The old host's room code is released a few seconds after his page closes.
       const room = await keepTrying(async () => (kind === 'online' ? hostOnline(code, accept) : hostLocal(code, accept)), 30);
@@ -269,7 +273,7 @@ const actions = {
   async resume() {
     const save = readSave();
     if (!save) throw new Error('The saved game could not be read. It may be from an older version.');
-    const session = new HostSession({ name: save.host, director: createDirector(), state: save.state, resume: true });
+    const session = new HostSession({ name: save.host, director: createDirector(), state: save.state, resume: true, visibility: pageVisibility() });
     if (save.players.length > 1 && save.kind !== 'local') {
       const code = makeRoomCode();
       const room = await hostOnline(code, (conn) => session.accept(conn));

@@ -36,7 +36,7 @@
            survived   then the store gets through the last sales event (Head Office loses)
   noplan=1   Steve buys nothing (the usual crowd comes)
   check=1    after the plan, test that Head Office cannot build (keys and clicks do nothing) but can
-             move the view, and that the host's copy of the plan replaces his after a second;
+             move the view, and that the host's copy of the plan (as it arrives) replaces his after a second;
              results are listed in the corner (use with step=plan)
   map, size  the store (see MAP_DESIGNS and MAP_SIZES)
   Photograph it with:  node tools/realshot.mjs "<url>" out.png 14000 1600 900
@@ -119,9 +119,12 @@
     say(g.renderer.cam.x > cam0.x + 0.5, `D moves the view (x ${cam0.x.toFixed(1)} -> ${g.renderer.cam.x.toFixed(1)})`);
     key('keydown', 'f');
     await wait(100);
-    // The host's copy wins once he stops editing for a second.
-    const hostState = game(host).session.state;
-    hostState.office.plan = [{ k: 'hunter', n: 3, sup: 0, door: 0, at: 2 }];
+    // The host's copy wins once he stops editing for a second. (The joined player's copy of the
+    // state is what the host's messages change, so the host's plan is put straight into it: a plan
+    // changed on the host behind the rules' back, as this check did until 0.4, never reaches the
+    // joined player, since every real change to a plan is a command both sides play.)
+    const seen = g.session.state;
+    seen.office.plan = [{ k: 'hunter', n: 3, sup: 0, door: 0, at: 2 }];
     await wait(2500);
     const rowsNow = $$(join, '.plr-rows .plr').length;
     const n = $(join, '.plr-rows [data-f="n0"]');

@@ -155,9 +155,10 @@ export function createDeal(session, { strip, playSound = () => {} }) {
     // The cards sit below the strip of slots if it is over the middle of the screen (a phone, or a
     // big game's tall players panel that put it beside the panel), or else just below the top bar,
     // whatever height that has on this screen (the strip off to the left under the players panel).
-    const r = strip.el.firstChild.getBoundingClientRect();
+    const r = (strip.el.querySelector('.hand-strip') || strip.el).getBoundingClientRect();
     const mid = r.right > innerWidth / 4 && r.left < innerWidth * 3 / 4;
-    const top = Math.round(mid ? r.bottom : strip.el.offsetParent?.getBoundingClientRect().top ?? r.bottom);
+    // (The floor's top: the strip now sits in the column of panels, not straight on the floor.)
+    const top = Math.round(mid ? r.bottom : strip.el.closest('.stage')?.getBoundingClientRect().top ?? r.bottom);
     if (top !== topPx && r.height) { topPx = top; el.style.setProperty('--deal-top', `${top}px`); }
     if (!startedSound) { startedSound = true; if (v.secs < 1) playSound('cardDeal'); }
 

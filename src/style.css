@@ -561,7 +561,7 @@ body.dealing .pause-banner { z-index: 42; }
 .review-toast.five {
   background: linear-gradient(135deg, #fde68a, #facc15 45%, #f59e0b);
   border-color: #78350f;
-  box-shadow: 0 0 0 0.15rem #fef3c7 inset, 0 0.25rem 0 rgba(0, 0, 0, 0.45), 0 0 1.2rem rgba(250, 204, 21, 0.55);
+  box-shadow: 0 0 0 0.15rem #fef3c7 inset, 0 0.25rem 0 rgba(0, 0, 0, 0.45), 0 0 0 0.2rem rgba(250, 204, 21, 0.5);
   transform: rotate(-1deg);
 }
 .review-toast.five .rt-label { color: #78350f; }
@@ -787,7 +787,9 @@ body.dealing .pause-banner { z-index: 42; }
   color: var(--ink);
   border: 0.22rem solid var(--line);
   border-radius: 0.9rem;
-  box-shadow: 0 0.5rem 0 rgba(0, 0, 0, 0.5), 0 1rem 3rem rgba(0, 0, 0, 0.6);
+  /* (A hard shadow and a dark ring, no blur: the blurred one froze both screens for 0.4 s the first
+     time it was drawn, on a phone; stutter investigation, 2026-11-26.) */
+  box-shadow: 0 0.5rem 0 rgba(0, 0, 0, 0.5), 0 0 0 0.35rem rgba(0, 0, 0, 0.3);
   animation: deb-pop 0.25s ease-out;
   overflow: hidden;
 }
@@ -1855,7 +1857,7 @@ body.dealing .pause-banner { z-index: 42; }
   background: #1a0b0b;
   border: 0.2rem solid var(--yellow);
   border-radius: 0.55rem;
-  box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.55), 0 0 1.2rem rgba(220, 38, 38, 0.45);
+  box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.55), 0 0 0 0.22rem rgba(220, 38, 38, 0.4);
   pointer-events: none;
   white-space: nowrap;
   animation: drop-in 0.25s ease-out;
@@ -1890,7 +1892,7 @@ body.dealing .pause-banner { z-index: 42; }
 .boss-bar.is-out .boss-note { color: #86efac; }
 .boss-bar.is-through .boss-note { color: #fca5a5; }
 /* A Midnight Release (bossbar.js): the same strip in foil-card purple. */
-.boss-bar[class*="is-release"] { background: #1c0b2b; border-color: #c084fc; box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.55), 0 0 1.2rem rgba(168, 85, 247, 0.5); }
+.boss-bar[class*="is-release"] { background: #1c0b2b; border-color: #c084fc; box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.55), 0 0 0 0.22rem rgba(168, 85, 247, 0.45); }
 .boss-bar[class*="is-release"] .boss-tag { background: #7e22ce; }
 .boss-bar[class*="is-release"] .boss-title { color: #f0abfc; }
 .boss-bar[class*="is-release"] .boss-num { color: #e9d5ff; }
@@ -2057,7 +2059,6 @@ body.dealing .pause-banner { z-index: 42; }
    nothing; it sits in the middle at the top, under the boss bar while that shows, and the notices
    move down out of its way. */
 .hand-wrap { position: absolute; z-index: 9; top: 0.6rem; left: 50%; transform: translateX(-50%); }
-.game.boss-up .hand-wrap { top: 4.1rem; }
 .game.has-hand .notices { top: 4.9rem; }
 .game.has-hand.boss-up .notices { top: 8.4rem; }
 .game.in-lobby .hand-wrap, .game.ended .hand-wrap { display: none; }
@@ -2505,7 +2506,7 @@ html, body { overscroll-behavior: none; }
   .hud-more > .btn-help::after { content: "  How to play"; font: 700 0.9rem var(--font); }
   .hud-more > .btn-help.btn-full::after { content: "  Full screen"; }
   .hud-more .btn-sound { width: 100%; }
-  .hud-more .btn-sound::after { content: "  Sound"; font: 700 0.9rem var(--font); }
+  .hud-more .btn-sound::after { content: "  Sound & settings"; font: 700 0.9rem var(--font); }
   .hud-more .snd-menu { position: static; width: auto; margin-top: 0.4rem; }
 
   /* The floor's panels: smaller, and out of the way. */
@@ -2569,15 +2570,10 @@ html, body { overscroll-behavior: none; }
   .boss-num { font-size: 0.66rem; }
   .boss-meter { height: 0.6rem; }
   .boss-note { max-width: 6.5rem; font-size: 0.6rem; white-space: normal; line-height: 1.1; }
-  .game.boss-up .notices, .game.boss-up .players, .game.boss-up .reviews, .game.boss-up .deb { top: 3.4rem; }
+  .game.boss-up .left-col, .game.boss-up .toasts { top: 3.4rem; }
 
-  /* DEB talks from the top of the floor, where nothing is being built. */
-  .deb { top: 0.4rem; bottom: auto; right: calc(0.4rem + env(safe-area-inset-right)); width: min(30rem, calc(100% - 0.8rem)); }
-  .deb-body { gap: 0.5rem; padding: 0.35rem 0.6rem 0.35rem 0.4rem; border-width: 0.16rem; }
-  .deb-face { width: 2.6rem; height: 2.6rem; }
-  .deb-text { font-size: 0.86rem; line-height: 1.25; }
-  .deb-tag { font-size: 0.66rem; }
-  .deb-more { font-size: 0.62rem; }
+  /* (DEB's place on a small screen: the bottom of the floor, in the block "the bottom of the floor
+     on a small screen" at the end of this file.) */
 
   .minimap { left: calc(0.4rem + env(safe-area-inset-left)); bottom: 0.4rem; width: 8.6rem; height: 4.9rem; padding: 0.12rem; border-width: 0.12rem; }
 
@@ -2802,12 +2798,6 @@ html, body { overscroll-behavior: none; }
   .lobby { top: calc(36% + 0.3rem); left: calc(0.4rem + env(safe-area-inset-left)); right: calc(0.4rem + env(safe-area-inset-right)); width: auto; }
   .game.in-lobby .chat { left: calc(0.4rem + env(safe-area-inset-left)); bottom: calc(64% + 0.4rem); }
 
-  .game.is-training .stage { display: flex; flex-direction: column; }
-  .game.is-training .tutorial { order: -1; position: relative; flex: none; top: auto; left: auto; width: auto; max-height: 44%; margin: 0.35rem calc(0.35rem + env(safe-area-inset-right)) 0 calc(0.35rem + env(safe-area-inset-left)); }
-  .game.is-training .minimap { left: calc(0.4rem + env(safe-area-inset-left)); }
-  .game.is-training .world { position: relative; inset: auto; left: 0; width: 100%; height: auto; flex: 1 1 0; min-height: 0; }
-  /* The lesson is at the top: DEB speaks from the bottom of the floor instead. */
-  .game.is-training .deb { top: auto; bottom: 0.4rem; right: calc(0.4rem + 56px + env(safe-area-inset-right)); width: auto; left: calc(0.4rem + env(safe-area-inset-left)); }
 
   .menu-title { font-size: 2.3rem; }
   .join-row { grid-template-columns: 7rem 1fr; }
@@ -2818,6 +2808,15 @@ html, body { overscroll-behavior: none; }
   .pr-row { grid-template-columns: 2.4rem minmax(0, 1fr); }
   .pr-metrics, .pr-stamp-wrap { grid-column: 1 / -1; }
   .pr-mid, .pr-foot { grid-template-columns: 1fr; }
+}
+
+/* The training shift on a phone held upright: the lesson panel goes above the floor. (A small phone
+   on its side, 667 wide, keeps it beside the floor: above, it left a floor about 100 pixels tall.) */
+@media (max-width: 699px) and (max-aspect-ratio: 1/1) {
+  .game.is-training .stage { display: flex; flex-direction: column; }
+  .game.is-training .tutorial { order: -1; position: relative; flex: none; top: auto; left: auto; width: auto; max-height: 44%; margin: 0.35rem calc(0.35rem + env(safe-area-inset-right)) 0 calc(0.35rem + env(safe-area-inset-left)); }
+  .game.is-training .minimap { left: calc(0.4rem + env(safe-area-inset-left)); }
+  .game.is-training .world { position: relative; inset: auto; left: 0; width: 100%; height: auto; flex: 1 1 0; min-height: 0; }
 }
 
 /* Phones on their side: every pixel of height counts, so the bar loses its group labels. */
@@ -2954,7 +2953,9 @@ html, body { overscroll-behavior: none; }
 .touch-sheet { max-width: min(58rem, calc(100% - 1.2rem)); }
 /* The sheet and DEB's bubble share the bottom of the floor: while the sheet is open the bubble
    stands on top of it (touch.js measures the sheet into --sheet-h). */
-.game:has(.touch-sheet:not(.hidden):not(.at-top)) .deb { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
+@media (min-width: 1100px) and (min-height: 560px) {
+  .game:has(.touch-sheet:not(.hidden):not(.at-top)) .deb { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
+}
 .ts-btns { flex-wrap: wrap; }
 .ts-btn .ts-cost { margin-top: 0.1rem; font-size: 0.86rem; font-weight: 900; }
 /* Rotate and Remove never squeeze below their words (0.3.03 follow-up: at 390 px they overlapped as
@@ -2974,16 +2975,12 @@ html, body { overscroll-behavior: none; }
 /* The strip sits at the top left, beside the players button (where nothing else is), with smaller
    slots; whatever else talks from the top of the floor moves down out of its way. */
 @media (max-width: 1099px), (max-height: 559px) {
-  .hand-wrap { top: 0.4rem; left: calc(5.4rem + env(safe-area-inset-left)); transform: none; }
-  .game.boss-up .hand-wrap { top: 3.4rem; }
   .hand-strip { gap: 0.3rem; min-height: 34px; padding: 0.15rem 0.3rem 0.15rem 0.25rem; border-width: 0.13rem; }
   .hs-label small { display: none; }
   .hs-slots { gap: 0.22rem; }
   .hs-slot, .tcard-mini { width: 1.85rem; height: 2.45rem; }
   .tcard-mini { padding: 0.12rem; }
   .cc-mark { width: 0.85rem; height: 0.85rem; font-size: 0.7rem; left: -0.25rem; top: -0.25rem; }
-  .game.has-hand .notices { top: 3.5rem; }
-  .game.has-hand.boss-up .notices { top: 6.5rem; }
 
   /* The deal: the card large, the words at reading size. */
   .deal { padding: calc(var(--deal-top, 6rem) + 0.35rem) calc(0.5rem + env(safe-area-inset-right)) calc(0.6rem + env(safe-area-inset-bottom)) calc(0.5rem + env(safe-area-inset-left)); }
@@ -3001,10 +2998,12 @@ html, body { overscroll-behavior: none; }
   .tcard-mid .cc-joke { font-size: max(13px, 0.86rem); }
   .help .help-head .hp-open { padding-inline: 0.5rem; }
 }
-/* Phones held upright: DEB and the reviews talk from the top of the floor too. */
+/* Phones held upright: the reviews and notices stand under the row of chips at the top left. */
+@media (max-width: 699px) and (max-aspect-ratio: 1/1) {
+  .game.has-hand .toasts { top: 3.5rem; }
+  .game.has-hand.boss-up .toasts { top: 6.5rem; }
+}
 @media (max-width: 699px) {
-  .game.has-hand .deb, .game.has-hand .reviews { top: 3.5rem; }
-  .game.has-hand.boss-up .deb, .game.has-hand.boss-up .reviews { top: 6.5rem; }
   /* The card in the deal takes most of the screen. */
   .tcard-big { width: 86vw; padding: 0.35rem; }
   .tcard-big .cc-inner { gap: 0.3rem; padding: 0.4rem 0.55rem 0.35rem; }
@@ -3069,7 +3068,7 @@ html, body { overscroll-behavior: none; }
    waits behind More on a phone, where the panel stands over the top of the floor and must leave
    most of the screen to it. */
 .tut-more { display: none; }
-@media (max-width: 699px) {
+@media (max-width: 699px) and (max-aspect-ratio: 1/1) {
   .game.is-training .tutorial { max-height: 34%; }
   .game.is-training .tut-head { padding-top: 0.2rem; padding-bottom: 0.1rem; }
   .game.is-training .tut-title { font-size: 0.95rem; margin-bottom: 0.25rem; }
@@ -3208,7 +3207,6 @@ html, body { overscroll-behavior: none; }
 }
 @media (max-width: 1099px), (max-height: 559px) {
   .floor-switch { font-size: 0.8rem; min-height: 40px; gap: 0.4rem; }
-  .game.is-training .deb { bottom: calc(0.8rem + 44px); }
 }
 .game.ended .floor-switch, .game.in-lobby .floor-switch, .game.is-office .bb-back { display: none; }
 
@@ -3264,3 +3262,312 @@ html, body { overscroll-behavior: none; }
 /* ---------------------------------------------------------------- Employee Handbook: The Back (0.4) */
 /* The supplies card heads The Back's tab across the whole width: its tier table is wide. */
 .hb-card.hb-supplies { grid-column: 1 / -1; }
+
+/* ================================================================ interface clean-up (0.4, stage 5a)
+   The owner, after playing 0.3.04: notices, reviews and DEB covered the floor so often that he had
+   to zoom in to place things. The rules below decide where each thing that floats over the floor
+   stands, so that on a phone none of them overlaps another; tools/layout.mjs measures it. */
+
+/* ---- The three panels at the top left: ON SHIFT, the hand of cards, EVENT PAY ----
+   One box (.left-col, game.js). On a big screen a column, always in that order (the owner: EVENT PAY
+   must be below the hand, never beside it), each panel as wide as the column; on a small screen a
+   row of chips that wraps. Each panel keeps its own look; the box itself is invisible. */
+.left-col {
+  position: absolute;
+  z-index: 9;
+  top: 0.6rem;
+  left: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: max-content;
+  min-width: 12rem;
+  max-width: 17rem;
+  pointer-events: none;
+}
+.left-col > * { pointer-events: auto; }
+/* (The pay panel's explanation is open: over DEB and the reviews while it is read.) */
+.left-col:has(.eventpay-wrap.is-up) { z-index: 12; }
+.left-col > .players, .left-col > .hand-wrap, .left-col > .eventpay-wrap { position: relative; top: auto; left: auto; transform: none; z-index: auto; }
+.left-col > .players { min-width: 0; max-width: none; }
+.left-col > .hand-wrap { width: auto; }
+.game.in-lobby .left-col > .hand-wrap { display: none; }
+
+/* A panel's heading folds it (big screens only): a button that looks like the heading. */
+.fold-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--yellow);
+  font: 900 0.72rem var(--font-heavy);
+  letter-spacing: 0.08em;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-head:hover .fold-text { text-decoration: underline; }
+.fold-head:focus-visible { outline: 0.15rem solid var(--white); outline-offset: 0.1rem; }
+.fold-caret { margin-left: auto; color: #c3cad3; font-size: 0.7rem; }
+.fold-caret::after { content: "▴"; }
+.fold-head[aria-expanded="false"] .fold-caret::after { content: "▾"; }
+.hs-head { display: none; }
+.eventpay h3 .pay-fold { width: auto; letter-spacing: inherit; }
+.eventpay h3 .pay-fold .fold-caret { margin-left: 0.15rem; }
+
+@media (min-width: 1100px) and (min-height: 560px) {
+  .players.folded { padding-bottom: 0.45rem; }
+  .players.folded h3 { margin: 0; }
+  .players.folded .players-list, .players.folded .players-foot, .players.folded .ready-lights { display: none; }
+
+  /* The hand: the panel is the wrap, with the heading above the strip of slots. */
+  .hand-wrap.is-side {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.3rem 0.55rem 0.45rem;
+    background: rgba(17, 21, 26, 0.9);
+    border: 0.15rem solid var(--yellow);
+    border-radius: 0.6rem;
+    box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.45);
+  }
+  .hand-wrap.is-side .hs-head { display: flex; order: -1; }
+  .hand-wrap.is-side .hs-read { margin-left: auto; font: 700 0.62rem var(--font); letter-spacing: 0; color: var(--muted); }
+  .hand-wrap.is-side .hs-head .fold-caret { margin-left: 0.3rem; }
+  .hand-wrap.is-side.folded .hs-read { display: none; }
+  .hand-wrap.is-side.folded .hs-head .fold-caret { margin-left: auto; }
+  .hand-wrap.is-side .hand-strip { padding: 0; border: 0; background: none; box-shadow: none; }
+  .hand-wrap.is-side .hand-strip:hover:not(.is-dealing) .hs-slots { filter: brightness(1.12); }
+  .hand-wrap.is-side .hs-label { display: none; }
+  .hand-wrap.is-side.folded .hand-strip { display: none; }
+
+  /* EVENT PAY folded: just its figure, as the phone's chip shows it; a click opens it again. */
+  .eventpay.folded { flex-direction: row; align-items: center; gap: 0.4rem; cursor: pointer; padding-block: 0.25rem; }
+  .eventpay.folded > h3, .eventpay.folded > .pay-main, .eventpay.folded > .pay-sub, .eventpay.folded > .pay-speed { display: none; }
+  .eventpay.folded > .pay-chip { display: block; white-space: nowrap; font: 900 0.9rem var(--font-heavy); color: var(--green-2); }
+  .eventpay.folded::before { content: "EVENT PAY"; font: 900 0.72rem var(--font-heavy); color: var(--yellow); letter-spacing: 0.08em; }
+  .eventpay.folded::after { content: "▾"; margin-left: auto; color: #c3cad3; font-size: 0.7rem; }
+
+  /* The held tool's card keeps clear of the small map in the bottom left corner (it overlapped). */
+  .game.has-minimap .buildbar .bb-info { left: calc(0.6rem + 15rem + 0.8rem); }
+  /* A training shift's marked tile under DEB or the floor switch: they step up to the top. */
+  .game .deb.dodge, .floor-switch.dodge { bottom: auto; }
+}
+
+/* ---- Reviews and notices ----
+   A click or a tap sends one away at once (toasts.js); each review has a small "Hide reviews". */
+.toasts { display: contents; }
+.notice, .review-toast { pointer-events: auto; cursor: pointer; }
+.notice.standing { cursor: default; border-color: var(--orange); background: #3b2a12; }
+.rt-hide {
+  margin-left: auto;
+  padding: 0.05rem 0.35rem;
+  border: 0.1rem solid rgba(0, 0, 0, 0.25);
+  border-radius: 0.3rem;
+  background: rgba(255, 255, 255, 0.6);
+  color: #4b5563;
+  font: 800 0.62rem var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rt-hide:hover { background: #fff; color: var(--ink); }
+.rt-shades + .rt-hide { margin-left: 0.4rem; }
+.review-toast.five .rt-hide { color: #78350f; }
+/* On a big screen a column of three reviews can reach down to DEB on a shorter window: two then. */
+@media (min-width: 1100px) and (max-height: 899px) { .review-toast:nth-child(n+3) { display: none; } }
+
+/* A menu dropped from the top bar (sound and settings; the ☰ menu on a phone) stands over everything on
+   the floor while it is open: the top bar is otherwise under the floor's panels, DEB and the reviews. */
+.topbar:has(.snd-menu:not(.hidden)), .topbar:has(.hud-more.open) { z-index: 30; }
+
+/* ---- The held tool's card: "Don't show these" ---- */
+.bbi-off {
+  flex: none;
+  padding: 0.05rem 0.4rem;
+  border: 0.1rem solid rgba(0, 0, 0, 0.3);
+  border-radius: 0.3rem;
+  background: none;
+  color: #57534e;
+  font: 800 0.66rem var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bbi-off:hover { background: #fff; color: var(--ink); }
+
+/* ---- The sound menu's screen switches ---- */
+.set-screen { margin-top: 0.3rem; padding-top: 0.35rem; border-top: 0.12rem solid var(--line); }
+.set-head { display: block; font: 900 0.7rem var(--font-heavy); letter-spacing: 0.08em; color: #57534e; }
+.set-row { display: flex; align-items: center; gap: 0.45rem; padding: 0.2rem 0; }
+.set-row input { width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--orange); cursor: pointer; flex: none; }
+.set-row label { cursor: pointer; }
+@media (pointer: coarse) { .set-row { min-height: 40px; } .set-row input { width: 1.4rem; height: 1.4rem; } }
+
+/* ---- The building sheet on a phone: compact (touch.js) ---- */
+.ts-details, .ts-sum { display: none; }
+.ts-sumi { display: inline-flex; align-items: center; gap: 0.12rem; font: 900 0.72rem var(--font-heavy); }
+.ts-sumi i { width: 0.65rem; height: 0.65rem; border-radius: 50%; border: 0.1rem solid var(--line); }
+.ts-sumi.empty { opacity: 0.45; }
+
+/* ---- The bottom of the floor on a small screen ----
+   One row along the bottom: the small map on the left, DEB's bubble, the floor switch, and on a touch
+   screen the camera pad in the corner. On a phone held upright DEB has a row of her own just above
+   it. The held tool's card and a tapped building's sheet stand over the bottom of the floor: the
+   whole row stands on top of them (--dock-lift, set by game.js), so nothing is behind anything. */
+@media (max-width: 1099px), (max-height: 559px) {
+  .game {
+    --fs-w: 6.9rem;
+    --fs-right: calc(0.7rem + env(safe-area-inset-right));
+    --pad-right: calc(0.4rem + env(safe-area-inset-right));
+    --map-w: 0px;
+    --floor-left: 0px;
+    --lift: var(--dock-lift, 0px);
+  }
+  .game.has-minimap { --map-w: 9rem; }
+  .game.is-training { --floor-left: 20rem; }
+
+  /* The panels: a row of chips at the top left. */
+  .left-col {
+    top: 0.4rem;
+    left: calc(0.4rem + env(safe-area-inset-left));
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 5px;
+    width: auto;
+    min-width: 0;
+    max-width: calc(100% - 0.8rem);
+  }
+  .left-col > .players { max-width: min(17rem, calc(100vw - 0.8rem)); }
+
+  /* Reviews and notices: one column at the top right, notices first; only the newest review. */
+  .toasts {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+    position: absolute;
+    z-index: 9;
+    top: 0.4rem;
+    right: calc(0.4rem + env(safe-area-inset-right));
+    width: min(15rem, 58%);
+    pointer-events: none;
+  }
+  .toasts > .notices, .toasts > .reviews { position: static; transform: none; width: auto; max-width: none; }
+  .toasts > .notices { align-items: stretch; }
+  .notices:empty, .reviews:empty { display: none; }
+  .notice { padding: 0.25rem 0.6rem; border-radius: 0.6rem; font-size: 0.74rem; line-height: 1.25; }
+  .rt-hide { font-size: 0.58rem; padding: 0.15rem 0.35rem; }
+  /* A review in two lines and its stars: who wrote it goes (the stars and the words are the joke). */
+  .review-toast .rt-who { display: none; }
+  .review-toast .rt-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0; }
+  .review-toast { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 0.4rem; align-items: center; }
+  .rt-stars { grid-row: 1; grid-column: 1; }
+  .rt-head { grid-row: 1; grid-column: 2; gap: 0.3rem; min-width: 0; }
+  .rt-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .review-toast .rt-text { grid-column: 1 / -1; }
+
+  /* DEB: smaller, at the bottom, between the small map and the floor switch. */
+  .deb {
+    top: auto;
+    bottom: calc(0.4rem + var(--lift));
+    left: calc(0.4rem + env(safe-area-inset-left) + var(--floor-left) + var(--map-w));
+    right: calc(var(--fs-right) + var(--fs-w) + 0.4rem);
+    width: auto;
+    max-width: 28rem;
+    margin-left: auto;
+  }
+  .deb-tag { position: absolute; z-index: 1; top: -0.55rem; left: 2.4rem; margin: 0; padding: 0 0.4rem; font-size: 0.58rem; border-bottom: 0.15rem solid var(--line); border-radius: 0.35rem; }
+  .deb-body { gap: 0.45rem; padding: 0.3rem 0.5rem 0.25rem 0.35rem; border-width: 0.15rem; border-radius: 0.7rem; box-shadow: 0 0.2rem 0 rgba(0, 0, 0, 0.5); }
+  .deb-body::after { display: none; }
+  .deb-face { width: 2.1rem; height: 2.1rem; }
+  .deb-text { font-size: 0.76rem; line-height: 1.22; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .deb-more { font-size: 0.56rem; margin-top: -0.1rem; }
+  .game .deb.dodge, .game.has-minimap .deb.dodge, .floor-switch.dodge { bottom: auto; }
+  /* The training shift: the reviews stay away (the lesson says what matters), notices stand at the
+     top of the floor (below the lesson on a phone held upright), and the held tool's card starts
+     where the floor does (beside the lesson panel on a phone on its side). */
+  .game.is-training .reviews { display: none; }
+  .game.is-training .toasts { top: calc(var(--floor-top, 0px) + 0.4rem); }
+  .game.is-training .buildbar .bb-info { left: calc(var(--floor-left) + 0.5rem + env(safe-area-inset-left)); }
+
+  .floor-switch {
+    right: var(--fs-right);
+    bottom: calc(0.4rem + var(--lift));
+    width: var(--fs-w);
+    min-height: 40px;
+    padding: 0.2rem 0.35rem 0.2rem 0.3rem;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    line-height: 1.05;
+    text-align: left;
+    white-space: normal;
+  }
+  /* (Its narrow plate has no room for the Tab key's picture; the title still says Tab.) */
+  .fs-key { display: none; }
+  .minimap, .game.is-training .minimap { bottom: calc(0.4rem + var(--lift)); left: calc(0.4rem + env(safe-area-inset-left) + var(--floor-left)); }
+  /* The chat and the REBUILD button: above the row. */
+  .chat { bottom: calc(4.3rem + var(--lift)); }
+  .game.has-minimap .chat { bottom: calc(5.8rem + var(--lift)); }
+  .rebuild-pop, .game:has(.touch-sheet:not(.hidden):not(.at-top)) .rebuild-pop { bottom: calc(4.3rem + var(--lift)); }
+  .has-minimap .rebuild-pop, .game.has-minimap:has(.touch-sheet:not(.hidden):not(.at-top)) .rebuild-pop { bottom: calc(5.8rem + var(--lift)); }
+
+  /* The building sheet: compact. Its stock rows and numbers wait behind DETAILS. */
+  .touch-sheet { padding: 0.3rem 0.5rem 0.35rem; }
+  .ts-head { flex-wrap: wrap; row-gap: 0.15rem; font-size: 0.92rem; }
+  .ts-icon { width: 1.4rem; height: 1.4rem; }
+  .ts-x { width: 36px; height: 34px; font-size: 1.25rem; }
+  .ts-details {
+    display: inline-flex; align-items: center; min-height: 32px; padding: 0 0.5rem;
+    border: 0.12rem solid var(--line); border-radius: 0.4rem; background: #fff; color: var(--ink);
+    font: 900 0.68rem var(--font-heavy); letter-spacing: 0.04em; margin-left: auto;
+  }
+  .ts-details + .ts-x { margin-left: 0.3rem; }
+  .touch-sheet.compact .ts-sum { display: inline-flex; gap: 0.45rem; margin-left: 0.2rem; }
+  .touch-sheet.compact .ts-nums, .touch-sheet.compact .ts-stock { display: none; }
+  /* Compact: the wire picker and the buttons share one row where they fit, and the line under the
+     picker shows only while a direction is being tried (it says what the floor is showing). */
+  .touch-sheet.compact { display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.6rem; max-width: 36rem; }
+  .touch-sheet.compact > .ts-head, .touch-sheet.compact > .ts-note { flex: 1 1 100%; }
+  .touch-sheet.compact > .ts-wire { flex: 0 1 auto; }
+  .touch-sheet.compact > .ts-btns { flex: 1 1 12rem; margin-top: 0.2rem; }
+  .touch-sheet.compact:not(.peek) .ts-wnote { display: none; }
+  .ts-wire { margin: 0.2rem 0 0; gap: 0.2rem 0.4rem; }
+  .ts-wlabel { font-size: 0.72rem; }
+  .ts-wnote { font-size: 0.68rem; flex-basis: 9rem; }
+  .ts-btns { margin-top: 0.3rem; gap: 0.3rem; }
+  .ts-btn { min-height: 38px; flex-direction: row; gap: 0.4rem; padding: 0.1rem 0.4rem; }
+  .ts-btn .ts-cost { margin-top: 0; font-size: 0.78rem; }
+  /* Opened at the top of the floor (the reach would be under it): under the row of chips, and the
+     reviews and notices make way while it is open. */
+  .touch-sheet.at-top { top: calc(0.4rem + 34px + 0.4rem); }
+  .game.boss-up .touch-sheet.at-top { top: calc(3.4rem + 34px + 0.4rem); }
+  .game:has(.touch-sheet.at-top:not(.hidden)) .toasts { display: none; }
+}
+/* The shortest floors (a small phone on its side): the folded card's line on how a finger places it
+   keeps to one line; unfolded, it is all there. */
+@media (max-height: 420px) {
+  .bb-info.folded .bbi-touch { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (pointer: coarse) and (max-width: 1099px), (pointer: coarse) and (max-height: 559px) {
+  .game { --fs-right: calc(0.5rem + 56px + env(safe-area-inset-right)); --pad-right: calc(0.5rem + 56px + env(safe-area-inset-right)); }
+  .floor-switch { min-height: 44px; }
+  .ts-wd { min-width: 2.6rem; min-height: 2.5rem; }
+}
+/* A phone held upright: no room for DEB between the small map and the floor switch, so she has a
+   row of her own just above them, as wide as the floor less the camera pad. */
+@media (max-width: 699px) and (max-aspect-ratio: 1/1) {
+  .deb {
+    left: calc(0.4rem + env(safe-area-inset-left));
+    right: var(--pad-right);
+    bottom: calc(0.4rem + 44px + 0.4rem + var(--lift));
+    max-width: none;
+  }
+  .game.has-minimap .deb { bottom: calc(0.4rem + 4.9rem + 0.4rem + var(--lift)); }
+  .game.is-training { --floor-left: 0px; }
+  .chat, .game.has-minimap .chat { bottom: calc(9.8rem + var(--lift)); }
+  .rebuild-pop, .has-minimap .rebuild-pop { bottom: calc(9.8rem + var(--lift)); }
+}

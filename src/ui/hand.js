@@ -7,6 +7,7 @@ import { h, setClass } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { shopperPortrait } from './portrait.js';
 import { artOf, faceOf, handOf, SYMBOLS, STAMPS } from './cardart.js';
+import { prefs, handLine } from './prefs.js';
 
 /** Portrait sizes drawn for each card size (CSS then fits the picture to the window). */
 const ART_PX = { big: 150, mid: 110, mini: 44 };
@@ -83,7 +84,7 @@ export function cardLine(id) {
  *   update shows the strip if the game has cards (not in the lobby) and says whether it shows;
  *   `filled` is how many slots show their card (all of them when left out)
  */
-export function createHandStrip({ onOpen }) {
+export function createHandStrip({ onOpen, prefs: pf = prefs() }) {
   const tip = h('div', { class: 'hs-tip hidden', role: 'tooltip' });
   const slots = h('div', { class: 'hs-slots' });
   const label = h('span', { class: 'hs-label', 'aria-hidden': 'true' }, h('b', null, 'HAND'), h('small', null, 'click to read'));
@@ -91,10 +92,26 @@ export function createHandStrip({ onOpen }) {
     type: 'button', class: 'hand-strip hidden', 'aria-label': "This game's cards: open them to read",
     onclick: () => { if (!el.classList.contains('is-dealing')) { hideTip(); onOpen(); } },
   }, label, slots);
+  // On a big screen (0.4, the owner) the heading folds the hand down to one line, "HAND · 5 cards",
+  // remembered (prefs.js). It is a button of its own beside the strip (not inside it: the strip is a
+  // button too); the style sheet shows it above the slots, and only on a big screen.
+  const headText = h('b', { class: 'fold-text' }, 'HAND');
+  const head = h('button', {
+    type: 'button', class: 'fold-head hs-head', 'aria-expanded': 'true', title: 'Fold the hand down to one line, or open it again',
+    onclick: () => pf.setFolded('hand', !pf.folded('hand')),
+  }, headText, h('small', { class: 'hs-read' }, 'click a card to read'), h('span', { class: 'fold-caret', 'aria-hidden': 'true' }));
   // (The tooltip is not inside the button, so its text is not read out as part of the label.)
-  const wrap = h('div', { class: 'hand-wrap hidden' }, el, tip);
+  const wrap = h('div', { class: 'hand-wrap hidden' }, el, head, tip);
   let sig = '';
   let hand = [];
+  let foldedNow = null;
+  function showFold() {
+    const f = pf.folded('hand');
+    if (f !== foldedNow) { foldedNow = f; setClass(wrap, 'folded', f); head.setAttribute('aria-expanded', String(!f)); }
+    const text = f ? handLine(hand.length) : 'HAND';
+    if (headText.textContent !== text) headText.textContent = text;
+  }
+  pf.on(showFold);
 
   function showTip(i, e) {
     if (e.pointerType === 'touch' || el.classList.contains('is-dealing') || !hand[i]) return;
@@ -125,6 +142,7 @@ export function createHandStrip({ onOpen }) {
     const now = `${hand.join(',')}|${n}|${s.holiday || ''}`;
     if (now === sig) return true;
     sig = now;
+    showFold();
     slots.replaceChildren(...hand.map((id, i) => {
       const slot = h('span', { class: `hs-slot${i < n ? ' is-full' : ''}`, 'data-i': String(i) },
         i < n ? cardEl(id, { size: 'mini', dress: s.holiday }) : null);
@@ -137,18 +155,15 @@ export function createHandStrip({ onOpen }) {
   }
 
   /**
-   * On a big screen: puts the strip in the left column (game.js works out where), `w` pixels wide,
-   * its slots in a row under the word HAND. null hands it back to the style sheet (the phone layout).
-   * @param {{x: number, y: number, w: number}|null} p
+   * On a big screen (side: true) the strip is the second panel of the column at the top left, as
+   * wide as the column, its slots in a row under its heading; otherwise (a phone) a strip in the row
+   * at the top left. The column itself is laid out by the style sheet (.left-col), so nothing here
+   * measures anything.
+   * @param {boolean} side
    */
-  function place(p) {
-    setClass(wrap, 'is-side', !!p);
-    wrap.style.left = p ? `${Math.round(p.x)}px` : '';
-    wrap.style.top = p ? `${Math.round(p.y)}px` : '';
-    wrap.style.width = p ? `${Math.round(p.w)}px` : '';
-  }
+  function setSide(side) { setClass(wrap, 'is-side', !!side); }
 
-  return { el: wrap, update, place, slot: (i) => slots.children[i] || null };
+  return { el: wrap, update, setSide, slot: (i) => slots.children[i] || null };
 }
 
 /**

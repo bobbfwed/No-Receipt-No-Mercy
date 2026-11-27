@@ -44,7 +44,24 @@ export function setStyle(el, prop, value) {
   if (el.style.getPropertyValue(prop) !== value) el.style.setProperty(prop, value);
 }
 
-export const money = (n) => `$${Math.floor(n).toLocaleString('en-US')}`;
+// Dollars, "$1,234". The panels ask for the same few figures every frame, and a slowed-down phone
+// spent a tenth of its busy time here when each call made a new number formatter
+// (toLocaleString does; the stutter investigation of 2026-11-26). So one formatter is made once,
+// and the last few hundred answers are kept.
+const DOLLARS = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const MONEY_KEEP = 256;
+const moneyMemo = new Map();
+export function money(n) {
+  const v = Math.floor(n);
+  let s = moneyMemo.get(v);
+  if (s === undefined) {
+    // (NaN and the infinities are formatted like any number, as toLocaleString did.)
+    s = `$${DOLLARS.format(v)}`;
+    if (moneyMemo.size >= MONEY_KEEP) moneyMemo.clear();
+    moneyMemo.set(v, s);
+  }
+  return s;
+}
 
 /** Ticks (30 a second) as m:ss. */
 export function clock(ticks) {
