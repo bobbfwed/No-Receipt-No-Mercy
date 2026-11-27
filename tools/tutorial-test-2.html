@@ -90,8 +90,9 @@
     // An Unpaid Intern facing left beside the line, at the Forklift's height.
     await tab(); key('4', 'Digit4'); face(2); click(9, 9);
     if (!await stepDone('an Unpaid Intern stocks the Forklift', 10000)) return;
-    // Swap the belt above the gap Sprinkler for a Splitter facing down; a belt into the second one.
-    key('Escape', 'Escape'); click(10, 12, 2);
+    // A Splitter facing down straight on the belt above the gap Sprinkler (0.4.01: it replaces the
+    // belt); a belt into the second one.
+    key('Escape', 'Escape');
     key('2', 'Digit2'); face(1); click(10, 12);
     key('1', 'Digit1'); await drag(9, 12, 9, 13);
     if (!await stepDone('a Splitter stocks both Sprinklers', 15000)) return;
@@ -100,9 +101,10 @@
     press('5x');
     await doors();
     if (!await stepDone('the Forklift ran out of Spite', 60000)) return;
-    // The Rebrander in the belt above the gap, and the belt back.
-    await tab(); click(10, 8, 2);
-    key('-', 'Minus'); face(1); click(10, 8);
+    // The Rebrander straight on the belt above the gap (0.4.01: key 0, the Tape Winder gone), and
+    // the belt back.
+    await tab();
+    key('0', 'Digit0'); face(1); click(10, 8);
     key('1', 'Digit1'); await drag(10, 9, 10, 10);
     await tab();
     if (!await stepDone('a Rebrander: the Forklift gets Name Brand', 20000)) return;
@@ -111,7 +113,7 @@
     key('z'); click(8, 9);
     if (!await stepDone('the Forklift\'s wire points north (planned)')) return;
     // A Barb Bender facing right between the second drop and the Forklift; then six dads.
-    key('Escape', 'Escape'); await tab(); key('0', 'Digit0'); face(0); click(7, 9);
+    key('Escape', 'Escape'); await tab(); key('9', 'Digit9'); face(0); click(7, 9);
     await wait(2500); await tab();
     await doors();
     if (!await stepDone('live wire turned the dads away', 40000)) return;
