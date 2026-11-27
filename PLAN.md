@@ -498,10 +498,24 @@ The owner's aim: make the game more its own, and make the factory decide who win
   - Stock is used **per use**: a shot, a shopper affected, or a hit absorbed. Idle buildings keep their stock, so gauges refill between shoppers and between events.
   - **Four brand tiers** per supply (Store Brand, Name Brand, Premium, Platinum), worth today's upgrade levels 2, 4, 6 and 8. Each tier up is one more pass through a Rebrander, slower each time.
   - **Dads walk through every building** unless stopped, and the dad-stopper is a **fifth supply** made in The Back and fed through the dumbwaiter. When it runs out, dads walk through again.
-  - The work is committed **directly on `main`**, so nothing can be pushed from the first 0.4 game-code commit until 0.4 is playable. 0.3.04 should be pushed before that commit.
-- **Names (proposed, the owner has seen them):** The Back; Returns Drop (fixed inlet); Bottled Spite (damage, from the Spite Still), Rage Cola (speed, Cola Cannery), Extension Cord (range, Cord Spooler), Duct Tape (durability, Tape Winder); Rebrander; Dumbwaiter; Unpaid Intern (takes items off a belt and hands them on); Splitter; Overpass (belts crossing at right angles); Clearance Bin (sells leftovers).
-- **Defaults put to the owner, taken unless he objects:** belts carry whatever is put on them and an intern only takes what his target accepts, so a mixed belt can jam; more junk comes from a cash upgrade on the Returns Drop; each event has a par time and every second under it pays extra, capped at half the event's pay; starting an event early no longer runs the factory ahead for free; old saves do not load in 0.4; the "2x2 factory buildings" card idea is dropped.
-- **Still to settle with the owner:** how the dad-stopping supply covers a wall (see the stages), its name, and whether Crate Stacks get dumbwaiters.
+  - The work is committed **directly on `main`**, so nothing can be pushed from the first 0.4 game-code commit until 0.4 is playable. 0.3.04 was pushed on 2026-11-26 (tag `v0.3.04`); everything after it belongs to 0.4.00 (`VERSION` '0.4', `RELEASE` 0).
+  - **Razor Wire** (the fifth supply, owner's rules of 2026-11-26):
+    - Any building can be given a wire direction at any time. The wire runs 3 tiles from the building in that one direction (3 is a number to tune by playing). It only works while the building holds Razor Wire.
+    - The brand tier is how many dads one unit turns away before it is used up, not how far the wire reaches.
+    - Because the player chooses the direction, a wire that would cut a required path is refused when it is planned, the same way a building is refused today.
+    - Two dad routes are drawn: where dads walk now (only wire that is stocked), and where they would walk if every planned wire were stocked.
+    - The owner's warning to balance for: early in the game, a player with no way to divert dads will not get far. Wire must be reachable early.
+  - **Shopper routes are always drawn** (owner, 2026-11-26), not only between events or while holding something to build.
+- **Names (seen by the owner):** The Back; Returns Drop (fixed inlet); Bottled Spite (damage, from the Spite Still), Rage Cola (speed, Cola Cannery), Extension Cord (range, Cord Spooler), Duct Tape (durability, Tape Winder), Razor Wire (stops dads, from the Barb Bender; the owner turned down "Diamond" and "Wire Jeweller"); Rebrander; Dumbwaiter; Unpaid Intern (takes items off a belt and hands them on); Splitter; Overpass (belts crossing at right angles); Clearance Bin (sells leftovers).
+- **Defaults the owner did not object to:** belts carry whatever is put on them and an intern only takes what his target accepts, so a mixed belt can jam; more junk comes from a cash upgrade on the Returns Drop; each event has a par time and every second under it pays extra, capped at half the event's pay; starting an event early no longer runs the factory ahead for free; old saves do not load in 0.4; the "2x2 factory buildings" card idea is dropped; Crate Stacks get no dumbwaiter.
+- **Decisions made on the owner's behalf** (each is one rule in `docs/architecture.md`, "The Back", and cheap to change):
+  - The store's walls and shelves go all the way down, so The Back has the same obstacles as the shop above it.
+  - Returns Drops stand where each map's Unpacker floor marks were.
+  - A security building cannot be placed over a belt or machine in The Back; the tile below must be empty for its dumbwaiter.
+  - A dumbwaiter takes any tier and uses stock in the order it arrived, so mixing tiers neither jams nor cheats.
+  - Razor Wire stops dads on every tile it crosses, open floor included, and other shoppers ignore it. So dads get a maze of their own, made only of wire.
+  - A dad counts as turned away by a wire when the way he would have walked with no wire at all goes through it; each dad is counted once per wire.
+  - Duct Tape works like wire: each use soaks up one gym bro hit, and the tier is how many hits one unit soaks up.
 - **What it changes that is easy to miss:**
   - The maze is now security buildings and Crate Stacks only. Where a building stands decides where its dumbwaiter is, and a dumbwaiter can only be fed from its four sides, so a building boxed in by others cannot be supplied.
   - Goods were the main income and upgrades the main thing to buy. Both go, so every price and the event pay are re-tuned.

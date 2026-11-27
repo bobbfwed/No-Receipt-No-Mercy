@@ -276,3 +276,58 @@ A game created with `createGame({ training: true })` has no build timer, cannot 
 - `&autostart=1` test only: the host opens the doors whenever a build phase starts.
 - `&cards=1` deals the game's cards where it would have none (`?solo=1&cards=1` goes through the deal; on `?demo=1` the hand is dealt without the deal, since the layout is built at once); `&cards=0` none, even through the lobby. `&cards=litter,hardy:karen` test only: exactly that hand, with no deal.
 - `&holiday=xmas` test only: the new game is played as if it were that holiday (a key of `HOLIDAYS`), whatever the date; `&holiday=none` plays it with no holiday. Example, the Christmas boss on the floor: `?demo=1&seed=7&holiday=xmas&autostart=1&ff=3000`.
+
+## The Back (0.4, built in stages; `PLAN.md` says which stages are done)
+From 0.4 the factory is a second floor under the shop, **The Back**. It makes no money. It turns returned junk into supplies and delivers them to the security buildings above, which are stronger while stocked. This section is the contract for it. Where it disagrees with the older sections above, this section is the target and the older text describes code that has not been replaced yet.
+
+### Two floors, one grid
+- `state.back` is a flat array like `state.grid`, the same size and indexing: a Back part or 0 per tile. `state.backVer` goes up whenever a part is added, removed or turned, and derived data is cached against it (as path maps are against `gridVer`).
+- A tile of The Back can hold a part unless `state.tiles[i] === '#'`: the store's walls and shelves go all the way down. Tills and entrances have open floor under them. Nothing in The Back blocks shoppers and no route check is needed to place a part.
+- Back parts are kinds in `BUILD` with `back: true`. They are bought, owned (`o`), removed and refunded like any building. The `place`, `remove` and `rotate` commands take `f: 1` to mean The Back (no `f` means the shop floor).
+- Which floor a player is looking at is not in the state. It is local to his screen (`view.floor`, 0 shop, 1 The Back), switched with Tab. The floor he is not on is drawn faintly (about 25%).
+- The engine lives in `src/sim/back.js`. `stepBack(state)` runs once per tick, in the build pause and during events alike, before the security buildings fire.
+
+### Items
+- An item is a small whole number. `1` is returned junk. A supply is `10 * type + tier`, type 1 Bottled Spite (track `dmg`), 2 Rage Cola (`spd`), 3 Extension Cord (`rng`), 4 Duct Tape (`dur`), 5 Razor Wire (`wire`), tier 1 Store Brand, 2 Name Brand, 3 Premium, 4 Platinum. So Premium Rage Cola is 23. `back.js` exports `itemCode`, `itemType`, `itemTier`.
+- Nothing stores items except belts in motion, the one-item hands and slots named below, and the dumbwaiters. There is no warehouse.
+
+### Belts (`conv`, shown as "Belt")
+- A belt tile is `{k:'conv', o, d, it:[code, pos, code, pos, ...]}`: the items on it, front one first. `pos` is a whole number from 0 (entering) to `BACK.sub` (leaving), so there are no fractions to drift between browsers.
+- Numbers, all in `BACK` in `constants.js`: `sub` 240 units per tile; `gap` 80, the least distance between two items, so a tile holds three; `step` 16 units a tick, which is 2 tiles a second; `end` = `sub - gap / 2`, where an item waits when it cannot go on.
+- Movement must not depend on tile order. Lanes are stepped **downstream first**: a lane is stepped after the lane it hands into, so a full line moves as one and no item moves twice in a tick. The order is derived from the layout and cached against `backVer` (never stored in the state). A ring of belts is broken at its lowest tile index.
+- A front item heading straight into another belt may advance to `sub + (that belt's last pos - gap)`, which keeps the gap across the join. Once past `sub` it is handed over with the overshoot as its new `pos`. Heading into anything else it advances to `end` and is offered each tick.
+- A belt takes items from behind and from both sides, never head-on. From the side an item lands at `sub / 2` if no item is within `gap` of that spot. A belt that is fed from behind and from the side gives way to neither: whichever lane is stepped first that tick wins, and the order is fixed.
+- The step is written as a function over one lane array, so a second lane (`it2`, the two-sided belts of Factorio) can be added later without a rewrite.
+
+### Handing over
+- Everything that passes an item on uses two functions in `back.js`: `wants(state, i, code, dir)` (would tile `i` take this item, arriving travelling in direction `dir`, right now?) and `give(state, i, code, dir, over)`, which does it. `wants` has no side effects. All hand-overs go through them, so a new part only has to answer those two.
+- **Splitter** `{k:'split', o, d, h, r}`: takes one item from behind into `h` (0 when empty), and each tick offers it to the tiles in front, to its left and to its right, starting after the one that took the last item (`r`), skipping any that do not want it. One belt in, up to three out, shared evenly among the ways that are open.
+- **Overpass** `{k:'over', o, a:[...], b:[...]}`: two belt lanes that do not mix, `a` running east-west and `b` north-south. Which way each runs is read from the layout (the neighbour that feeds into it; east and south win a tie), not stored.
+- **Unpaid Intern** `{k:'intern', o, d, h, t}`: stands between two tiles. With an empty hand he takes from the belt behind him the front-most item that the tile in front of him `wants`, holds it for `BACK.internSecs`, then gives it. He takes from belts only.
+- **Returns Drop** `{k:'drop', d, t, lv}`: fixed by the map (`makeDrops` in `maps.js`, one where each Unpacker floor mark was), owned by nobody, cannot be removed, can be turned by anyone. Every `BACK.dropSecs` (less with each cash upgrade level `lv`, the `dropUp` command) it puts one junk on the tile in front if that tile wants it.
+- **Clearance Bin** `{k:'bin', o}`: takes anything from any side. Junk pays nothing; a supply pays `BACK.binPay[tier]`, shared like any income.
+- **Machines** (Spite Still `still`, Cola Cannery `cannery`, Cord Spooler `spooler`, Tape Winder `winder`, Barb Bender `bender`): `{k, o, d, n, t, out}`. Each takes junk from any side but its front, holds up to 2, and every `BACK.makeSecs` turns one into its supply at tier 1, put on the tile in front.
+- **Rebrander** `{k:'rebrand', o, d, q:[codes], t, out}`: takes any supply below tier 4 (up to 2 waiting), and puts out the same supply one tier higher after `BACK.rebrandSecs[tier]`, which is longer for each tier.
+
+### Dumbwaiters and stock
+- Every tile of a security building has a **Dumbwaiter** under it: `{k:'lift', a}` in `state.back`, `a` being the building's anchor tile. It appears and goes with the building. A security building cannot be placed where The Back already holds a part (`canPlace` answers `'back'`). Crate Stacks and Wet Floor Signs have none.
+- A dumbwaiter wants a supply if its building has that track (`BUILD[k].up`, and every building with a dumbwaiter has `wire`) and the stock of that track is below its cap.
+- Stock is on the building: `b.s = { dmg: [tier, uses, tier, uses, ...], ... }`, runs in the order they arrived. A unit arriving adds `usesPer(kind, track, tier)` uses to the last run if the tier matches, else starts a run. The cap is `BACK.stockUnits` units' worth.
+- A track's level is `BACK.tierLevel[tier of its first run]` (`[0, 2, 4, 6, 8]`), 0 with no stock. `levelIn` in `upgrades.js` reads it, so `statsOf` and its formulas are unchanged, and an unstocked building is exactly the 0.3 building with no upgrades. Bought upgrades (`b.u`, the `upgrade` command, `levelCost`) are removed.
+- Use: each shot (or each shopper a stand, sign or salesman acts on) takes one use from `dmg`, `spd` and `rng` where stocked. `BUILD[k].shots` is how many uses one unit gives that kind, so a slow gun and a fast one eat at a similar rate. Each gym bro hit takes one use of `dur` instead of counting as a hit; the tier sets how many uses a unit of Duct Tape gives (`BACK.tapeHits`).
+- Shoplifters and Card Traders steal stock from the buildings they pass, not goods from belts.
+
+### Razor Wire and dads
+- Dads walk through every building; only walls and live wire stop them. `HOP` becomes `DAD`.
+- A building may have a wire direction `b.wd` (0 to 3), set or cleared at any time with the `wire` command. Its wire covers the building's own tiles and the `BACK.wireReach` (3) tiles beyond it that way, stopping at a wall. The wire is **live** while the building has `wire` stock and **planned** otherwise.
+- Two dad maps: `DAD` (walls and live wire block) and `DADPLAN` (walls and every wire, live or planned). The `wire` command, and placing a building that carries a wire plan, is refused (`'blocked'`) if on `DADPLAN` any entrance loses its way to the tills or a bank of tills is cut off. Live wire is always a part of planned wire, so the live map can never be cut off. `gridVer` goes up when a wire goes live or dead.
+- Use: a dad is turned away by a wire when the step he would take on the walls-only map (`GHOST`) is a tile under that building's live wire. He is counted once per wire building (`s.rw` remembers the last). `BACK.wireTurns[tier]` dads use up one unit.
+- Both dad routes are drawn: the live one solid, the planned one faint where it differs.
+
+### Money
+- Income: the event bonus, a speed bonus (each event has a par time; each second under par pays, up to half the event's pay), boss bounties, and the Clearance Bin. Goods and the Shipping Chute are gone, with the Unpacker, Press, Packer, the old `belt` and the marked floors (`state.zones`).
+- Starting an event early no longer runs the factory ahead (`skipBuild`), so the pause is refill time and starting early gives it up.
+
+### Sync
+- The Back is part of the state, so it is sent, saved and replayed like the rest. The checksum (`session.js`) covers it: the number of items in The Back, the sum of their positions and codes, and every building's stock.
+- `stepBack` walks a cached list of parts, not the whole grid, and makes no garbage per tick: the largest store is 121 x 67 tiles and every client simulates at up to 5x speed.
