@@ -52,6 +52,8 @@ function play(s, seconds, each = () => {}) {
   }
   return all;
 }
+/** Razor Wire uses left on a building. */
+const usesOf = (b) => { let n = 0; const r = b && b.s && b.s.wire; if (r) for (let k = 1; k < r.length; k += 2) n += r[k]; return n; };
 const dadsOn = (s, tiles) => s.shoppers.filter((m) => m.k === 'dad' && tiles.includes(at(m.x | 0, m.y | 0)));
 /** Temporarily changes tuning numbers for one test. */
 function tune(t, changes, obj = TUNE) {
@@ -117,7 +119,7 @@ test('dads walk straight through crates, security and big buildings; nobody else
   assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'dad'));
 });
 
-test('without wire nothing changes for anyone but dads, and wire changes nothing for anyone but dads', () => {
+test('without wire nothing changes; planned wire changes nothing for anyone but dads; live wire is a wall to all but runaway children (0.4.01)', () => {
   const s = stage();
   for (let y = 1; y <= 13; y++) assert.ok(place(s, 'crate', 12, y).ok);
   assert.ok(place(s, 'sprinkler', 5, 5).ok);
@@ -125,12 +127,17 @@ test('without wire nothing changes for anyone but dads, and wire changes nothing
   const before = [getDist(s), getField(s, SMASH), getField(s, GHOST)].map((f) => [...f]);
   assert.ok(wire(s, 5, 5, 1).ok);
   assert.ok(wire(s, 20, 6, 1).ok);
+  const planned = [getDist(s), getField(s, SMASH), getField(s, GHOST)].map((f) => [...f]);
+  assert.deepEqual(planned, before, 'planned: the ordinary, gym bro and runaway-child maps are untouched');
   stock(s, 5, 5);
   stock(s, 20, 6);
   assert.ok(wireLive(s.grid[at(5, 5)]) && wireLive(s.grid[at(20, 6)]));
-  const after = [getDist(s), getField(s, SMASH), getField(s, GHOST)].map((f) => [...f]);
-  assert.deepEqual(after, before, 'the ordinary, gym bro and runaway-child maps are untouched');
-  assert.equal(getDadDist(s)[at(20, 7)], UNREACHABLE, 'only the dads\' map has the wire');
+  assert.deepEqual([...getField(s, GHOST)], before[2], 'runaway children ignore it');
+  for (const t of tilesAt([[20, 6], [20, 7], [20, 8], [20, 9], [5, 6], [5, 7], [5, 8]])) {
+    assert.equal(getDadDist(s)[t], UNREACHABLE);
+    assert.equal(getDist(s)[t], UNREACHABLE, 'live wire stops ordinary shoppers too (0.4.01)');
+    assert.equal(getField(s, SMASH)[t], UNREACHABLE, 'and gym bros');
+  }
 });
 
 // ---- what a wire covers ------------------------------------------------------------------------
@@ -178,7 +185,7 @@ test('a Barcode Laser\'s wire, lying and standing, and a TV Salesman\'s: as wide
 
 // ---- planned and live --------------------------------------------------------------------------
 
-test('planned wire does nothing; live wire turns dads away over open floor, and nobody else notices it', () => {
+test('planned wire does nothing; live wire turns dads away over open floor, and ordinary shoppers go round it unharmed (0.4.01)', () => {
   const s = stage();
   // A Wet Floor Sign (blocks nobody) at (14, 5) with wire south over (14, 5..8): across the dads' way.
   assert.ok(place(s, 'wetfloor', 14, 5).ok);
@@ -197,12 +204,15 @@ test('planned wire does nothing; live wire turns dads away over open floor, and 
   assert.ok(getDadDist(s)[at(0, 7)] > getField(s, GHOST)[at(0, 7)], 'the way round is longer');
   send(s, [{ k: 'dad', n: 6, gap: 0.6, at: 0 }, { k: 'clipper', n: 6, gap: 0.6, at: 0.3 }]);
   let clipperOnWire = false;
+  const uses = usesOf(s.grid[at(14, 5)]);
   const ev = play(s, 60, () => {
     assert.equal(dadsOn(s, covered).length, 0, 'no dad steps under live wire');
     if (s.shoppers.some((m) => m.k === 'clipper' && covered.includes(at(m.x | 0, m.y | 0)))) clipperOnWire = true;
   });
-  assert.ok(clipperOnWire, 'a Coupon Clipper walked across it');
+  assert.ok(!clipperOnWire, 'no Coupon Clipper walked across it (0.4.01)');
   assert.equal(ev.filter((e) => e.e === 'escape' && e.k === 'dad').length, 6, 'the dads went round it');
+  assert.equal(ev.filter((e) => e.e === 'escape' && e.k === 'clipper').length, 6, 'so did the clippers');
+  assert.equal(uses - usesOf(s.grid[at(14, 5)]), ev.filter((e) => e.e === 'turned' && !e.free).length, 'only dads use it up');
 });
 
 // ---- the wire command --------------------------------------------------------------------------

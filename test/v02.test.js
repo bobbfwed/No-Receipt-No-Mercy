@@ -962,7 +962,7 @@ test('host and client stay in step with the new buildings and shoppers, sent ove
   assert.ok(st.shoppers.some((m) => NEW_KINDS.includes(m.k)) || st.ws.stopped + st.ws.escaped > 0);
 });
 
-test('the checksum sees stock, hits and a building switched off; saves are version 5, and older ones are ignored', () => {
+test('the checksum sees stock, hits and a building switched off; saves are version 6, and older ones are ignored', () => {
   const s = stage();
   place(s, 'forklift', 5, 5);
   s.grid[at(5, 5)].s = { dmg: [1, 6] };
@@ -972,7 +972,7 @@ test('the checksum sees stock, hits and a building switched off; saves are versi
     tweak(c);
     assert.notEqual(checksum(c), base);
   }
-  assert.equal(s.v, 5, 'version 5 since 0.4, which loads no older save');
+  assert.equal(s.v, 6, 'version 6 since 0.4.01 (5 since 0.4), which loads no older save');
   const storage = new Map();
   const store = { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: (k) => storage.delete(k) };
   const g = createGame({ seed: 5, map: { design: 'warehouse', size: 'm' } });
@@ -980,8 +980,8 @@ test('the checksum sees stock, hits and a building switched off; saves are versi
   place(g, 'crate', 5, 5);
   store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: g }));
   assert.ok(readSave({ storage: store }));
-  for (const v of [4, 3, 2]) {
+  for (const v of [5, 4, 3, 2]) {
     store.setItem('returns-dept.save', JSON.stringify({ v: 1, at: 1, kind: 'solo', state: { ...g, v } }));
-    assert.equal(readSave({ storage: store }), null, `a save of version ${v} (before 0.4) is ignored`);
+    assert.equal(readSave({ storage: store }), null, `a save of version ${v} (before 0.4.01) is ignored`);
   }
 });

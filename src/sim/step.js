@@ -2,7 +2,7 @@
 // which lets every player's browser predict the game between updates from the host.
 import { DIRS, BUILD, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless, releaseOrder, releaseAllOrders, footprint } from './state.js';
-import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, dadDecide, NORMAL, DAD, SMASH, GHOST, UNREACHABLE } from './path.js';
+import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, dadDecide, NORMAL, DAD, SMASH, GHOST, FREE, UNREACHABLE } from './path.js';
 import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
@@ -1656,7 +1656,10 @@ function stepShoppers(state, fields, sec, ev) {
       const to = dadMove(state, s, i, fields, ev);
       going = to !== i && moveTo(s.x, s.y, (to % W) + 0.5 + s.ox, ((to / W) | 0) + 0.5 + s.oy, speed);
     } else {
-      going = moveAlong(state, fields[routeOf(s, state)], s.x, s.y, s.ox, s.oy, speed, s.id);
+      // (0.4.01) Caught on Razor Wire that went live under him, or shut in by it: he walks off by
+      // the map without wire until he is somewhere with a way to the tills again.
+      const f = fields[routeOf(s, state)];
+      going = moveAlong(state, f[i] === UNREACHABLE ? getField(state, FREE) : f, s.x, s.y, s.ox, s.oy, speed, s.id);
     }
     if (going) {
       s.vx = MV.vx;

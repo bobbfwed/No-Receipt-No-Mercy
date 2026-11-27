@@ -1,21 +1,29 @@
 // Shopper pathfinding. One flood fill from the tills gives every tile its walking distance to
 // the nearest till; shoppers simply step to the neighbour with the smallest number.
-// There are five such maps, because some shoppers get through things others cannot:
-//   NORMAL  most shoppers: security buildings (but Wet Floor Signs) and crates block
+// There are seven such maps, because some shoppers get through things others cannot:
+//   NORMAL  most shoppers: security buildings (but Wet Floor Signs), crates and, since 0.4.01, live
+//           Razor Wire block (the owner: ordinary people would not walk into razor wire either;
+//           they see it and go round, so they never use it up)
 //   DAD     dads (0.4): they walk through every building; only the store's walls and live Razor
 //           Wire stop them (wire.js). (Until 0.4 they only stepped over the old factory's belts.)
 //   SMASH   gym bros: they walk through crate stacks (and wreck them), while they still can hit
-//           things; resting after a hit, or spent, they walk by NORMAL (see routeOf)
+//           things; resting after a hit, or spent, they walk by NORMAL (see routeOf). Live wire
+//           stops them as it stops everyone else (0.4.01): a crate under live wire is not in reach
 //   GHOST   runaway children: only the store's own walls stop them
 //   DADPLAN nobody walks it: the dads' map as it would be if every planned wire were stocked
 //           (walls and all wire block). The wire command is refused if it cuts a way on it, and
 //           the interface draws the route it gives.
-import { DIRS, BUILD, SHOPPERS, TUNE, defOf } from './constants.js';
+//   PLAN    nobody walks it (0.4.01): NORMAL as it would be if every planned wire were stocked. Every
+//           check that a change does not shut shoppers off uses it (shopPlanCheck), so wire that
+//           goes live later can never close the last way through.
+//   FREE    NORMAL without any wire (0.4.01): the way out for a shopper caught on wire that went
+//           live under him, or shut in by it, until he is somewhere with a way to the tills again.
+import { DIRS, BUILD, SHOPPERS, TUNE, ST, defOf } from './constants.js';
 import { cardSmash } from './cards.js';
 import { wireMap } from './wire.js';
 
 export const UNREACHABLE = 65535;
-export const NORMAL = 0, DAD = 1, SMASH = 2, GHOST = 3, DADPLAN = 4;
+export const NORMAL = 0, DAD = 1, SMASH = 2, GHOST = 3, DADPLAN = 4, PLAN = 5, FREE = 6;
 
 const cache = new WeakMap();
 
@@ -53,7 +61,7 @@ export function routeOf(s, state = null) {
 
 /**
  * True if a shopper can stand on this tile.
- * @param {number} [mode] NORMAL, DAD, SMASH, GHOST or DADPLAN
+ * @param {number} [mode] NORMAL, DAD, SMASH, GHOST, DADPLAN, PLAN or FREE
  */
 export function walkable(state, i, mode = NORMAL) {
   // (A shut entrance counts as floor, so the check that the maze leaves every entrance a way
@@ -63,6 +71,9 @@ export function walkable(state, i, mode = NORMAL) {
   // Dads walk through every building (0.4): only wire stops them, live wire on their own map.
   if (mode === DAD) return wireMap(state).live[i] < 0;
   if (mode === DADPLAN) return !wireMap(state).plan[i];
+  // Everyone else goes round live wire (0.4.01), and the checks round every planned wire.
+  if ((mode === NORMAL || mode === SMASH) && wireMap(state).live[i] >= 0) return false;
+  if (mode === PLAN && wireMap(state).plan[i]) return false;
   const b = state.grid[i];
   if (!b || !BUILD[b.k].blocks) return true;
   return mode === SMASH && b.k === 'crate';
@@ -79,13 +90,16 @@ function wireBlock(state, mode) {
 }
 
 /**
- * Flood fill: the walking distance from every tile to the nearest of some starting tiles.
+ * Flood fill: the walking distance from every tile to the nearest of some starting tiles. A
+ * starting tile the map does not let anyone stand on (a till under wire) is no way out.
  * @param {(i: number) => boolean} isStart
  * @param {Int32Array|Uint16Array|null} [wire] the dads' maps (0.4): wire that blocks, as wireBlock
  *   gives it (live anchors, -1 for none; or planned counts, 0 for none). With it, only the store's
- *   walls and that wire block, and a till under wire is no way out.
+ *   walls and that wire block.
+ * @param {Uint16Array} [plan] the PLAN map (0.4.01): the planned wire to treat as blocked, counts per
+ *   tile as wireMap's plan (or a changed copy, from planWith, to test a wire command)
  */
-function flood(state, isStart, extraBlocked, mode, wire = wireBlock(state, mode)) {
+function flood(state, isStart, extraBlocked, mode, wire = wireBlock(state, mode), plan = mode === PLAN ? wireMap(state).plan : null) {
   const W = state.w, H = state.h, n = W * H;
   const dist = new Uint16Array(n).fill(UNREACHABLE);
   const queue = new Int32Array(n);
@@ -94,9 +108,13 @@ function flood(state, isStart, extraBlocked, mode, wire = wireBlock(state, mode)
   const none = wire instanceof Int32Array ? -1 : 0;
   // A building bigger than one tile is tested by blocking all of its tiles at once.
   const many = Array.isArray(extraBlocked) ? new Set(extraBlocked) : null;
+  const grid = state.grid;
+  const pass = wire ? (t) => tiles[t] !== '#' && wire[t] === none
+    : plan ? (t) => tiles[t] !== '#' && !plan[t] && (!grid[t] || !BUILD[grid[t].k].blocks)
+      : (t) => walkable(state, t, mode);
   let head = 0, tail = 0;
   for (let i = 0; i < n; i++) {
-    if (isStart(i) && (!wire || wire[i] === none)) { dist[i] = 0; queue[tail++] = i; }
+    if (isStart(i) && pass(i)) { dist[i] = 0; queue[tail++] = i; }
   }
   while (head < tail) {
     const i = queue[head++];
@@ -106,7 +124,7 @@ function flood(state, isStart, extraBlocked, mode, wire = wireBlock(state, mode)
       if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const t = ny * W + nx;
       if (dist[t] !== UNREACHABLE || t === extraBlocked || (many && many.has(t))) continue;
-      if (wire ? tiles[t] === '#' || wire[t] !== none : !walkable(state, t, mode)) continue;
+      if (!pass(t)) continue;
       dist[t] = d;
       queue[tail++] = t;
     }
@@ -118,7 +136,7 @@ function flood(state, isStart, extraBlocked, mode, wire = wireBlock(state, mode)
  * Distance in tiles from every tile to the nearest till.
  * @param {number|number[]} extraBlocked a tile index, or a list of them, to treat as blocked (to
  *   test a placement), or -1
- * @param {number} [mode] NORMAL, DAD, SMASH, GHOST or DADPLAN
+ * @param {number} [mode] NORMAL, DAD, SMASH, GHOST, DADPLAN, PLAN or FREE
  * @returns {Uint16Array}
  */
 export function computeDist(state, extraBlocked = -1, mode = NORMAL) {
@@ -139,6 +157,37 @@ export function dadPlanCheck(state, plan) {
   const dist = flood(state, (i) => tiles[i] === 'T', -1, DADPLAN, plan);
   for (const door of state.doors) for (const t of door) if (dist[t] === UNREACHABLE) return 'blocked';
   return banksJoined(state, -1, DADPLAN, plan) ? null : 'blocked';
+}
+
+/**
+ * The check every change that could shut shoppers off makes (0.4.01: placing or rebuilding a
+ * building, turning one, the wire command, a wreck's wire coming back): on the PLAN map with
+ * `plan` as the planned wire (counts per tile; the store's own by default, or a changed copy from
+ * planWith) and `extraBlocked` as for computeDist (a building being tested), does every entrance,
+ * open or shut, keep a way to the tills, every bank of tills a way to the others, and every shopper
+ * in the store who has a way out now keep one? (A dad is left out: he walks by his own map. A
+ * shopper standing on planned wire is left out: if it goes live under him he walks off it.)
+ * Live wire is always part of planned wire, so passing this means stock arriving later can never
+ * close the last way through.
+ * @returns {string|null} null if it does; 'blocked' (an entrance or a shopper cut off) or 'bank'
+ */
+export function shopPlanCheck(state, plan = wireMap(state).plan, extraBlocked = -1) {
+  const tiles = state.tiles;
+  const dist = flood(state, (i) => tiles[i] === 'T', extraBlocked, PLAN, null, plan);
+  for (const door of state.doors) for (const t of door) if (dist[t] === UNREACHABLE) return 'blocked';
+  if (!banksJoined(state, extraBlocked, PLAN, null, plan)) return 'bank';
+  let before = null;
+  const W = state.w;
+  for (const s of state.shoppers) {
+    if (s.st === ST.LEAVE || modeOf(s.k) === DAD) continue;
+    const t = ((s.y | 0) * W) + (s.x | 0);
+    if (dist[t] !== UNREACHABLE || plan[t]) continue;
+    // (Only one this change would shut in: one already without a way out on the planned map, who
+    // came in over wire that is not stocked yet, is not this change's doing.)
+    before ||= getField(state, PLAN);
+    if (before[t] !== UNREACHABLE) return 'blocked';
+  }
+  return null;
 }
 
 const bankCache = new WeakMap();
@@ -175,27 +224,28 @@ export function banksOpen(state, extraBlocked = -1) {
   return banksJoined(state, extraBlocked, NORMAL);
 }
 
-/** banksOpen on any map (with `wire` as flood takes it, for the dads' planned map). */
-function banksJoined(state, extraBlocked, mode, wire) {
+/** banksOpen on any map (with `wire` and `plan` as flood takes them, for the planned maps). */
+function banksJoined(state, extraBlocked, mode, wire, plan) {
   const banks = tillBanks(state);
   if (banks.length < 2) return true;
   const first = new Set(banks[0]);
-  const dist = flood(state, (i) => first.has(i), extraBlocked, mode, wire);
+  const dist = flood(state, (i) => first.has(i), extraBlocked, mode, wire ?? undefined, plan ?? undefined);
   return banks.every((bank) => bank.some((t) => dist[t] !== UNREACHABLE));
 }
 
 function cacheOf(state) {
   let hit = cache.get(state);
   if (!hit || hit.ver !== state.gridVer) {
-    hit = { ver: state.gridVer, fields: [null, null, null, null, null], to: new Map() };
+    hit = { ver: state.gridVer, fields: [null, null, null, null, null, null, null], to: new Map() };
     cache.set(state, hit);
   }
   return hit;
 }
 
 /**
- * The distance map for the current layout, worked out only when the layout changes.
- * @param {number} [mode] NORMAL, DAD, SMASH or GHOST
+ * The distance map for the current layout, worked out only when the layout changes (gridVer: wire
+ * going live or dead moves it on too).
+ * @param {number} [mode] NORMAL, DAD, SMASH, GHOST, DADPLAN, PLAN or FREE
  */
 export function getField(state, mode = NORMAL) {
   const hit = cacheOf(state);

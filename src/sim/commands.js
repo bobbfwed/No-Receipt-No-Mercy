@@ -2,14 +2,14 @@
 // The host validates every command here, so a confused or cheating client cannot break the game.
 import { BUILD, BACK, TUNE, TICK_HZ, ST, ROLES, SPEEDS, buildDef } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf, releaseOrder } from './state.js';
-import { computeDist, banksOpen, dadPlanCheck, modeOf, UNREACHABLE, DAD } from './path.js';
+import { shopPlanCheck, dadPlanCheck, modeOf, DAD } from './path.js';
 import { beginWave } from './step.js';
 import { spentOn, rebuildDeal, reinforceCost } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, cardStock, boozeRoll, nextCard } from './cards.js';
 import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode, takeOverBelt, backPrice } from './back.js';
 import { planLine } from './line.js';
-import { carriesWire, wireCovers, buildingTiles, planWith, wireLive, wireChanged } from './wire.js';
+import { carriesWire, wireCovers, buildingTiles, planWith, wireLive, wireChanged, wireMap } from './wire.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
 const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp', 'wire', 'reinforce', 'line']);
@@ -99,7 +99,8 @@ function tidyRubble(state, r) {
  *   'fit' part of a bigger building's footprint is off the floor or occupied,
  *   'cash' he cannot afford it, 'shopper' someone is standing there,
  *   'blocked' it would wall off the tills from an entrance or from a shopper,
- *   'bank' it would wall off one of the two banks of tills (the car park),
+ *   'bank' it would wall off one of the two banks of tills (the car park); both counting every
+ *   planned Razor Wire as a wall (0.4.01: shopPlanCheck), as wire stocked later would be one,
  *   'back' (0.4) a security building with Dumbwaiters over a part in The Back.
  */
 export function canPlace(state, k, x, y, pid = 0, d = 0) {
@@ -146,19 +147,15 @@ function placeCheck(state, k, x, y, pid, d, paid) {
     // never wall him in. Only Razor Wire stops a dad, and a new building has no wire.)
     for (const s of state.shoppers) if (s.st !== ST.LEAVE && modeOf(s.k) !== DAD && at.tiles.includes(tileOf(state, s))) return 'shopper';
     const block = at.tiles.length === 1 ? at.i : at.tiles;
-    const dist = computeDist(state, block);
-    // Every entrance must keep a way to the tills, including the ones that are still shut.
-    for (const door of state.doors) for (const t of door) if (dist[t] === UNREACHABLE) return 'blocked';
-    // In a store with two banks of tills, both stay open: walling one off would turn it back into
-    // an ordinary store, and the crowd choosing between them is the point of it.
-    if (!banksOpen(state, block)) return 'bank';
-    // Nobody in the store may be walled in. A gym bro is checked as an ordinary shopper: at any
-    // moment he may be resting after a hit, or spent, and then he walks round crates like anyone
-    // else, so crates must not wall him in either.
-    for (const s of state.shoppers) {
-      if (s.st === ST.LEAVE || modeOf(s.k) === DAD) continue;
-      if (dist[tileOf(state, s)] === UNREACHABLE) return 'blocked';
-    }
+    // Every entrance must keep a way to the tills, including the ones that are still shut. In a
+    // store with two banks of tills, both stay open: walling one off would turn it back into an
+    // ordinary store, and the crowd choosing between them is the point of it. Nobody in the store
+    // may be walled in. A gym bro is checked as an ordinary shopper: at any moment he may be
+    // resting after a hit, or spent, and then he walks round crates like anyone else, so crates
+    // must not wall him in either. Every planned Razor Wire counts as a wall (0.4.01): shoppers go
+    // round live wire, and planned wire can go live at any moment.
+    const why = shopPlanCheck(state, wireMap(state).plan, block);
+    if (why) return why;
   }
   return null;
 }
@@ -202,7 +199,8 @@ function put(state, tiles, b) {
 function restoreWire(state, ai, wd) {
   const b = state.grid[ai];
   if (wd === undefined || !b || !carriesWire(b.k)) return;
-  if (dadPlanCheck(state, planWith(state, [], wireCovers(state, buildingTiles(state, ai, b), wd)))) return;
+  const plan = planWith(state, [], wireCovers(state, buildingTiles(state, ai, b), wd));
+  if (dadPlanCheck(state, plan) || shopPlanCheck(state, plan)) return;
   b.wd = wd;
   state.gridVer++;
   wireChanged(state);
@@ -567,7 +565,9 @@ function dropUp(state, pid, cmd, ev) {
  *   'bounds' off the map; 'empty' no building there; 'kind' a building that cannot carry wire (a
  *   Crate Stack: only buildings with Dumbwaiters can); 'blocked' on the dads' planned map
  *   (DADPLAN: every wire, live or not) with this change, an entrance, open or shut, would have no
- *   way to the tills or a bank of tills would be cut off from the others.
+ *   way to the tills or a bank of tills would be cut off from the others; or (0.4.01) the same, or
+ *   a shopper shut in, on the ordinary shoppers' planned map (PLAN: buildings and every wire; see
+ *   shopPlanCheck), since live wire stops them too.
  */
 export function canWire(state, pid, x, y, d) {
   if (state.phase === 'won' || state.phase === 'lost') return 'over';
@@ -586,7 +586,8 @@ export function canWire(state, pid, x, y, d) {
   // (Taking a wire away, or keeping it as it is, can never cut a way: only a new stretch is checked.)
   const tiles = buildingTiles(state, ai, b);
   const was = b.wd === undefined ? [] : wireCovers(state, tiles, b.wd);
-  return dadPlanCheck(state, planWith(state, was, wireCovers(state, tiles, d)));
+  const plan = planWith(state, was, wireCovers(state, tiles, d));
+  return dadPlanCheck(state, plan) || (shopPlanCheck(state, plan) ? 'blocked' : null);
 }
 
 /**
@@ -785,7 +786,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
         const was = wireCovers(state, buildingTiles(state, ai, b), b.wd);
         const now = wireCovers(state, footprint(state, b.k, ai % state.w, (ai / state.w) | 0, d) || [ai], b.wd);
         moved = was.length !== now.length || was.some((t, n) => t !== now[n]);
-        if (moved && dadPlanCheck(state, planWith(state, was, now))) return { ok: false, why: 'blocked' };
+        const plan = moved ? planWith(state, was, now) : null;
+        if (moved && (dadPlanCheck(state, plan) || shopPlanCheck(state, plan))) return { ok: false, why: 'blocked' };
       }
       b.d = d;
       if (moved) { state.gridVer++; wireChanged(state); }
