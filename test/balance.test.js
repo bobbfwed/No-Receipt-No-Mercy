@@ -34,6 +34,21 @@ test('the dads\' line never pushes an event up to 30 over the crowd cap, for any
   }
 });
 
+/**
+ * The way a line from the Returns Drop on tile i is laid out in these tests: toward the store's
+ * middle from top to bottom, else the next open way (the facing drops had until 0.4.01; since then
+ * a drop deals out to all four sides, so any open side works).
+ */
+function dropWay(s, i) {
+  const x = i % s.w, y = (i / s.w) | 0;
+  const down = y * 2 < s.h - 1 ? 1 : 3, across = x * 2 < s.w - 1 ? 0 : 2;
+  for (const d of [down, across, (across + 2) & 3, (down + 2) & 3]) {
+    const fx = x + [1, 0, -1, 0][d], fy = y + [0, 1, 0, -1][d];
+    if (fx >= 0 && fy >= 0 && fx < s.w && fy < s.h && s.tiles[fy * s.w + fx] !== '#') return d;
+  }
+  return down;
+}
+
 test('from the starting cash: a first Razor Wire line, live in the first build pause, with two more security buildings and a wall to spare', () => {
   const s = createGame({ seed: 3, map: { design: 'warehouse', size: 's' } });
   addPlayer(s, 'Solo');
@@ -43,7 +58,8 @@ test('from the starting cash: a first Razor Wire line, live in the first build p
   // In a line from the first Returns Drop: Splitter, Barb Bender, a belt, an Unpaid Intern, and the
   // Pepper Sprinkler he feeds, whose wire runs back over them.
   const di = s.back.findIndex((p) => p && p.k === 'drop');
-  const d = s.back[di].d;
+  // (The way to lay the line: toward the middle, top to bottom, as drops used to face until 0.4.01.)
+  const d = dropWay(s, di);
   const at = (n) => di + n * (DIRS[d][1] * s.w + DIRS[d][0]);
   const xy = (i) => ({ x: i % s.w, y: (i / s.w) | 0 });
   const back = [['split', 1], ['bender', 2], ['conv', 3], ['intern', 4]];

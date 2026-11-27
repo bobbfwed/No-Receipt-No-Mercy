@@ -4,7 +4,8 @@
 import { DIRS } from '../../src/sim/index.js';
 
 /** The machine for each upgrade track a security building takes. */
-export const MACHINE = { dmg: 'still', spd: 'cannery', rng: 'spooler', dur: 'winder', wire: 'bender' };
+// (Duct Tape and its Tape Winder went in 0.4.01.)
+export const MACHINE = { dmg: 'still', spd: 'cannery', rng: 'spooler', wire: 'bender' };
 
 /** The facing (0 east, 1 south, 2 west, 3 north) that points from tile a to its neighbour b. */
 export function facing(state, a, b) {
@@ -18,7 +19,7 @@ export function facing(state, a, b) {
  * front of the drop gets a belt, the next a machine making `track`'s supply, then belts to the
  * Dumbwaiter, the last one pointing into it. Null if there is no such way (or it is too short).
  * @param {number} dropIndex the drop's tile
- * @param {string} track 'dmg', 'spd', 'rng', 'dur' or 'wire'
+ * @param {string} track 'dmg', 'spd', 'rng' or 'wire'
  * @param {Set<number>} [avoid] tiles not to lay on
  * @param {number} [target] the Dumbwaiter to reach (any tile of its building); left out, the nearest
  * @returns {{k, x, y, d, f}[] | null} place commands, in the order to send them
@@ -27,9 +28,13 @@ export function chain(state, dropIndex, track = 'dmg', avoid = new Set(), target
   const { w, h, back, tiles } = state;
   const drop = back[dropIndex];
   if (!drop || drop.k !== 'drop') return null;
-  const [dx, dy] = DIRS[drop.d | 0];
-  const start = dropIndex + dy * w + dx;
-  if (start < 0 || start >= back.length || back[start] || tiles[start] === '#') return null;
+  // (A drop deals out to all four sides since 0.4.01: the line starts on the first open one.)
+  let start = -1;
+  for (const [dx, dy] of DIRS) {
+    const x = (dropIndex % w) + dx, y = ((dropIndex / w) | 0) + dy, t = y * w + x;
+    if (x >= 0 && y >= 0 && x < w && y < h && !back[t] && tiles[t] !== '#' && !avoid.has(t)) { start = t; break; }
+  }
+  if (start < 0) return null;
   const from = new Int32Array(back.length).fill(-1);
   from[start] = start;
   const queue = [start];

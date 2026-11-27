@@ -128,7 +128,7 @@ function makeLink(clock, rnd) {
 
 // ---- the scripted players ----------------------------------------------------------------------
 const SHOP = ['crate', 'crate', 'crate', 'sprinkler', 'sprinkler', 'forklift', 'wetfloor', 'samples', 'railgun', 'salesman'];
-const BACK = ['conv', 'conv', 'conv', 'conv', 'split', 'over', 'intern', 'still', 'cannery', 'spooler', 'winder', 'bender', 'rebrand', 'bin'];
+const BACK = ['conv', 'conv', 'conv', 'conv', 'split', 'over', 'intern', 'still', 'cannery', 'spooler', 'bender', 'rebrand', 'bin'];
 
 function anchors(s, pred) { const out = []; for (let i = 0; i < s.grid.length; i++) { const b = s.grid[i]; if (b && b.part === undefined && pred(b)) out.push(i); } return out; }
 function backParts(s, pred) { const out = []; for (let i = 0; i < s.back.length; i++) { const p = s.back[i]; if (p && pred(p)) out.push(i); } return out; }
@@ -207,7 +207,7 @@ function think(s, pid, rnd, plan) {
   if (r < 0.80) {
     // A whole supply line from a drop, laid over the next few moments.
     const d = drops(s);
-    const cmds = d.length ? chain(s, pick(rnd, d), pick(rnd, ['dmg', 'spd', 'rng', 'dur', 'wire', 'wire', 'wire'])) : null;
+    const cmds = d.length ? chain(s, pick(rnd, d), pick(rnd, ['dmg', 'spd', 'rng', 'wire', 'wire', 'wire'])) : null;
     if (cmds) { plan.push(...cmds.slice(1)); return [cmds[0]]; }
     return [];
   }

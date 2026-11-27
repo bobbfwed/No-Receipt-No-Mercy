@@ -9,8 +9,10 @@
 //                                              b north-south; which way each runs is read from the
 //                                              layout (see overpassDirs), never stored
 //   Unpaid Intern { k: 'intern', o, d, h, t }  h: the item in his hand; t: ticks before he hands it on
-//   Returns Drop  { k: 'drop', d, t, lv }      t: ticks to the next junk; lv: its cash level (a later
-//                                              stage buys them); owned by nobody
+//   Returns Drop  { k: 'drop', t, lv, r }      t: ticks to the next junk; lv: its cash level (the dropUp
+//                                              command); r: the way (0-3, as DIRS) that took the last
+//                                              junk; owned by nobody. No facing since 0.4.01: it
+//                                              shares out to its four sides like a Splitter
 //   Clearance Bin { k: 'bin', o }
 //   machine       { k, o, d, n, t, out }       k: still, cannery, spooler, winder or bender (BUILD[k].supply
 //                                              is the supply it makes); n: junk waiting (up to 2);
@@ -90,12 +92,16 @@ export const stockCap = (state) => BACK.stockUnits + (state ? cardUnits(state) :
 /** What a Clearance Bin pays for one supply of `tier` in this game (lootbox pays more). */
 const binPay = (state, tier) => (BACK.binPay[tier] || 0) * cardBin(state);
 
-/** A Returns Drop as the map puts it down (makeDrops in maps.js), facing d. */
-export const newDrop = (d) => ({ k: 'drop', d: d & 3, t: dropTicks(0), lv: 0 });
+/**
+ * A Returns Drop as the map puts it down (makeDrops in maps.js). It has no facing (0.4.01): it
+ * offers its junk to its four sides in turn, so r 3 means the first goes east.
+ */
+export const newDrop = () => ({ k: 'drop', t: dropTicks(0), lv: 0, r: 3 });
 
 /**
  * Training mode only (0.4, the training shift's lessons on The Back): puts Returns Drops on the
- * given tiles of The Back, as [x, y, facing] each. A game made without a map has no drops (only
+ * given tiles of The Back, as [x, y] each (a third number, the facing drops had until 0.4.01, is
+ * ignored). A game made without a map has no drops (only
  * the maps place them, makeDrops in maps.js), and the lessons need a couple close to the security
  * they feed. A tile that is a wall or already holds a part is left alone; does nothing outside
  * training, so no real game can be given extra junk.
@@ -104,11 +110,11 @@ export const newDrop = (d) => ({ k: 'drop', d: d & 3, t: dropTicks(0), lv: 0 });
 export function addTrainingDrops(state, list) {
   if (!state.training || !state.back) return 0;
   let n = 0;
-  for (const [x, y, d] of list) {
+  for (const [x, y] of list) {
     if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= state.w || y >= state.h) continue;
     const i = y * state.w + x;
     if (state.tiles[i] === '#' || state.back[i]) continue;
-    state.back[i] = newDrop(d);
+    state.back[i] = newDrop();
     n++;
   }
   if (n) state.backVer = (state.backVer | 0) + 1;
@@ -160,9 +166,10 @@ function nb(W, H, i, d) {
 /** Whether a part (not an Overpass) puts items out in direction dir. */
 function sendsToward(p, dir) {
   if (!p) return false;
-  if (p.k === 'conv' || p.k === 'drop' || p.k === 'intern' || makes(p)) return p.d === dir;
+  if (p.k === 'conv' || p.k === 'intern' || makes(p)) return p.d === dir;
   if (p.k === 'split') return dir !== ((p.d + 2) & 3);
-  return false;
+  // (A Returns Drop shares out to all four sides, 0.4.01.)
+  return p.k === 'drop';
 }
 
 /**
@@ -193,17 +200,18 @@ function overpassLanes(back, W, H) {
 
 /**
  * Whether the part on tile j puts items out in direction dir into the next tile, for working out a
- * belt's shape: a belt, a Returns Drop, a machine's or a Rebrander's front, a Splitter's three
- * ways, an Overpass lane. Not an Unpaid Intern: he puts things down where there is room and does
+ * belt's shape: a belt, a Returns Drop (every side), a machine's or a Rebrander's front, a
+ * Splitter's three ways, an Overpass lane. Not an Unpaid Intern: he puts things down where there is room and does
  * not make a belt a corner.
  */
 function feeds(back, od, j, dir) {
   const p = back[j];
   if (!p) return false;
-  if (p.k === 'conv' || p.k === 'drop' || makes(p)) return p.d === dir;
+  if (p.k === 'conv' || makes(p)) return p.d === dir;
   if (p.k === 'split') return dir !== ((p.d + 2) & 3);
   if (p.k === 'over') return od[j * 2 + (dir & 1)] === dir;
-  return false;
+  // (A Returns Drop feeds every side, as a Splitter feeds its three ways: 0.4.01.)
+  return p.k === 'drop';
 }
 
 /**
@@ -238,7 +246,7 @@ export function beltShape(state, i) {
 
 /**
  * Whether the part on tile j puts items out in direction dir into the next tile, by the layout
- * alone: the same rule that makes belts corners (a belt, a Returns Drop, a machine's or a
+ * alone: the same rule that makes belts corners (a belt, a Returns Drop's four sides, a machine's or a
  * Rebrander's front, a Splitter's three ways, an Overpass lane; not an Unpaid Intern). For drawing
  * (where a belt gets an end roller), so the drawing can never disagree with the rules.
  */
@@ -298,14 +306,14 @@ function build(state) {
     else if (p.k === 'over') { add(OVA, i, od[i * 2], 0); add(OVB, i, od[i * 2 + 1], 1); }
     else if (p.k === 'split') add(SPLIT, i, p.d, 0);
     else if (p.k === 'intern') add(INTERN, i, p.d, 0);
-    else if (p.k === 'drop') add(DROP, i, p.d, 0);
+    else if (p.k === 'drop') add(DROP, i, 0, 0);
     else if (p.k === 'rebrand') add(REBRAND, i, p.d, 0);
     else if (BUILD[p.k].supply) add(MACHINE, i, p.d, 0);
   }
   const M = kinds.length;
-  // For each node, up to three tiles it hands to (a Splitter's front, left, right; everyone else's
-  // front) and the nodes on them (for the order).
-  const to = new Int32Array(M * 3).fill(-1), outs = new Int32Array(M * 3).fill(-1);
+  // For each node, up to four tiles it hands to (a Splitter's front, left, right; a Returns Drop's
+  // east, south, west and north, 0.4.01; everyone else's front) and the nodes on them (for the order).
+  const to = new Int32Array(M * 4).fill(-1), outs = new Int32Array(M * 4).fill(-1);
   // (A machine or a Rebrander is stepped before whatever feeds it, like a belt: downstream first.)
   const entry = (t, dir) => {
     const q = back[t];
@@ -316,11 +324,11 @@ function build(state) {
   };
   for (let m = 0; m < M; m++) {
     const d = dirs[m];
-    const ways = kinds[m] === SPLIT ? [d, (d + 3) & 3, (d + 1) & 3] : [d];
+    const ways = kinds[m] === SPLIT ? [d, (d + 3) & 3, (d + 1) & 3] : kinds[m] === DROP ? [0, 1, 2, 3] : [d];
     for (let k = 0; k < ways.length; k++) {
       const t = nb(W, H, tiles[m], ways[k]);
-      to[m * 3 + k] = t;
-      if (t >= 0) outs[m * 3 + k] = entry(t, ways[k]);
+      to[m * 4 + k] = t;
+      if (t >= 0) outs[m * 4 + k] = entry(t, ways[k]);
     }
   }
   // An Unpaid Intern also needs the tile behind him (he takes from it).
@@ -338,8 +346,8 @@ function build(state) {
     index[s] = low[s] = next++; stk.push(s); on[s] = 1; call.push(s);
     while (call.length) {
       const v = call[call.length - 1];
-      if (ei[v] < 3) {
-        const w = outs[v * 3 + ei[v]++];
+      if (ei[v] < 4) {
+        const w = outs[v * 4 + ei[v]++];
         if (w < 0) continue;
         if (index[w] === -1) { index[w] = low[w] = next++; stk.push(w); on[w] = 1; call.push(w); }
         else if (on[w] && index[w] < low[v]) low[v] = index[w];
@@ -361,8 +369,8 @@ function build(state) {
         seen[start] = 1;
         while (walk.length) {
           const u = walk[walk.length - 1];
-          if (ei2[u] < 3) {
-            const w = outs[u * 3 + ei2[u]++];
+          if (ei2[u] < 4) {
+            const w = outs[u * 4 + ei2[u]++];
             if (w >= 0 && group[w] === groups && !seen[w]) { seen[w] = 1; walk.push(w); }
             continue;
           }
@@ -663,7 +671,7 @@ export function stepBack(state, ev = null) {
         const f1 = c.freshA[m], f2 = c.freshB[m];
         c.freshA[m] = c.freshB[m] = -1;
         c.stamp[m] = c.pass;
-        stepLane(state, c, laneOf(back, kind, i), d, to[m * 3], f1, f2);
+        stepLane(state, c, laneOf(back, kind, i), d, to[m * 4], f1, f2);
         break;
       }
       case SPLIT: {
@@ -676,14 +684,14 @@ export function stepBack(state, ev = null) {
         if (!p.h || now) break;
         for (let n = 1; n <= 3; n++) {
           const k = (p.r + n) % 3;
-          const t = to[m * 3 + k];
+          const t = to[m * 4 + k];
           const way = k === 0 ? d : k === 1 ? (d + 3) & 3 : (d + 1) & 3;
           if (t >= 0 && give(state, t, p.h, way, 0)) { p.h = 0; p.r = k; break; }
         }
         break;
       }
       case INTERN: {
-        const front = to[m * 3];
+        const front = to[m * 4];
         if (p.h) {
           if (p.t > 0) p.t--;
           if (p.t <= 0 && front >= 0 && give(state, front, p.h, d, 0)) p.h = 0;
@@ -704,10 +712,16 @@ export function stepBack(state, ev = null) {
         break;
       }
       case DROP: {
-        // A piece of junk every dropTicks; it waits while the tile in front will not take it.
+        // A piece of junk every dropTicks (in all, not per side), offered to its four sides in turn
+        // as a Splitter does (0.4.01): starting after the way that took the last one, skipping any
+        // that will not take it. If none will, it waits and tries again next tick.
         if (p.t > 0) p.t--;
-        const front = to[m * 3];
-        if (p.t <= 0 && front >= 0 && give(state, front, JUNK, d, 0)) p.t = dropTicks(p.lv, state);
+        if (p.t > 0) break;
+        for (let n = 1; n <= 4; n++) {
+          const k = ((p.r | 0) + n) & 3;
+          const t = to[m * 4 + k];
+          if (t >= 0 && give(state, t, JUNK, k, 0)) { p.r = k; p.t = dropTicks(p.lv, state); break; }
+        }
         break;
       }
       case MACHINE:
@@ -720,7 +734,7 @@ export function stepBack(state, ev = null) {
           // (A unit finished, for its sound in The Back and the training shift: the tile, the item.)
           if (ev) ev.push({ e: 'made', i, c: p.out });
         }
-        const front = to[m * 3];
+        const front = to[m * 4];
         if (p.out && front >= 0 && give(state, front, p.out, d, 0)) p.out = 0;
         if (p.out || p.t > 0) break;
         if (kind === MACHINE) {

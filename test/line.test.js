@@ -24,7 +24,7 @@ const ix = (s, x, y) => y * s.w + x;
 const at = (s, x, y) => s.back[ix(s, x, y)];
 /** Puts a part straight into The Back, as a test needs it. */
 function lay(s, x, y, k, d = 0, o = 0) {
-  const p = k === 'drop' ? { k: 'drop', d, t: 1, lv: 0, r: 0 } : newPart(k, o, d);
+  const p = k === 'drop' ? { k: 'drop', t: 1, lv: 0, r: 3 } : newPart(k, o, d);
   s.back[ix(s, x, y)] = p;
   s.backVer++;
   return p;

@@ -144,8 +144,9 @@ export const BUILD = {
     desc: 'Takes anything from any side. Junk pays nothing; leftover supplies pay pennies.',
   },
   drop: {
-    name: 'Returns Drop', cost: 0, group: 'back', back: true, rot: true, fixed: true,
-    desc: 'Where returned junk comes down from the shop. Fixed by the map; anyone may turn it.',
+    // (No facing since 0.4.01: it deals its junk out to its four sides in turn, like a Splitter.)
+    name: 'Returns Drop', cost: 0, group: 'back', back: true, fixed: true,
+    desc: 'Where returned junk comes down from the shop. Fixed by the map; deals it out to all four sides in turn.',
   },
   // The machines (0.4, stage 3): each turns junk into one supply, `supply` being its type (1 Bottled
   // Spite, damage; 2 Rage Cola, speed; 3 Extension Cord, range; 4 Duct Tape, durability; 5 Razor

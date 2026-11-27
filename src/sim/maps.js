@@ -646,12 +646,10 @@ function factoryPatches(w, h, tiles, doors, design) {
 /**
  * Where The Back's Returns Drops go (0.4): one under each Loading Bay patch of the old marked floor
  * (factoryPatches), on the patch's tile nearest its middle (patch tiles are always open floor,
- * never a wall). test/back.test.js pins every drop on every design and size.
- * Each drop faces the middle of the store from top to bottom, where the rest of a production line
- * used to be (the Loading Bay is at the top or bottom of its section); if that tile is a wall it
- * faces the next way that is open: toward the middle from side to side, then the others.
+ * never a wall). test/back.test.js pins every drop on every design and size. A drop has no facing
+ * since 0.4.01 (it shares its junk out to all four sides), so none is chosen here.
  * Same arguments as factoryPatches.
- * @returns {Array<{i: number, d: number}>} tile index and facing (0-3, as DIRS), by tile index
+ * @returns {Array<{i: number}>} tile index, by tile index
  */
 export function makeDrops(w, h, tiles, doors, design) {
   const z = factoryPatches(w, h, tiles, doors, design);
@@ -684,14 +682,7 @@ export function makeDrops(w, h, tiles, doors, design) {
       const dx = (t % w) * n - sx, dy = ((t / w) | 0) * n - sy, d = dx * dx + dy * dy;
       if (d < bestD || (d === bestD && t < best)) { bestD = d; best = t; }
     }
-    const x = best % w, y = (best / w) | 0;
-    const down = y * 2 < h - 1 ? 1 : 3, across = x * 2 < w - 1 ? 0 : 2;
-    let face = down;
-    for (const d of [down, across, (across + 2) & 3, (down + 2) & 3]) {
-      const fx = x + (d === 0 ? 1 : d === 2 ? -1 : 0), fy = y + (d === 1 ? 1 : d === 3 ? -1 : 0);
-      if (fx >= 0 && fy >= 0 && fx < w && fy < h && tiles[fy * w + fx] !== '#') { face = d; break; }
-    }
-    out.push({ i: best, d: face });
+    out.push({ i: best });
   }
   return out.sort((a, b) => a.i - b.i);
 }

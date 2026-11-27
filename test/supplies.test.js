@@ -31,7 +31,7 @@ const at = (s, x, y) => s.back[idx(s, x, y)];
 const bld = (s, x, y) => s.grid[idx(s, x, y)];
 /** Puts a part straight into The Back (no command, no price), as a test needs it. */
 function lay(s, x, y, k, d = 0) {
-  const p = k === 'drop' ? { k: 'drop', d, t: dropTicks(0), lv: 0 } : newPart(k, 0, d);
+  const p = k === 'drop' ? { k: 'drop', t: dropTicks(0), lv: 0, r: 3 } : newPart(k, 0, d);
   s.back[idx(s, x, y)] = p;
   s.backVer++;
   return p;
@@ -530,7 +530,8 @@ test('dropUp: any player pays dropUpCost * dropUpGrow^lv for a faster Returns Dr
   assert.equal(s.players[0].all.spent + s.players[1].all.spent, spent);
   // Faster: junk every dropTicks(lv), the base time times dropMul for each level.
   assert.equal(dropTicks(5), Math.round(BACK.dropSecs * BACK.dropMul ** 5 * TICK_HZ));
-  const front = s.back.findIndex((q, i) => i === di + [1, s.w, -1, -s.w][p.d]);
+  // (A bin on its first open side: a drop deals out to all four, 0.4.01.)
+  const front = [1, s.w, -1, -s.w].map((o) => di + o).find((i) => s.tiles[i] !== '#' && !s.back[i]);
   s.back[front] = newPart('bin', 0);
   s.backVer++;
   const drops = [];

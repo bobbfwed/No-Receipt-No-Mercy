@@ -339,7 +339,7 @@ export function createGame({ seed = 1, training = false, map = null, lobby = fal
  */
 function blankBack(plan, design) {
   const back = new Array(plan.w * plan.h).fill(0);
-  if (design) for (const { i, d } of makeDrops(plan.w, plan.h, plan.tiles, plan.doors, design)) back[i] = newDrop(d);
+  if (design) for (const { i } of makeDrops(plan.w, plan.h, plan.tiles, plan.doors, design)) back[i] = newDrop();
   return back;
 }
 

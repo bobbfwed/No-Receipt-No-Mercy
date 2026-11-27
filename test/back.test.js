@@ -25,7 +25,7 @@ function blank() {
 
 /** Puts a part straight into The Back (no command, no price), as a test needs it. */
 function lay(s, x, y, k, d = 0, o = 0) {
-  const p = k === 'drop' ? { k: 'drop', d, t: dropTicks(0), lv: 0 } : newPart(k, o, d);
+  const p = k === 'drop' ? { k: 'drop', t: dropTicks(0), lv: 0, r: 3 } : newPart(k, o, d);
   s.back[y * s.w + x] = p;
   s.backVer++;
   return p;
@@ -112,17 +112,17 @@ test('a new game has an empty Back the size of its grid; the default map has no 
   for (const p of drops) assert.ok(!('o' in p), 'owned by nobody');
 });
 
-test('makeDrops: at least one Returns Drop on every design at every size, never on a wall, facing open floor', () => {
+test('makeDrops: at least one Returns Drop on every design at every size, never on a wall, next to open floor', () => {
   for (const design of Object.keys(MAP_DESIGNS)) {
     for (const size of Object.keys(MAP_SIZES)) {
       const s = createGame({ map: { design, size } });
       const drops = makeDrops(s.w, s.h, s.tiles, s.doors, design);
       assert.ok(drops.length >= 1, `${design} ${size}`);
-      for (const { i, d } of drops) {
+      for (const { i } of drops) {
         assert.notEqual(s.tiles[i], '#', `${design} ${size}: not on a wall`);
-        const x = (i % s.w) + [1, 0, -1, 0][d], y = ((i / s.w) | 0) + [0, 1, 0, -1][d];
-        assert.notEqual(s.tiles[y * s.w + x], '#', `${design} ${size}: faces open floor`);
-        assert.deepEqual(s.back[i], { k: 'drop', d, t: dropTicks(0), lv: 0 });
+        const d = dropWay(s, i), x = (i % s.w) + [1, 0, -1, 0][d], y = ((i / s.w) | 0) + [0, 1, 0, -1][d];
+        assert.notEqual(s.tiles[y * s.w + x], '#', `${design} ${size}: open floor beside it`);
+        assert.deepEqual(s.back[i], { k: 'drop', t: dropTicks(0), lv: 0, r: 3 });
       }
       assert.equal(s.back.filter(Boolean).length, drops.length);
     }
@@ -133,65 +133,66 @@ test('makeDrops: at least one Returns Drop on every design at every size, never 
 // The drops used to be placed from the Unpacker patches of that floor, and the food court's and car
 // park's furniture still keeps clear of where all four kinds of patch were, so the layout code was
 // kept (as factoryPatches in maps.js) and these must never move. Each design and size: the drops of
-// a new game ('tile:facing'), then a hash of the tiles, the furniture and the drops for every number
+// a new game (tile indexes; until 0.4.01 each had its facing too, and the hashes were taken again
+// then with the positions checked unchanged for every design, size and number of entrances), then a hash of the tiles, the furniture and the drops for every number
 // of entrances from 1 to 7.
 const PINNED_DROPS = {
-  'warehouse/xs': ['100:1 380:2', '1eelk0i'],
-  'warehouse/s': ['102:1 118:1 596:3', 'e0qlm0'],
-  'warehouse/m': ['118:1 142:1 856:0', '1r9vp2p'],
-  'warehouse/l': ['192:1 226:1 1371:3 1444:3', '1w06a42'],
-  'warehouse/xl': ['228:1 248:1 274:1 2199:3 2218:3 2238:3', '1gn1xhz'],
-  'warehouse/xxl': ['253:1 293:1 313:1 354:1 3341:3 3361:3 3381:3', 'uxjzb3'],
-  'warehouse/huge': ['307:1 327:1 347:1 367:1 387:1 4970:3 4990:3 5109:3 5129:3', '1ss21l6'],
-  'warehouse/titan': ['373:1 393:1 433:1 453:1 473:1 534:1 7643:3 7663:3 7683:3 7703:3 7723:3', 'mrvv58'],
-  'showroom/xs': ['101:1 381:3', 't16up2'],
-  'showroom/s': ['102:1 118:1 596:3', '1dmkh3f'],
-  'showroom/m': ['118:1 142:1 856:3', 'u5a3ok'],
-  'showroom/l': ['192:1 226:1 1370:3 1444:3', '10nnt8k'],
-  'showroom/xl': ['228:1 248:1 274:1 2198:3 2218:3 2238:3', '1415l17'],
-  'showroom/xxl': ['253:1 293:1 314:1 355:1 3342:3 3362:3 3382:3', 'xjmasn'],
-  'showroom/huge': ['308:1 328:1 348:1 368:1 387:1 4971:3 4991:3 5109:3 5129:3', '3l7zv0'],
-  'showroom/titan': ['373:1 394:1 434:1 453:1 474:1 535:1 7643:3 7664:3 7683:3 7704:3 7723:3', '6jeuqw'],
-  'aisles/xs': ['101:1 410:3', 't9n4ge'],
-  'aisles/s': ['103:1 119:1 632:3', 'xcwn5p'],
-  'aisles/m': ['119:1 143:1 856:3', 'rn3k2p'],
-  'aisles/l': ['193:1 227:1 1370:3 1444:3', '1gk89oh'],
-  'aisles/xl': ['229:1 249:1 275:1 2198:3 2218:3 2238:3', '7okofo'],
-  'aisles/xxl': ['254:1 294:1 314:1 355:1 3341:3 3361:3 3381:3', 'gan4tf'],
-  'aisles/huge': ['308:1 328:1 348:1 368:1 388:1 4970:3 4990:3 5109:3 5129:3', 'fjrsrs'],
-  'aisles/titan': ['374:1 394:1 434:1 454:1 474:1 535:1 7643:3 7663:3 7683:3 7703:3 7723:3', '1g3q7id'],
-  'food/xs': ['100:1 380:3', 'e97r0u'],
-  'food/s': ['102:1 118:1 596:3', 'czayth'],
-  'food/m': ['118:1 142:1 856:3', 'kubllk'],
-  'food/l': ['192:1 226:1 1370:3 1444:3', '1kb7ik2'],
-  'food/xl': ['228:1 248:1 274:1 2198:3 2218:3 2238:3', 'olfhzc'],
-  'food/xxl': ['253:1 293:1 313:1 354:1 3341:3 3361:3 3381:3', 'va3ftk'],
-  'food/huge': ['307:1 327:1 347:1 367:1 387:1 4970:3 4990:3 5109:3 5129:3', 'bj3bi7'],
-  'food/titan': ['373:1 393:1 433:1 453:1 473:1 534:1 7643:3 7663:3 7683:3 7703:3 7723:3', '1b9re0b'],
-  'carpark/xs': ['100:1 350:3', 'fa07y2'],
-  'carpark/s': ['102:1 118:1 596:3', '12y5dz4'],
-  'carpark/m': ['118:1 142:1 856:3', 'zy18zl'],
-  'carpark/l': ['192:1 226:1 1370:3 1390:3', '1ghiet7'],
-  'carpark/xl': ['228:1 248:1 274:1 2198:3 2218:3 2238:3', '17dqs21'],
-  'carpark/xxl': ['253:1 293:1 313:1 354:1 3300:3 3341:3 3361:3', 'j18kyq'],
-  'carpark/huge': ['307:1 327:1 347:1 367:1 387:1 4970:3 4990:3 5030:3 5109:3', 'hk6wy6'],
-  'carpark/titan': ['373:1 393:1 433:1 453:1 473:1 534:1 7602:3 7643:3 7663:3 7683:3 7703:3', 'stt58l'],
-  'corridors/xs': ['100:1 470:3', '1vz6jzq'],
-  'corridors/s': ['102:1 119:1 812:3', 'ouccw9'],
-  'corridors/m': ['142:1 162:1 1032:3', 'h8oyfn'],
-  'corridors/l': ['172:1 192:1 1640:3 1660:3', '12ri9y1'],
-  'corridors/xl': ['208:1 228:1 248:1 2528:3 2548:3 2568:3', 'pkktze'],
-  'corridors/xxl': ['253:1 273:1 293:1 313:1 3908:3 3928:3 3948:3', '3jfpkf'],
-  'corridors/huge': ['307:1 327:1 347:1 367:1 387:1 5960:3 5980:3 6000:3 6020:3', 'lkjhdg'],
-  'corridors/titan': ['373:1 393:1 413:1 433:1 453:1 473:1 8853:3 8873:3 8893:3 8913:3 8933:3', '4mgn2t'],
-  'horseshoe/xs': ['91:1 104:1', '19inbaj'],
-  'horseshoe/s': ['111:1 126:1 339:1', '1qdszer'],
-  'horseshoe/m': ['134:1 151:1 503:1', '4o8obh'],
-  'horseshoe/l': ['154:1 249:1 744:1 1788:3', 'bkwn6i'],
-  'horseshoe/xl': ['249:1 273:1 298:1 1135:1 2644:3 2765:3', '1uv33pb'],
-  'horseshoe/xxl': ['276:1 300:1 320:1 344:1 1823:1 4024:3 4161:3', '24x8y3'],
-  'horseshoe/huge': ['354:1 380:1 406:1 426:1 443:1 2659:1 2679:1 6230:3 6302:3', '1c9wui0'],
-  'horseshoe/titan': ['453:1 473:1 497:1 517:1 542:1 562:1 4081:1 4101:1 9396:3 9416:3 9485:3 9505:3', '1myygrh'],
+  'warehouse/xs': ['100 380', '2niyw9'],
+  'warehouse/s': ['102 118 596', '11o1tz5'],
+  'warehouse/m': ['118 142 856', 'lace2r'],
+  'warehouse/l': ['192 226 1371 1444', 'rzlmu0'],
+  'warehouse/xl': ['228 248 274 2199 2218 2238', '1b5czkt'],
+  'warehouse/xxl': ['253 293 313 354 3341 3361 3381', '98jxpg'],
+  'warehouse/huge': ['307 327 347 367 387 4970 4990 5109 5129', '9vmapb'],
+  'warehouse/titan': ['373 393 433 453 473 534 7643 7663 7683 7703 7723', '1ufgmvh'],
+  'showroom/xs': ['101 381', 'ns35m0'],
+  'showroom/s': ['102 118 596', 'vrtkai'],
+  'showroom/m': ['118 142 856', '1jfgdwh'],
+  'showroom/l': ['192 226 1370 1444', '1tb8496'],
+  'showroom/xl': ['228 248 274 2198 2218 2238', '12w0519'],
+  'showroom/xxl': ['253 293 314 355 3342 3362 3382', 'oa64xw'],
+  'showroom/huge': ['308 328 348 368 387 4971 4991 5109 5129', '1xgmrvl'],
+  'showroom/titan': ['373 394 434 453 474 535 7643 7664 7683 7704 7723', '1yd5rzp'],
+  'aisles/xs': ['101 410', 'ibw3bs'],
+  'aisles/s': ['103 119 632', 'yf4rlo'],
+  'aisles/m': ['119 143 856', 'xsz6ak'],
+  'aisles/l': ['193 227 1370 1444', '17k7ioz'],
+  'aisles/xl': ['229 249 275 2198 2218 2238', '7awska'],
+  'aisles/xxl': ['254 294 314 355 3341 3361 3381', 'eo6k3k'],
+  'aisles/huge': ['308 328 348 368 388 4970 4990 5109 5129', 'nxu4kx'],
+  'aisles/titan': ['374 394 434 454 474 535 7643 7663 7683 7703 7723', '1mcjbh0'],
+  'food/xs': ['100 380', 'zumtw4'],
+  'food/s': ['102 118 596', 'o20yxg'],
+  'food/m': ['118 142 856', '1xksekp'],
+  'food/l': ['192 226 1370 1444', '1487354'],
+  'food/xl': ['228 248 274 2198 2218 2238', '1i80ldy'],
+  'food/xxl': ['253 293 313 354 3341 3361 3381', 'myln8t'],
+  'food/huge': ['307 327 347 367 387 4970 4990 5109 5129', '3dwmgs'],
+  'food/titan': ['373 393 433 453 473 534 7643 7663 7683 7703 7723', '16wfsnk'],
+  'carpark/xs': ['100 350', '1lfwty8'],
+  'carpark/s': ['102 118 596', '16vxzup'],
+  'carpark/m': ['118 142 856', '19qq470'],
+  'carpark/l': ['192 226 1370 1390', 'frkt8l'],
+  'carpark/xl': ['228 248 274 2198 2218 2238', '17fln6v'],
+  'carpark/xxl': ['253 293 313 354 3300 3341 3361', '65bfer'],
+  'carpark/huge': ['307 327 347 367 387 4970 4990 5030 5109', 'ohl1e1'],
+  'carpark/titan': ['373 393 433 453 473 534 7602 7643 7663 7683 7703', '1mnqffa'],
+  'corridors/xs': ['100 470', 'hvqvaw'],
+  'corridors/s': ['102 119 812', 'amrmec'],
+  'corridors/m': ['142 162 1032', 'q04viw'],
+  'corridors/l': ['172 192 1640 1660', '29ctl3'],
+  'corridors/xl': ['208 228 248 2528 2548 2568', '118rvw4'],
+  'corridors/xxl': ['253 273 293 313 3908 3928 3948', '1ubn45k'],
+  'corridors/huge': ['307 327 347 367 387 5960 5980 6000 6020', '1yl25wd'],
+  'corridors/titan': ['373 393 413 433 453 473 8853 8873 8893 8913 8933', '17ov0rm'],
+  'horseshoe/xs': ['91 104', '1fpshcp'],
+  'horseshoe/s': ['111 126 339', '44b4qk'],
+  'horseshoe/m': ['134 151 503', '2cz2f6'],
+  'horseshoe/l': ['154 249 744 1788', '96lgwe'],
+  'horseshoe/xl': ['249 273 298 1135 2644 2765', 'asaxaj'],
+  'horseshoe/xxl': ['276 300 320 344 1823 4024 4161', 'mecm0c'],
+  'horseshoe/huge': ['354 380 406 426 443 2659 2679 6230 6302', 'vht7'],
+  'horseshoe/titan': ['453 473 497 517 542 562 4081 4101 9396 9416 9485 9505', 'ukp12v'],
 };
 
 test('the Returns Drops, and the stores round them, are exactly where they were before the marked floor went', () => {
@@ -203,7 +204,7 @@ test('the Returns Drops, and the stores round them, are exactly where they were 
       assert.ok(Object.hasOwn(PINNED_DROPS, key), `${key} has no record: a new design or size needs one`);
       const s = createGame({ map: { design, size } });
       const drops = [];
-      s.back.forEach((p, i) => { if (p && p.k === 'drop') drops.push(i + ':' + p.d); });
+      s.back.forEach((p, i) => { if (p && p.k === 'drop') drops.push(i); });
       assert.equal(drops.join(' '), PINNED_DROPS[key][0], `${key}: the drops of a new game`);
       let all = '';
       for (let slots = 1; slots <= 7; slots++) {
@@ -555,10 +556,10 @@ test('Unpaid Intern: takes from the belt behind, only when the tile in front wan
   assert.equal(wants(u, 7 * u.w + 5, 11, E), false);
 });
 
-test('Returns Drop: one junk every dropSecs; waits while the tile in front is full; cannot be removed; anyone can turn it', () => {
+test('Returns Drop: one junk every dropSecs; waits while nothing round it will take one; cannot be removed or turned', () => {
   const s = blank();
   addPlayer(s, 'Steve');
-  lay(s, 3, 5, 'drop', E);
+  lay(s, 3, 5, 'drop');
   row(s, 4, 5, 5, E); // two belts into nothing: they fill up
   run(s, dropTicks(0) - 1);
   assert.equal(codes(s).length, 0);
@@ -569,18 +570,92 @@ test('Returns Drop: one junk every dropSecs; waits while the tile in front is fu
   run(s, 60 * TICK_HZ);
   assert.equal(codes(s).length, 6, 'two belts hold six, and the drop waits');
   assert.equal(at(s, 3, 5).t, 0);
-  // Commands: nobody can place or remove one; anyone can turn it.
+  // Commands: nobody can place, remove or turn one (0.4.01: it has no facing).
   s.phase = 'build';
   assert.equal(applyCommand(s, 0, { c: 'remove', x: 3, y: 5, f: 1 }).why, 'fixed');
   assert.equal(applyCommand(s, 0, { c: 'place', k: 'drop', x: 8, y: 8, f: 1 }).why, 'kind');
-  const ver = s.backVer;
-  assert.equal(applyCommand(s, 1, { c: 'rotate', x: 3, y: 5, f: 1 }).ok, true);
-  assert.equal(at(s, 3, 5).d, S);
-  assert.ok(s.backVer > ver);
-  // Turned to face a bin, the junk flows again.
+  assert.equal(applyCommand(s, 1, { c: 'rotate', x: 3, y: 5, f: 1 }).why, 'empty');
+  // A bin on another side: the junk flows again, at once.
   lay(s, 3, 6, 'bin');
   run(s, 1);
   assert.equal(at(s, 3, 5).t, dropTicks(0), 'it put one out at once');
+  assert.equal(at(s, 3, 5).r, S);
+});
+
+test('Returns Drop: deals its junk out to its sides in turn, at the same rate in all (0.4.01)', () => {
+  for (const ways of [[E, W], [E, S, W], [E, S, W, N]]) {
+    const s = blank();
+    lay(s, 10, 7, 'drop');
+    const bins = [];
+    for (const d of ways) {
+      // A belt leading away on that side, into a bin.
+      const x = 10 + [1, 0, -1, 0][d], y = 7 + [0, 1, 0, -1][d];
+      lay(s, x, y, 'conv', d);
+      lay(s, x + [1, 0, -1, 0][d], y + [0, 1, 0, -1][d], 'bin');
+      bins.push([x, y]);
+    }
+    for (const [x, y] of bins) assert.equal(beltShape(s, y * s.w + x), 0, 'a belt leading away is fed from behind');
+    const got = ways.map(() => 0);
+    const n = 24 * ways.length;
+    for (let t = 0; t < n * dropTicks(0); t++) {
+      const before = ways.map((d, k) => at(s, ...bins[k]).it.length);
+      stepBack(s);
+      ways.forEach((d, k) => { if (at(s, ...bins[k]).it.length > before[k] && at(s, ...bins[k]).it.at(-1) === 0) got[k]++; });
+    }
+    assert.equal(got.reduce((a, b) => a + b, 0), n, `${ways.length} ways: one junk every dropTicks in all`);
+    for (const g of got) assert.equal(g, n / ways.length, `${ways.length} ways: an even share`);
+  }
+});
+
+test('Returns Drop: a backed-up side is passed over and the others share its part; it picks up again when it clears', () => {
+  const s = blank();
+  lay(s, 10, 7, 'drop');
+  lay(s, 11, 7, 'conv', E); // east: a dead end that fills up
+  lay(s, 9, 7, 'conv', W);
+  lay(s, 8, 7, 'bin');
+  lay(s, 10, 8, 'conv', S);
+  lay(s, 10, 9, 'bin');
+  // A belt pointing into the drop gets nothing, and a belt running past its side takes from it.
+  lay(s, 10, 6, 'conv', S);
+  run(s, 40 * dropTicks(0));
+  assert.equal(at(s, 11, 7).it.length / 2, 3, 'east is full (one tile holds three)');
+  assert.equal(at(s, 10, 6).it.length, 0, 'the belt pointing into it gets nothing');
+  const t0 = s.back.filter((p) => p && p.k === 'bin').length;
+  assert.equal(t0, 2);
+  // Both open ways keep getting junk, at the drop's full rate between them.
+  let w = 0, south = 0;
+  for (let t = 0; t < 20 * dropTicks(0); t++) {
+    stepBack(s);
+    if (at(s, 9, 7).it.at(-1) === 0) w++;
+    if (at(s, 10, 8).it.at(-1) === 0) south++;
+  }
+  assert.equal(w + south, 20);
+  assert.equal(w, 10);
+  // East clears (a bin at its end): it gets its share again.
+  lay(s, 12, 7, 'bin');
+  run(s, 4 * dropTicks(0));
+  let e = 0;
+  for (let t = 0; t < 30 * dropTicks(0); t++) { stepBack(s); if (at(s, 11, 7).it.at(-1) === 0) e++; }
+  assert.equal(e, 10, 'a third again');
+  // Beside a belt running past it: side-loaded (the belt has a feeder behind it, so a merge).
+  const m = blank();
+  lay(m, 10, 7, 'drop');
+  row(m, 8, 12, 8, E);
+  assert.equal(beltShape(m, 8 * m.w + 10), 0);
+  run(m, 3 * dropTicks(0));
+  assert.ok(codes(m).length >= 2, 'junk on the passing belt');
+  assert.ok(m.back[8 * m.w + 10].it.length + m.back[8 * m.w + 11].it.length + m.back[8 * m.w + 12].it.length >= 1);
+});
+
+test('Returns Drop: a machine right beside it is fed straight from it', () => {
+  const s = blank();
+  lay(s, 10, 7, 'drop');
+  lay(s, 11, 7, 'still', E);
+  lay(s, 12, 7, 'bin');
+  run(s, 20 * dropTicks(0));
+  const p = at(s, 11, 7);
+  assert.ok(p.n > 0 || p.t > 0, 'the still has junk');
+  assert.equal(codes(s).length, 0, 'nothing on belts');
 });
 
 test('Clearance Bin: pays binPay by tier for supplies, shared like income; nothing for junk', () => {
@@ -788,6 +863,21 @@ test('commands on The Back: price, sell-back, walls, occupied tiles, belt over b
   assert.deepEqual([BUILD.conv.cost, BUILD.split.cost, BUILD.over.cost, BUILD.intern.cost, BUILD.bin.cost], [2, 15, 15, 20, 20]);
 });
 
+/**
+ * The way a line from the Returns Drop on tile i is laid out in these tests: toward the store's
+ * middle from top to bottom, else the next open way (the facing drops had until 0.4.01; since then
+ * a drop deals out to all four sides, so any open side works).
+ */
+function dropWay(s, i) {
+  const x = i % s.w, y = (i / s.w) | 0;
+  const down = y * 2 < s.h - 1 ? 1 : 3, across = x * 2 < s.w - 1 ? 0 : 2;
+  for (const d of [down, across, (across + 2) & 3, (down + 2) & 3]) {
+    const fx = x + [1, 0, -1, 0][d], fy = y + [0, 1, 0, -1][d];
+    if (fx >= 0 && fy >= 0 && fx < s.w && fy < s.h && s.tiles[fy * s.w + fx] !== '#') return d;
+  }
+  return down;
+}
+
 /** A busy Back on a real map: drops, belts, a splitter, an overpass, an intern and bins. */
 function busy() {
   const s = createGame({ seed: 7, map: { design: 'warehouse', size: 's' } });
@@ -797,7 +887,7 @@ function busy() {
   s.back.forEach((p, i) => { if (p) drops.push(i); });
   // From each drop, a belt two tiles on, then a splitter into two bins (in front and to its left).
   for (const i of drops) {
-    const p = s.back[i];
+    const p = { d: dropWay(s, i) };
     const dx = [1, 0, -1, 0][p.d], dy = [0, 1, 0, -1][p.d];
     let x = i % s.w, y = (i / s.w) | 0;
     for (let n = 0; n < 2; n++) { x += dx; y += dy; send('conv', x, y, p.d); }

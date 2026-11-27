@@ -99,9 +99,9 @@ const SHOWCASE = [
 export function applyDemoBack(state, pid = 0) {
   const problems = [];
   if (!state.back) return ['no Back in this state'];
-  for (const { i, d } of makeDrops(state.w, state.h, state.tiles, state.doors, 'warehouse')) {
+  for (const { i } of makeDrops(state.w, state.h, state.tiles, state.doors, 'warehouse')) {
     // (Four cash levels, which a later stage sells: junk every 0.8 seconds, so the demo's belts are busy.)
-    if (!state.back[i]) { state.back[i] = newDrop(d); state.back[i].lv = 4; }
+    if (!state.back[i]) { state.back[i] = newDrop(); state.back[i].lv = 4; }
   }
   state.backVer = (state.backVer | 0) + 1;
   const p = state.players[pid];

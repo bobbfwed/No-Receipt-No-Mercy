@@ -3,9 +3,9 @@
 // `rotate` with `f: 1`, through applyCommand), so the bots play by the same rules as a person.
 //
 // The shape of what it builds, kept simple rather than clever:
-//  - A "cell" at each Returns Drop: a Splitter on the tile in front of the drop shares its junk among
-//    three machines, on its left, its right and in front of it (the drop is turned first if the cell
-//    fits better another way). Each machine's product runs along a short private stretch of belt,
+//  - A "cell" at each Returns Drop: a Splitter on one side of the drop (0.4.01: a drop has no facing
+//    and deals out to all four sides; its other sides are kept clear of belts, so all its junk goes
+//    to the Splitter) shares its junk among three machines, on its left, its right and in front of it. Each machine's product runs along a short private stretch of belt,
 //    where Rebranders can be put in later (raise()).
 //  - Two of the machines (Bottled Spite and Rage Cola, or whatever the bot asks for) join one belt,
 //    the drop's main "bus", which visits the buildings it serves one after the other and ends in a
@@ -106,11 +106,14 @@ export class Backroom {
    *     R = P + 1; the main bus along row R + 1 from u = 0 to 1, its bin at u = 2;
    *   the Barb Bender W (-1,0) facing -u, its stretch in column -2 from row 0 to P (forward); its bus
    *     goes on from there.
-   * Tried with u either way across, then with the drop turned the other ways (anyone may turn a
-   * Returns Drop: the bot does so when it builds the cell), then with less room for Rebranders.
+   * Tried with u either way across, then the other sides of the drop, then with less room for
+   * Rebranders. The first side tried is the way drops faced until 0.4.01 (toward the store's middle
+   * from top to bottom, else the next open way), so the bots build what they built before.
    */
   planCell(di) {
-    const s = this.s, D = s.back[di].d | 0;
+    const s = this.s, x = di % s.w, y = (di / s.w) | 0;
+    const down = y * 2 < s.h - 1 ? 1 : 3, across = x * 2 < s.w - 1 ? 0 : 2;
+    const D = [down, across, (across + 2) & 3, (down + 2) & 3].find((d) => !this.wall(this.nb(di, d))) ?? down;
     for (let P = this.prefix; P >= 0; P--) for (const F of [D, (D + 1) & 3, (D + 3) & 3, (D + 2) & 3]) {
       for (const U of [RIGHT(F), LEFT(F)]) {
         const at = ([u, v]) => {
@@ -139,6 +142,8 @@ export class Backroom {
         this.cellTiles.delete(bin);
         this.cellTiles.delete(face);
         this.noBelt.add(face);
+        // (The drop's other sides: a belt there would be fed junk by it.)
+        for (let e = 0; e < 4; e++) { const t = this.nb(di, e); if (e !== F && t >= 0 && !this.wall(t)) this.noBelt.add(t); }
         const wireStart = slots[2].chain.pop();
         for (const sl of slots) Object.assign(sl, { built: false, raised: 0, on: false });
         const c = { drop: di, F, U, P, split, slots, row, built: false };
@@ -337,10 +342,6 @@ export class Backroom {
       if (!c.slots.some((sl) => sl.on)) continue;
       if (!c.built) {
         if (this.cash() < this.price('split')) return;
-        // (Turn the drop to face the cell, a quarter turn at a time: free.)
-        for (let n = 0; n < 4 && (this.s.back[c.drop].d | 0) !== c.F; n++) {
-          this.cmd({ c: 'rotate', x: c.drop % this.s.w, y: (c.drop / this.s.w) | 0, f: 1 });
-        }
         this.place('split', c.split, c.F);
         c.built = true;
       }
