@@ -4,9 +4,9 @@
 //   RELEASE  goes up by one at most once per push to main, and only when the game's code has
 //            changed since the last push; commits in between leave it alone. Shown after the
 //            version with two digits: version 0.1, release 7 reads "0.1.07". It starts again
-//            at 1 when VERSION changes.
-export const VERSION = '0.3';
-export const RELEASE = 4;
+//            when VERSION changes (at 0 since 0.4, the owner's plan: 0.4.00).
+export const VERSION = '0.4';
+export const RELEASE = 0;
 
 /** The whole thing as text, e.g. "0.1.07". */
 export const versionText = () => `${VERSION}.${String(RELEASE).padStart(2, '0')}`;

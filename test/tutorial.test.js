@@ -7,7 +7,7 @@ import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
 import { createTutorial, STEPS, PART_TWO } from '../src/tutorial/lessons.js';
 import { HOW } from '../src/content/help.js';
-import { createGame, applyCommand, step, queueTrainingWave, levelIn, statsOf, BUILD, SHOPPERS, TUNE, TICK_HZ, ST } from '../src/sim/index.js';
+import { createGame, applyCommand, step, queueTrainingWave, levelIn, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ, ST } from '../src/sim/index.js';
 
 function trainingSession(seed = 9) {
   return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
@@ -311,7 +311,7 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
 });
 
 test('every building has a plain explanation', () => {
-  for (const k of Object.keys(BUILD)) {
+  for (const k of SHOP_KINDS) {
     assert.ok(HOW[k], `help for ${k}`);
     assert.ok(HOW[k].does.length > 20 && HOW[k].use.length > 20, `help for ${k} says what it does and how to use it`);
   }
@@ -350,7 +350,7 @@ test('the player places every building at least once, and uses Upgrade, Rebuild 
   assert.ok(t2.marks().some((m) => m.fix === 'rebuild'), 'the Gym Bro lesson marks the wrecks for Rebuild');
   tools.rebuild.add(GYM);
 
-  const buildable = Object.keys(BUILD);
+  const buildable = SHOP_KINDS;
   assert.equal(buildable.length, 12, 'every building in BUILD (a new one needs a lesson)');
   for (const k of buildable) {
     assert.ok(asked.has(k), `some lesson's marks ask the player to place a ${BUILD[k].name}`);

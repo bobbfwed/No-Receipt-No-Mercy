@@ -7,6 +7,7 @@ import { beginWave, skipBuild } from './step.js';
 import { upgradeCost, spentOn, levelIn, maxIn, defaultTrack, rebuildDeal, TRACKS } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, freeTrack, boozeRoll } from './cards.js';
+import { canPlaceBack, newPart } from './back.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
 const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'upgrade', 'give', 'rebuild', 'endless']);
@@ -108,7 +109,8 @@ function placeCheck(state, k, x, y, pid, d, paid) {
   if (state.phase === 'cards') return 'cards';
   if (state.pause) return 'paused';
   const def = BUILD[k];
-  if (!def) return 'kind';
+  // (The Back's parts, 0.4, are placed with canPlaceBack and the `f: 1` commands.)
+  if (!def || def.back) return 'kind';
   if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
   const at = placement(state, k, x, y, d | 0);
   const own = idxOf(state, x, y); // the tile pointed at
@@ -361,6 +363,7 @@ export function stepRebuilds(state, ev) {
  *   { c: 'remove', x, y }       sell a building back (the money goes to whoever paid for it)
  *   { c: 'rotate', x, y }       turn a building a quarter turn clockwise (half a turn if it is
  *                               bigger than one tile, so it keeps its footprint)
+ *   place, remove and rotate with f: 1 do the same on The Back (0.4; see backCommand)
  *   { c: 'upgrade', x, y, t }   buy the next level of track t ('dmg', 'spd', 'rng', 'dur');
  *                               without t, damage if the kind has it, otherwise its first track
  *   { c: 'give', to, n }        hand n of your cash to player `to`
@@ -415,6 +418,65 @@ function setPause(state, pid, cmd, ev) {
   return { ok: true };
 }
 
+/**
+ * place, remove and rotate on The Back (0.4; the commands with `f: 1`). Bought, owned, sold back and
+ * turned like buildings on the shop floor, with the same reasons, but nothing there blocks a
+ * shopper, so there is no route check, and there is no rubble or upgrades. The Returns Drops are
+ * the map's: nobody can place or remove one ('fixed'), anybody can turn one. Every change to the
+ * layout moves state.backVer on, which tells back.js to work its lane order out again.
+ *   place: a belt laid on a belt turns it to face d, free, keeping what is on it. Sends placed
+ *     {k, x, y, d, by, f: 1}.
+ *   remove: whoever paid for it gets TUNE.sellBack of what he paid; whatever was on it is lost.
+ *     Sends removed {k, x, y, by, owner, f: 1}.
+ *   rotate: a quarter turn clockwise; 'empty' for nothing there or a part that does not turn.
+ */
+function backCommand(state, pid, cmd, ev) {
+  const player = state.players[pid];
+  if (cmd.c === 'place') {
+    const why = canPlaceBack(state, cmd.k, cmd.x, cmd.y, pid, cmd.d | 0);
+    if (why) return { ok: false, why };
+    const i = idxOf(state, cmd.x, cmd.y);
+    if (state.back[i]) {
+      state.back[i].d = cmd.d & 3;
+      state.backVer = (state.backVer | 0) + 1;
+      return { ok: true, turned: true };
+    }
+    const def = BUILD[cmd.k];
+    const paid = buildPrice(state, cmd.k);
+    const p = newPart(cmd.k, pid, cmd.d | 0);
+    // (A card changed the price: kept, so that selling it back returns the usual share of it.)
+    if (paid !== def.cost) p.c = paid;
+    state.back[i] = p;
+    state.backVer = (state.backVer | 0) + 1;
+    player.cash -= paid;
+    bump(state, pid, 'spent', paid);
+    bump(state, pid, 'built');
+    if (state.phase === 'build' && state.phaseT === -1 && !state.training) state.phaseT = FIRST_BUILD_SECS * TICK_HZ;
+    ev.push({ e: 'placed', k: cmd.k, x: cmd.x, y: cmd.y, d: p.d | 0, by: pid, f: 1 });
+    return { ok: true };
+  }
+  if (!Number.isInteger(cmd.x) || !Number.isInteger(cmd.y) || !inBounds(state, cmd.x, cmd.y) || !state.back) return { ok: false, why: 'bounds' };
+  const i = idxOf(state, cmd.x, cmd.y);
+  const p = state.back[i];
+  if (cmd.c === 'remove') {
+    if (state.phase === 'won' || state.phase === 'lost') return { ok: false, why: 'over' };
+    if (!p) return { ok: false, why: 'empty' };
+    if (BUILD[p.k].fixed) return { ok: false, why: 'fixed' };
+    state.back[i] = 0;
+    state.backVer = (state.backVer | 0) + 1;
+    const back = Math.floor(spentOn(p) * TUNE.sellBack);
+    (state.players[p.o] || player).cash += back;
+    bump(state, pid, 'sold');
+    ev.push({ e: 'removed', k: p.k, x: cmd.x, y: cmd.y, by: pid, owner: p.o, f: 1 });
+    return { ok: true };
+  }
+  // rotate
+  if (!p || !BUILD[p.k].rot) return { ok: false, why: 'empty' };
+  p.d = (p.d + 1) & 3;
+  state.backVer = (state.backVer | 0) + 1;
+  return { ok: true };
+}
+
 export function applyCommand(state, pid, cmd, ev = []) {
   const player = state.players[pid];
   if (!player || !cmd || typeof cmd !== 'object') return { ok: false, why: 'bad' };
@@ -448,6 +510,11 @@ export function applyCommand(state, pid, cmd, ev = []) {
       return { ok: true };
     }
     if (cmd.c !== 'role' && cmd.c !== 'speed') return { ok: false, why: 'cards' };
+  }
+  // The Back (0.4): `f: 1` on place, remove and rotate means the floor under the shop.
+  if ((cmd.c === 'place' || cmd.c === 'remove' || cmd.c === 'rotate') && cmd.f !== undefined && cmd.f !== 0) {
+    if (cmd.f !== 1) return { ok: false, why: 'bad' };
+    return backCommand(state, pid, cmd, ev);
   }
   switch (cmd.c) {
     case 'skipCards':

@@ -11,7 +11,7 @@ import {
   createGame, addPlayer, applyCommand, step, canPlace, setPlayerOnline, waveSpec, statsOf, spentOn, upgradeCost,
   levelCost, rebuildDeal, buildPrice, dealCards, cleanHand, hasCard, cardKind, cardKinds, cardParts, cardsShown,
   revealTick, dealLength, idShare, smashReady, patienceFor, bossPatience, CARDS, DEALABLE, CARDS_APART,
-  CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
+  CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
 import { cardSlip, cardFall, cardLiftChance, cardLiftHeal, cardShield, cardPicks } from '../src/sim/cards.js';
 import { HostSession } from '../src/net/session.js';
@@ -633,7 +633,7 @@ test('klepto: ordinary shoplifters go out of their way for goods twice as often,
 
 test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, and what it sells back for', () => {
   const price = (cards, k) => buildPrice(game(cards), k);
-  for (const k of Object.keys(BUILD)) {
+  for (const k of SHOP_KINDS) {
     assert.equal(price(null, k), BUILD[k].cost);
     assert.equal(price(['shrinkflation'], k), Math.round(BUILD[k].cost * CARDS.shrinkflation.cost), k);
     assert.equal(price(['staffdiscount'], k), Math.round(BUILD[k].cost * CARDS.staffdiscount.cost), k);

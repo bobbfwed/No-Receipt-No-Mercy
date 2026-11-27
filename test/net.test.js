@@ -290,7 +290,8 @@ test('a player who joins in the middle of a wave can build at once and gets his 
 
 test('the version reads as a big number and a two-digit release', () => {
   assert.match(VERSION, /^\d+\.\d+$/);
-  assert.ok(Number.isInteger(RELEASE) && RELEASE >= 1);
+  // (0 is allowed: a new VERSION starts at release 0, as 0.4.00 does.)
+  assert.ok(Number.isInteger(RELEASE) && RELEASE >= 0);
   assert.match(versionText(), /^\d+\.\d+\.\d{2,}$/);
 });
 

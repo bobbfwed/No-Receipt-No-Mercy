@@ -1,9 +1,11 @@
 // Game state: creation, random numbers, players, money. The state is a plain JSON-safe object so
 // the host can send it to the other players as-is.
 import { TUNE, MAX_PLAYERS, PLAYER_COLORS, ROLES, SETTINGS, TICK_HZ, BUILD, HOLIDAYS } from './constants.js';
-import { makeMap, makeZones, MAP_DESIGNS, MAP_SIZES } from './maps.js';
+import { makeMap, makeZones, makeDrops, MAP_DESIGNS, MAP_SIZES } from './maps.js';
 // (cards.js imports rand from this file. That is safe: neither uses the other while loading.)
 import { dealCards, cleanHand } from './cards.js';
+// (back.js imports from this file too; the same holds.)
+import { newDrop } from './back.js';
 
 /**
  * A building. One bigger than a tile (BUILD[k].size) is held by the top-left tile of its
@@ -230,6 +232,14 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     /** @type {Array<Building|0>} */
     grid: new Array(plan.w * plan.h).fill(0),
     gridVer: 0,
+    /** The Back (0.4), the floor under the shop: like `grid`, one entry per tile, a Back part or 0
+     *  (the parts' shapes are in back.js and docs/architecture.md, "The Back"). A game made with a
+     *  map has its Returns Drops in it from the start (makeDrops in maps.js); the bare default map
+     *  has none for now. A save from before it loads with an empty one (migrateSave). */
+    back: blankBack(plan, map ? design : null),
+    /** Goes up whenever a Back part is added, removed or turned; back.js caches its lane order
+     *  against it, as path maps are cached against gridVer. */
+    backVer: 0,
     /** @type {Shopper[]} */
     shoppers: [],
     /** Messes teenagers have left on the floor, as [tile index, ticks left]. */
@@ -320,6 +330,16 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
 }
 
 /**
+ * A fresh Back (0.4) for a floor plan: empty, with a Returns Drop under each Loading Bay patch when
+ * a design is given (see makeDrops). `design` null means the bare default map: no drops yet.
+ */
+function blankBack(plan, design) {
+  const back = new Array(plan.w * plan.h).fill(0);
+  if (design) for (const { i, d } of makeDrops(plan.w, plan.h, plan.tiles, plan.doors, design)) back[i] = newDrop(d);
+  return back;
+}
+
+/**
  * The version of the game state. 4 since 0.2.09, when the refund limit was halved (20, plus 5 a
  * player) with the crowd; saves of version 3 are brought up to date by migrateSave.
  */
@@ -343,6 +363,13 @@ export function migrateSave(state) {
   let changed = false;
   for (const p of state.players || []) if ('autoRebuild' in p) { delete p.autoRebuild; changed = true; }
   for (const r of state.rubble || []) if ('at' in r) { delete r.at; changed = true; }
+  // Any version (0.4): a save from before The Back has none; it gets an empty one (no drops: the
+  // marked floor it would place them by is part of the old factory such a save still runs).
+  if (!Array.isArray(state.back) || state.back.length !== state.w * state.h) {
+    state.back = new Array(state.w * state.h).fill(0);
+    state.backVer = 0;
+    changed = true;
+  }
   if ((state.v | 0) >= STATE_VERSION) return changed;
   const limit = TUNE.refundLimit + TUNE.refundPerPlayer * Math.max(0, state.players.length - 1);
   if (state.refundLimit > 0) state.refunds = Math.floor(((state.refunds || 0) * limit) / state.refundLimit);
@@ -450,6 +477,8 @@ export function setMap(state, design, size) {
   if (state.zones) state.zones = makeZones(plan.w, plan.h, plan.tiles, plan.doors, design);
   state.grid = new Array(plan.w * plan.h).fill(0);
   state.gridVer++;
+  state.back = blankBack(plan, design);
+  state.backVer = (state.backVer | 0) + 1;
   for (const p of state.players) p.ready = false;
   openDoors(state);
   return true;

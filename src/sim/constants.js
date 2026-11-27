@@ -182,6 +182,67 @@ export const BUILD = {
     up: { dmg: { mul: 1.15, keep: 0.88, rush: 0.85, cost: 0.5 }, rng: { add: 0.5, cost: 0.4 }, dur: { add: 1, cost: 0.25 } },
     desc: 'Demonstrates knives and barbecues on a television. Shoppers in reach may stop to watch, or hurry past.',
   },
+  // The Back (0.4): the floor under the shop, where the factory is moving. Its parts are kinds like
+  // any other, but with `back: true` they live in state.back, not state.grid, are placed with the
+  // `f: 1` commands, and are left out of everything that lists the shop floor's buildings (the
+  // build bar, hotkeys, handbook, README: see SHOP_KINDS below). They never block shoppers. The
+  // engine is src/sim/back.js; docs/architecture.md, "The Back", is the contract.
+  // `fixed`: placed by the map, never bought or removed by a player (the Returns Drop).
+  conv: {
+    name: 'Belt', cost: 2, group: 'back', back: true, rot: true,
+    desc: 'Carries anything put on it, two tiles a second, three items to a tile.',
+  },
+  split: {
+    name: 'Splitter', cost: 15, group: 'back', back: true, rot: true,
+    desc: 'Takes from behind and deals out in turn to the front, left and right.',
+  },
+  over: {
+    name: 'Overpass', cost: 15, group: 'back', back: true,
+    desc: 'Two belts crossing without mixing: one east-west, one north-south.',
+  },
+  intern: {
+    name: 'Unpaid Intern', cost: 20, group: 'back', back: true, rot: true,
+    desc: 'Picks what the tile in front wants off the belt behind him and hands it over.',
+  },
+  bin: {
+    name: 'Clearance Bin', cost: 20, group: 'back', back: true,
+    desc: 'Takes anything from any side. Junk pays nothing; leftover supplies pay pennies.',
+  },
+  drop: {
+    name: 'Returns Drop', cost: 0, group: 'back', back: true, rot: true, fixed: true,
+    desc: 'Where returned junk comes down from the shop. Fixed by the map; anyone may turn it.',
+  },
+};
+
+/**
+ * The kinds that are built on the shop floor (every kind of BUILD but The Back's). Everything that
+ * lists the buildings a player can put in the shop (build bar, hotkeys, handbook, tests) reads this.
+ */
+export const SHOP_KINDS = Object.keys(BUILD).filter((k) => !BUILD[k].back);
+
+/**
+ * The Back (0.4): numbers for its belts and parts (src/sim/back.js). Positions on a belt are whole
+ * numbers, so every browser moves items exactly alike.
+ *   sub        units along one tile: 0 entering, sub leaving
+ *   gap        the least distance between two items on a lane (so a tile holds three)
+ *   step       units an item moves in one tick: 16 is two tiles a second
+ *   end        where an item waits at the end of a belt that cannot hand it on straight
+ *   internSecs how long an Unpaid Intern holds an item before handing it over
+ *   dropSecs   seconds between two pieces of junk from a Returns Drop at level 0
+ *   dropMul    each cash level of a Returns Drop (`lv`, a later stage's dropUp command) multiplies
+ *              its time by this (a first guess, to tune by playing)
+ *   binPay     what a Clearance Bin pays for a supply, by its tier (index 0 is junk: nothing)
+ */
+const BACK_SUB = 240, BACK_GAP = 80;
+export const BACK = {
+  sub: BACK_SUB,
+  gap: BACK_GAP,
+  step: 16,
+  end: BACK_SUB - BACK_GAP / 2,
+  internSecs: 0.4,
+  dropSecs: 1.5,
+  dropMul: 0.85,
+  binPay: [0, 0.1, 0.25, 0.5, 1],
 };
 
 /**

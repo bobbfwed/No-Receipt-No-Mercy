@@ -134,6 +134,19 @@ export function checksum(s) {
     mix(b.hit); mix(b.off);
     if (b.it) mix(b.it.length);
   }
+  // The Back (0.4): how many items are on it (belts, Overpass lanes and the one-item hands), and the
+  // sums of their positions and codes, plus its layout's version. Whole numbers, so exact.
+  if (s.back) {
+    let n = 0, pos = 0, codes = 0;
+    const lane = (it) => { for (let k = 0; k < it.length; k += 2) { n++; codes += it[k]; pos += it[k + 1]; } };
+    for (const p of s.back) {
+      if (!p) continue;
+      if (p.it) lane(p.it);
+      if (p.a) { lane(p.a); lane(p.b); }
+      if (p.h) { n++; codes += p.h; }
+    }
+    mix(s.backVer); mix(n); mix(pos); mix(codes);
+  }
   return h >>> 0;
 }
 

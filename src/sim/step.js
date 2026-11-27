@@ -7,6 +7,7 @@ import { statsOf, spentOn } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { stepRebuilds } from './commands.js';
+import { stepBack } from './back.js';
 import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
@@ -261,8 +262,13 @@ export function skipBuild(state, ev) {
     for (let k = state.messes.length - 1; k >= 0; k--) {
       if (--state.messes[k][1] <= 0) state.messes.splice(k, 1);
     }
+    // The Back (0.4) runs through the skipped time too, as it would have tick by tick. (A later stage
+    // of 0.4 stops running anything ahead here; until then the two floors stay in step.)
+    stepBack(state, quiet);
     stepBuildings(state, fields, quiet, only);
-    for (const e of quiet) if (e.e === 'sale') { cash += e.v; sold++; }
+    for (const e of quiet) {
+      if (e.e === 'sale') { cash += e.v; sold++; } else if (e.e === 'binned') cash += e.v;
+    }
     quiet.length = 0;
   }
   if (sales === undefined) delete state.sales; else state.sales = sales;
@@ -1817,6 +1823,7 @@ function stepShoppers(state, fields, sec, ev) {
  *  step() once nothing was in the way), rebuildHeld {by,n,paid} a Rebuild press paid for n wrecks
  *  that must wait, endless {by} a won game carries on as an endless one,
  *  pause {on,by} player `by` paused (on true) or resumed (on false) the game.)
+ *  The Back (0.4, back.js): binned {i,v,by} a Clearance Bin on tile i was paid v for a supply.
  */
 export function step(state) {
   const ev = [];
@@ -1861,6 +1868,8 @@ export function step(state) {
   }
   // A gym bro can change the layout mid-tick; everyone else finishes this tick on the old maps.
   const fields = [getField(state, NORMAL), getField(state, HOP), getField(state, SMASH)];
+  // The Back (0.4) first: in a later stage it stocks the security buildings, which fire below.
+  stepBack(state, ev);
   const sec = stepBuildings(state, fields, ev);
   stepShoppers(state, fields, sec, ev);
   // After the shoppers have moved, so a rebuild sees where they stand now (it must not be put

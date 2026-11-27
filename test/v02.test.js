@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, canPlace, canUpgrade, step, queueTrainingWave, waveSpec, crowdShiftAt, getDist,
   footprint, anchorOf, tracksOf, defaultTrack, levelIn, levelOf, upgradeCost, spentOn, statsOf, rebuildDeal,
-  priceOf, pitchStop, SHOPPERS, SUPERS, BUILD, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
+  priceOf, pitchStop, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
 } from '../src/sim/index.js';
 import { HostSession, ClientSession, checksum } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
@@ -212,7 +212,7 @@ test('each kind has the upgrade tracks it should, and a plain upgrade means dama
     unpacker: ['spd', 'dur'], press: ['spd', 'dur'], packer: ['spd', 'dur'],
     belt: ['dur'], chute: ['dur'], crate: ['dur'],
   };
-  assert.deepEqual(Object.keys(want).sort(), Object.keys(BUILD).sort());
+  assert.deepEqual(Object.keys(want).sort(), [...SHOP_KINDS].sort());
   for (const [k, ts] of Object.entries(want)) assert.deepEqual(tracksOf(k), ts, k);
   assert.equal(defaultTrack('forklift'), 'dmg');
   assert.equal(defaultTrack('press'), 'spd');

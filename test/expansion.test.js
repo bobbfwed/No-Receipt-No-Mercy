@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, setPlayerOnline, applyCommand, canPlace, canUpgrade, step, queueTrainingWave,
   waveSpec, getField, getDist, makeMap, mapSize, recommendedSize, teamCash, upgradeCost, statsOf, levelOf, patienceScaleAt, crowdShiftAt, bossPatience,
-  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, ITEMS, TUNE, TICK_HZ, kidFirst, NORMAL, UNREACHABLE, SETTINGS,
+  MAP_SIZES, MAP_DESIGNS, ZONES, SHOPPERS, SUPERS, BOSS, BUILD, SHOP_KINDS, ITEMS, TUNE, TICK_HZ, kidFirst, NORMAL, UNREACHABLE, SETTINGS,
 } from '../src/sim/index.js';
 
 /** A training game (no timer, cannot be lost) with plenty of cash, on the original small map. */
@@ -328,7 +328,7 @@ test('every building has some upgrade, and only the tracks its kind has', () => 
   assert.equal(canUpgrade(s, 5, 5), null);
   s.players[0].cash = 10;
   assert.equal(canUpgrade(s, 5, 5), 'cash');
-  for (const k of Object.keys(BUILD)) assert.ok(BUILD[k].up && Object.keys(BUILD[k].up).length, `${k} can be upgraded`);
+  for (const k of SHOP_KINDS) assert.ok(BUILD[k].up && Object.keys(BUILD[k].up).length, `${k} can be upgraded`);
 });
 
 test('an upgraded sprinkler stops shoppers a plain one lets through', () => {

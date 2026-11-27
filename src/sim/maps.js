@@ -635,6 +635,60 @@ export function makeZones(w, h, tiles, doors, design) {
   return z.join('');
 }
 
+/**
+ * Where The Back's Returns Drops go (0.4): one under each Loading Bay patch of marked floor, on the
+ * patch's tile nearest its middle (patch tiles are always open floor, never a wall). It works the
+ * patches out with the same layout code as makeZones rather than reading `state.zones`, because the
+ * marked floor itself is removed in a later stage of 0.4 and the drops must stay where they are.
+ * Each drop faces the middle of the store from top to bottom, where the rest of a production line
+ * used to be (the Loading Bay is at the top or bottom of its section); if that tile is a wall it
+ * faces the next way that is open: toward the middle from side to side, then the others.
+ * Same arguments as makeZones.
+ * @returns {Array<{i: number, d: number}>} tile index and facing (0-3, as DIRS), by tile index
+ */
+export function makeDrops(w, h, tiles, doors, design) {
+  const z = makeZones(w, h, tiles, doors, design);
+  const seen = new Uint8Array(w * h);
+  const out = [];
+  for (let s = 0; s < w * h; s++) {
+    if (z[s] !== 'u' || seen[s]) continue;
+    // One patch: every 'u' tile joined to this one. Tiles up to two apart count as joined, so a
+    // patch that a shelf or wall cuts in two (the Supermarket Aisles) is still one Loading Bay;
+    // sections are ten tiles apart, so two never merge.
+    const patch = [s];
+    seen[s] = 1;
+    for (let q = 0; q < patch.length; q++) {
+      const t = patch[q], x = t % w, y = (t / w) | 0;
+      for (let ny = y - 2; ny <= y + 2; ny++) {
+        for (let nx = x - 2; nx <= x + 2; nx++) {
+          const n = ny * w + nx;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[n] || z[n] !== 'u') continue;
+          seen[n] = 1;
+          patch.push(n);
+        }
+      }
+    }
+    // The tile nearest the patch's middle (whole numbers: positions are scaled by the tile count).
+    let sx = 0, sy = 0;
+    for (const t of patch) { sx += t % w; sy += (t / w) | 0; }
+    const n = patch.length;
+    let best = -1, bestD = Infinity;
+    for (const t of patch) {
+      const dx = (t % w) * n - sx, dy = ((t / w) | 0) * n - sy, d = dx * dx + dy * dy;
+      if (d < bestD || (d === bestD && t < best)) { bestD = d; best = t; }
+    }
+    const x = best % w, y = (best / w) | 0;
+    const down = y * 2 < h - 1 ? 1 : 3, across = x * 2 < w - 1 ? 0 : 2;
+    let face = down;
+    for (const d of [down, across, (across + 2) & 3, (down + 2) & 3]) {
+      const fx = x + (d === 0 ? 1 : d === 2 ? -1 : 0), fy = y + (d === 1 ? 1 : d === 3 ? -1 : 0);
+      if (fx >= 0 && fy >= 0 && fx < w && fy < h && tiles[fy * w + fx] !== '#') { face = d; break; }
+    }
+    out.push({ i: best, d: face });
+  }
+  return out.sort((a, b) => a.i - b.i);
+}
+
 // ---------------------------------------------------------------------------------------------
 // The Back Passage (version 0.3): the store's service corridors.
 

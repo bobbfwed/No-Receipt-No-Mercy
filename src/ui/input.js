@@ -27,12 +27,13 @@
 // finger that lands a moment after the first turns the touch into a pinch before anything is placed.
 // touch.js shows a Rotate button and a "second finger cancels" hint while a finger is placing.
 // A pen is treated as a finger; only the mouse keeps the mouse's rules.
-import { BUILD, doorOf, anchorOf, sizeOf } from '../sim/index.js';
+import { BUILD, SHOP_KINDS, doorOf, anchorOf, sizeOf } from '../sim/index.js';
 import { startDrag } from './drag.js';
 import { liftFraction, createPress, liftedSpot, edgeVelocity, barGesture, EDGE } from './lift.js';
 import { rebuildStatus } from './rebuild.js';
 
-export const BUILD_KEYS = Object.keys(BUILD);
+// (The shop floor's kinds only: The Back's parts, 0.4, get their own bar in a later stage.)
+export const BUILD_KEYS = SHOP_KINDS;
 /** Hotkeys 1-9 then 0, in the order of BUILD. */
 // (The first ten keep the keys they have always had; the two newer buildings follow on the same row.)
 const KEY_OF = { belt: '1', unpacker: '2', press: '3', packer: '4', chute: '5', crate: '6', sprinkler: '7', forklift: '8', wetfloor: '9', samples: '0', railgun: '-', salesman: '=' };

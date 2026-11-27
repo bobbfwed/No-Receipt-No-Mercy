@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import { fill, generated, pictures } from '../tools/readme.mjs';
 import { versionText } from '../src/version.js';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, SHOPPERS, SUPERS, BUILD, TUNE, MAP_DESIGNS, SETTINGS, BOSS,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, TUNE, MAP_DESIGNS, SETTINGS, BOSS,
 } from '../src/sim/index.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, firstWave, countIn,
@@ -38,7 +38,7 @@ test('README.md shows the current version, every store design and every shopper'
 
 test('the handbook covers every shopper and building', () => {
   assert.deepEqual([...SHOPPER_ORDER].sort(), Object.keys(SHOPPERS).sort());
-  assert.deepEqual([...FACTORY_ORDER, ...SECURITY_ORDER].sort(), Object.keys(BUILD).sort());
+  assert.deepEqual([...FACTORY_ORDER, ...SECURITY_ORDER].sort(), [...SHOP_KINDS].sort());
   assert.deepEqual(SHOPPER_ORDER.map(firstWave), [...SHOPPER_ORDER.map(firstWave)].sort((a, b) => a - b), 'listed in the order they first appear');
   for (const k of SHOPPER_ORDER) {
     const f = shopperFacts(k);
