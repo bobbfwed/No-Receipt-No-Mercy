@@ -159,7 +159,7 @@ const TEXT = {
   },
   mallcop: {
     name: 'Mall Cop Academy',
-    rule: (c) => `Every security building bought new arrives with ${fmt(c.units)} units of Store Brand of every supply it takes except Razor Wire. Not when it is rebuilt.`,
+    rule: (c) => `Every security building bought new arrives with ${fmt(c.units)} units of Store Brand of every supply it takes except Razor Wire. Once per tile: not when it is rebuilt, or bought again where one already arrived stocked.`,
     joke: 'New security turns up already loaded. Twelve weeks at Mall Cop Academy and they still arrive better stocked than your bedside drawer.',
   },
   pulledout: {

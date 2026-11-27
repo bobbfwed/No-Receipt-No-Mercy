@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, eventPay, speedBonus, speedPar, bossTier,
+  createGame, addPlayer, applyCommand, step, eventPay, storePay, payHeads, speedBonus, speedPar, bossTier, setPlayerOnline,
   SETTINGS, TUNE, TICK_HZ, ST,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
@@ -25,6 +25,8 @@ function game(players = 1, more = {}) {
 function openOn(s, n) {
   s.wave = n - 1;
   assert.ok(applyCommand(s, 0, { c: 'start' }).ok);
+  // (With a Head Office player, both sides say the doors may open.)
+  if (s.phase !== 'wave' && s.office) assert.ok(applyCommand(s, s.office.pid, { c: 'start' }).ok);
   s.spawnQ = [[s.tick + 1, 'hunter', 0, -1]];
 }
 /**
@@ -275,4 +277,129 @@ test('with more players the store\'s event pay grows as its crowd does, shared e
     assert.equal(e.speed, Math.round(e.pay * TUNE.speedShare), 'the speed bonus is a share of each player\'s pay');
     s.players.forEach((p, n) => assert.equal(p.cash, before[n] + e.pay + e.speed, `player ${n} is paid what the event says`));
   }
+});
+
+/**
+ * Plays sales event n with its one shopper in at once, calls `mid(s)` after he is in (the speed
+ * bonus's clock running), then clears the floor 5 seconds later. Returns the waveEnd event and
+ * what each player's cash went up by.
+ */
+function endWith(s, n, mid) {
+  openOn(s, n);
+  step(s);
+  assert.ok(s.lastIn !== undefined, 'the last shopper is in');
+  mid(s);
+  // (Taken after mid: a player who joins then starts with his own cash.)
+  const before = s.players.map((p) => p.cash);
+  for (const sh of s.shoppers) { sh.st = ST.STUN; sh.t = 1e9; }
+  for (let i = 0; i < 5 * TICK_HZ - 1; i++) assert.ok(!step(s).some((e) => e.e === 'waveEnd'));
+  s.shoppers.length = 0;
+  s.ws.stopped = 1;
+  s.ws.escaped = 0;
+  const e = step(s).find((x) => x.e === 'waveEnd');
+  assert.ok(e, 'the event ended');
+  return { e, got: s.players.map((p, k) => Math.round(p.cash - (before[k] ?? 0))) };
+}
+
+test('event pay is fixed for the head count the event began with, and split among whoever is sharing at its end (0.4.00)', () => {
+  const n = 6;
+  // Two players, one drops after the last shopper is in: the other gets the whole two-player total.
+  const s = game(2);
+  const two = endWith(s, n, (g) => {
+    assert.equal(g.ws.heads, 2, 'the doors opened on two players');
+    setPlayerOnline(g, 1, false);
+    // The panel shows what this player will get now: the whole total.
+    assert.equal(payView(g).pay, payOf(n, 1.5));
+    assert.equal(eventPay(g, n), payOf(n, 1.5));
+    assert.equal(storePay(g, n), (TUNE.payBase + TUNE.payStep * n) * 1.5);
+  });
+  assert.equal(two.e.pay, payOf(n, 1.5), 'a two-player total, all to the one left');
+  assert.equal(two.e.speed, Math.round(two.e.pay * TUNE.speedShare), 'the speed bonus follows the same total');
+  assert.deepEqual(two.got, [two.e.pay + two.e.speed, 0]);
+  // In the build pause: the next event's figure for the head count now, one player.
+  assert.equal(payView(s).pay, payOf(n + 1));
+
+  // One player, a second joins after the last shopper is in: they split the one-player total.
+  const t = game(1);
+  const one = endWith(t, n, (g) => {
+    assert.equal(g.ws.heads, 1);
+    addPlayer(g, 'Late');
+    assert.equal(payView(g).pay, payOf(n, 0.5), 'the panel shows his half');
+  });
+  assert.equal(one.e.pay, payOf(n, 0.5));
+  assert.deepEqual(one.got, [one.e.pay + one.e.speed, one.e.pay + one.e.speed]);
+  // (The store as a whole got the one-player total, give or take the rounding of each half.)
+  assert.ok(Math.abs(one.e.pay * 2 - payOf(n)) <= 1);
+
+  // Solo: unchanged.
+  const solo = endWith(game(1), n, () => {});
+  assert.equal(solo.e.pay, payOf(n));
+  assert.equal(solo.e.speed, Math.round(payOf(n) * TUNE.speedShare));
+});
+
+test('event pay when a player changes sides mid-event: the store\'s total stays what the event began with (0.4.00)', () => {
+  const n = 4;
+  // Nobody can take the Head Office job during an event.
+  const s = game(2);
+  const r = endWith(s, n, (g) => assert.equal(applyCommand(g, 1, { c: 'side', side: 'office' }).why, 'phase'));
+  assert.equal(r.e.pay, payOf(n, 0.75));
+  // But Head Office is sent back to the store when the store's last player drops out: the doors
+  // opened on one store player, so the store is paid as a one-player store, all to him.
+  const t = game(2);
+  assert.ok(applyCommand(t, 1, { c: 'side', side: 'office' }).ok);
+  const back = endWith(t, n, (g) => {
+    assert.equal(g.ws.heads, 1, 'Head Office does not share the store');
+    setPlayerOnline(g, 0, false);
+    assert.equal(g.players[1].side, 'store');
+  });
+  assert.equal(back.e.pay, payOf(n));
+  assert.deepEqual(back.got, [0, back.e.pay + back.e.speed]);
+  // And the other way round, should a store player ever leave for Head Office mid-event (a state
+  // changed by hand): the store player left gets the whole two-player total.
+  const u = game(2);
+  const away = endWith(u, n, (g) => { g.players[1].side = 'office'; });
+  assert.equal(away.e.pay, payOf(n, 1.5));
+  assert.deepEqual(away.got, [away.e.pay + away.e.speed, 0]);
+});
+
+test('the pay head count travels with the state, is in the checksum, and a state without it falls back to the players now (0.4.00)', () => {
+  const s = game(2);
+  openOn(s, 3);
+  step(s);
+  assert.equal(s.ws.heads, 2);
+  setPlayerOnline(s, 1, false);
+  const copy = JSON.parse(JSON.stringify(s));
+  assert.equal(checksum(copy), checksum(s));
+  let a = null, b = null;
+  for (let i = 0; i < 90 * TICK_HZ && !(a && b); i++) {
+    a ||= step(s).find((e) => e.e === 'waveEnd');
+    b ||= step(copy).find((e) => e.e === 'waveEnd');
+  }
+  assert.deepEqual(a, b);
+  assert.equal(a.pay, payOf(3, 1.5));
+  assert.deepEqual(JSON.parse(JSON.stringify(copy)), JSON.parse(JSON.stringify(s)));
+  // The checksum sees it.
+  const t = game(2);
+  openOn(t, 3);
+  step(t);
+  const sum = checksum(t);
+  t.ws.heads = 1;
+  assert.notEqual(checksum(t), sum);
+  t.ws.heads = 2;
+  assert.equal(checksum(t), sum);
+  // A state saved or sent mid-event before the field existed: no crash, the players sharing now.
+  const old = game(2);
+  openOn(old, 3);
+  step(old);
+  delete old.ws.heads;
+  setPlayerOnline(old, 1, false);
+  assert.equal(payHeads(old), 1);
+  assert.equal(eventPay(old, 3), payOf(3));
+  let e = null;
+  for (let i = 0; i < 90 * TICK_HZ && !e; i++) e = step(old).find((x) => x.e === 'waveEnd') || null;
+  assert.ok(e);
+  assert.equal(e.pay, payOf(3));
+  // Between events the head count is the players sharing now, whatever the last event's was.
+  assert.equal(old.phase, 'build');
+  assert.equal(payHeads(old), 1);
 });

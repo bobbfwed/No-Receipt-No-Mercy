@@ -150,8 +150,14 @@ export function checksum(s) {
   // of stopped and refunded shoppers, which scale it, are summed too.)
   if (s.lastIn !== undefined) { mix(0x4c415354); mix(s.lastIn); }
   mix(s.ws ? s.ws.stopped : 0); mix(s.ws ? s.ws.escaped : 0);
+  // (The head count the event's pay is worked out for, 0.4.00: payHeads in step.js. Only where
+  // there is one.)
+  if (s.ws && s.ws.heads !== undefined) { mix(0x48454144); mix(s.ws.heads); }
   // (How many times wire has been laid differently, 0.4: only once it has, as above.)
   if (s.wireGen !== undefined) { mix(0x5747454e); mix(s.wireGen); }
+  // (The tiles the mallcop card has already stocked a new building on, 0.4.00: only in a game with
+  // the card, once it has.)
+  if (s.mallcop) { mix(0x4d43); mix(s.mallcop.length); for (let k = 0; k < s.mallcop.length; k++) mix(s.mallcop[k]); }
   for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);

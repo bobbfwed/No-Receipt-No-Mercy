@@ -254,6 +254,9 @@ export function beginWave(state, ev) {
   state.phaseT = 0;
   state.waveAt = state.tick;
   resetWaveStats(state);
+  // The head count this event's crowd is sized for (0.4.00): its pay is worked out from the same
+  // number, whoever leaves or joins before it ends (payHeads).
+  state.ws.heads = shareCount(state);
   const q = [];
   let dads = 0;
   // A Head Office player's plan replaces the automatic wave, if he made one.
@@ -310,19 +313,40 @@ export function beginWave(state, ev) {
 }
 
 /**
+ * The head count a sales event's pay is worked out for: during an event, the number of players who
+ * were sharing the store when its doors opened (`state.ws.heads`, set by beginWave), which is what
+ * its crowd was sized for; between events (the next one's figure), or in a state saved or sent
+ * mid-event before the field existed, the number sharing now. So a player who drops after the last
+ * shopper is in does not shrink the store's pay, and one who joins at the end does not grow it.
+ */
+export function payHeads(state) {
+  if (!state.players) return 1;
+  const h = state.phase === 'wave' && state.ws ? state.ws.heads : undefined;
+  return Number.isInteger(h) && h >= 1 ? h : shareCount(state);
+}
+
+/**
+ * The STORE's total pay for beating sales event n, unrounded: TUNE.payBase + TUNE.payStep an
+ * event, times the difficulty's pay and the cards (cardPay: overtime, clearance, payday), times
+ * crowdFactor(heads), heads being payHeads (the head count the crowd was sized for). So the total
+ * grows as the crowd does.
+ */
+export const storePay = (state, n, heads = payHeads(state)) => (TUNE.payBase + TUNE.payStep * n) * difficultyOf(state).pay * cardPay(state) * crowdFactor(heads);
+
+/**
  * What beating sales event n pays EACH store player sharing income in this game (0.4), in whole
- * dollars: TUNE.payBase + TUNE.payStep an event, times the difficulty's pay and the cards (cardPay:
- * overtime, clearance, payday), times crowdFactor(players) / players. So the store's total grows as
- * its crowd does and is shared evenly: one player gets all of it, two 75% each, three 67% each.
+ * dollars: the store's total (storePay) shared evenly among the players sharing it right now. With
+ * the head count unchanged since the doors opened, one player gets all of it, two 75% each, three
+ * 67% each; a player who left mid-event leaves his share to the others.
  * (Until 0.4's stage 7 every player got the whole amount, which made sense while goods were the
  * main income; with event pay nearly all of it, two players had twice the money for 1.5 times the
  * crowd. A decision made on the owner's behalf: PLAN.md, 0.4 stage 7.) The speed bonus is a share
- * of this, so it follows.
+ * of this, so it follows. endWave pays exactly this, and the EVENT PAY panel shows it.
  */
 export const eventPay = (state, n) => {
   // (A bare { difficulty } with no players, as the handbook passes, is a one-player game.)
   const players = state.players ? shareCount(state) : 1;
-  return Math.round((TUNE.payBase + TUNE.payStep * n) * difficultyOf(state).pay * cardPay(state) * crowdFactor(players) / players);
+  return Math.round(storePay(state, n) / players);
 };
 
 /** Seconds from the last shopper in to a clear floor at or past which sales event n pays no speed bonus. */
@@ -364,7 +388,8 @@ function endWave(state, ev) {
     ev.push({ e: 'waveEnd', wave: state.wave, pay: 0, speed: 0, took: 0, training: true });
     return;
   }
-  // Every player gets both (eventPay is already each player's share). (Cards may change the pay, and the bonus follows: cardPay.)
+  // Every player gets both (eventPay is already each player's share of the store's total for the
+  // head count the event began with: payHeads). (Cards may change the pay, and the bonus follows: cardPay.)
   const pay = eventPay(state, state.wave);
   // (Without lastIn, only when the queue was emptied some other way than by shoppers walking in,
   // the clock is taken as starting now.)
@@ -1523,7 +1548,10 @@ function stepShoppers(state, fields, sec, ev) {
     const wet = here && here.k === 'wetfloor';
     const messy = !wet && messAt !== null && messAt.has(i) && !def.messy;
     if ((wet || messy) && !def.steady && s.cr !== 1) {
-      const sign = wet ? statsOf(here) : null;
+      // (With the state, like every other statsOf in a step, so a card that one day changes a
+      // sign's numbers reaches it. None does today: cardStats changes towers only, and the cards
+      // about slipping work through cardSlip below.)
+      const sign = wet ? statsOf(here, state) : null;
       if (!def.ignoresSigns) {
         // A sign takes no patience from someone who does not slip, so being weak to it (the day
         // drinker) means taking that much longer to get across it. (Never faster than walking.)

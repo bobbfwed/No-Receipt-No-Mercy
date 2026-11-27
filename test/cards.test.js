@@ -14,7 +14,7 @@ import {
   CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
 import { cardSlip, cardFall, cardGrabChance, cardGrabHeal, cardShield, cardPicks } from '../src/sim/cards.js';
-import { HostSession } from '../src/net/session.js';
+import { HostSession, checksum } from '../src/net/session.js';
 import { cardText, cardName, CARD_WORDS, PLURALS, cardsNote } from '../src/content/cards.js';
 import { NOPE } from '../src/content/lines.js';
 
@@ -775,6 +775,60 @@ test('mallcop: security bought new arrives with Store Brand of every supply it t
     assert.equal(unitsIn(big.grid[5 * big.w + 5], 'dmg'), BACK.stockUnits);
   } finally {
     CARDS.mallcop.units = was;
+  }
+});
+
+test('mallcop: only the first security building bought on a tile arrives stocked; selling and buying again is no refill (0.4.00)', () => {
+  const units = CARDS.mallcop.units;
+  const s = game(['mallcop']);
+  assert.equal(s.mallcop, undefined, 'nothing listed before the first');
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
+  assert.equal(unitsIn(s.grid[5 * s.w + 5], 'dmg'), units);
+  assert.deepEqual(s.mallcop, [5 * s.w + 5]);
+  // Sold and bought again on the same tile, in the build pause or mid-event: empty.
+  assert.ok(applyCommand(s, 0, { c: 'remove', x: 5, y: 5 }).ok);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
+  assert.equal(s.grid[5 * s.w + 5].s, undefined, 'no second helping');
+  openEmpty(s, 2);
+  assert.ok(applyCommand(s, 0, { c: 'remove', x: 5, y: 5 }).ok);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'sprinkler', x: 5, y: 5 }).ok);
+  assert.equal(s.grid[5 * s.w + 5].s, undefined, 'not as another kind either');
+  // A building bigger than one tile lists all its tiles: shifted by one onto them, still empty.
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'salesman', x: 12, y: 5 }).ok);
+  assert.equal(unitsIn(s.grid[5 * s.w + 12], 'dmg'), units);
+  assert.equal(s.mallcop.length, 1 + 4);
+  assert.ok(applyCommand(s, 0, { c: 'remove', x: 12, y: 5 }).ok);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'salesman', x: 13, y: 5 }).ok);
+  assert.equal(s.grid[5 * s.w + 13].s, undefined);
+  // A fresh tile still gets it.
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'sprinkler', x: 5, y: 9 }).ok);
+  assert.equal(unitsIn(s.grid[9 * s.w + 5], 'dmg'), units);
+  // Plain JSON, and in the checksum.
+  const copy = JSON.parse(JSON.stringify(s));
+  assert.deepEqual(copy.mallcop, s.mallcop);
+  const sum = checksum(s);
+  s.mallcop.push(0);
+  assert.notEqual(checksum(s), sum);
+  s.mallcop.pop();
+  assert.equal(checksum(s), sum);
+  // Without the card nothing is listed.
+  const plain = game();
+  assert.ok(applyCommand(plain, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
+  assert.equal(plain.mallcop, undefined);
+});
+
+test('no card changes a Wet Floor Sign\'s slow or slip numbers (the step reads them with the state, 0.4.00)', () => {
+  // (Slipping cards work through cardSlip on the chance, not through statsOf.)
+  for (const card of Object.keys(CARDS)) {
+    const id = CARDS[card].per === 'kind' ? `${card}:karen` : card;
+    const s = game([id]);
+    assert.ok(applyCommand(s, 0, { c: 'place', k: 'wetfloor', x: 5, y: 5 }).ok, card);
+    const b = s.grid[5 * s.w + 5];
+    for (const stocked of [false, true]) {
+      if (stocked) addStock(b, itemCode(1, 3), s);
+      const plain = statsOf(b), withState = statsOf(b, s);
+      for (const key of ['slow', 'slip', 'slipDmg']) assert.equal(withState[key], plain[key], `${card} ${key}${stocked ? ', stocked' : ''}`);
+    }
   }
 });
 

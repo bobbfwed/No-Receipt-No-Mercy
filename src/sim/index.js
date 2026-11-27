@@ -12,7 +12,7 @@ export { canWire, canReinforce } from './commands.js';
 export { reinforceCost } from './upgrades.js';
 export { step, waveSpec, beginWave, queueTrainingWave, setTrainingCash, patienceGrowth, patienceFor, patienceScaleAt, crowdShiftAt, babyPace, walkPace, edgeMul, kidFirst, bossTier, bossTitle, bossPatience, pitchStop, surgeHpAt, surgeCrowdAt } from './step.js';
 // Money (0.4): what beating a sales event pays, and the speed bonus on top.
-export { eventPay, speedPar, speedBonus } from './step.js';
+export { eventPay, storePay, payHeads, speedPar, speedBonus } from './step.js';
 export { priceOf, waveValue, officePlayer, canBuy, planCost, checkPlan } from './office.js';
 export { applyDemoLayout, DEMO_LAYOUT } from './demo.js';
 // The Midnight Release (0.3.01): which events have one, how big its mob is, and its entrance.

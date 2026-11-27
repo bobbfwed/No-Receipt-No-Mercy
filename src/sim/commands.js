@@ -662,7 +662,15 @@ export function applyCommand(state, pid, cmd, ev = []) {
       const b = newBuilding(cmd.k, pid, at.d, card);
       // The mallcop card: bought new, it comes stocked with Store Brand of every supply it takes but
       // Razor Wire, as if that many units had come up its Dumbwaiter (takesSupply keeps to the cap).
-      const units = deal ? 0 : cardStock(state, cmd.k);
+      // Only the first time on its tiles (0.4.00): selling it and buying it again must not be a
+      // refill at a quarter of its price. `state.mallcop` lists every tile a building has arrived
+      // stocked on (absent in a game without the card, or before the first).
+      let units = deal ? 0 : cardStock(state, cmd.k);
+      if (units) {
+        const seen = state.mallcop || (state.mallcop = []);
+        if (at.tiles.some((t) => seen.includes(t))) units = 0;
+        else seen.push(...at.tiles);
+      }
       for (let type = 1; type <= 4; type++) {
         const code = itemCode(type, 1);
         for (let n = 0; n < units && takesSupply(b, code, state); n++) addStock(b, code, state);
