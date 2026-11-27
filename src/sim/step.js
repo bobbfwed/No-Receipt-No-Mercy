@@ -3,7 +3,7 @@
 import { DIRS, BUILD, ITEMS, SHOPPERS, BOSS, BABY, PUP, CARDS, shopperDef, defOf, perHead, ST, TUNE, TICK_HZ, DT } from './constants.js';
 import { rand, bump, resetWaveStats, earn, lose, shareCount, difficultyOf, expireAway, anchorOf, tilesOf, centreOf, isEndless, releaseOrder, releaseAllOrders, footprint } from './state.js';
 import { getField, getFieldTo, getBackField, modeOf, routeOf, smashReady, walkable, NORMAL, HOP, SMASH, GHOST, UNREACHABLE } from './path.js';
-import { statsOf, spentOn } from './upgrades.js';
+import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { stepRebuilds } from './commands.js';
@@ -1108,9 +1108,9 @@ function liftWalk(state, s, i, speed, ev) {
 
 /**
  * The chance a salesman stops a shopper: `stop0` is the shopper's base chance, `stopLeft` what
- * the salesman's upgrades leave of the chance to resist, `seen` how many times this same salesman
+ * the salesman's stock of Bottled Spite leaves of the chance to resist, `seen` how many times this same salesman
  * has pitched to him before (each repeat works TUNE.pitchRepeat times as well as the last).
- * Upgrades work on anyone who could be tempted at all (a blind man never sees the screen).
+ * Stock works on anyone who could be tempted at all (a blind man never sees the screen).
  */
 export function pitchStop(stop0, stopLeft, seen) {
   if (!(stop0 > 0)) return 0;
@@ -1294,10 +1294,10 @@ function wreck(state, ti, s, ev, flatten = false) {
   if (left > 0) return true;
   for (const t of tilesOf(state, ai)) state.grid[t] = 0;
   state.gridVer++;
-  const r = { i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b) };
-  // What a card gave it comes back with it: the price it was bought at, its free levels.
+  const r = { i: ai, k: b.k, d: b.d | 0, o: b.o };
+  // What a card gave it comes back with it: the price it was bought at (the rebuild price is a
+  // share of it: rebuildDeal).
   if (b.c !== undefined) r.c = b.c;
-  if (b.f) { r.f = b.f; if (b.fn !== undefined) r.fn = b.fn; }
   // (A Free Sample table that hands out booze, the eightyproof card, is rebuilt as one.)
   if (b.bz) r.bz = 1;
   state.rubble.push(r);
@@ -1315,8 +1315,8 @@ function wreck(state, ti, s, ev, flatten = false) {
 }
 
 /**
- * One of a gym bro's own hits. Every hit he lands uses one up (TUNE.smashMax), even one a
- * Durability level shrugs off, and he rests after it (TUNE.smashWait). The owner's rule (0.2.12).
+ * One of a gym bro's own hits. Every hit he lands uses one up (TUNE.smashMax), even one Duct
+ * Tape soaks up, and he rests after it (TUNE.smashWait). The owner's rule (0.2.12).
  */
 function landHit(state, ti, s, def, ev) {
   if (!wreck(state, ti, s, ev)) return;
@@ -1844,9 +1844,8 @@ function stepShoppers(state, fields, sec, ev) {
  *     at the stand of kind k on anchor tile i, centred at (x, y) (warranty)
  *   pet {x,y,n,k} n shoppers (the first of kind k) stopped to pet the emotional support dog of the
  *     man at (x, y) (supportdog)
- * (Commands add: placed {k,x,y,d,by,rebuilt?,short?,free?} (free: the track a card's free upgrade
- *  went on), removed, upgraded {k,x,y,by,t,lv},
- *  gave {by,to,n}, rebuilt {by,n,short,late?} (late 1: wrecks already paid for, put back by
+ * (Commands add: placed {k,x,y,d,by,rebuilt?,booze?}, removed,
+ *  gave {by,to,n}, rebuilt {by,n,late?} (late 1: wrecks already paid for, put back by
  *  step() once nothing was in the way), rebuildHeld {by,n,paid} a Rebuild press paid for n wrecks
  *  that must wait, endless {by} a won game carries on as an endless one,
  *  pause {on,by} player `by` paused (on true) or resumed (on false) the game.)

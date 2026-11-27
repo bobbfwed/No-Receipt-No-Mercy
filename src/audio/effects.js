@@ -17,7 +17,7 @@
 // The shoppers' own voices are in shoppers.js.
 import { voice, tone, noise, bell, brass, formant, gain, mtof, rng, vary, say, babble } from './synth.js';
 import { SHAPES, LEFT_ABOUT, bark, thud, knock, leftVoice, escapeVoice, walkout } from './shoppers.js';
-import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, trackIntro, deflate, carryUp } from './newfx.js';
+import { barcodeLaser, scannerWreck, pee, flash, fall, pitch, kidtv, shield, tvWreck, carryUp } from './newfx.js';
 import { bossWave, bossIn, pep, bossOut, bossEscape, endless } from './boss.js';
 import { popSound, noPop, waah, babyTill, nursery } from './preggo.js';
 import { releaseSound, ripSound } from './trader.js';
@@ -38,70 +38,11 @@ const WRECK = {
   railgun: 'scanner', salesman: 'tv', // (the key 'railgun' is the Barcode Laser's)
 };
 
-/** A wrench ratchet: a few quick clicks. */
-function ratchet(v, t, x, n = 2) {
-  for (let i = 0; i < n; i++) {
-    const dt = i * 0.03 * x.j(0.15);
-    noise(v, { t: t + dt, type: 'bandpass', f: 3000 - i * 250, q: 3, peak: 0.3, a: 0.002, d: 0.012 });
-    tone(v, { t: t + dt, f: 1600 - i * 120, peak: 0.05, a: 0.002, d: 0.012 });
-  }
-}
-
-/** A metal clang: an inharmonic struck tone. */
-function clang(v, t, f, peak = 0.14, d = 0.35, index = 2.5) {
-  bell(v, { t, f, ratio: 1.41, index, peak, d });
-}
-
 /** Coins handed over: one small two-tone clink. */
 function clink(v, t, x, peak = 0.12) {
   const f = x.between(2800, 3600);
   tone(v, { t, f, type: 'triangle', peak, a: 0.002, d: 0.06 });
   tone(v, { t, f: f * 1.47, type: 'triangle', peak: peak * 0.5, a: 0.002, d: 0.05 });
-}
-
-const TRACKS = ['dmg', 'spd', 'rng', 'dur'];
-
-/** The upgrade sound for a level (0: not known, a middle pitch). */
-function upgradeSound(ctx, dest, t, o = {}) {
-  const v = voice(ctx, dest, o.level);
-  // The level sets the pitch; the version sets the instrument (or the run, at the top level). The
-  // track (damage, speed, range, durability) sets the colour of the first half second.
-  const x = vary(o.seed, 3);
-  const lv = Math.max(0, Math.min(10, o.lv | 0));
-  const base = lv ? 62 + lv * 2 : 68;
-  let c0 = 0.08;
-  if (TRACKS.includes(o.t)) c0 = trackIntro(v, t, x, o.t, base);
-  else ratchet(v, t, x, 2 + (x.r() < 0.5 ? 1 : 0));
-  if (o.top || lv >= 10) {
-    // The top level: a fast arpeggio up two octaves, a brass stab and a sparkle.
-    const runs = [[72, 76, 79, 84, 88, 91], [72, 79, 76, 84, 79, 88], [67, 72, 76, 79, 84, 91]];
-    runs[x.shape].forEach((m, i) => {
-      tone(v, { t: t + 0.06 + i * 0.045 * x.j(0.1), f: mtof(m), type: 'triangle', peak: 0.14, a: 0.003, d: 0.1 });
-    });
-    const s = t + 0.36;
-    const chords = [[72, 76, 79, 84], [67, 72, 76, 79], [76, 79, 84, 88]];
-    for (const m of chords[x.shape]) {
-      brass(v, { t: s, f: mtof(m), peak: 0.09, a: 0.02, h: 0.25, d: 0.35, bright: 4 + x.shape, vib: { rate: 5.5 * x.j(0.15), depth: 15, delay: 0.15 } });
-    }
-    bell(v, { t: s, f: mtof([96, 91, 100][x.shape]), peak: 0.1, d: 0.9, ratio: 3.5, index: 0.8 });
-    noise(v, { t: s, type: 'highpass', f: 7000, peak: 0.07, a: 0.003, d: 0.6 });
-    return v.end;
-  }
-  // One whole tone higher for every level: level 1 starts on E4, level 9 on G#5.
-  [0, 4, 7].forEach((st, i) => {
-    const last = i === 2;
-    const at = t + c0 + i * 0.06 * x.j(0.1);
-    const f = mtof(base + st);
-    if (x.shape === 1) {
-      bell(v, { t: at, f, peak: last ? 0.16 : 0.13, d: last ? 0.35 : 0.12, ratio: 2, index: 0.6 }); // "ding ding DING"
-    } else {
-      tone(v, { t: at, f, type: 'triangle', peak: 0.17, a: 0.003, h: last ? 0.06 : 0.01, d: last ? 0.28 : 0.07 });
-      tone(v, { t: at, f, type: x.shape === 2 ? 'sawtooth' : 'square', lp: x.shape === 2 ? 1500 : 2500, peak: 0.035, a: 0.003, h: last ? 0.06 : 0.01, d: last ? 0.2 : 0.06 });
-    }
-  });
-  if (x.shape === 2) tone(v, { t: t + 0.05, f: mtof(base - 5), f1: mtof(base + 12), glide: 0.2, peak: 0.06, a: 0.02, h: 0.1, d: 0.1 }); // power-up sweep
-  else bell(v, { t: t + 0.2, f: mtof(base + 12), peak: 0.08, d: 0.35, ratio: 2, index: 0.5 });
-  return v.end;
 }
 
 /** Wrecked buildings put back: a hammer knock for each (up to six), then "ta-DA". */
@@ -116,12 +57,6 @@ function rebuildSound(ctx, dest, t, o = {}) {
     at += 0.075 * x.j(0.15);
   }
   const e = at + 0.04;
-  if (o.short > 0) {
-    // Some came back with fewer upgrades (no money for the rest): the "ta-DA" sags into a sad slide.
-    bell(v, { t: e, f: mtof(84), peak: 0.1, d: 0.25, ratio: 2, index: 0.6 });
-    deflate(v, e + 0.1, x);
-    return v.end;
-  }
   bell(v, { t: e, f: mtof(84), peak: 0.12, d: 0.3, ratio: 2, index: 0.6 });
   bell(v, { t: e + 0.08, f: mtof(91), peak: 0.14, d: 0.33, ratio: 2, index: 0.6 });
   return v.end;
@@ -474,7 +409,7 @@ export const SOUNDS = {
   },
 
   smash: {
-    about: 'A gym bro wrecks something. Crates: wood cracking and planks clattering. Belts: a rubber slap and metal rollers. Machines: a crunch, a clang, sparks and the motor dying. Sprinklers: a clank and a gush of water. Forklift: a heavy crash and its horn dying. Wet floor sign: plastic clattering flat. Samples: the table and the plates. An upgraded building only losing a level: one clang and a bolt bouncing away.',
+    about: 'A gym bro wrecks something. Crates: wood cracking and planks clattering. Belts: a rubber slap and metal rollers. Machines: a crunch, a clang, sparks and the motor dying. Sprinklers: a clank and a gush of water. Forklift: a heavy crash and its horn dying. Wet floor sign: plastic clattering flat. Samples: the table and the plates. A building that takes the hit and still stands (or Duct Tape soaking it up): one clang and a bolt bouncing away.',
     max: 0.9,
     shapes: 3,
     variants: [
@@ -589,25 +524,6 @@ export const SOUNDS = {
     },
   },
 
-  upgraded: {
-    about: 'Security upgraded: a wrench ratchet and a rising "ding-ding-DING", a step higher for every level (on one of three instruments). Level 10, the top, gets a flourish: an arpeggio, a brass stab and a sparkle.',
-    max: 0.75,
-    shapes: 3,
-    variants: [
-      { label: 'level 1', opts: { lv: 1 } },
-      { label: 'level 5', opts: { lv: 5 } },
-      { label: 'level 9', opts: { lv: 9 } },
-      { label: 'level 10', opts: { lv: 10 }, max: 1.6 },
-      { label: 'damage 3', opts: { t: 'dmg', lv: 3 }, about: 'Damage track: a heavy knock and a low growl under the chord.' },
-      { label: 'speed 3', opts: { t: 'spd', lv: 3 }, about: 'Speed track: a quick rising whirr.' },
-      { label: 'range 3', opts: { t: 'rng', lv: 3 }, about: 'Range track: a ping that rises.' },
-      { label: 'durability 3', opts: { t: 'dur', lv: 3 }, about: 'Durability track: a bolt being tightened, clicks bunching up, then a clunk.' },
-      { label: 'damage top (8)', opts: { t: 'dmg', lv: 8, top: 1 }, max: 1.6, about: 'The top level of a track: the flourish.' },
-      { label: 'range top (5)', opts: { t: 'rng', lv: 5, top: 1 }, max: 1.6, about: 'A track with its own lower maximum, at the top: the flourish at a lower pitch.' },
-    ],
-    play: upgradeSound,
-  },
-
   rebuilt: {
     about: 'Wrecked buildings put back in one go: a quick hammer knock for each one (up to six), then a cheerful "ta-DA".',
     max: 1.0,
@@ -616,8 +532,6 @@ export const SOUNDS = {
       { label: '1', opts: { n: 1 } },
       { label: '3', opts: { n: 3 } },
       { label: '8', opts: { n: 8 } },
-      { label: '3, 2 short', opts: { n: 3, short: 2 }, max: 1.2, about: 'Two of the three came back with fewer upgrades (no money): the "ta-DA" deflates into a sad slide.' },
-      { label: '8, all short', opts: { n: 8, short: 8 }, max: 1.2, about: 'The same after a big rebuild.' },
     ],
     play: rebuildSound,
   },
@@ -1204,13 +1118,6 @@ export const SOUNDS = {
     },
   },
 
-  upgrade: {
-    about: 'The upgrade button. The host hears the level-aware "upgraded" sound instead; this is for a player in someone else\'s game, whose browser does not know the new level: the same sound at a middle pitch.',
-    max: 0.75,
-    shapes: 3,
-    play: (ctx, dest, t, o = {}) => upgradeSound(ctx, dest, t, { ...o, lv: 0 }),
-  },
-
   rebuild: {
     about: 'The rebuild button (when the browser does not know how many came back): three hammer knocks and "ta-DA".',
     max: 1.0,
@@ -1349,7 +1256,7 @@ export const SOUNDS = {
  * Every effect above must be here, once: test/sound-settings.test.js fails otherwise.
  *   money     cash coming in or going out
  *   shoppers  anything a shopper, baby, dog, puppy, kid, the crowd or the boss does or says
- *   store     security working, and building, upgrading, removing, wrecking, rebuilding
+ *   store     security working, and building, removing, wrecking, rebuilding
  *   events    the store's announcements, the cards being dealt, winning and losing, pause, reviews,
  *             and the interface's own clicks and refusals
  *   voice     DEB's robot blips, which go with her spoken voice
@@ -1367,8 +1274,8 @@ export const GROUP_OF = {
   waah: 'shoppers', nursery: 'shoppers', rip: 'shoppers', litter: 'shoppers', whimper: 'shoppers',
   kennel: 'shoppers', drunk: 'shoppers', trail: 'shoppers', wrongway: 'shoppers', pet: 'shoppers',
   // Security and machines.
-  spray: 'store', shot: 'store', rail: 'store', pitch: 'store', smash: 'store', upgraded: 'store',
-  rebuilt: 'store', place: 'store', remove: 'store', rotate: 'store', upgrade: 'store', rebuild: 'store',
+  spray: 'store', shot: 'store', rail: 'store', pitch: 'store', smash: 'store',
+  rebuilt: 'store', place: 'store', remove: 'store', rotate: 'store', rebuild: 'store',
   // Announcements.
   begun: 'events', ready: 'events', side: 'events', waveStart: 'events', waveEnd: 'events',
   won: 'events', lost: 'events', endless: 'events', bossIn: 'events', release: 'events',

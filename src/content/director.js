@@ -32,7 +32,7 @@
 //   TALK.holidayBoss of the time), and once each build pause DEB may tell a holiday joke (the
 //   'holiday' topic), which fades over the game like any other joke. With no holiday, none of it.
 import {
-  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle, maxIn,
+  TICK_HZ, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle,
 } from '../sim/index.js';
 import { releaseNo, releaseSize, shareCount } from '../sim/index.js';
 import {
@@ -158,8 +158,6 @@ export const TOPICS = {
   idle: { joke: true, steady: true },
   sale: { joke: true, chance: 0.05, gap: 60 },
   placed: { joke: true, chance: 0.12, gap: 12, friend: 'built' },
-  upgraded: { joke: true, chance: 0.2, gap: 15, friend: 'built' },
-  maxed: { joke: true, important: true, gap: 10, friend: 'built' },
   removed: { joke: true, chance: 0.5, gap: 10, friend: 'sold' },
   removedOther: { note: true, gap: 8, friend: 'sold' },
   gave: { joke: true, gap: 10, friend: 'any' },
@@ -560,24 +558,9 @@ export function createDirector(random = Math.random) {
         else say(out, state, 'dented', LINES.dented, { k: thing(e.k), n: e.left > 0 ? e.left : undefined }, { pid, mood: 'angry' });
         break;
       }
-      case 'upgraded': {
-        const vars = { k: thing(e.k), n: e.lv };
-        const pid = state.players[e.by] ? e.by : undefined;
-        // Each track has its own top (a factory machine's speed goes to 10, most others to 8).
-        if (e.lv >= (e.t ? maxIn(e.k, e.t) : TUNE.maxLevel)) say(out, state, 'maxed', LINES.maxed, vars, { pid, mood: 'smug' });
-        else {
-          // Lines about the kind of upgrade join the general ones. Factory machines only get faster.
-          const group = own(BUILD, e.k)?.group === 'factory' ? 'factory' : e.t;
-          const extra = own(LINES.upgradedBy, group);
-          const bank = extra ? [...LINES.upgraded, ...extra] : LINES.upgraded;
-          say(out, state, 'upgraded', bank, vars, { pid, mood: 'smug' });
-        }
-        break;
-      }
       case 'rebuilt': {
         const pid = state.players[e.by] ? e.by : undefined;
-        if (e.short > 0) say(out, state, 'rebuilt', LINES.rebuiltShort, { n: e.n, m: e.short }, { pid, mood: 'smug' });
-        else if (e.n >= 3) say(out, state, 'rebuilt', LINES.rebuilt, { n: e.n }, { pid, mood: 'smug' });
+        if (e.n >= 3) say(out, state, 'rebuilt', LINES.rebuilt, { n: e.n }, { pid, mood: 'smug' });
         break;
       }
       // A Rebuild press that paid for wrecks that must wait (0.3.04).

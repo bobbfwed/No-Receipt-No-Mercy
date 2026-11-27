@@ -40,9 +40,8 @@ test('a building kind is only ever a real kind', () => {
   refused(s, { c: 'place', k: { toString: () => 'crate' }, x: 8, y: 8 });
 });
 
-test('an upgrade track, a player to give to, a command name, the floor flag: only real ones', () => {
+test('a player to give to, a command name, the floor flag: only real ones', () => {
   const s = game();
-  for (const t of NAMES) refused(s, { c: 'upgrade', x: 5, y: 5, t });
   for (const to of [...NAMES, '1', 1.5, -1, null]) refused(s, { c: 'give', to, n: 10 });
   for (const c of NAMES) refused(s, { c });
   for (const f of [...NAMES, 2, '1']) refused(s, { c: 'place', k: 'conv', x: 9, y: 9, f });

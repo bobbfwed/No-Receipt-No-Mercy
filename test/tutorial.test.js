@@ -7,14 +7,14 @@ import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
 import { createTutorial, STEPS, PART_TWO } from '../src/tutorial/lessons.js';
 import { HOW } from '../src/content/help.js';
-import { createGame, applyCommand, step, queueTrainingWave, levelIn, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ, ST } from '../src/sim/index.js';
+import { createGame, applyCommand, step, queueTrainingWave, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ, ST } from '../src/sim/index.js';
 
 function trainingSession(seed = 9) {
   return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
 }
 
 const title = (t) => { const st = STEPS.find((x) => x.title === t); assert.ok(st, `there is a lesson called "${t}"`); return t; };
-const SALES = title('Hold them up: the TV Salesman'), UPGRADES = title('Upgrades, and super shoppers');
+const SALES = title('Hold them up: the TV Salesman'), SUPERS_LESSON = title('Super shoppers');
 const DADS = title('Dads'), STOP_DADS = title('Stopping dads'), LASER = title('Aim down the line: the Barcode Laser');
 const GYM = title('Gym Bros'), WET = title('Slow them down: the Wet Floor Sign');
 /** The only kinds of shopper the training shift sends in (0.3.03, the owner's request). */
@@ -111,8 +111,8 @@ function checkLessons(s, waves, seen, label) {
     `${label}: a shopper watched him from inside the Sprinkler's reach`);
   assert.deepEqual(waves[SALES], { stopped: 24, escaped: 0 }, `${label}: the whole coach party stopped`);
 
-  // Upgrades: the upgraded sprinklers stop the Extreme Couponers.
-  assert.deepEqual(waves[UPGRADES], { stopped: 8, escaped: 0 }, `${label}: upgraded sprinklers stop eight super shoppers`);
+  // Super shoppers: a third sprinkler, by the samples, stops the Extreme Couponers.
+  assert.deepEqual(waves[SUPERS_LESSON], { stopped: 8, escaped: 0 }, `${label}: three sprinklers stop eight super shoppers`);
 
   // Dads: the four walk straight through; the forklift, signs and crate stop most of the next
   // five, and every dad who steps over the belts does it on the same row.
@@ -143,7 +143,7 @@ function checkLessons(s, waves, seen, label) {
   for (const k of kinds) assert.ok(SHIFT_KINDS.includes(k), `${label}: a ${k} walked in`);
 
   // The gap cluster stays as part 1 left it, for the practice at the end.
-  for (const [x, y] of [[9, 13], [11, 13]]) assert.ok(levelIn(s.grid[tileOf(s, x, y)], 'dmg') >= 3, `${label}: the sprinklers at the gap are still there`);
+  for (const [x, y] of [[7, 13], [9, 13], [11, 13]]) assert.equal(s.grid[tileOf(s, x, y)]?.k, 'sprinkler', `${label}: the sprinklers at the gap are still there`);
 }
 
 test('training mode: no timer, no losing, waves only when lined up', () => {
@@ -173,7 +173,7 @@ test('the whole training shift can be completed, and each lesson shows what it s
       assert.ok(st.title && st.text.length && st.quip, `step ${t.index} has a title, text and a line from DEB`);
       if (!st.manual) assert.equal(t.check(), false, `step ${t.index} "${st.title}" is not done before the player acts`);
       if (st.marks && !st.manual) assert.ok(t.marks().length > 0, `step "${st.title}" highlights something`);
-      if (st.tool) assert.ok(t.tool() in BUILD || ['upgrade', 'rebuild'].includes(t.tool()), `step "${st.title}" points at a real button`);
+      if (st.tool) assert.ok(t.tool() in BUILD || t.tool() === 'rebuild', `step "${st.title}" points at a real button`);
     },
     onDone: (t, st) => {
       assert.equal(t.check(), true, `step ${t.index} "${st.title}" completes`);
@@ -208,8 +208,8 @@ test('the wave lessons play out the same whatever the random seed', () => {
         if (st.title === WET) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: one sprinkler lets some of the ten through`);
         // "A crowd this big swamps your gap."
         if (st.title === SALES) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: the gap alone lets some of the coach party through`);
-        // "As they are, your Sprinklers cannot stop the eight Extreme Couponers."
-        if (st.title === UPGRADES) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without upgrades some Extreme Couponers get through`);
+        // "As they are, your two Sprinklers at the gap cannot stop the eight Extreme Couponers."
+        if (st.title === SUPERS_LESSON) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the third sprinkler some Extreme Couponers get through`);
         // The laser lesson's ten dads are too many for the forklift and the signs.
         if (st.title === LASER) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the laser some dads get through`);
       },
@@ -288,7 +288,7 @@ test('autoplay reaches any step, for screenshots and for Skip', () => {
   assert.equal(t3.index, PART_TWO);
   const quips = new Set(STEPS.map((st) => st.quip));
   assert.deepEqual(says.filter((t) => quips.has(t)), [STEPS[PART_TWO].quip]);
-  assert.ok(levelIn(third.state.grid[13 * third.state.w + 9], 'dmg') >= 3, 'the upgraded sprinklers are in place');
+  assert.equal(third.state.grid[13 * third.state.w + 7].k, 'sprinkler', 'the third sprinkler, by the samples, is in place');
   assert.equal(third.state.grid[13 * third.state.w + 4].k, 'salesman', 'and the TV Salesman');
 
   // The panel's jump keeps refusals off the screen; the "you cannot block the route" lesson
@@ -317,18 +317,17 @@ test('every building has a plain explanation', () => {
   }
 });
 
-test('the player places every building at least once, and uses Upgrade, Rebuild and Remove (0.3.03)', () => {
+test('the player places every building at least once, and uses Rebuild and Remove (0.3.03; the Upgrade tool went in 0.4)', () => {
   // Played through, gathering what each lesson's marks ask for at the start and as it goes.
   const session = trainingSession();
   const tut = createTutorial(session);
   const asked = new Map(); // kind of building -> titles of the lessons whose marks ask for it
-  const tools = { upgrade: new Set(), rebuild: new Set(), remove: new Set() };
+  const tools = { rebuild: new Set(), remove: new Set() };
   const look = () => {
     const st = tut.step;
     for (const m of tut.marks()) {
-      if (m.up) tools.upgrade.add(st.title);
       if (m.fix === 'rebuild') tools.rebuild.add(st.title);
-      if (!m.k || m.up) continue;
+      if (!m.k) continue;
       if (!asked.has(m.k)) asked.set(m.k, new Set());
       asked.get(m.k).add(st.title);
       // A mark on a tile that holds something else asks for that to be removed first.
@@ -358,11 +357,10 @@ test('the player places every building at least once, and uses Upgrade, Rebuild 
     const placed = [...asked.get(k)].some((t) => STEPS.find((st) => st.title === t).solve(createGame({ training: true, zones: true })).some((c) => c.c === 'place' && c.k === k));
     assert.ok(placed, `a lesson that asks for a ${BUILD[k].name} has the player place it`);
   }
-  assert.ok(tools.upgrade.size >= 1, 'a lesson has the player upgrade something');
   assert.ok(tools.remove.size >= 1, 'a lesson has the player remove something');
   assert.ok(STEPS.some((st) => st.after && st.after(createGame({ training: true })).some((c) => c.c === 'rebuild')), 'a lesson waits for Rebuild');
   assert.ok(STEPS.some((st) => st.solve(createGame({ training: true, zones: true })).some((c) => c.c === 'remove')), 'a lesson removes something');
-  assert.ok(STEPS.some((st) => st.solve(createGame({ training: true, zones: true })).some((c) => c.c === 'upgrade')), 'a lesson upgrades something');
+  assert.ok(!STEPS.some((st) => st.solve(createGame({ training: true, zones: true })).some((c) => c.c === 'upgrade')), 'no lesson buys an upgrade');
 });
 
 test('the whole shift sends in Coupon Clippers, Dads and a Gym Bro, and nobody else (0.3.03)', () => {
@@ -414,7 +412,7 @@ test('on a touch screen no lesson or help text mentions a key or the mouse', asy
   for (const v of Object.values(help.HOW)) texts.push(v.does, v.use);
   // (The Back's parts, 0.4, on their own build bar.)
   for (const v of Object.values(help.BACK_HOW)) texts.push(v.does, v.use);
-  for (const v of [help.HOW_REMOVE, help.HOW_UPGRADE, help.HOW_REBUILD]) texts.push(v.does, v.use);
+  for (const v of [help.HOW_REMOVE, help.HOW_REBUILD]) texts.push(v.does, v.use);
   // The live hints too, at the moments a player is most likely to see them.
   const session = trainingSession();
   const tut = createTutorial(session);

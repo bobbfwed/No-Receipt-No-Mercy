@@ -4,9 +4,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, migrateSave, queueTrainingWave, canPlace, canPlaceBack, canUpgrade,
+  createGame, addPlayer, applyCommand, step, migrateSave, queueTrainingWave, canPlace, canPlaceBack,
   BACK, BUILD, TUNE, TICK_HZ, JUNK, itemCode, dropTicks, newPart, wants, give, stepBack, beltShape,
-  statsOf, levelIn, boughtIn, stockLevel, spentOn, upgradeCost, levelCost,
+  statsOf, levelIn, stockLevel, spentOn, rebuildDeal,
   usesPer, unitsIn, usesIn, takesSupply, addStock, useStock, useWork, dropUpCost,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
@@ -174,7 +174,7 @@ test('a chain from a Returns Drop through a Still and a Rebrander stocks a tower
   assert.deepEqual(b.s, { dmg: [2, BACK.stockUnits * BUILD.forklift.shots] }, 'six units of tier 2, then it wants no more');
   assert.equal(unitsIn(b, 'dmg'), BACK.stockUnits);
   assert.ok(at(s, 9, 2).it.length > 0, 'the line backs up behind the full Dumbwaiter');
-  assert.deepEqual(statsOf(b, s), statsOf({ k: 'forklift', u: { dmg: BACK.tierLevel[2] } }, s), 'it works at level 4 damage');
+  assert.equal(statsOf(b, s).dmg, BUILD.forklift.dmg * BUILD.forklift.up.dmg.mul ** BACK.tierLevel[2], 'it works at level 4 damage');
 });
 
 test('Dumbwaiters come and go with their building: 1 x 1, the Barcode Laser both ways round, the TV Salesman', () => {
@@ -224,45 +224,44 @@ test('a security building cannot go over a Back part (\'back\'); a crate can', (
   assert.equal(canPlace(s, 'crate', 5, 5, 0), null);
 });
 
-test('stock gives a track exactly the level a tier stands for; the larger of that and the levels bought counts', () => {
+test('stock gives a track exactly the level a tier stands for, and nothing else gives levels', () => {
   for (const k of ['sprinkler', 'forklift', 'salesman', 'wetfloor', 'samples', 'railgun']) {
     for (const t of ['dmg', 'spd', 'rng']) {
       if (!BUILD[k].up[t]) continue;
       for (const tier of [1, 2, 3, 4]) {
-        const stocked = { k, s: { [t]: [tier, 3] } }, bought = { k, u: { [t]: BACK.tierLevel[tier] } };
+        const stocked = { k, s: { [t]: [tier, 3] } };
         assert.equal(levelIn(stocked, t), BACK.tierLevel[tier]);
-        assert.deepEqual(statsOf(stocked), statsOf(bought), `${k} ${t} tier ${tier}`);
+        assert.equal(stockLevel(stocked, t), BACK.tierLevel[tier]);
+        // How much is left of the run does not matter, only its tier.
+        assert.deepEqual(statsOf(stocked), statsOf({ k, s: { [t]: [tier, 1] } }), `${k} ${t} tier ${tier}`);
+        assert.notDeepEqual(statsOf(stocked), statsOf({ k }), `${k} ${t} tier ${tier} changes something`);
       }
     }
   }
-  // The larger of the two; durability's level is never raised by stock (tape soaks hits instead).
-  assert.equal(levelIn({ k: 'sprinkler', u: { dmg: 5 }, s: { dmg: [2, 1] } }, 'dmg'), 5);
-  assert.equal(levelIn({ k: 'sprinkler', u: { dmg: 5 }, s: { dmg: [4, 1] } }, 'dmg'), 8);
+  // Levels a save from before 0.4 bought (`u`) count for nothing: bought upgrades are gone.
+  assert.equal(levelIn({ k: 'sprinkler', u: { dmg: 5 }, s: { dmg: [2, 1] } }, 'dmg'), BACK.tierLevel[2]);
+  assert.equal(levelIn({ k: 'sprinkler', u: { dmg: 5 } }, 'dmg'), 0);
+  // Durability's level is never raised by stock (tape soaks hits instead).
   assert.equal(levelIn({ k: 'sprinkler', s: { dur: [4, 1] } }, 'dur'), 0);
   assert.equal(statsOf({ k: 'sprinkler', s: { dur: [4, 1] } }).hits, statsOf({ k: 'sprinkler' }).hits);
   // No stock, no levels: exactly the building it always was.
   assert.deepEqual(statsOf({ k: 'forklift', s: {} }), statsOf({ k: 'forklift' }));
 });
 
-test('stock is never money: prices, buying, selling back and the rebuild price ignore it', () => {
+test('stock is never money: what was spent, selling back and the rebuild price ignore it', () => {
   const s = stage();
   const b = placeOk(s, 'sprinkler', 5, 5);
-  const plain = { spent: spentOn(b), next: upgradeCost(b, 'dmg') };
+  const plain = { spent: spentOn(b), rebuild: rebuildDeal(b, Infinity).pay };
   for (let n = 0; n < 6; n++) addStock(b, itemCode(1, 4));
   addStock(b, itemCode(2, 4));
   assert.equal(levelIn(b, 'dmg'), 8);
-  assert.equal(boughtIn(b, 'dmg'), 0);
   assert.equal(stockLevel(b, 'dmg'), 8);
-  assert.deepEqual({ spent: spentOn(b), next: upgradeCost(b, 'dmg') }, plain);
-  assert.equal(canUpgrade(s, 5, 5, 0, 'dmg'), null, 'level 8 of stock does not max the track out');
-  const cash = s.players[0].cash;
-  assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'dmg' }).ok);
-  assert.deepEqual(b.u, { dmg: 1 }, 'the first level bought');
-  assert.equal(s.players[0].cash, cash - levelCost('sprinkler', 'dmg', 0));
-  assert.equal(levelIn(b, 'dmg'), 8, 'still works at the stock\'s level');
+  assert.deepEqual({ spent: spentOn(b), rebuild: rebuildDeal(b, Infinity).pay }, plain);
+  assert.equal(plain.spent, BUILD.sprinkler.cost);
+  assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'dmg' }).why, 'bad', 'nothing is bought for a track any more');
   const before = s.players[0].cash;
   assert.ok(applyCommand(s, 0, { c: 'remove', x: 5, y: 5 }).ok);
-  assert.equal(s.players[0].cash, before + Math.floor((BUILD.sprinkler.cost + levelCost('sprinkler', 'dmg', 0)) * TUNE.sellBack), 'sold back for what was spent');
+  assert.equal(s.players[0].cash, before + Math.floor(BUILD.sprinkler.cost * TUNE.sellBack), 'sold back for what was paid');
 });
 
 test('a Dumbwaiter takes only the tracks its building has (and wire), up to stockUnits units of each', () => {
@@ -325,7 +324,7 @@ test('a tower uses one use a shot, however many it hits, and is plain again when
   const sprayUses = 3 * BUILD.sprinkler.shots;
   let shots = 0, sprays = 0, hitMany = false;
   const outs = [];
-  const boosted = statsOf({ k: 'forklift', u: { dmg: 4 } }, s).dmg, plain = statsOf({ k: 'forklift' }, s).dmg;
+  const boosted = statsOf({ k: 'forklift', s: { dmg: [2, 1] } }, s).dmg, plain = statsOf({ k: 'forklift' }, s).dmg;
   wave(s, [{ k: 'hunter', n: 14, gap: 0.25, at: 0 }], 90, (ev) => {
     for (const e of ev) {
       if (e.e === 'shot' && e.i === fi) {
@@ -426,7 +425,7 @@ test('a wreck\'s Dumbwaiters stay under the rubble, wanting nothing, until it is
   for (const r of wrecks) {
     assert.equal(s.grid[r.i], 0);
     assert.equal(r.s, undefined, 'its stock is lost');
-    assert.equal(r.spent, BUILD.sprinkler.cost, 'what was spent is only the price');
+    assert.equal(rebuildDeal(r, Infinity).pay, Math.floor(BUILD.sprinkler.cost * TUNE.rebuildShare), 'its rebuild price is a share of its price only');
     assert.deepEqual(s.back[r.i], { k: 'lift', a: r.i }, 'its Dumbwaiter is still there');
     assert.ok(!wants(s, r.i, itemCode(1, 1), E), 'wanting nothing');
     assert.equal(canPlaceBack(s, 'conv', r.i % s.w, (r.i / s.w) | 0, 0), 'occupied', 'and in the way of The Back\'s parts');
@@ -463,7 +462,7 @@ test('the Rebuild button puts a wreck back over its Dumbwaiters; one that falls 
   // Wrecked again, then pushed off the end of the list by 400 newer wrecks.
   wave(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   assert.equal(s.rubble.length, 1);
-  for (let n = 0; n < 399; n++) s.rubble.push({ i: idx(s, 1, 1), k: 'crate', d: 0, o: 0, u: {}, spent: 10 });
+  for (let n = 0; n < 399; n++) s.rubble.push({ i: idx(s, 1, 1), k: 'crate', d: 0, o: 0 });
   wave(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   assert.ok(!s.grid[idx(s, 7, 9)] || !s.grid[idx(s, 7, 6)], 'this time he wrecked a crate');
   assert.equal(s.rubble.length, 400);
@@ -599,7 +598,7 @@ test('a save from before Dumbwaiters gets them, for standing buildings and their
   const s = stage();
   placeOk(s, 'salesman', 5, 5);
   placeOk(s, 'sprinkler', 10, 5);
-  s.rubble.push({ i: idx(s, 14, 5), k: 'forklift', d: 0, o: 0, u: {}, spent: 200 });
+  s.rubble.push({ i: idx(s, 14, 5), k: 'forklift', d: 0, o: 0 });
   lay(s, 12, 5, 'conv', E);
   const want = JSON.stringify(s.back);
   for (let i = 0; i < s.back.length; i++) if (s.back[i] && s.back[i].k === 'lift') s.back[i] = 0;

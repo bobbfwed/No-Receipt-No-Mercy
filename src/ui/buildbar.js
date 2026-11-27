@@ -1,12 +1,11 @@
-// The build bar: one button per building, grouped Factory and Security, plus the Upgrade and
+// The build bar: one button per building, grouped Factory and Security, plus the Rebuild and
 // Remove tools. In The Back (0.4) the same bar shows The Back's parts instead, with Remove.
-import { BUILD, TUNE, ZONES, anchorOf, levelOf, rebuildDeal, buildPrice } from '../sim/index.js';
-import { tracksInfo } from './upgradetext.js';
+import { BUILD, TUNE, ZONES, rebuildDeal, buildPrice } from '../sim/index.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, BACK_GROUPS, hotkeyOf } from './input.js';
 import { longPress, touchedLast } from './touch.js';
-import { HOW, BACK_HOW, HOW_REMOVE, HOW_UPGRADE, HOW_REBUILD } from '../content/help.js';
+import { HOW, BACK_HOW, HOW_REMOVE, HOW_REBUILD } from '../content/help.js';
 import { worded, isTouch, PLACE_BY_TOUCH } from '../content/touch.js';
 
 // On a phone the info card is a sheet over the floor; the player can fold it down to one line,
@@ -24,7 +23,6 @@ const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', still: 'Still', cann
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
-  upgrade: { name: 'Upgrade', key: 'U', price: 'anything', how: HOW_UPGRADE, keys: 'key U' },
   // Not a tool you hold: one press pays to put back everything of yours that gym bros have wrecked.
   rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true },
   remove: { name: 'Remove', key: 'X', price: `${Math.round(TUNE.sellBack * 100)}% back`, how: HOW_REMOVE, keys: 'key X or Delete' },
@@ -118,11 +116,11 @@ export function createBuildBar(input, session) {
     h('span', { class: 'bb-label' }, g.label),
     h('div', { class: 'bb-btns' }, g.keys.map((k) => makeButton(k)))));
   const tools = h('div', { class: 'bb-group bb-tools', role: 'group', 'aria-label': 'tools' },
-    h('span', { class: 'bb-label' }, 'TOOLS'), h('div', { class: 'bb-btns' }, makeButton('upgrade', -1), makeButton('rebuild', -1), makeButton('remove', -1)));
+    h('span', { class: 'bb-label' }, 'TOOLS'), h('div', { class: 'bb-btns' }, makeButton('rebuild', -1), makeButton('remove', -1)));
 
   const dirEl = h('b');
   const hint = h('div', { class: 'bb-hints' },
-    h('div', null, 'Facing ', dirEl, ' · ', h('kbd', null, 'R'), ' rotate · ', h('kbd', null, 'U'), ' upgrade'),
+    h('div', null, 'Facing ', dirEl, ' · ', h('kbd', null, 'R'), ' rotate'),
     h('div', null, h('kbd', null, 'WASD'), ' move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'H'), ' my entrance'),
     h('div', null, h('kbd', null, 'Right-click'), ' remove · ', h('kbd', null, 'Esc'), ' drop it'));
 
@@ -152,7 +150,7 @@ export function createBuildBar(input, session) {
   });
   // A folded card opens with a tap anywhere on it, not only on its small button.
   info.addEventListener('click', (e) => { if (folded && !e.target.closest('button')) toggleFold(); });
-  let lastCash = null, lastTool, lastDir, lastUp = '', lastRubble = '';
+  let lastCash = null, lastTool, lastDir, lastRubble = '';
   const rebuildBtn = buttons.get('rebuild'), rebuildNote = rebuildBtn.querySelector('.bb-price');
 
   function showInfo(k) {
@@ -174,30 +172,6 @@ export function createBuildBar(input, session) {
       h('p', null, h('b', null, 'How: '), worded(how.use)));
     // On a touch screen: how a finger places it (0.3.03). (The belt's "How" already says drag.)
     if (def && k !== 'belt' && k !== 'conv' && isTouch()) info.append(h('p', { class: 'bbi-touch' }, PLACE_BY_TOUCH));
-  }
-
-  /** With the upgrade tool held: what the building under the mouse has and what more it could have. */
-  function showUpgrade(s, cash) {
-    const t = input.hover;
-    const ai = t && s.grid[t.y * s.w + t.x] ? anchorOf(s, t.y * s.w + t.x) : -1;
-    const b = ai >= 0 ? s.grid[ai] : 0;
-    const key = b ? `${ai},${b.k},${JSON.stringify(b.u || 0)},${cash}` : '';
-    if (key === lastUp) return;
-    lastUp = key;
-    if (!b) { showInfo('upgrade'); return; }
-    const def = BUILD[b.k], tracks = tracksInfo(b);
-    const head = h('div', { class: 'bbi-head' },
-      h('span', { class: 'bbi-icon', html: buildingIcon(b.k) }),
-      h('b', null, levelOf(b) > 1 ? `${def.name}, ${levelOf(b) - 1} upgrade${levelOf(b) > 2 ? 's' : ''}` : def.name),
-      foldBtn());
-    const body = tracks.length
-      ? [
-        ...tracks.map((tr) => h('p', { class: 'bbi-track' }, h('b', null, `${tr.name} ${tr.lv}/${tr.max}: `), tr.gain,
-          tr.cost ? h('span', { class: `bbi-cost${cash < tr.cost ? ' poor' : ''}` }, ` ${money(tr.cost)}`) : null)),
-        h('p', null, touchedLast() ? 'Tap it to choose an upgrade.' : 'Click it to choose an upgrade. U buys the first one.'),
-      ]
-      : [h('p', null, 'This cannot be upgraded.')];
-    info.replaceChildren(head, ...body);
   }
 
   /** Lights up one button (the tutorial points at the tool to pick). Pass null to clear. */
@@ -236,14 +210,13 @@ export function createBuildBar(input, session) {
   let lastFloor = 0;
   function update(s) {
     updatePrices(s);
-    // The floor being looked at (0.4): The Back's parts, or the shop's buildings and the Upgrade
-    // and Rebuild tools, which belong to the shop floor. (B still rebuilds from either floor.)
+    // The floor being looked at (0.4): The Back's parts, or the shop's buildings and the Rebuild
+    // tool, which belongs to the shop floor. (B still rebuilds from either floor.)
     if (input.floor !== lastFloor) {
       lastFloor = input.floor;
       const back = lastFloor === 1;
       for (const g of groups) setClass(g, 'hidden', back);
       for (const g of backGroups) setClass(g, 'hidden', !back);
-      setClass(buttons.get('upgrade'), 'hidden', back);
       setClass(rebuildBtn, 'hidden', back);
       setClass(el, 'on-back', back);
     }
@@ -254,7 +227,6 @@ export function createBuildBar(input, session) {
     }
     if (input.tool !== lastTool) {
       lastTool = input.tool;
-      lastUp = '';
       for (const [k, btn] of buttons) {
         const on = k === input.tool;
         setClass(btn, 'on', on);
@@ -262,12 +234,11 @@ export function createBuildBar(input, session) {
       }
       showInfo(input.tool);
     }
-    if (input.tool === 'upgrade') showUpgrade(s, cash);
     // The Rebuild button says how much of yours is lying in pieces and what putting it back costs
     // (alert); with nothing to order but something paid for and waiting to go back, how many
     // (waiting, 0.3.04); otherwise nothing (idle).
     let n = 0, cost = 0, held = 0;
-    // (Half of what had been spent on each; with less money it comes back with fewer upgrades.)
+    // (Half of what was paid for each, all or nothing: rebuildDeal.)
     for (const r of s.rubble) {
       if (r.by !== undefined) { if (r.by === session.me) held++; continue; }
       if (r.o === session.me) { n++; cost += rebuildDeal(r, Infinity).pay; }

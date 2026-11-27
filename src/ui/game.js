@@ -467,10 +467,9 @@ export function startGame(session, {
     view.routeFaint = s.phase === 'wave' && !office && !training && !view.tool;
     // Nor does he get the tile outline under the mouse that says "you could build here".
     if (office) view.hover = null;
-    // The building whose sheet is open, and the upgrade pointed at in it: the floor shows its reach,
-    // and what a Range upgrade would add (src/render/reach.js). Head Office has no sheet.
+    // The building whose sheet is open: the floor shows its reach (src/render/reach.js). Head Office
+    // has no sheet.
     view.selected = office ? null : touchUi.selected;
-    view.track = office ? undefined : touchUi.track;
     keepInSight(s, input.floor ? null : view.selected); // (a Returns Drop's sheet, in The Back, has no reach)
     view.marks = training ? training.marks() : null;
     // The captions on highlighted tiles speak of the mouse; on a touch screen, of taps.

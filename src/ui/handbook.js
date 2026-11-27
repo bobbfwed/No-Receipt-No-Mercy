@@ -1,16 +1,16 @@
 // The Employee Handbook: every shopper, factory building and piece of security, with its numbers.
 // How patient each shopper is as the sales events go by, how many turn up, what the super
-// version changes, and what every upgrade level of security costs and does.
+// version changes, and what each tier of supply from The Back does for each piece of security.
 // Opened from the menu and from the game (the book button, or the ? screen). In a game it uses
 // that game's length, difficulty and number of players; from the menu, the standard game.
-import { BUILD, MACHINE_SPD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
+import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  trackRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText, edgeFacts,
+  tierRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText, edgeFacts,
 } from '../content/facts.js';
 import { releaseWaves } from '../content/facts.js';
-import { trackName } from './upgradetext.js';
+import { trackName, SUPPLIES } from '../content/supplies.js';
 import { worded } from '../content/touch.js';
 import { versionText } from '../version.js';
 import { h, money } from './dom.js';
@@ -27,8 +27,9 @@ const table = (cls, head, rows) => h('div', { class: 'hb-scroll' }, h('table', {
 const facts = (pairs) => h('dl', { class: 'hb-facts' }, pairs.map(([k, v]) => [h('dt', null, k), h('dd', null, v)]));
 const stat = (label, value) => h('span', { class: 'hb-stat' }, h('small', null, label), h('b', null, value));
 
-/** The columns of an upgrade table: for each number a track changes, its heading and how to print it. */
+/** The columns of a supply table: for each number a track changes, its heading and how to print it. */
 const COLS = {
+  level: ['Counts as', (v) => (v ? `+${v} levels` : '–')],
   dmg: ['Hit', fmt],
   dps: ['A second, one shopper', fmt],
   most: ['A second, all it reaches', fmt],
@@ -39,25 +40,28 @@ const COLS = {
   stopLeft: ['A dad stops', (v) => pct(1 - (1 - SHOPPERS.dad.pitch[0]) * v)],
   rushMul: ['A dad hurries past', (v) => pct(SHOPPERS.dad.pitch[1] * v)],
   cd: ['Seconds between shots', (v) => (v < 2 ? v.toFixed(2) : fmt(v))],
-  period: ['Seconds a box', (v) => v.toFixed(2)],
-  time: ['Seconds an item', (v) => v.toFixed(2)],
-  perMin: ['A minute', fmt],
   range: ['Reach (tiles)', fmt],
-  hits: ['Gym bro hits it survives', fmt],
 };
 
-/** A table for each kind of upgrade a building has: what each level costs and what it gives. */
-function upgradeTables(k) {
+/**
+ * A table for each supply a building takes (tierRows): what each brand tier does for it, and how
+ * long one unit lasts. Duct Tape's table only says how many gym bro hits a roll soaks up.
+ */
+function supplyTables(k) {
   const def = BUILD[k];
+  // What a unit of stock is used up by: a tower's shots, or the shoppers anything else acts on.
+  const per = def.tower ? 'shots' : 'shoppers';
   return tracksOf(k).flatMap((track) => {
-    const rows = trackRows(k, track);
+    const rows = tierRows(k, track);
+    const head = h('h4', null, `${SUPPLIES[track].name}: ${trackName(k, track)}`);
+    if (track === 'dur') {
+      return [head, table('hb-levels', ['Tier', 'One roll soaks up'],
+        rows.map((r) => [r.name, r.uses ? `${r.uses} gym bro hit${r.uses === 1 ? '' : 's'}` : '–']))];
+    }
     // "most" only means something for a tower that hits several at once; "perSec" repeats "cd".
     const keys = Object.keys(COLS).filter((c) => rows[0][c] !== undefined && !(c === 'most' && !(def.targets > 1)));
-    return [
-      h('h4', null, `Upgrade: ${trackName(k, track)}`),
-      table('hb-levels', ['Level', 'Costs', 'Spent on it', ...keys.map((c) => COLS[c][0])],
-        rows.map((r) => [r.lv ? String(r.lv) : 'as built', r.lv ? money(r.cost) : '–', money(r.total), ...keys.map((c) => COLS[c][1](r[c]))])),
-    ];
+    return [head, table('hb-levels', ['Tier', 'A unit lasts', ...keys.map((c) => COLS[c][0])],
+      rows.map((r) => [r.name, r.uses ? `${r.uses} ${per}` : '–', ...keys.map((c) => COLS[c][1](r[c]))]))];
   });
 }
 
@@ -156,11 +160,10 @@ function factoryCard(k, ctx) {
     h('p', null, h('b', null, 'How: '), worded(HOW[k].use)),
     // The sentences above quote Normal prices; the numbers below are for this game's difficulty.
     ctx.pay !== 1 && /$/.test(HOW[k].does) ? h('p', { class: 'hb-small' }, `The prices in the text are for Normal difficulty. On ${ctx.name}:`) : null,
-    facts(factoryFacts(k, ctx.pay).slice(2).filter(([label]) => label !== 'Goes on')),
-    ...upgradeTables(k));
+    facts(factoryFacts(k, ctx.pay).slice(2).filter(([label]) => label !== 'Goes on')));
 }
 
-/** One piece of security: what it does as built, and a table for each kind of upgrade. */
+/** One piece of security: what it does as built, and a table for each supply it takes. */
 function securityCard(k) {
   const def = BUILD[k], st = statsOf({ k });
   const extra = [];
@@ -189,7 +192,7 @@ function securityCard(k) {
     h('p', null, worded(HOW[k].does)),
     h('p', null, h('b', null, 'How: '), worded(HOW[k].use)),
     facts(extra),
-    ...upgradeTables(k));
+    ...supplyTables(k));
 }
 
 /**
@@ -227,10 +230,10 @@ export function handbook({ state = null, onClose }) {
         + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds do not grow from event to event. ${paceText()} A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
-      note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Machines can be upgraded for speed, at a price: up to ${MACHINE_SPD.max} levels, each ${fmt((MACHINE_SPD.mul - 1) * 100)}% faster than the last, costing ×${fmt(MACHINE_SPD.grow)} the level before up to level ${MACHINE_SPD.gentleFrom} and ×${fmt(MACHINE_SPD.gentleGrow)} after. Everything can be made tougher. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
+      note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
       body.replaceChildren(...FACTORY_ORDER.map((k) => factoryCard(k, ctx)));
     } else {
-      note.textContent = `Each kind of upgrade is bought separately, up to ${TUNE.maxLevel} levels, and each level costs ×${fmt(TUNE.upGrowth)} the last. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event, and a wrecked building comes back at half price with its upgrades when you press Rebuild (B): the money goes at once, the building as soon as nothing is in the way, and every new wreck needs another press.`;
+      note.textContent = `Security gets stronger only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range) and Duct Tape (soaks up gym bro hits). Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
       body.replaceChildren(...SECURITY_ORDER.map((k) => securityCard(k)));
     }
     body.dataset.tab = id;

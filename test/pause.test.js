@@ -2,7 +2,7 @@
 // sessions, saves and DEB behave while a game is paused. Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, addPlayer, setPlayerOnline, applyCommand, step, applyDemoLayout, canPlace, canUpgrade, TICK_HZ } from '../src/sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, applyCommand, step, applyDemoLayout, canPlace, TICK_HZ } from '../src/sim/index.js';
 import { HostSession, ClientSession, checksum } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
 import { createDirector } from '../src/content/director.js';
@@ -154,17 +154,17 @@ test('paused and then resumed during the deal of the cards plays out exactly as 
   }
 });
 
-test('nothing can be built, sold, upgraded, rebuilt, given or bought while paused', () => {
+test('nothing can be built, sold, rebuilt, given or bought while paused', () => {
   const s = midWave();
   // A building to act on, owned by Dave: the demo's first.
   const at = s.grid.findIndex((b) => b && b.part === undefined && b.k === 'sprinkler');
   const x = at % s.w, y = (at / s.w) | 0;
-  s.rubble.push({ i: 0, k: 'crate', d: 0, o: 0, u: {}, spent: 10 });
+  s.rubble.push({ i: 0, k: 'crate', d: 0, o: 0 });
   applyCommand(s, 0, { c: 'pause', on: true });
   const before = json(s);
   const refused = [
     { c: 'place', k: 'crate', x: 3, y: 3 }, { c: 'remove', x, y }, { c: 'rotate', x, y },
-    { c: 'upgrade', x, y }, { c: 'upgrade', x, y, t: 'rng' }, { c: 'give', to: 1, n: 10 },
+    { c: 'give', to: 1, n: 10 }, { c: 'dropUp', x: 3, y: 3 },
     { c: 'rebuild' }, { c: 'rebuild', all: true }, { c: 'start' }, { c: 'side', side: 'office' },
     { c: 'plan', groups: [] }, { c: 'endless' }, { c: 'ready', on: true }, { c: 'map', design: 'warehouse', size: 'm' },
     { c: 'settings', waves: 10 }, { c: 'nonsense' },
@@ -173,14 +173,13 @@ test('nothing can be built, sold, upgraded, rebuilt, given or bought while pause
   assert.equal(json(s), before, 'nothing changed');
   // The preview on the floor says so too.
   assert.equal(canPlace(s, 'crate', 3, 3, 0), 'paused');
-  assert.equal(canUpgrade(s, x, y, 0), 'paused');
   // DEB has a plain answer for it.
   assert.ok(NOPE.paused.length >= 3);
 });
 
 test('speed, job titles and pausing still work while paused; a rebuild paid for before the pause waits for the game to carry on', () => {
   const s = midWave();
-  s.rubble.push({ i: 3 * s.w + 3, k: 'crate', d: 0, o: 0, u: {}, spent: 10 });
+  s.rubble.push({ i: 3 * s.w + 3, k: 'crate', d: 0, o: 0 });
   // (Paid for just before the pause, but not yet built: as if a shopper had been in the hole.
   // Since 0.3.04 a Rebuild press orders it and step() puts it back when it can.)
   Object.assign(s.rubble[0], { by: 0, res: 5 });

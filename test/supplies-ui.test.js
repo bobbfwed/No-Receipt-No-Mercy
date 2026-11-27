@@ -5,10 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BUILD, BACK, STOCK_TRACKS, addStock, useStock, unitsIn, dropTicks, dropUpCost, TICK_HZ, createGame, addPlayer,
-  applyDemoLayout, step, applyCommand,
+  applyDemoLayout, step, applyCommand, statsOf, itemCode,
 } from '../src/sim/index.js';
 import {
   SUPPLIES, TIER_NAMES, TIER_RINGS, outOfText, stockTracks, tierIn, stockGives, stockRows, junkPerMinute, dropInfo,
+  trackName, trackNumbers,
 } from '../src/content/supplies.js';
 import { BACK_GROUPS, BACK_KEYS, BACK_HOTKEYS, hotkeyOf, BUILD_KEYS, HOTKEYS } from '../src/ui/input.js';
 import { BACK_HOW } from '../src/content/help.js';
@@ -30,7 +31,7 @@ test('every stock track has a supply with a name, a warning word and a colour', 
   assert.ok(TIER_RINGS[2] && TIER_RINGS[3] && TIER_RINGS[4]);
 });
 
-test('the tracks a building takes: its upgrade tracks and wire, only for kinds with Dumbwaiters', () => {
+test('the tracks a building takes: its tracks and wire, only for kinds with Dumbwaiters', () => {
   assert.deepEqual(stockTracks('sprinkler'), ['dmg', 'spd', 'rng', 'dur', 'wire']);
   assert.deepEqual(stockTracks('wetfloor'), ['dmg', 'dur', 'wire']);
   assert.deepEqual(stockTracks('crate'), []);
@@ -50,14 +51,23 @@ test('a sheet row says what the stock gives now, or EMPTY', () => {
   const dmg = stockRows(b).find((r) => r.track === 'dmg');
   assert.equal(dmg.tierName, 'Name Brand');
   assert.equal(dmg.units, 1);
-  // Bought levels at least as high: the stock adds nothing, and the row says so.
-  const bought = { k: 'sprinkler', u: { dmg: 5 } };
-  addStock(bought, 11);
-  assert.match(stockGives(bought, 'dmg'), /nothing more than the 5 levels bought/);
   // Used up: empty again.
   while (useStock(b, 'dmg', 0, [])) { /* use it all */ }
   assert.equal(stockGives(b, 'dmg'), 'EMPTY');
   assert.equal(unitsIn(b, 'dmg'), 0);
+});
+
+test("a building sheet's working numbers come from the rules, its stock counted", () => {
+  // (0.4: the sheet shows what a building works at in place of the old upgrade buttons.)
+  const b = { k: 'forklift' };
+  assert.deepEqual(trackNumbers('forklift', 'dmg', statsOf(b)), [['hit', String(BUILD.forklift.dmg)]]);
+  addStock(b, itemCode(1, 4)); // Platinum Bottled Spite
+  const hit = Math.round(statsOf(b).dmg * 10) / 10;
+  assert.ok(hit > BUILD.forklift.dmg);
+  assert.deepEqual(trackNumbers('forklift', 'dmg', statsOf(b)), [['hit', String(hit)]]);
+  assert.deepEqual(trackNumbers('crate', 'dur', statsOf({ k: 'crate' })), [['survives', '1 gym bro hit a sales event']]);
+  assert.equal(trackName('railgun', 'rng'), 'Beam length');
+  assert.equal(trackName('salesman', 'dmg'), 'Pitch');
 });
 
 test('a Returns Drop sheet: junk a minute, the next level, and why MORE JUNK cannot be pressed', () => {

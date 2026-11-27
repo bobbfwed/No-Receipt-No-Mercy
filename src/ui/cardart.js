@@ -50,8 +50,8 @@ export const CARD_ART = {
   lootbox: { symbol: 'box' },
   asseenontv: { symbol: 'gadget' },
   regifting: { symbol: 'gift' },
-  offatruck: { building: 'unpacker', badge: 'upgrade' },
-  mallcop: { building: 'forklift', badge: 'upgrade' },
+  offatruck: { building: 'unpacker', badge: 'boost' },
+  mallcop: { building: 'forklift', badge: 'boost' },
   pulledout: { shopper: 'preggo' },
   eyesup: { shopper: 'flasher' },
   wrongway: { shopper: 'mom' },
@@ -86,6 +86,10 @@ const S = 'stroke="#111" stroke-width="2"';
  * The drawn symbols (inline SVG, viewBox 0 0 40 40, static markup). No image files, no emoji.
  */
 export const SYMBOLS = {
+  // Two green chevrons going up: more for less (the offatruck and mallcop cards; it was the Upgrade
+  // tool's icon until bought upgrades went in 0.4).
+  boost: `<circle cx="20" cy="20" r="15" fill="#16a34a" ${S}/>
+    <path d="M12 21l8-9 8 9M12 29l8-9 8 9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`,
   coins: `<ellipse cx="14" cy="31" rx="10" ry="4" fill="#ca8a04" ${S}/><rect x="4" y="25" width="20" height="6" fill="#facc15"/>
     <path d="M4 25v6M24 25v6" ${S}/><ellipse cx="14" cy="25" rx="10" ry="4" fill="#fde047" ${S}/>
     <ellipse cx="26" cy="21" rx="10" ry="4" fill="#ca8a04" ${S}/><rect x="16" y="13" width="20" height="8" fill="#facc15"/>
@@ -276,7 +280,7 @@ export function clearLeft(spans, width, min, max, want) {
 /** True if the art for this card exists: a shopper the portrait code draws, a building, a symbol. */
 export function artExists(a) {
   if (a.shopper) return a.shopper === 'boss' || Object.hasOwn(SHOPPERS, a.shopper);
-  if (a.building) return Object.hasOwn(BUILD, a.building) && (!a.badge || Object.hasOwn(SYMBOLS, a.badge) || a.badge === 'upgrade' || a.badge === 'remove');
+  if (a.building) return Object.hasOwn(BUILD, a.building) && (!a.badge || Object.hasOwn(SYMBOLS, a.badge) || a.badge === 'remove');
   return Object.hasOwn(SYMBOLS, a.symbol);
 }
 

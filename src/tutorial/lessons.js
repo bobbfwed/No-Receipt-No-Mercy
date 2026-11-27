@@ -23,15 +23,15 @@
 //
 // What the shift covers (0.3.03, the owner's request: "only a few different shoppers, just to show
 // that there's variation ... it should show all buildings"): every building in BUILD is placed by
-// the player at least once, and the Upgrade, Rebuild and Remove tools are each used; the only
-// shoppers sent in are Coupon Clippers (super ones in the upgrade lesson), Dads and a Gym Bro.
+// the player at least once, and the Rebuild and Remove tools are each used; the only shoppers sent
+// in are Coupon Clippers (super ones in the super shopper lesson), Dads and a Gym Bro.
 // test/tutorial.test.js holds it to both.
 //
 // Facts gathered during a step (f): sales, nopes (refusals by reason), waveStarts, waveEnds, and
 // counts of what the shoppers did: slip (a dad slipped), watched (a shopper stopped to watch the
 // TV Salesman), beam (the most shoppers one Barcode Laser beam hit), smashed (a gym bro wrecked
 // something; smashedCrate for crate stacks), rebuilt (the Rebuild button put something back).
-import { queueTrainingWave, setTrainingCash, levelIn, maxIn, TUNE, BUILD, sizeOf } from '../sim/index.js';
+import { queueTrainingWave, setTrainingCash, TUNE, BUILD, sizeOf } from '../sim/index.js';
 
 const E = 0, S = 1, W = 2; // facing east, south, west
 const FACING = ['right', 'down', 'left', 'up'];
@@ -44,10 +44,13 @@ const remove = (x, y) => ({ c: 'remove', x, y });
 const BELTS = [3, 4, 5, 6, 7, 8, 9, 10]; // rows of the belt run under the unpacker
 const CRATES = [[X, 1], [X, 12], [X, 13]];
 const GAP = [X, 14];
-const SPRINKLERS = [[9, 13], [11, 13]]; // the two beside the gap
-const UP_TO = 3; // the damage level the upgrade lesson asks for (the U key buys damage)
-// The upgrade lesson's super Coupon Clippers (Extreme Couponers): more than the layout gets through
-// before its upgrades, never more than it gets through after (the tests check every seed).
+// The super shopper lesson's third Sprinkler, beside the Free Samples, where the shoppers who stop
+// for a sample stand in its spray. (Until 0.4 the lesson had the player buy damage upgrades for the
+// two Sprinklers at the gap instead; bought upgrades are gone, and supplies from The Back get their
+// own lesson later.)
+const SUPER_SPRINKLER = [7, 13];
+// Its super Coupon Clippers (Extreme Couponers): more than the layout gets through without the third
+// Sprinkler, never more than it gets through with it (the tests check every seed).
 const SUPER_CLIPPERS = 8;
 const SUPER_WORD = 'eight';
 
@@ -168,17 +171,6 @@ const openDoorsHint = (s, f) => (f.waveEnds ? null
 /** The same, with what to watch for while the wave is on. */
 const watchHint = (watch) => (s, f) => (f.waveEnds ? null
   : s.phase === 'wave' ? watch : 'Press OPEN THE DOORS at the top of the screen.');
-
-/** The damage level of the building on (x, y): what the U key raises. */
-const dmgAt = (s, x, y) => levelIn(at(s, x, y), 'dmg');
-
-/** Commands that bring the building on (x, y) up to damage level `lv`, placing it first if missing. */
-function upTo(s, k, x, y, lv) {
-  const cmds = [];
-  if (!is(s, x, y, k)) cmds.push(place(k, x, y));
-  for (let n = is(s, x, y, k) ? dmgAt(s, x, y) : 0; n < lv; n++) cmds.push({ c: 'upgrade', x, y, t: 'dmg' });
-  return cmds;
-}
 
 export const STEPS = [
   {
@@ -427,37 +419,26 @@ export const STEPS = [
     solve: () => [place('salesman', ...SALESMAN), place('sprinkler', ...SALES_SPRINKLER), { c: 'start' }],
   },
   {
-    title: 'Upgrades, and super shoppers',
-    tool: 'upgrade',
+    title: 'Super shoppers',
+    tool: 'sprinkler',
     wave: [{ k: 'clipper', n: SUPER_CLIPPERS, gap: 0.6, at: 0, sup: SUPER_CLIPPERS }],
     text: [
-      `Do this: click Upgrade in the bar, click a highlighted Sprinkler, and click Damage on the card that opens until it shows Damage ${UP_TO}/${maxIn('sprinkler', 'dmg')}. Do the same for the other one, then press OPEN THE DOORS. As they are, your Sprinklers cannot stop the ${SUPER_WORD} Extreme Couponers (super Coupon Clippers: faster, with two and a half times the patience) waiting outside.`,
-      'Shortcut: point at a building with the mouse and press U to buy a level of Damage.',
-      'Everything you build can be upgraded, in separate tracks: damage, speed, range and durability (how many gym bro hits it survives in a sales event). You buy each track a level at a time, and each level costs more than the one before. Upgrades get more out of the floor space you have already built on. The number on a building adds up all its levels.',
+      `Do this: put a third Sprinkler (press 7) on the highlighted tile beside the Free Samples, then press OPEN THE DOORS. As they are, your two Sprinklers at the gap cannot stop the ${SUPER_WORD} Extreme Couponers (super Coupon Clippers: faster, with two and a half times the patience) waiting outside. The ones who stop for a sample will stand in its spray.`,
       'Later in a real game, SUPER versions of every shopper turn up. They are bigger, marked in gold, far more patient, and take a double refund.',
+      'In a real game your security also gets stronger: supplies made in The Back, the floor under the shop, go up to it and make it hit harder, fire faster and reach further while they last. The number on a building is the level it is working at.',
     ],
     touch: [
-      `Do this: tap a highlighted Sprinkler and tap Damage on the card that opens until it shows Damage ${UP_TO}/${maxIn('sprinkler', 'dmg')}. Do the same for the other one, then tap OPEN THE DOORS. As they are, your Sprinklers cannot stop the ${SUPER_WORD} Extreme Couponers (super Coupon Clippers: faster, with two and a half times the patience) waiting outside.`,
-      'Everything you build can be upgraded, in separate tracks: damage, speed, range and durability (how many gym bro hits it survives in a sales event). You buy each track a level at a time, and each level costs more than the one before. Upgrades get more out of the floor space you have already built on. The number on a building adds up all its levels.',
+      `Do this: drag Sprinkler from the bar onto the highlighted tile beside the Free Samples, then tap OPEN THE DOORS. As they are, your two Sprinklers at the gap cannot stop the ${SUPER_WORD} Extreme Couponers (super Coupon Clippers: faster, with two and a half times the patience) waiting outside. The ones who stop for a sample will stand in its spray.`,
       'Later in a real game, SUPER versions of every shopper turn up. They are bigger, marked in gold, far more patient, and take a double refund.',
+      'In a real game your security also gets stronger: supplies made in The Back, the floor under the shop, go up to it and make it hit harder, fire faster and reach further while they last. The number on a building is the level it is working at.',
     ],
-    quip: `Both Sprinklers at the gap to Damage ${UP_TO}, then open the doors. Extreme Couponers: they'd sell their own mothers for 10% off, and she'd be reduced to clear.`,
+    quip: "A third Sprinkler by the samples, then open the doors. Extreme Couponers: they'd sell their own mothers for 10% off, and she'd be reduced to clear.",
     mood: 'smug',
-    marks: (s) => SPRINKLERS.filter(([x, y]) => dmgAt(s, x, y) < UP_TO).map(([x, y]) => ({ x, y, label: 'Upgrade', k: 'sprinkler', up: 'dmg' })),
-    done: (s, f) => SPRINKLERS.every(([x, y]) => is(s, x, y, 'sprinkler') && dmgAt(s, x, y) >= UP_TO) && f.waveEnds >= 1,
-    hint: (s, f) => {
-      for (const [x, y] of SPRINKLERS) {
-        if (!is(s, x, y, 'sprinkler')) return 'A Sprinkler is missing beside the gap. Put it back on the highlighted tile first (press 7).';
-        if (dmgAt(s, x, y) < UP_TO) return `Click the highlighted Sprinkler and click Damage on the card that opens. It has ${dmgAt(s, x, y)} of the ${UP_TO} damage levels it needs.`;
-      }
-      return openDoorsHint(s, f);
-    },
-    solve: (s) => {
-      const cmds = [];
-      for (const [x, y] of SPRINKLERS) cmds.push(...upTo(s, 'sprinkler', x, y, UP_TO));
-      cmds.push({ c: 'start' });
-      return cmds;
-    },
+    marks: (s) => wanted(s, [[...SUPER_SPRINKLER, 'sprinkler', undefined, 'Sprinkler']]),
+    done: (s, f) => is(s, ...SUPER_SPRINKLER, 'sprinkler') && f.waveEnds >= 1,
+    hint: (s, f) => tileHint(s, ...SUPER_SPRINKLER, 'sprinkler', undefined, 'Sprinkler')
+      || (is(s, ...SUPER_SPRINKLER, 'sprinkler') ? openDoorsHint(s, f) : null),
+    solve: () => [place('sprinkler', ...SUPER_SPRINKLER), { c: 'start' }],
   },
 
   // ---- Part 2: the difficult customers --------------------------------------------------------
@@ -539,16 +520,16 @@ export const STEPS = [
     wave: [{ k: 'gymbro', n: 1, gap: 1, at: 0 }],
     text: [
       'Do this: put Crates (press 6) on the three highlighted tiles by the entrance, then OPEN THE DOORS for one Gym Bro. He walks straight through crates instead of round them.',
-      'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, upgrades and all, for half of what you had spent on it.',
-      'A Gym Bro smashes any Crate Stack in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a belt, a machine, a sign. Each thing you build survives one hit in a sales event (more for the biggest security), and one more for every level of durability you buy it.',
-      `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that durability soaks up still uses one of his.`,
+      'Do this: when he has gone, press B (or the Rebuild button in the build bar) to put back everything he wrecked, for half of what you paid for it.',
+      'A Gym Bro smashes any Crate Stack in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a belt, a machine, a sign. Each thing you build survives one hit in a sales event (more for the biggest security); Duct Tape from The Back soaks up more.',
+      `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that Duct Tape soaks up still uses one of his.`,
       'The money goes the moment you press. The building goes back when nothing is in the way, and every new wreck needs another press.',
     ],
     touch: [
       'Do this: drag Crates from the bar onto the three highlighted tiles by the entrance, then tap OPEN THE DOORS for one Gym Bro. He walks straight through crates instead of round them.',
-      'Do this: when he has gone, tap the Rebuild button in the bar to put back everything he wrecked, upgrades and all, for half of what you had spent on it.',
-      'A Gym Bro smashes any Crate Stack in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a belt, a machine, a sign. Each thing you build survives one hit in a sales event (more for the biggest security), and one more for every level of durability you buy it.',
-      `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that durability soaks up still uses one of his.`,
+      'Do this: when he has gone, tap the Rebuild button in the bar to put back everything he wrecked, for half of what you paid for it.',
+      'A Gym Bro smashes any Crate Stack in his way, and the ones beside him as he passes. Now and then he smashes something else he passes, too: a belt, a machine, a sign. Each thing you build survives one hit in a sales event (more for the biggest security); Duct Tape from The Back soaks up more.',
+      `But he only has ${['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? TUNE.smashMax} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else. A hit that Duct Tape soaks up still uses one of his.`,
       'The money goes the moment you tap. The building goes back when nothing is in the way, and every new wreck needs another tap.',
     ],
     quip: 'Crates by the entrance, open the doors, then press Rebuild for whatever he smashes.',

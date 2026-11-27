@@ -3,7 +3,7 @@
 // to find out (0.2.15). Since 0.3.04 a press orders the rebuild: the money is taken at once and the
 // building goes back as soon as nothing is in the way (orderRebuilds and stepRebuilds in
 // src/sim/commands.js); there is no auto-rebuild any more.
-import { TUNE, BUILD, rebuildDeal, footprint, canPutBack } from '../sim/index.js';
+import { rebuildDeal, footprint, canPutBack } from '../sim/index.js';
 import { h, setClass, setText, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 
@@ -22,19 +22,18 @@ const WHY = {
  * Pure: it changes nothing. Only the oldest wreck that is waiting is checked against the route
  * (a path search), and only to say why it waits.
  * @returns {null | {n: number, cost: number, can: boolean, why: string, held: number,
- *   paid: number, full: number, wait: string}} null when he has nothing wrecked and nothing
- *   waiting (or he is Head Office, or the game is not being played).
- *   n: his wrecks nobody has ordered yet; cost: putting all of them back with every upgrade;
+ *   paid: number, wait: string}} null when he has nothing wrecked and nothing waiting (or he is
+ *   Head Office, or the game is not being played).
+ *   n: his wrecks nobody has ordered yet; cost: putting all of them back (rebuildDeal);
  *   can: B would order at least one now; why: if not, what to tell him;
- *   held: wrecks he has paid for that are waiting; paid: the money held for them; full: what they
- *   cost with every upgrade (paid is less while he was short when he pressed); wait: why the oldest
- *   of them has not gone back yet ('' with none waiting).
+ *   held: wrecks he has paid for that are waiting; paid: the money held for them; wait: why the
+ *   oldest of them has not gone back yet ('' with none waiting).
  */
 export function rebuildStatus(s, me) {
   const p = s && s.players[me];
   if (!p || p.side === 'office' || (s.phase !== 'build' && s.phase !== 'wave')) return null;
   let n = 0, cost = 0, can = false, need = Infinity;
-  let held = 0, paid = 0, full = 0, first = null;
+  let held = 0, paid = 0, first = null;
   for (const r of s.rubble) {
     const x = r.i % s.w, y = (r.i / s.w) | 0;
     const tiles = footprint(s, r.k, x, y, r.d | 0);
@@ -44,16 +43,16 @@ export function rebuildStatus(s, me) {
       if (r.by !== me) continue;
       held++;
       paid += r.res | 0;
-      full += rebuildDeal(r, Infinity).pay;
       first ||= r;
       continue;
     }
     if (r.o !== me) continue;
     n++;
-    cost += rebuildDeal(r, Infinity).pay;
-    // B orders every wreck he can afford at least the bare building for, oldest first.
-    if (rebuildDeal(r, p.cash)) can = true;
-    else need = Math.min(need, Math.floor(BUILD[r.k].cost * TUNE.rebuildShare));
+    // B orders every wreck he can afford, oldest first (all or nothing: rebuildDeal).
+    const price = rebuildDeal(r, Infinity).pay;
+    cost += price;
+    if (p.cash >= price) can = true;
+    else need = Math.min(need, price);
   }
   if (!n && !held) return null;
   let wait = '';
@@ -62,15 +61,14 @@ export function rebuildStatus(s, me) {
     wait = !no ? 'Going back up any second' : WHY[no] || 'Not right now';
   }
   const why = !n ? 'Already paid for. It goes back when the way is clear' : can ? '' : `Too broke. Need ${money(need)}`;
-  return { n, cost, can, why, held, paid, full, wait };
+  return { n, cost, can, why, held, paid, wait };
 }
 
 /** The words on the big button for a status (rebuildStatus), so a test can read them too. */
 export function rebuildWords(st) {
   const plural = (k) => (k === 1 ? '' : 's');
   if (!st.n) {
-    const amount = st.paid < st.full ? `PAID ${money(st.paid)} of ${money(st.full)}` : `PAID ${money(st.paid)}`;
-    return { look: 'waiting', count: `${amount} · ${st.held} waiting`, sub: st.wait };
+    return { look: 'waiting', count: `PAID ${money(st.paid)} · ${st.held} waiting`, sub: st.wait };
   }
   const more = st.held ? `${st.held} more paid for and waiting` : '';
   const sub = !st.can ? st.why : more || 'Your shit is broken. Fix it';
@@ -93,7 +91,7 @@ export function createRebuildPop(session, { rebuild }) {
   const sub = h('small', { class: 'rp-sub' });
   const btn = h('button', {
     type: 'button', class: 'rp-btn',
-    title: 'Pay to put back everything of yours the gym bros wrecked, at half of what you spent on it (key B). The money goes now; each one goes back as soon as nothing is in the way',
+    title: 'Pay to put back everything of yours the gym bros wrecked, at half of what you paid for it (key B). The money goes now; each one goes back as soon as nothing is in the way',
     onclick: () => rebuild(),
   },
   h('span', { class: 'hotkey', 'aria-hidden': 'true' }, 'B'),

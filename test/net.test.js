@@ -196,7 +196,7 @@ test('every line bank is non-empty and covers every shopper and refusal reason',
   assert.ok(nopeLine('something-new', 'Kev').length > 0);
 });
 
-test('on a chosen map, a joining player gets his own entrance and money, and upgrades cross the wire', () => {
+test('on a chosen map, a joining player gets his own entrance and money, and what he builds crosses the wire', () => {
   const host = new HostSession({ name: 'Dave', seed: 9, map: { design: 'showroom', size: 'm' } });
   assert.equal(host.state.w, 44);
   assert.equal(host.state.open, 1);
@@ -208,15 +208,19 @@ test('on a chosen map, a joining player gets his own entrance and money, and upg
   assert.equal(client.state.tiles, host.state.tiles);
   assert.equal(client.state.players[1].cash, TUNE.startCash);
 
-  // Steve builds and upgrades a sprinkler with his own money; Dave's is untouched.
+  // Steve builds a sprinkler and a wet floor sign with his own money; Dave's is untouched.
+  // (Until 0.4 the second command bought an upgrade.)
   client.send({ c: 'place', k: 'sprinkler', x: 4, y: 4 });
-  client.send({ c: 'upgrade', x: 4, y: 4 });
+  client.send({ c: 'place', k: 'wetfloor', x: 5, y: 4 });
   for (let n = 0; n < 12; n++) { host.update(n * TICK_MS); client.update(n * TICK_MS); }
   const i = 4 * host.state.w + 4;
-  assert.equal(host.state.grid[i].u.dmg, 1);
-  assert.equal(client.state.grid[i].u.dmg, 1);
+  for (const st of [host.state, client.state]) {
+    assert.equal(st.grid[i].k, 'sprinkler');
+    assert.equal(st.grid[i + 1].k, 'wetfloor');
+    assert.equal(st.grid[i + 1].o, 1);
+  }
   assert.equal(client.state.players[0].cash, TUNE.startCash);
-  assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.sprinkler.cost - Math.round(BUILD.sprinkler.cost * BUILD.sprinkler.up.dmg.cost));
+  assert.equal(client.state.players[1].cash, TUNE.startCash - BUILD.sprinkler.cost - BUILD.wetfloor.cost);
 });
 
 test('a client can take the Head Office job, plan a wave over the wire, and DEB announces it', () => {

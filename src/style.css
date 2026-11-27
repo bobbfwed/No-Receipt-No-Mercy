@@ -1264,10 +1264,6 @@ body.dealing .pause-banner { z-index: 42; }
 .minimap-canvas { display: block; width: 100%; height: 100%; }
 .game.ended .minimap { display: none; }
 
-/* ---------------------------------------------------------------- upgrade tool */
-
-.world[data-tool="upgrade"] { cursor: cell; }
-.bbi-cost.poor { color: var(--red); }
 .guide .guide-super { display: block; color: #92400e; }
 
 /* ---------------------------------------------------------------- rebuild button */
@@ -2414,8 +2410,6 @@ html, body { overscroll-behavior: none; }
 .ts-btn:disabled { cursor: default; opacity: 0.6; }
 .ts-btn b { font: 900 0.9rem var(--font-heavy); white-space: nowrap; }
 .ts-btn small { font-size: 0.74rem; font-weight: 700; opacity: 0.92; white-space: nowrap; }
-.ts-up { background: var(--green); }
-.ts-up.poor { background: #6b7280; }
 .ts-remove { background: var(--red-2); }
 
 @media (pointer: coarse) {
@@ -2992,23 +2986,20 @@ html, body { overscroll-behavior: none; }
   .hb-facts dd { margin-bottom: 0.25rem; }
 }
 
-/* ---------------------------------------------------------------- building sheet: a button per upgrade */
+/* ---------------------------------------------------------------- building sheet */
 
 .touch-sheet { max-width: min(58rem, calc(100% - 1.2rem)); }
 /* The sheet and DEB's bubble share the bottom of the floor: while the sheet is open the bubble
    stands on top of it (touch.js measures the sheet into --sheet-h). */
 .game:has(.touch-sheet:not(.hidden):not(.at-top)) .deb { bottom: calc(1.3rem + var(--sheet-h, 8.5rem)); }
 .ts-btns { flex-wrap: wrap; }
-.ts-btn.ts-up { align-items: flex-start; text-align: left; min-width: 9.5rem; }
-.ts-btn .ts-gain { white-space: normal; line-height: 1.2; opacity: 0.95; }
 .ts-btn .ts-cost { margin-top: 0.1rem; font-size: 0.86rem; font-weight: 900; }
-.ts-btn.ts-up:disabled { opacity: 0.55; }
 /* Rotate and Remove never squeeze below their words (0.3.03 follow-up: at 390 px they overlapped as
    "Rot...emove"): a row that has no room for them wraps, and they share the next one. */
-.ts-btn:not(.ts-up) { min-width: 6.5rem; }
-.ts-btn.ts-up.poor .ts-cost { color: #fecaca; }
-.bbi-track { margin: 0.05rem 0 0 !important; }
-.bbi-track .bbi-cost { margin-left: 0.3rem; font-size: 0.74rem; }
+.ts-btn { min-width: 6.5rem; }
+/* What the building works at now, its stock counted: "Damage: hit 9.4 · Speed: fires every 0.5 s". */
+.ts-nums { display: flex; flex-wrap: wrap; gap: 0.1rem 0.8rem; margin: 0.25rem 0 0; font-size: 0.8rem; font-weight: 700; color: #1f2937; }
+.ts-nums b { font-weight: 900; color: #57534e; }
 
 /* The big REBUILD button keeps clear of the camera pad on touch screens (it sits bottom right). */
 @media (pointer: coarse) { .rebuild-pop { right: calc(31.5rem + 56px + env(safe-area-inset-right)); } }

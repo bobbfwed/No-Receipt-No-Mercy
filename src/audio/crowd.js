@@ -89,7 +89,6 @@ export const RULES = {
   pee: { gap: 0.3, soft: 2, per: 2 },
   flash: { gap: 0.4, soft: 2, per: 2 },
   fall: { gap: 0.3, soft: 2, per: 2 },
-  upgraded: { gap: 0.1, soft: 3, per: 3 },
   rebuilt: { gap: 0.3, soft: 2, per: 2 },
   gave: { gap: 0.2, soft: 2, per: 2 },
   // The boss. There is only ever one of him, so these are rare; they are `always` (never thinned
@@ -137,7 +136,7 @@ export const RULES = {
   waveStart: { gap: 1, delay: 0 }, waveEnd: { gap: 1, delay: 0 }, won: { gap: 2, delay: 0 }, lost: { gap: 2, delay: 0 },
   rotate: { gap: 0.03, delay: 0 }, click: { gap: 0.03, delay: 0 }, select: { gap: 0.04, delay: 0 }, place: { gap: 0.04, delay: 0 },
   remove: { gap: 0.04, delay: 0 }, nope: { gap: 0.15, delay: 0 }, tutorial: { gap: 0.2, delay: 0 }, chat: { gap: 0.12, delay: 0 },
-  upgrade: { gap: 0.08, delay: 0 }, rebuild: { gap: 0.2, delay: 0 },
+  rebuild: { gap: 0.2, delay: 0 },
 };
 
 /** The level of one play when `n` of the same sound were asked for in the last second. */

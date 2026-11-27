@@ -222,60 +222,6 @@ export const LINES = {
     u("Dent in {p}'s {k}. He'll call it 'character'. It's a dent."),
     r("He punched {p}'s {k} and it didn't break. He took that personally. He'll tell his therapist, who is also his personal trainer, who is also his cousin."),
   ],
-  // {p} who upgraded, {k} what (may be missing), {n} its new level (may be missing)
-  upgraded: [
-    '{p} upgraded a {k} to level {n}. Throwing money at a problem. Finally, a strategy he can sustain.',
-    "Level {n} {k}. {p} is compensating for something. We've all seen the staff shower.",
-    "{p} paid for an upgrade. It's bigger and it lasts longer. Don't tell his wife that's available.",
-    "{p} upgraded his {k}. Size matters, and he's finally admitting it.",
-    'Another upgrade from {p}. Lovely. Money in, ego out.',
-    '{p} took the {k} to level {n}. He gets a little badge. It is made of paper. He will keep it forever.',
-    u("{p} just paid to make something bigger. I've been asked not to make the obvious joke. So: he paid to make something bigger."),
-    u("Upgrade from {p}. I've changed his file from 'useless' to 'useless, but invested'."),
-    r("{p} upgraded the {k} to level {n}. In the brochure that level is called 'Overcompensation'. In the staff room it's called 'The {p}'."),
-  ],
-  // Extra lines for each kind of upgrade, added to the general ones above. Same placeholders.
-  upgradedBy: {
-    dmg: [
-      '{p} made the {k} hit harder. Finally, somebody in this building who can finish.',
-      'More damage on the {k}. {p} has found his anger. It took him until level {n}.',
-      u("{p} turned up the {k}. It hurts more now. He knows about pain. He's seen his credit card bill."),
-      r('{p} upgraded the damage. HR has been notified. HR is me. HR is delighted.'),
-    ],
-    spd: [
-      "{p} made the {k} faster. Quicker isn't always better, {p}. Ask anyone you've dated.",
-      'Speed upgrade from {p}. The {k} now does its business in less time. Relatable.',
-      u('{p} sped up his {k}. It now finishes before the shopper does. A first for anything of his.'),
-      r('A faster {k}. {p} is the only man in history to pay money to make something finish sooner.'),
-    ],
-    rng: [
-      '{p} gave the {k} more reach. Now it can disappoint people from further away.',
-      'Range upgrade, {p}. Your {k} now reaches places it never has. Your wife knows the feeling. Or she does not.',
-      u("{p} extended the {k}'s range. An extension: the only kind he's ever been offered."),
-      r("{p} paid to make his {k} reach further. If that worked on people, he'd have bought one for his arms when the bill comes."),
-    ],
-    dur: [
-      '{p} toughened up the {k}. Now it can take a punch. More than he can.',
-      "Durability upgrade. {p}'s {k} can now survive a gym bro. {p} could not.",
-      u("{p} reinforced the {k}. Thicker. Harder. Lasts longer. I've been told I'm not allowed to read upgrades out in this voice."),
-      r("{p} made the {k} sturdier. It now has more resilience than {p}'s ego, which collapsed when a shopper called him 'buddy' in a tone."),
-    ],
-    // A factory machine made faster, at great expense.
-    factory: [
-      '{p} paid a fortune to make a factory machine faster. Gadgets per minute: up. Dignity per minute: unchanged.',
-      '{p} sped up the {k}. At that price it should also make breakfast.',
-      u('Machine upgrade from {p}. The {k} now works faster than anyone on this team. Not hard. It is a {k}.'),
-      r("{p} spent more speeding up the {k} than on his wedding ring. I checked. The ring is still the better investment, and that's saying something."),
-    ],
-  },
-  // An upgrade reached the top level. {p} who, {k} what, {n} the level (either may be missing)
-  maxed: [
-    "{p} has a level {n} {k}. That's the limit. Nothing gets bigger than that, however hard he pulls on it.",
-    "{p}'s {k} is maxed out. Level {n}. Nowhere left to go. Like {p}'s career.",
-    "Top level, {p}. You can stop now. That's not a phrase you hear often, is it.",
-    u("{p} has taken the {k} all the way. It's huge. It's expensive. It's still not enough. Story of his life."),
-    r("Level {n} {k}. {p} has reached the top. Enjoy it, {p}. You will never be at the top of anything else. Get it framed."),
-  ],
   // {p} gave money to {q}; {n} how much
   gave: [
     '{p} just handed {q} ${n}. Paying a man to do your job for you. Management material.',
@@ -304,15 +250,6 @@ export const LINES = {
     u('Paid for, {p}. It goes up the second nobody is standing on it. Patience. You of all people should be used to waiting for things to get up.'),
     u('{p} paid good money for {n} holes in the floor. Someone is standing in them. Welcome to being a landlord, {p}.'),
     r("{p} has paid cash for a hole a shopper is standing in. That is the most action that hole has seen, {p}, and you are the one paying for it."),
-  ],
-  // Same, but {m} of them came back with fewer upgrades because he could not afford them.
-  rebuiltShort: [
-    "{p} rebuilt {n} things but couldn't afford the upgrades on {m} of them. Poverty: the great leveller.",
-    '{p} rebuilt {n}, but {m} came back smaller. He knows how that feels. Cold swimming pool.',
-    "{m} of {p}'s rebuilds are the budget version. Like his vacations.",
-    u('{p} rebuilt what he could. {m} came back weaker. Rebuilt on a budget, like a second marriage.'),
-    u("{p} couldn't afford the full rebuild, so {m} came back cheaper. You don't say 'store brand' about security, {p}."),
-    r("{p} rebuilt {n} things and {m} came back without their upgrades. Corporate calls that 'right-sizing'. I call it what it is. Small."),
   ],
   // Head Office: a player has gone over to the shoppers' side. {p} is him.
   officeTaken: [
@@ -1586,7 +1523,7 @@ export const NOPE = {
   empty: [
     "There's nothing there, {p}. Like your Friday nights.",
     'Nothing there to work on, {p}. Like your 401(k).',
-    u("Empty floor, {p}. You can't upgrade thin air. Believe me, I've tried with you."),
+    u("Empty floor, {p}. You can't work on thin air. Believe me, I've tried with you."),
   ],
   lobby: [
     "We haven't opened yet, {p}. Press Ready. It's the big button. I made it big specially.",
@@ -1606,7 +1543,7 @@ export const NOPE = {
     "It's paid for, {p}. It's waiting for some idiot to get out of the hole. Pressing again just makes you look desperate.",
     u("Already on order, {p}. Calm down. It's a crate, not a kidney."),
   ],
-  // The game is paused (0.3.02): nothing can be built, sold, upgraded or bought until someone resumes.
+  // The game is paused (0.3.02): nothing can be built, sold, rebuilt or bought until someone resumes.
   paused: [
     "The game's paused, {p}. Nothing gets built until somebody presses play.",
     "Paused, {p}. You can't build in a frozen store. That's cheating, and cheating is my job.",
@@ -1691,17 +1628,11 @@ export const NOPE = {
     "That door's shut, {p}. Pick an open one. They're the ones with people coming through.",
     u("Closed entrance, {p}. It's not a door if nobody uses it. It's a wall with ambitions."),
   ],
-  // That kind of upgrade does not exist for this building.
-  noup: [
-    "That can't be upgraded that way, {p}. Some things just stay the size they are. You'd know.",
-    "That upgrade doesn't exist for that, {p}. You can't make a crate faster. It's a crate.",
-    u('No such upgrade, {p}. Some things cannot be improved. I am looking at one now.'),
-  ],
-  // That kind of upgrade is at the top level.
+  // A Returns Drop already at its top cash level (the dropUp command, 0.4): no more junk for money.
   max: [
-    "It's at the top level, {p}. It will not get any bigger. I know you've heard that before.",
-    "That one's maxed, {p}. Top level. Pick something else to make bigger.",
-    u('Already at the top, {p}. Stop rubbing it. Nothing more will happen.'),
+    "That drop is going as fast as it goes, {p}. It will not get any faster. I know you've heard that before.",
+    "Top level, {p}. The junk can't come down any quicker. Pick something else to throw money at.",
+    u('Already maxed out, {p}. Stop rubbing it. Nothing more will come out.'),
   ],
 };
 
@@ -1710,7 +1641,7 @@ export const NOPE = {
  * has exactly that name (capital letters ignored), and they always name him with {p}, so everyone
  * in the game knows who is being laughed at. Keys are lower case names. Each friend's lines are
  * grouped by situation:
- *   joined, quit: he arrives or leaves. built: he places or upgrades something. sold: he sells
+ *   joined, quit: he arrives or leaves. built: he places something. sold: he sells
  *   something back. losing, winning: how the store is doing. report: the end-of-wave review.
  *   idle: DEB has a go at him between waves, unprompted. any: fits whenever a line names him.
  *   boss: the boss walks in. These stand in for his announcement, so each one names him with
@@ -1734,7 +1665,7 @@ export const FRIENDS = {
       "{p} built something. He'll apologize to the shoppers for it later. He apologizes to everybody.",
       '{p} placed that because someone asked him nicely. Somebody always asks {p} nicely. Somebody always wins.',
       "{p}'s building again. Big man, big plans, big snack straight after.",
-      u("{p} upgraded it. He couldn't say no to it either. It just looked at him."),
+      u("{p} built it. He couldn't say no to it either. It just looked at him."),
       r("{p} built that. Remember, he also built me. I'd hold off on the praise until you've seen all of his work."),
     ],
     sold: [
@@ -1798,7 +1729,7 @@ export const FRIENDS = {
       "{p} built something. Don't get attached to it. It's {p}. He won't commit to it.",
       '{p} placed that. Up on a high shelf, without a ladder. Must be nice.',
       "{p}'s building. Long arms. No ring on either hand.",
-      u("{p} upgraded it. Look at that. He'll upgrade a sprinkler, but not a girlfriend to a wife."),
+      u("{p} built it. Look at that. He'll commit to a sprinkler, but not a girlfriend to a wife."),
       r('{p} built that. Years with the same woman and no ring, but he committed to a Pepper Sprinkler in eleven seconds.'),
     ],
     sold: [
@@ -1861,7 +1792,7 @@ export const FRIENDS = {
       '{p} built something. Look at him, putting down roots. In a building he does not own. Again.',
       "{p} placed that. The first thing he's built that a landlord can't put the rent up on.",
       "{p}'s building. Hair today, gone tomorrow. Mostly gone today.",
-      u("{p} upgraded it. He's never been allowed to upgrade anything at home. The lease doesn't allow shelves."),
+      u("{p} built it. He's never been allowed to build anything at home. The lease doesn't allow shelves."),
       r("{p} built that, and it's his. He owns it. Look at his face. That's a man owning something for the first time. Let him have this."),
     ],
     sold: [

@@ -1375,7 +1375,7 @@ function peedOn(ctx, i, t, x, y, w, h) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Upgrade badges, wreckage
+// Level badges, wreckage
 
 /** The main colours of each kind, for wreckage and debris: [body, trim, detail]. */
 export const KIND_COLOURS = {
@@ -1395,8 +1395,8 @@ export const KIND_COLOURS = {
 
 /**
  * A small badge with the building's level (2 and up) at the top right of its tile. `k` scales it
- * up when zoomed out, so the number stays readable on small tiles. `top`: every track it has is
- * maxed out (the badge turns pink). `corner` (see badgeCorner): 0 top right, 1 top left, 2 bottom
+ * up when zoomed out, so the number stays readable on small tiles. `top`: every track it works at by
+ * levels is stocked at the best tier (the badge turns pink). `corner` (see badgeCorner): 0 top right, 1 top left, 2 bottom
  * right of the tile centred on (cx, cy).
  */
 export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0, top = false, corner = 0) {
@@ -1406,7 +1406,7 @@ export function drawBadge(ctx, cx, cy, lv, k = 1, res = 0, top = false, corner =
   const y = corner === 2 ? cy + HALF - h + 2 * k : cy - HALF - 2 * k;
   if (res > 0) {
     // Cached as a sprite at the sprite resolution `res` (device pixels per logical pixel): a
-    // floor full of upgraded towers would otherwise mean hundreds of text draws a frame.
+    // floor full of stocked towers would otherwise mean hundreds of text draws a frame.
     const pad = 2 * k;
     const key = (lv * 1e6 + Math.round(k * 10) * 1e4 + Math.round(res * 1000)) * 2 + (top ? 1 : 0);
     let c = badgeCache.get(key);

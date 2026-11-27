@@ -1,13 +1,13 @@
 // Tests for the rules changed after the owner's playtest: easier difficulty, buildings bigger than
-// one tile, upgrades in separate tracks, durability and half-price rebuilding, the Barcode Laser, the
+// one tile, tracks (from 0.4 raised by stock, not bought), durability and half-price rebuilding, the Barcode Laser, the
 // TV Salesman, the longer forklift, the new rules for moms, four new shoppers, and the painted
 // floor kept off the walls. Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, canPlace, canUpgrade, step, queueTrainingWave, waveSpec, crowdShiftAt, getDist,
-  footprint, anchorOf, tracksOf, defaultTrack, levelIn, levelOf, upgradeCost, spentOn, statsOf, rebuildDeal,
-  priceOf, pitchStop, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
+  createGame, addPlayer, applyCommand, canPlace, step, queueTrainingWave, waveSpec, crowdShiftAt, getDist,
+  footprint, anchorOf, tracksOf, levelIn, levelOf, spentOn, statsOf, rebuildDeal, addStock, itemCode,
+  priceOf, pitchStop, SHOPPERS, SUPERS, BUILD, BACK, SHOP_KINDS, OFFICE, SETTINGS, TUNE, TICK_HZ, DT, ST, UNREACHABLE, MAP_SIZES, MAP_DESIGNS,
 } from '../src/sim/index.js';
 import { HostSession, ClientSession, checksum } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
@@ -175,14 +175,9 @@ test('every tile of a big building must fit: floor, empty, nobody standing there
   assert.equal(canPlace(s, 'railgun', 5, 9, 0, 0), null);
 });
 
-test('remove, rotate and upgrade work from any tile of a big building, on the whole building', () => {
+test('remove and rotate work from any tile of a big building, on the whole building', () => {
   const s = stage();
   place(s, 'railgun', 5, 3, 0);
-  const ev = [];
-  assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 7, y: 3, t: 'rng' }, ev).ok);
-  assert.equal(s.grid[at(5, 3)].u.rng, 1);
-  assert.deepEqual(ev[0], { e: 'upgraded', k: 'railgun', x: 5, y: 3, by: 0, t: 'rng', lv: 1 });
-  assert.equal(canUpgrade(s, 6, 3, 0, 'dur'), null);
   // A long building turns end for end, keeping its footprint.
   assert.ok(applyCommand(s, 0, { c: 'rotate', x: 6, y: 3 }).ok);
   assert.equal(s.grid[at(5, 3)].d, 2);
@@ -193,9 +188,9 @@ test('remove, rotate and upgrade work from any tile of a big building, on the wh
   place(s, 'belt', 10, 10, 0);
   applyCommand(s, 0, { c: 'rotate', x: 10, y: 10 });
   assert.equal(s.grid[at(10, 10)].d, 1);
-  // Selling from its far end takes the whole thing and pays back its share of everything spent.
+  // Selling from its far end takes the whole thing and pays back its share of what was paid.
   const cash = s.players[0].cash, spent = spentOn(s.grid[at(5, 3)]);
-  assert.equal(spent, BUILD.railgun.cost + Math.round(BUILD.railgun.cost * BUILD.railgun.up.rng.cost));
+  assert.equal(spent, BUILD.railgun.cost);
   const out = [];
   assert.ok(applyCommand(s, 0, { c: 'remove', x: 7, y: 3 }, out).ok);
   for (const x of [5, 6, 7]) assert.equal(s.grid[at(x, 3)], 0);
@@ -203,154 +198,67 @@ test('remove, rotate and upgrade work from any tile of a big building, on the wh
   assert.equal(out[0].x, 5, 'the event names the top-left tile');
 });
 
-// ---------------------------------------------------------------- upgrade tracks
+// ---------------------------------------------------------------- tracks, raised by stock (0.4)
 
-test('each kind has the upgrade tracks it should, and a plain upgrade means damage where there is any', () => {
+test('each kind has the tracks it should, and only stock raises their levels', () => {
   const want = {
     sprinkler: ['dmg', 'spd', 'rng', 'dur'], forklift: ['dmg', 'spd', 'rng', 'dur'], railgun: ['dmg', 'spd', 'rng', 'dur'],
     wetfloor: ['dmg', 'dur'], samples: ['dmg', 'rng', 'dur'], salesman: ['dmg', 'rng', 'dur'],
-    unpacker: ['spd', 'dur'], press: ['spd', 'dur'], packer: ['spd', 'dur'],
-    belt: ['dur'], chute: ['dur'], crate: ['dur'],
+    // (Bought upgrades went in 0.4: the old factory and crates have no Dumbwaiter, so no tracks.)
+    unpacker: [], press: [], packer: [], belt: [], chute: [], crate: [],
   };
   assert.deepEqual(Object.keys(want).sort(), [...SHOP_KINDS].sort());
   for (const [k, ts] of Object.entries(want)) assert.deepEqual(tracksOf(k), ts, k);
-  assert.equal(defaultTrack('forklift'), 'dmg');
-  assert.equal(defaultTrack('press'), 'spd');
-  assert.equal(defaultTrack('crate'), 'dur');
-  assert.equal(TUNE.upGrowth, 1.6);
-  assert.equal(TUNE.maxLevel, 8);
 
   const s = stage();
-  place(s, 'unpacker', 3, 3, 0);
   place(s, 'sprinkler', 5, 5);
-  const ev = [];
-  applyCommand(s, 0, { c: 'upgrade', x: 3, y: 3 }, ev);
-  applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5 }, ev);
-  assert.deepEqual(ev.map((e) => [e.t, e.lv]), [['spd', 1], ['dmg', 1]]);
-  assert.deepEqual(s.grid[at(5, 5)].u, { dmg: 1 });
-  assert.equal(levelIn(s.grid[at(5, 5)], 'spd'), 0);
-  // Separate upgrades are each cheaper than the one combined upgrade was (the building's price).
-  for (const k of ['sprinkler', 'forklift', 'wetfloor', 'samples']) for (const t of tracksOf(k)) assert.ok(upgradeCost({ k }, t) < BUILD[k].cost, `${k} ${t}`);
+  const b = s.grid[at(5, 5)];
+  assert.equal(levelIn(b, 'dmg'), 0, 'as built, every track is at 0');
+  // One unit of Store Brand Bottled Spite works like BACK.tierLevel[1] levels of damage, and only damage.
+  addStock(b, itemCode(1, 1));
+  assert.equal(levelIn(b, 'dmg'), BACK.tierLevel[1]);
+  assert.equal(levelIn(b, 'spd'), 0);
+  // There is no command to buy a level any more.
+  assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'dmg' }).why, 'bad');
 });
 
-test('a factory machine gets a quarter faster a level, at most ten, x1.8 a level to 5 and x1.4 after', () => {
-  // (The first level cost $400, $600 and $900 until 0.2.12; the owner cut them to 25%, 50% and 60%.
-  // Levels 6 to 10 came in 0.2.13; levels 1 to 5 kept their speeds and prices.)
-  for (const [k, base] of [['unpacker', 100], ['press', 300], ['packer', 540]]) {
-    const tr = BUILD[k].up.spd;
-    assert.deepEqual([tr.mul, tr.base, tr.grow, tr.max, tr.gentleFrom, tr.gentleGrow], [1.25, base, 1.8, 10, 5, 1.4]);
-    const b = { k, u: {} };
-    const costs = [];
-    for (let lv = 0; lv < 10; lv++) { b.u.spd = lv; costs.push(upgradeCost(b, 'spd')); }
-    assert.deepEqual(costs.slice(0, 5), [0, 1, 2, 3, 4].map((n) => Math.round(base * 1.8 ** n)), 'levels 1-5 as before');
-    assert.deepEqual(costs.slice(5), [1, 2, 3, 4, 5].map((n) => Math.round(base * 1.8 ** 4 * 1.4 ** n)), 'levels 6-10');
-    b.u.spd = 10;
-    assert.equal(upgradeCost(b, 'spd'), 0, 'ten is the top');
-    assert.ok(Math.abs((statsOf(b).period || statsOf(b).time) - 2.5 / 1.25 ** 10) < 1e-9);
-  }
-  // The speeds of levels 1 to 5 are what they were.
-  for (let lv = 0; lv <= 5; lv++) assert.ok(Math.abs(statsOf({ k: 'packer', u: { spd: lv } }).time - 2.5 / 1.25 ** lv) < 1e-9);
-  // An upgraded unpacker really makes boxes faster.
-  const boxes = (lv) => {
-    const s = stage(3);
-    place(s, 'unpacker', 3, 3, 0); place(s, 'belt', 4, 3, 0); place(s, 'chute', 5, 3);
-    for (let n = 0; n < lv; n++) assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 3, y: 3, t: 'spd' }).ok);
-    let sales = 0;
-    for (let i = 0; i < 60 * TICK_HZ; i++) sales += step(s).filter((e) => e.e === 'sale').length;
-    return sales;
-  };
-  const plain = boxes(0), fast = boxes(2);
-  assert.ok(Math.abs(fast / plain - 1.25 ** 2) < 0.1, `${fast} boxes against ${plain}`);
-});
-
-test('at the top speed level a whole production line makes what its machines promise, and belts keep up', () => {
-  // What one second of steady running ships, after 10 s to fill the belts.
-  const rate = (build, secs = 60) => {
-    const s = stage(3);
-    build(s);
-    for (let i = 0; i < 10 * TICK_HZ; i++) step(s);
-    let n = 0;
-    for (let i = 0; i < secs * TICK_HZ; i++) n += step(s).filter((e) => e.e === 'sale').length;
-    return n / secs;
-  };
-  const max = (s, x, y) => { for (let n = 0; n < 10; n++) assert.ok(applyCommand(s, 0, { c: 'upgrade', x, y, t: 'spd' }).ok); };
-  // 2.5 s / 1.25^10 is 8 ticks an item: 3.75 a second, for every kind of machine.
-  const top = TICK_HZ / Math.max(1, Math.round((2.5 / 1.25 ** 10) * TICK_HZ));
-  assert.equal(top, 3.75);
-  // Unpacker -> Press -> Packer -> chute, two belts between each: the Press and Packer keep the
-  // Unpacker's pace (they used to lose two ticks an item), and no belt holds them up.
-  const line = rate((s) => {
-    place(s, 'unpacker', 3, 3, 0); max(s, 3, 3);
-    place(s, 'belt', 4, 3, 0); place(s, 'belt', 5, 3, 0);
-    place(s, 'press', 6, 3, 0); max(s, 6, 3);
-    place(s, 'belt', 7, 3, 0); place(s, 'belt', 8, 3, 0);
-    place(s, 'packer', 9, 3, 0); max(s, 9, 3);
-    place(s, 'belt', 10, 3, 0); place(s, 'belt', 11, 3, 0); place(s, 'chute', 12, 3);
-  });
-  assert.ok(Math.abs(line - top) < 0.05, `${line} gift sets a second`);
-  // Two top-level machines feeding one belt (the busiest a belt gets: a machine takes in no more
-  // than it makes) both run flat out...
-  const two = rate((s) => {
-    place(s, 'unpacker', 3, 3, 0); max(s, 3, 3);
-    place(s, 'unpacker', 5, 4, 3); max(s, 5, 4);
-    for (let x = 4; x < 10; x++) place(s, 'belt', x, 3, 0);
-    place(s, 'chute', 10, 3);
-  });
-  assert.ok(Math.abs(two - 2 * top) < 0.05, `${two} boxes a second`);
-  // ...with room to spare: a third one squeezes in until the belt carries one item every 3 ticks.
-  const three = rate((s) => {
-    place(s, 'unpacker', 3, 3, 0); max(s, 3, 3);
-    place(s, 'unpacker', 5, 4, 3); max(s, 5, 4);
-    place(s, 'unpacker', 7, 2, 1); max(s, 7, 2);
-    for (let x = 4; x < 12; x++) place(s, 'belt', x, 3, 0);
-    place(s, 'chute', 12, 3);
-  });
-  assert.ok(three >= 1.3 * 2 * top, `a belt carries ${three} a second`);
-});
-
-test('the stats of any mix of levels, the overall level, and what was spent', () => {
-  const f = { k: 'forklift', u: { dmg: 2, spd: 1, rng: 3, dur: 1 } };
+test('the stats of any mix of stock, the overall level, and what was spent', () => {
+  // Runs of [tier, uses]: damage Store Brand (2 levels), speed Name Brand (4), range Premium (6),
+  // and Duct Tape, which soaks up hits and is never counted as levels.
+  const f = { k: 'forklift', s: { dmg: [1, 6], spd: [2, 6], rng: [3, 6], dur: [1, 1] } };
   const st = statsOf(f);
   assert.ok(Math.abs(st.dmg - 30 * 1.3 ** 2) < 1e-9);
-  assert.ok(Math.abs(st.cd - 1.6 / 1.12) < 1e-9);
-  assert.ok(Math.abs(st.range - (6 + 0.9)) < 1e-9);
-  assert.equal(st.hits, 2);
-  assert.equal(levelOf(f), 8);
-  assert.equal(spentOn(f), 200 + 120 + 192 + 120 + 80 + 128 + 205 + 60);
-  assert.deepEqual(statsOf({ k: 'forklift' }), statsOf({ k: 'forklift', u: {} }));
+  assert.ok(Math.abs(st.cd - 1.6 / 1.12 ** 4) < 1e-9);
+  assert.ok(Math.abs(st.range - (6 + 0.3 * 6)) < 1e-9);
+  assert.equal(st.hits, 1);
+  assert.equal(levelOf(f), 1 + 2 + 4 + 6);
+  // Stock is never money: what was spent is only what was paid for it (a card's price where it differs).
+  assert.equal(spentOn(f), 200);
+  assert.equal(spentOn({ ...f, c: 150 }), 150);
+  assert.deepEqual(statsOf({ k: 'forklift' }), statsOf({ k: 'forklift', s: {} }));
   assert.equal(statsOf({ k: 'railgun' }).hits, 2);
-  assert.equal(statsOf({ k: 'salesman', u: { dur: 2 } }).hits, 4);
+  assert.equal(statsOf({ k: 'salesman', s: { dur: [2, 4] } }).hits, 2);
   assert.equal(statsOf({ k: 'crate' }).hits, 1);
-  const sign = statsOf({ k: 'wetfloor', u: { dmg: 2 } });
+  const sign = statsOf({ k: 'wetfloor', s: { dmg: [1, 10] } });
   assert.ok(Math.abs(sign.slow - TUNE.wetSlow * 0.82 ** 2) < 1e-9 && Math.abs(sign.slip - (TUNE.slipChance + 0.16)) < 1e-9);
   assert.ok(Math.abs(sign.slipDmg - TUNE.slipDmg * 1.45 ** 2) < 1e-9);
-  assert.ok(Math.abs(statsOf({ k: 'press', u: { spd: 1 } }).time - 2.5 / 1.25) < 1e-9);
+  // The old factory runs at its one speed.
+  assert.ok(Math.abs(statsOf({ k: 'press' }).time - 2.5) < 1e-9);
 });
 
-test('canUpgrade gives every reason, and a faster tower really fires more often', () => {
+test('a tower stocked with Rage Cola really fires more often', () => {
   const s = stage();
   place(s, 'sprinkler', 5, 5);
-  assert.equal(canUpgrade(s, 99, 5), 'bounds');
-  assert.equal(canUpgrade(s, 5.5, 5), 'bounds');
-  assert.equal(canUpgrade(s, 6, 6), 'empty');
-  assert.equal(canUpgrade(s, 5, 5, 0, 'nope'), 'noup');
-  s.players[0].cash = 1;
-  assert.equal(canUpgrade(s, 5, 5, 0, 'spd'), 'cash');
-  s.players[0].cash = 1e6;
-  for (let n = 0; n < 3; n++) applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'spd' });
   const b = s.grid[at(5, 5)];
-  b.u.rng = TUNE.maxLevel;
-  assert.equal(canUpgrade(s, 5, 5, 0, 'rng'), 'max');
-  s.phase = 'won';
-  assert.equal(canUpgrade(s, 5, 5), 'over');
-  s.phase = 'build';
-  // After a spray it waits its upgraded time, not the plain one.
+  // Name Brand Rage Cola: four levels of speed, with uses to spare.
+  b.s = { spd: [2, 100] };
+  // After a spray it waits its stocked time, not the plain one.
   send(s, [{ k: 'karen', n: 1, gap: 1, at: 0 }]);
   pin(arrival(s, 'karen'), 6.5, 6.5);
   let fired = false;
   for (let i = 0; i < 30 && !fired; i++) fired = step(s).some((e) => e.e === 'spray');
   assert.ok(fired);
-  assert.equal(b.cd, Math.round((0.5 / 1.1 ** 3) * TICK_HZ));
+  assert.equal(b.cd, Math.round((0.5 / 1.1 ** BACK.tierLevel[2]) * TICK_HZ));
 });
 
 // ---------------------------------------------------------------- durability, rubble and rebuilding
@@ -359,10 +267,9 @@ test('a gym bro takes two hits to destroy a big building, and its rubble remembe
   // (About big buildings and rubble, not his limit, so this one may hit as often as he likes.)
   tune(t, { smashOther: 1, smashMax: 1000, smashWait: 0 });
   const s = stage(4);
-  // A corridor along row 7 lined with barcode lasers, one with upgrades.
+  // A corridor along row 7 lined with barcode lasers, one stocked with Bottled Spite.
   for (let x = 3; x <= 24; x += 3) { place(s, 'railgun', x, 6, 0); place(s, 'railgun', x, 8, 0); }
-  applyCommand(s, 0, { c: 'upgrade', x: 9, y: 6, t: 'dmg' });
-  applyCommand(s, 0, { c: 'upgrade', x: 9, y: 6, t: 'dmg' });
+  s.grid[at(9, 6)].s = { dmg: [2, 2] };
   send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0 }]);
   arrival(s, 'gymbro').hp = 1e9;
   const ev = play(s, 120).filter((e) => e.e === 'smash');
@@ -381,79 +288,59 @@ test('a gym bro takes two hits to destroy a big building, and its rubble remembe
     assert.equal(r.d, 0);
     assert.equal(r.o, 0);
   }
+  // Its stock does not survive it: the rubble keeps only what a rebuild needs.
   const up = s.rubble.find((q) => q.i === at(9, 6));
-  if (up) {
-    assert.deepEqual(up.u, { dmg: 2 });
-    assert.equal(up.spent, spentOn({ k: 'railgun', u: { dmg: 2 } }));
-  }
+  if (up) assert.deepEqual(up, { i: at(9, 6), k: 'railgun', d: 0, o: 0 });
 });
 
-test('a crate with durability soaks up a gym bro\'s hit: he does not stand at it, he walks round, and never gets stuck', (t) => {
+test('a crate falls to a gym bro\'s first hit, and he walks through where it stood', (t) => {
+  // (Crate Stacks have no Dumbwaiter, so since 0.4 nothing makes them tougher.)
   tune(t, { smashOther: 0 });
-  const crossing = (dur, sup = 0) => {
+  for (const sup of [0, 1]) {
     const s = stage(2);
     // A wall of belts with a crate in it on the gym bro's way, and a gap far away for everyone else.
     for (let y = 1; y <= 13; y++) assert.ok(place(s, y === 7 ? 'crate' : 'belt', 12, y, 1).ok);
-    for (let n = 0; n < dur; n++) applyCommand(s, 0, { c: 'upgrade', x: 12, y: 7, t: 'dur' });
     send(s, [{ k: 'gymbro', n: 1, gap: 1, at: 0, sup }]);
     const sh = arrival(s, 'gymbro');
     sh.hp = 1e9;
     const hits = [];
-    let ticks = 0, still = 0, round = false;
+    let round = false;
     const ev = play(s, 200, (e) => {
-      ticks++;
-      for (const x of e) if (x.e === 'smash' && x.i === at(12, 7)) hits.push([s.tick, x.left]);
-      if (!s.shoppers.includes(sh)) return;
-      if (hits.length && sh.st === ST.WALK && sh.vx === 0 && sh.vy === 0) still++;
-      if ((sh.y | 0) === 14 && (sh.x | 0) === 12) round = true;
+      for (const x of e) if (x.e === 'smash' && x.i === at(12, 7)) hits.push(x.left);
+      if (s.shoppers.includes(sh) && (sh.y | 0) === 14 && (sh.x | 0) === 12) round = true;
     });
     assert.equal(ev.filter((e) => e.e === 'escape').length, 1, 'he gets out in the end');
-    return { hits, ticks, still, round, standing: !!s.grid[at(12, 7)] };
-  };
-  const plain = crossing(0);
-  assert.deepEqual(plain.hits.map((h) => h[1]), [0], 'a plain crate falls to his first hit');
-  assert.equal(plain.round, false, 'and he walks through where it stood');
-  for (const sup of [0, 1]) {
-    const tough = crossing(1, sup);
-    assert.equal(tough.hits[0][1], 1, 'the first hit only uses up the level of durability...');
-    assert.ok(tough.hits.length <= 2);
-    assert.equal(tough.still, 0, '...and he does not stand there waiting to hit it again');
-    if (tough.standing) assert.ok(tough.round, 'with the crate still up, he went round by the gap, like anyone else');
+    assert.deepEqual(hits, [0], 'the crate falls to his first hit');
+    assert.equal(round, false, 'and he walks through where it stood');
   }
-  // The most durable crate there is does not hold him up for ever, or stop him.
-  const toughest = crossing(TUNE.maxLevel);
-  assert.equal(toughest.hits[0][1], TUNE.maxLevel);
-  assert.ok(toughest.round && toughest.standing);
 });
 
-test('rebuilding costs half of what was spent, with upgrades; short of that, the cheapest levels it can afford', () => {
-  const r = { i: 0, k: 'forklift', d: 0, o: 0, u: { dmg: 2, rng: 1 }, spent: spentOn({ k: 'forklift', u: { dmg: 2, rng: 1 } }) };
-  assert.equal(r.spent, 200 + 120 + 192 + 80);
-  assert.deepEqual(rebuildDeal(r, 1000), { pay: 296, u: { dmg: 2, rng: 1 }, lost: 0 });
-  assert.deepEqual(rebuildDeal(r, 296), { pay: 296, u: { dmg: 2, rng: 1 }, lost: 0 });
-  // 100 for the forklift, then the cheapest levels at half price: rng 40, dmg 60, dmg 96.
-  assert.deepEqual(rebuildDeal(r, 99), null);
-  assert.deepEqual(rebuildDeal(r, 100), { pay: 100, u: {}, lost: 3 });
-  assert.deepEqual(rebuildDeal(r, 140), { pay: 140, u: { rng: 1 }, lost: 2 });
-  assert.deepEqual(rebuildDeal(r, 210), { pay: 200, u: { rng: 1, dmg: 1 }, lost: 1 });
+test('rebuilding costs half of what was paid, all or nothing', () => {
+  // (Until 0.4 a player short of the full price got the building back with fewer upgrades.)
+  const r = { i: 0, k: 'forklift', d: 0, o: 0 };
+  assert.deepEqual(rebuildDeal(r, 1000), { pay: 100 });
+  assert.deepEqual(rebuildDeal(r, 100), { pay: 100 });
+  assert.equal(rebuildDeal(r, 99), null);
+  // A card's price (c) is what was paid, so the rebuild is half of that.
+  assert.deepEqual(rebuildDeal({ ...r, c: 150 }, 1000), { pay: 75 });
   assert.equal(TUNE.rebuildShare, 0.5);
 
-  // The rebuild command: oldest first, his own only, counting what came back short. (Since 0.3.04
-  // it also says what it held for wrecks that must wait, none here, and what it took in all.)
+  // The rebuild command: oldest first, his own only. (Since 0.3.04 it also says what it held for
+  // wrecks that must wait, none here, and what it took in all.)
   const s = stage();
   addPlayer(s, 'Steve');
-  s.rubble.push({ ...r, i: at(5, 5) }, { i: at(7, 5), k: 'crate', d: 0, o: 1, u: {}, spent: 10 }, { i: at(9, 5), k: 'railgun', d: 1, o: 0, u: {}, spent: 700 });
-  s.players[0].cash = 140 + 99;
+  s.rubble.push({ ...r, i: at(5, 5) }, { i: at(7, 5), k: 'crate', d: 0, o: 1 }, { i: at(9, 5), k: 'railgun', d: 1, o: 0 });
+  s.players[0].cash = 100 + 99;
   const ev = [];
   const res = applyCommand(s, 0, { c: 'rebuild' }, ev);
-  assert.deepEqual(res, { ok: true, n: 1, short: 1, held: 0, paid: 200 });
-  assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1, short: 1 }]);
-  assert.deepEqual(s.grid[at(5, 5)].u, { rng: 1, dmg: 1 }, 'the forklift came back with what he could afford');
-  assert.equal(s.players[0].cash, 39);
+  assert.deepEqual(res, { ok: true, n: 1, held: 0, paid: 100 });
+  assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1 }]);
+  assert.equal(s.grid[at(5, 5)].k, 'forklift');
+  assert.equal(s.players[0].cash, 99);
   assert.equal(s.grid[at(9, 5)], 0, 'not enough left for the barcode laser');
   assert.equal(s.rubble.length, 2);
   s.players[0].cash = 350;
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, short: 0, held: 0, paid: 350 });
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, held: 0, paid: 350 });
   assert.deepEqual(s.grid[at(9, 6)], { k: 'railgun', part: at(9, 5) }, 'back on its side, as it was');
   assert.equal(s.grid[at(9, 5)].d, 1);
   assert.equal(applyCommand(s, 0, { c: 'rebuild' }).why, 'empty', 'Steve\'s crate is his to rebuild');
@@ -464,9 +351,9 @@ test('rebuilding costs half of what was spent, with upgrades; short of that, the
 
 test('placing the same kind on its rubble brings it back as it was, at the rebuild price', () => {
   const s = stage();
-  const r = { i: at(5, 5), k: 'railgun', d: 0, o: 0, u: { dmg: 1 }, spent: 700 + 350 };
-  s.rubble.push(r, { i: at(5, 9), k: 'crate', d: 0, o: 0, u: { dur: 2 }, spent: 10 + 10 + 16 });
-  // Only half the base price is needed to be allowed to place it.
+  const r = { i: at(5, 5), k: 'railgun', d: 0, o: 0 };
+  s.rubble.push(r, { i: at(5, 9), k: 'crate', d: 0, o: 0 });
+  // Half of what was paid for it is all that is needed to place it.
   s.players[0].cash = 349;
   assert.equal(canPlace(s, 'railgun', 6, 5, 0, 1), 'cash');
   s.players[0].cash = 350;
@@ -476,17 +363,16 @@ test('placing the same kind on its rubble brings it back as it was, at the rebui
   const ev = [];
   assert.ok(applyCommand(s, 0, { c: 'place', k: 'railgun', x: 6, y: 5, d: 1 }, ev).ok);
   assert.equal(s.grid[at(5, 5)].d, 0);
-  assert.deepEqual(s.grid[at(5, 5)].u, { dmg: 1 });
   assert.deepEqual(s.grid[at(7, 5)], { k: 'railgun', part: at(5, 5) });
-  assert.equal(s.players[0].cash, 1000 - 525);
-  assert.deepEqual(ev[0], { e: 'placed', k: 'railgun', x: 5, y: 5, d: 0, by: 0, rebuilt: 1, short: 0 });
+  assert.equal(s.players[0].cash, 1000 - 350);
+  assert.deepEqual(ev[0], { e: 'placed', k: 'railgun', x: 5, y: 5, d: 0, by: 0, rebuilt: 1 });
   assert.equal(s.rubble.length, 1);
   // Something else on the rubble just clears it, at the normal price.
   const cash = s.players[0].cash;
   assert.ok(place(s, 'belt', 5, 9, 0).ok);
   assert.equal(s.players[0].cash, cash - BUILD.belt.cost);
   assert.equal(s.rubble.length, 0);
-  assert.equal(s.grid[at(5, 9)].u, undefined);
+  assert.equal(s.grid[at(5, 9)].k, 'belt');
 });
 
 // ---------------------------------------------------------------- barcode laser
@@ -549,11 +435,14 @@ test('a Karen near the barcode laser slows its reload', () => {
 
 // ---------------------------------------------------------------- TV salesman
 
-/** Sends `n` shoppers of a kind past a salesman and counts what he did to them. */
-function pitched(k, n, ups = 0, seed = 7) {
+/**
+ * Sends `n` shoppers of a kind past a salesman and counts what he did to them. With `tier`, he is
+ * stocked with Bottled Spite of that tier (uses to spare, so it never runs out mid-test).
+ */
+function pitched(k, n, tier = 0, seed = 7) {
   const s = stage(seed);
   place(s, 'salesman', 14, 4);
-  for (let i = 0; i < ups; i++) applyCommand(s, 0, { c: 'upgrade', x: 14, y: 4, t: 'dmg' });
+  if (tier) s.grid[at(14, 4)].s = { dmg: [tier, 1e6] };
   send(s, [{ k, n, gap: 0.5, at: 0 }]);
   const ids = new Map(), last = new Map();
   let stop = 0, rush = 0, watch = 0;
@@ -589,10 +478,11 @@ test('the TV salesman stops some shoppers and hurries others past, each kind in 
   assert.ok(scooters.stop > 0.6 && scooters.rush === 0, `scooters stopped ${scooters.stop}`);
   const blind = pitched('blind', 20);
   assert.equal(blind.pitches.length, 0, 'a blind man cannot see the television');
-  // His pitch: each level makes stopping likelier and hurrying less likely.
-  const sold = pitched('dad', 150, 4);
-  assert.ok(sold.stop > dads.stop + 0.15, `upgraded: dads stopped ${sold.stop}`);
-  assert.ok(sold.rush < dads.rush, `upgraded: dads hurried ${sold.rush}`);
+  // His pitch: each level makes stopping likelier and hurrying less likely. (Name Brand: 4 levels.)
+  const sold = pitched('dad', 150, 2);
+  assert.equal(BACK.tierLevel[2], 4);
+  assert.ok(sold.stop > dads.stop + 0.15, `stocked: dads stopped ${sold.stop}`);
+  assert.ok(sold.rush < dads.rush, `stocked: dads hurried ${sold.rush}`);
   const st = statsOf(sold.salesman);
   assert.ok(Math.abs(st.secs - TUNE.stopSecs * 1.15 ** 4) < 1e-9 && Math.abs(st.stopLeft - 0.88 ** 4) < 1e-9 && Math.abs(st.rushMul - 0.85 ** 4) < 1e-9);
 });
@@ -633,7 +523,8 @@ test('each repeat pitch by the same salesman works half as well; another salesma
   place(s, 'salesman', 14, 4);
   // (Far enough along that the two reaches do not overlap on the route.)
   assert.ok(place(s, 'salesman', 24, 9).ok);
-  for (let i = 0; i < 12; i++) applyCommand(s, 0, { c: 'upgrade', x: 14, y: 4, t: 'dmg' });
+  // Platinum Bottled Spite: his pitch at its strongest (uses to spare).
+  s.grid[at(14, 4)].s = { dmg: [4, 1e6] };
   send(s, [{ k: 'scooter', n: 12, gap: 1.5, at: 0 }]);
   let most = 0, both = false;
   play(s, 900, () => {
@@ -1050,14 +941,16 @@ function everything(seed = 21) {
   for (let x = 6; x <= 34; x += 7) {
     place(g, 'crate', x, 5); place(g, 'belt', x, 6);
     place(g, 'sprinkler', x, 12, 0, 1); place(g, 'samples', x + 1, 15, 0, 1); place(g, 'wetfloor', x + 2, 11, 0, 1);
-    applyCommand(g, 1, { c: 'upgrade', x, y: 12, t: 'spd' });
-    applyCommand(g, 0, { c: 'upgrade', x, y: 5, t: 'dur' });
+    // Stock from The Back on some of it (as if it had come up the Dumbwaiters): Rage Cola and Duct Tape.
+    const sp = g.grid[12 * g.w + x];
+    addStock(sp, itemCode(2, 1));
+    addStock(sp, itemCode(4, 2));
   }
   assert.ok(place(g, 'railgun', 20, 1, 1).ok);
   assert.ok(place(g, 'railgun', 12, 20, 3).ok);
   assert.ok(place(g, 'salesman', 14, 9).ok);
   assert.ok(place(g, 'salesman', 26, 14, 0, 1).ok);
-  applyCommand(g, 0, { c: 'upgrade', x: 15, y: 10, t: 'dmg' });
+  addStock(g.grid[9 * g.w + 14], itemCode(1, 3));
   g.wave = 14;
   applyCommand(g, 0, { c: 'start' });
   return g;
@@ -1089,14 +982,14 @@ test('host and client stay in step with the new buildings and shoppers, sent ove
   host.send({ c: 'give', to: 1, n: 50000 });
   host.send({ c: 'place', k: 'railgun', x: 20, y: 1, d: 1 });
   client.send({ c: 'place', k: 'salesman', x: 14, y: 9 });
-  client.send({ c: 'upgrade', x: 15, y: 10, t: 'rng' });
-  host.send({ c: 'upgrade', x: 20, y: 3, t: 'spd' });
+  client.send({ c: 'give', to: 0, n: 1000 });
+  host.send({ c: 'place', k: 'wetfloor', x: 18, y: 7 });
   for (let x = 6; x <= 34; x += 7) { client.send({ c: 'place', k: 'sprinkler', x, y: 12 }); host.send({ c: 'place', k: 'crate', x, y: 5 }); }
   host.send({ c: 'start' });
   let now = 0;
   for (let i = 1; i <= 40 * TICK_HZ; i++) {
     now = i * TICK_MS;
-    if (i === 300) client.send({ c: 'upgrade', x: 6, y: 12, t: 'dur' });
+    if (i === 300) client.send({ c: 'remove', x: 6, y: 12 });
     if (i === 600) client.send({ c: 'rotate', x: 20, y: 2 });
     host.update(now);
     client.update(now);
@@ -1106,18 +999,19 @@ test('host and client stay in step with the new buildings and shoppers, sent ove
   assert.equal(JSON.stringify(client.state), JSON.stringify(host.state));
   assert.equal(client.stats.mismatches, 0);
   const st = host.state;
-  assert.equal(st.grid[20 + 1 * st.w].u.spd, 1);
   assert.equal(st.grid[20 + 1 * st.w].d, 3);
-  assert.equal(st.grid[14 + 9 * st.w].u.rng, 1);
+  assert.equal(st.grid[14 + 9 * st.w].k, 'salesman');
+  assert.equal(st.grid[18 + 7 * st.w].k, 'wetfloor');
+  assert.equal(st.grid[6 + 12 * st.w], 0, 'the client\'s removal crossed the wire');
   assert.ok(st.shoppers.some((m) => NEW_KINDS.includes(m.k)) || st.ws.stopped + st.ws.escaped > 0);
 });
 
-test('the checksum sees upgrades, hits and a building switched off; saves are version 4, and 3 still loads', () => {
+test('the checksum sees stock, hits and a building switched off; saves are version 4, and 3 still loads', () => {
   const s = stage();
   place(s, 'forklift', 5, 5);
-  applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5 });
+  s.grid[at(5, 5)].s = { dmg: [1, 6] };
   const base = checksum(s);
-  for (const tweak of [(x) => { x.grid[at(5, 5)].u.dmg = 2; }, (x) => { x.grid[at(5, 5)].u.rng = 1; }, (x) => { x.grid[at(5, 5)].hit = 1; }, (x) => { x.grid[at(5, 5)].off = 9; }]) {
+  for (const tweak of [(x) => { x.grid[at(5, 5)].s.dmg[0] = 2; }, (x) => { x.grid[at(5, 5)].s.dmg[1] = 5; }, (x) => { x.grid[at(5, 5)].s.rng = [1, 6]; }, (x) => { x.grid[at(5, 5)].hit = 1; }, (x) => { x.grid[at(5, 5)].off = 9; }]) {
     const c = JSON.parse(JSON.stringify(s));
     tweak(c);
     assert.notEqual(checksum(c), base);

@@ -2,7 +2,7 @@
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, addPlayer, applyCommand, maxIn, statsOf } from '../src/sim/index.js';
+import { createGame, addPlayer, applyCommand, statsOf, addStock, itemCode } from '../src/sim/index.js';
 import { selectedReach, drawnBySelection } from '../src/render/reach.js';
 
 function game() {
@@ -27,29 +27,22 @@ test('a selected building that reaches something shows its reach; nothing select
   const r = selectedReach(s, { selected: { x: 5, y: 5 } });
   assert.equal(r.ai, at(s, 5, 5));
   assert.equal(r.b.k, 'sprinkler');
-  assert.equal(r.next, false, 'pointing at nothing: the current reach only');
 });
 
-test('pointing at Range adds the next reach; pointing at any other track does not; a maxed Range has none', () => {
+test('the reach shown is the one it works at: Extension Cord makes it bigger, the other supplies do not', () => {
+  // (Until 0.4 pointing at a Range upgrade in the sheet also showed the reach after one more bought
+  // level. Bought upgrades are gone; a building's reach comes from its stock.)
   const s = game();
   applyCommand(s, 0, { c: 'place', k: 'sprinkler', x: 5, y: 5 });
   const sel = { x: 5, y: 5 };
-  assert.equal(selectedReach(s, { selected: sel, track: 'rng' }).next, true);
-  for (const t of ['dmg', 'spd', 'dur', undefined]) assert.equal(selectedReach(s, { selected: sel, track: t }).next, false, String(t));
-  // Only the range track changes what a building reaches.
   const b = s.grid[at(s, 5, 5)];
   const reach = statsOf(b, s).range;
-  for (const t of ['dmg', 'spd', 'dur']) applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t });
-  assert.equal(statsOf(b, s).range, reach);
-  // Buy Range up to the top: the next reach is offered until the last level, then not.
-  const top = maxIn('sprinkler', 'rng');
-  for (let lv = 0; lv < top; lv++) {
-    assert.equal(selectedReach(s, { selected: sel, track: 'rng' }).next, true, `level ${lv}`);
-    assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t: 'rng' }).ok, true);
-  }
-  assert.ok(statsOf(b, s).range > reach, 'the reach grew');
-  assert.equal(selectedReach(s, { selected: sel, track: 'rng' }).next, false, 'maxed');
-  assert.ok(selectedReach(s, { selected: sel, track: 'rng' }), 'its current reach still shows');
+  // Bottled Spite, Rage Cola and Duct Tape (types 1, 2, 4) leave the reach alone.
+  for (const type of [1, 2, 4]) addStock(b, itemCode(type, 4));
+  assert.equal(selectedReach(s, { selected: sel }).b, b);
+  assert.equal(statsOf(selectedReach(s, { selected: sel }).b, s).range, reach);
+  addStock(b, itemCode(3, 2)); // Name Brand Extension Cord
+  assert.ok(statsOf(selectedReach(s, { selected: sel }).b, s).range > reach, 'the reach grew');
 });
 
 test('a Barcode Laser picked by any of its tiles shows its beam from its anchor; other players\' and switched-off buildings show theirs', () => {
@@ -57,10 +50,9 @@ test('a Barcode Laser picked by any of its tiles shows its beam from its anchor;
   addPlayer(s, 'Steve');
   s.players[1].cash = 1e5;
   assert.equal(applyCommand(s, 0, { c: 'place', k: 'railgun', x: 5, y: 8, d: 0 }).ok, true);
-  const r = selectedReach(s, { selected: { x: 6, y: 8 }, track: 'rng' });
+  const r = selectedReach(s, { selected: { x: 6, y: 8 } });
   assert.equal(r.ai, at(s, 5, 8), 'the anchor, whichever tile was picked');
   assert.equal(r.b.k, 'railgun');
-  assert.equal(r.next, true);
   applyCommand(s, 1, { c: 'place', k: 'forklift', x: 12, y: 4 });
   const f = s.grid[at(s, 12, 4)];
   f.off = 90; // a dog has peed on it

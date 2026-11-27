@@ -2,18 +2,17 @@
 // hover. The finger gestures on the floor themselves are in input.js; this file has the buttons.
 //   - a small pad on the floor: show the whole map, go to my entrance
 //   - two buttons at the end of the build bar: rotate, put the tool down
-//   - the building sheet, which opens when a building is tapped or clicked with nothing held (or
-//     with the Upgrade tool): one button for each kind of upgrade it has, rotate, remove, and
-//     (0.4) a security building's stock of supplies from The Back; in The Back, the same sheet for a
-//     Returns Drop: how much junk it sends and the MORE JUNK button (the dropUp command)
+//   - the building sheet, which opens when a building is tapped or clicked with nothing held: the
+//     numbers it works at now, (0.4) a security building's stock of supplies from The Back, rotate
+//     and remove; in The Back, the same sheet for a Returns Drop: how much junk it sends and the
+//     MORE JUNK button (the dropUp command)
 //   - while a finger is down placing something: a big Rotate button (for a building that turns)
 //     and the hint that a second finger cancels, halfway up the side of the floor away from the
 //     finger, where the other hand's thumb reaches and the placing finger is not
 // The pad, the bar buttons and the placing aid are only shown on a touch screen (CSS:
 // `(pointer: coarse)`); the sheet is for everyone.
-import { BUILD, TUNE, levelOf, spentOn, statsOf } from '../sim/index.js';
-import { tracksInfo } from './upgradetext.js';
-import { stockRows, dropInfo } from '../content/supplies.js';
+import { BUILD, TUNE, levelOf, spentOn, statsOf, tracksOf } from '../sim/index.js';
+import { stockRows, dropInfo, trackName, trackNumbers } from '../content/supplies.js';
 import { h, setText, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 
@@ -136,35 +135,15 @@ export function createTouchControls({ input, session, renderer, playSound = () =
   const sheetHead = h('div', { class: 'ts-head' });
   const sheetBtns = h('div', { class: 'ts-btns' });
   const sheetNote = h('p', { class: 'ts-note' });
+  // What it works at now (its stock from The Back counted): one entry per track, and the gym bro
+  // hits it survives.
+  const sheetNums = h('p', { class: 'ts-nums hidden' });
   // (0.4) A security building's supplies: one row per supply it takes.
   const sheetStock = h('div', { class: 'ts-stock hidden' });
-  const sheet = h('section', { class: 'touch-sheet hidden', 'aria-label': 'Building' }, sheetHead, sheetNote, sheetStock, sheetBtns);
+  const sheet = h('section', { class: 'touch-sheet hidden', 'aria-label': 'Building' }, sheetHead, sheetNums, sheetNote, sheetStock, sheetBtns);
   let sheetSig = '';
   let measuredSig = '';
   let sheetOpen = false;
-
-  // The upgrade button the mouse is over, or that has keyboard focus (0.3.02): the renderer shows
-  // what a Range upgrade would reach while it is Range (view.track; see src/render/reach.js).
-  // Listened for on the container, because the sheet replaces its buttons whenever what it shows
-  // changes (right after an upgrade is bought, say) and a replaced button never says the mouse has
-  // left it: the last answer stands until an event says otherwise, so with the mouse still on Range
-  // after buying a level, the floor shows the level after that. A finger has no hover: pressing
-  // Range just buys it, and the reach on the floor grows.
-  // (A button he cannot afford is disabled, and browsers may not report the mouse over a disabled
-  // button, so the floor may not show its next reach; a maxed Range has none to show anyway.)
-  let pointTrack;
-  const trackOf = (el) => (el && el.closest ? el.closest('[data-track]')?.dataset.track : undefined);
-  sheetBtns.addEventListener('pointerover', (e) => { if (e.pointerType !== 'touch') pointTrack = trackOf(e.target); });
-  sheetBtns.addEventListener('pointerout', (e) => {
-    if (e.pointerType === 'touch') return;
-    if (!sheetBtns.contains(e.relatedTarget)) pointTrack = undefined;
-  });
-  sheetBtns.addEventListener('focusin', (e) => { pointTrack = trackOf(e.target); });
-  sheetBtns.addEventListener('focusout', (e) => {
-    // (A button taken away as the sheet redraws loses its focus too; that is not the player moving on.)
-    if (!e.target.isConnected) return;
-    if (!sheetBtns.contains(e.relatedTarget)) pointTrack = undefined;
-  });
 
   function act(cmd, sound) {
     const r = session.send(cmd);
@@ -173,14 +152,17 @@ export function createTouchControls({ input, session, renderer, playSound = () =
 
   function renderSheet(s, t, b) {
     const def = BUILD[b.k];
-    const mine = s.players[session.me];
-    const cash = Math.floor(mine ? mine.cash : 0);
     const back = Math.floor(spentOn(b) * TUNE.sellBack);
     const owner = s.players[b.o];
-    const tracks = tracksInfo(b);
-    const hits = statsOf(b).hits, hit = b.hit | 0;
+    const st = statsOf(b, s);
+    const hits = st.hits, hit = b.hit | 0;
+    // Each track's numbers as it works now ("Damage: hit 9.4"), durability last (crates and the old
+    // factory have only that).
+    const nums = [...tracksOf(b.k).filter((tr) => tr !== 'dur'), 'dur'].map((tr) =>
+      [trackName(b.k, tr), trackNumbers(b.k, tr, st).map(([label, v]) => `${label} ${v}`).join(', ')]);
     const stock = stockRows(b);
-    const sig = JSON.stringify([t.x, t.y, b.k, b.u, b.d, hit, b.off > 0, back, tracks.map((tr) => cash >= tr.cost), owner ? owner.name : '', s.players.length,
+    const lv = levelOf(b);
+    const sig = JSON.stringify([t.x, t.y, b.k, b.d, hit, b.off > 0, back, nums, owner ? owner.name : '', s.players.length,
       stock.map((r) => [r.tier, r.units, r.gives])]);
     if (sig === sheetSig) return;
     sheetSig = sig;
@@ -188,19 +170,13 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     sheetHead.replaceChildren(...[
       h('span', { class: 'ts-icon', html: buildingIcon(b.k) }),
       h('b', null, def.name),
-      levelOf(b) > 1 ? h('span', { class: 'ts-lv' }, `${levelOf(b) - 1} upgrade${levelOf(b) > 2 ? 's' : ''}`) : null,
+      lv > 1 ? h('span', { class: 'ts-lv' }, `level ${lv}`) : null,
       owner && s.players.length > 1 ? h('span', { class: 'ts-owner' }, `${owner.name}'s`) : null,
       h('button', { type: 'button', class: 'ts-x', 'aria-label': 'Close', onclick: () => input.select(null) }, '×'),
     ].filter(Boolean));
-    const btns = tracks.map((tr) => h('button', {
-      type: 'button', class: `ts-btn ts-up ts-${tr.track}${tr.cost && cash < tr.cost ? ' poor' : ''}`, disabled: !tr.cost || cash < tr.cost,
-      'data-track': tr.track,
-      title: `${tr.name}: ${tr.gain}`,
-      onclick: () => act({ c: 'upgrade', x: t.x, y: t.y, t: tr.track }, 'upgrade'),
-    },
-    h('b', null, `${tr.name} ${tr.lv}/${tr.max}`),
-    h('small', { class: 'ts-gain' }, tr.gain),
-    h('small', { class: 'ts-cost' }, tr.cost ? money(tr.cost) : 'max')));
+    sheetNums.replaceChildren(...nums.map(([name, v]) => h('span', null, h('b', null, `${name}: `), v)));
+    setClass(sheetNums, 'hidden', false);
+    const btns = [];
     if (def.rot) {
       btns.push(h('button', { type: 'button', class: 'ts-btn', onclick: () => act({ c: 'rotate', x: t.x, y: t.y }, 'rotate') },
         h('b', null, '⟳ Rotate'), h('small', null, `faces ${ARROWS[b.d & 3]}`)));
@@ -211,8 +187,6 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     const notes = [];
     if (b.off > 0) notes.push('Switched off: a dog peed on it. It comes back in a few seconds.');
     if (hit > 0) notes.push(`Hit ${hit} time${hit > 1 ? 's' : ''} by gym bros this sales event; ${Math.max(0, hits - hit)} more and it is wrecked.`);
-    const short = tracks.filter((tr) => tr.cost && cash < tr.cost);
-    if (short.length && short.length === tracks.filter((tr) => tr.cost).length) notes.push(`You are ${money(Math.min(...short.map((tr) => tr.cost)) - cash)} short of the cheapest upgrade.`);
     setText(sheetNote, notes.join(' '));
     setClass(sheetNote, 'hidden', !notes.length);
     renderStock(stock);
@@ -237,7 +211,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
   function renderDrop(s, t, p) {
     const mine = s.players[session.me];
     const cash = Math.floor(mine ? mine.cash : 0);
-    const d = dropInfo(p, cash);
+    const d = dropInfo(p, cash, s);
     const sig = JSON.stringify(['drop', t.x, t.y, d]);
     if (sig === sheetSig) return;
     sheetSig = sig;
@@ -249,12 +223,13 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     setText(sheetNote, `${d.perMin} junk a minute comes down it.${d.next ? ` One more level: ${d.next} a minute.` : ' It is as fast as it goes.'}`);
     setClass(sheetNote, 'hidden', false);
     sheetNote.classList.add('ts-plain');
+    setClass(sheetNums, 'hidden', true);
     renderStock([]);
     const why = d.why;
     sheetBtns.replaceChildren(h('button', {
       type: 'button', class: `ts-btn ts-more${why ? ' poor' : ''}`, disabled: !!why,
       title: 'Pay to have junk sent down faster. Anyone can, for the whole store.',
-      onclick: () => act({ c: 'dropUp', x: t.x, y: t.y }, 'upgrade'),
+      onclick: () => act({ c: 'dropUp', x: t.x, y: t.y }, 'click'),
     }, h('b', null, 'MORE JUNK'), h('small', { class: 'ts-cost' }, why || money(d.cost))));
   }
 
@@ -264,7 +239,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     const t = input.selected;
     // In The Back (0.4) only a Returns Drop has a sheet.
     const back = input.floor === 1;
-    const b = t && (!input.tool || input.tool === 'upgrade') ? (back ? s.back?.[t.y * s.w + t.x] : s.grid[t.y * s.w + t.x]) : 0;
+    const b = t && !input.tool ? (back ? s.back?.[t.y * s.w + t.x] : s.grid[t.y * s.w + t.x]) : 0;
     const office = s.players[session.me]?.side === 'office';
     const show = !!b && (!back || b.k === 'drop') && !office && s.phase !== 'won' && s.phase !== 'lost' && s.phase !== 'lobby';
     if (!show && t && !b) input.select(null); // it was removed (or never was)
@@ -275,7 +250,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     if (show !== sheetOpen) {
       sheetOpen = show;
       setClass(sheet, 'hidden', !show);
-      if (!show) { sheetSig = ''; pointTrack = undefined; }
+      if (!show) sheetSig = '';
     }
     // DEB's bubble sits in the same corner: tell the page how tall the sheet is so the bubble
     // can stand on top of it instead of behind it (see ".deb" beside ".touch-sheet" in style.css).
@@ -299,7 +274,5 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     get sheetOpen() { return sheetOpen; },
     /** The building whose sheet is open ({ x, y }, its anchor tile), or null: for view.selected. */
     get selected() { return sheetOpen ? input.selected : null; },
-    /** The upgrade track pointed at in the sheet ('rng', ...), or undefined: for view.track. */
-    get track() { return sheetOpen ? pointTrack : undefined; },
   };
 }

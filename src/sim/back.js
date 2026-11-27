@@ -37,7 +37,7 @@
 import { BACK, BUILD, TICK_HZ, buildDef } from './constants.js';
 // (state.js and cards.js import from this file too. That is safe: none uses another while loading.)
 import { earn, bump, inBounds, idxOf, footprint } from './state.js';
-import { buildPrice } from './cards.js';
+import { buildPrice, cardDrop } from './cards.js';
 
 const SUB = BACK.sub, GAP = BACK.gap, STEP = BACK.step, END = BACK.end;
 /** Where an item lands when it comes onto a belt from the side. */
@@ -61,7 +61,7 @@ export const itemType = (code) => (code / 10) | 0;
 /** A supply's tier (1 to 4), or 0 for junk. */
 export const itemTier = (code) => (code >= 10 ? code % 10 : 0);
 
-/** The upgrade track each supply type stocks, by type (index 0, junk: none). */
+/** The track (BUILD[k].up) each supply type stocks, by type (index 0, junk: none). */
 export const SUPPLY_TRACKS = [null, 'dmg', 'spd', 'rng', 'dur', 'wire'];
 /** Every track a building can hold stock in, in a fixed order (the checksum walks them so). */
 export const STOCK_TRACKS = ['dmg', 'spd', 'rng', 'dur', 'wire'];
@@ -69,8 +69,12 @@ export const STOCK_TRACKS = ['dmg', 'spd', 'rng', 'dur', 'wire'];
 /** True for a part that makes things and puts them out of its front: a machine or a Rebrander. */
 const makes = (p) => p.k === 'rebrand' || !!BUILD[p.k].supply;
 
-/** Ticks between two pieces of junk from a Returns Drop with `lv` cash levels. */
-export const dropTicks = (lv = 0) => Math.max(1, Math.round(BACK.dropSecs * BACK.dropMul ** (lv | 0) * TICK_HZ));
+/**
+ * Ticks between two pieces of junk from a Returns Drop with `lv` cash levels. With `state`, the
+ * game's cards count too (the offatruck card: cardDrop); without, the plain time.
+ */
+export const dropTicks = (lv = 0, state = null) =>
+  Math.max(1, Math.round((BACK.dropSecs * BACK.dropMul ** (lv | 0) * TICK_HZ) / (state ? cardDrop(state) : 1)));
 
 /** A Returns Drop as the map puts it down (makeDrops in maps.js), facing d. */
 export const newDrop = (d) => ({ k: 'drop', d: d & 3, t: dropTicks(0), lv: 0 });
@@ -649,7 +653,7 @@ export function stepBack(state, ev = null) {
         // A piece of junk every dropTicks; it waits while the tile in front will not take it.
         if (p.t > 0) p.t--;
         const front = to[m * 3];
-        if (p.t <= 0 && front >= 0 && give(state, front, JUNK, d, 0)) p.t = dropTicks(p.lv);
+        if (p.t <= 0 && front >= 0 && give(state, front, JUNK, d, 0)) p.t = dropTicks(p.lv, state);
         break;
       }
       case MACHINE:

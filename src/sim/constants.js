@@ -59,19 +59,11 @@ export const ITEMS = {
 };
 
 /**
- * Every factory machine (Unpacker, Press, Packer) works at the same pace and speeds up the same
- * way, so at equal levels none outruns another (the owner's request). MACHINE_SECS is the time
- * for one item at level 0; MACHINE_SPD is the shared speed track (each machine adds only its own
- * `base` price for the first level).
- * Ten levels since 0.2.13 (five before): the number of machines is held down by the painted floor,
- * so in a long endless game the only way to earn more is to make each one faster. Levels 1 to 5
- * cost what they always did (x1.8 a level). Past that a level costs only x1.4 the last
- * (`gentleFrom`, `gentleGrow`): each level adds a quarter, so at x1.8 every level would take
- * longer to pay for itself than the one before (level 10 well over four hours of play), while
- * at x1.4 levels 6 to 10 pay back in about the hour level 5 does.
+ * Every factory machine (Unpacker, Press, Packer) works at the same pace, so none outruns another
+ * (the owner's request): MACHINE_SECS is the time for one item. (Their bought speed levels went
+ * with bought upgrades in 0.4; the machines themselves go in a later step.)
  */
 export const MACHINE_SECS = 2.5;
-export const MACHINE_SPD = { mul: 1.25, grow: 1.8, max: 10, gentleFrom: 5, gentleGrow: 1.4 };
 
 /**
  * Marked areas of the floor. Each of the four factory machines may only be built on its own
@@ -96,54 +88,43 @@ export const ZONES = {
  * targets: an area tower hits at most this many shoppers at once (the ones nearest the tills).
  * size: [w, h] tiles when facing east or west; facing north or south it is [h, w]. Absent: 1 x 1.
  *   The top-left tile of the footprint holds the building; the others point at it (see state.js).
- * hits: how many gym bro hits it survives in one wave (1 if absent), before durability upgrades.
+ * hits: how many gym bro hits it survives in one wave (1 if absent). Duct Tape soaks up more.
  * beam: fires straight out of its front end and hits everyone along the line (the Barcode Laser).
- * up: the upgrade tracks it has, each bought separately (see upgrades.js):
- *   dmg  damage, or the building's main effect    spd  speed (fires more often, works faster)
- *   rng  range                                     dur  durability (one more gym bro hit a wave)
- *   In a track: `mul` multiplies per level, `add` adds per level; the price of the next level is
- *   `cost` times the building's own price (or a fixed `base`), times `grow` (TUNE.upGrowth unless
- *   given) to the power of the levels already bought; `max` levels at most (TUNE.maxLevel unless
- *   given). With `gentleFrom` n, levels after the n-th each cost `gentleGrow` times the last
- *   instead of `grow`. The Wet Floor Sign's dmg track has `slow` (speed multiplier per level) and `slip`
- *   (added to the chance a dad slips); the Salesman's has `keep` (what is left of each shopper's
- *   chance NOT to stop, per level) and `rush` (multiplies every chance to hurry past, per level).
+ * up: the tracks a security building takes supplies for, and what a level does in each (see
+ *   upgrades.js; a supply's tier stands for a number of levels, BACK.tierLevel):
+ *   dmg  damage, or the building's main effect (Bottled Spite)
+ *   spd  speed, fires more often (Rage Cola)       rng  range (Extension Cord)
+ *   dur  takes Duct Tape, whose uses soak up gym bro hits; it is never counted as levels
+ *   In a track: `mul` multiplies per level, `add` adds per level. The Wet Floor Sign's dmg track
+ *   has `slow` (speed multiplier per level) and `slip` (added to the chance a dad slips); the
+ *   Salesman's has `keep` (what is left of each shopper's chance NOT to stop, per level) and
+ *   `rush` (multiplies every chance to hurry past, per level).
+ *   (Until 0.4 these were upgrades bought with cash, and the tracks also carried their prices.)
  */
 export const BUILD = {
   belt: {
     name: 'Belt', cost: 5, group: 'factory', blocks: true, rot: true,
-    up: { dur: { add: 1, cost: 1 } },
     desc: 'Moves goods. Shoppers cannot cross it. Dads step right over.',
   },
-  // Factory machines all share MACHINE_SECS and MACHINE_SPD: faster by a quarter a level, and it is
-  // deliberately very expensive. At the top level (10) a machine makes 3.75 items a second; see
-  // TUNE.beltSpeed for why a belt keeps up with it.
+  // Factory machines all share MACHINE_SECS.
   unpacker: {
     name: 'Unpacker', cost: 60, group: 'factory', blocks: true, rot: true, period: MACHINE_SECS, makes: 'box', zone: 'u',
-    // (Speed levels start at $100: a quarter of the $400 they cost until 0.2.12, the owner's number.)
-    up: { spd: { ...MACHINE_SPD, base: 100 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Opens pallets and spits out a Mystery Box every 2.5 seconds.',
   },
   press: {
     name: 'Press', cost: 220, group: 'factory', blocks: true, rot: true, takes: 'box', makes: 'gadget', time: MACHINE_SECS, zone: 'p',
-    // (Speed levels start at $300: half of the $600 they cost until 0.2.12, the owner's number.)
-    up: { spd: { ...MACHINE_SPD, base: 300 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Crushes a Mystery Box into a Gadget.',
   },
   packer: {
     name: 'Packer', cost: 450, group: 'factory', blocks: true, rot: true, takes: 'gadget', makes: 'giftset', time: MACHINE_SECS, zone: 'k',
-    // (Speed levels start at $540: 60% of the $900 they cost until 0.2.12, the owner's number.)
-    up: { spd: { ...MACHINE_SPD, base: 540 }, dur: { add: 1, cost: 0.3 } },
     desc: 'Wraps a Gadget into a Gift Set, the same thing at nearly twice the price.',
   },
   chute: {
     name: 'Shipping Chute', cost: 40, group: 'factory', blocks: true, zone: 'c',
-    up: { dur: { add: 1, cost: 0.5 } },
     desc: 'Sells whatever falls into it.',
   },
   crate: {
     name: 'Crate Stack', cost: 10, group: 'factory', blocks: true,
-    up: { dur: { add: 1, cost: 1 } },
     desc: 'A cheap wall. Does nothing else, but even a dad cannot climb it.',
   },
   // (0.4) `lift`: a Dumbwaiter under every tile of it, through which The Back stocks it with
@@ -153,37 +134,37 @@ export const BUILD = {
   sprinkler: {
     name: 'Pepper Sprinkler', cost: 80, group: 'security', blocks: true, tower: true, lift: true, shots: 20,
     range: 1.75, dmg: 6, cd: 0.5, aoe: true, targets: 4,
-    up: { dmg: { mul: 1.25, cost: 0.6 }, spd: { mul: 1.1, cost: 0.6 }, rng: { add: 0.15, cost: 0.4 }, dur: { add: 1, cost: 0.3 } },
+    up: { dmg: { mul: 1.25 }, spd: { mul: 1.1 }, rng: { add: 0.15 }, dur: {} },
     desc: 'Sprays up to four shoppers nearby. Short range.',
   },
   forklift: {
     name: 'Forklift Turret', cost: 200, group: 'security', blocks: true, tower: true, lift: true, shots: 6,
     range: 6, dmg: 30, cd: 1.6, aoe: false,
-    up: { dmg: { mul: 1.3, cost: 0.6 }, spd: { mul: 1.12, cost: 0.6 }, rng: { add: 0.3, cost: 0.4 }, dur: { add: 1, cost: 0.3 } },
+    up: { dmg: { mul: 1.3 }, spd: { mul: 1.12 }, rng: { add: 0.3 }, dur: {} },
     desc: 'Long range, one shopper at a time.',
   },
   // A 3 x 1 gun that fires down the line it faces, through everything, and hits every shopper on it.
   railgun: {
     name: 'Barcode Laser', cost: 700, group: 'security', blocks: true, tower: true, rot: true, size: [3, 1], hits: 2, lift: true, shots: 2,
     range: 10, dmg: 60, cd: 4.5, beam: true, width: 0.6,
-    up: { dmg: { mul: 1.3, cost: 0.5 }, spd: { mul: 1.12, cost: 0.5 }, rng: { add: 1, cost: 0.25 }, dur: { add: 1, cost: 0.2 } },
+    up: { dmg: { mul: 1.3 }, spd: { mul: 1.12 }, rng: { add: 1 }, dur: {} },
     desc: 'Fires a beam straight out of its front end, through walls and everything else, hitting every shopper in line. Slow to reload.',
   },
   wetfloor: {
     name: 'Wet Floor Sign', cost: 30, group: 'security', blocks: false, lift: true, shots: 10,
-    up: { dmg: { slow: 0.82, slip: 0.08, mul: 1.45, cost: 0.8 }, dur: { add: 1, cost: 0.5 } },
+    up: { dmg: { slow: 0.82, slip: 0.08, mul: 1.45 }, dur: {} },
     desc: 'Slows shoppers who walk through. Dads ignore signs and sometimes slip.',
   },
   samples: {
     name: 'Free Samples', cost: 120, group: 'security', blocks: true, range: 2.2, lift: true, shots: 8,
-    up: { dmg: { mul: 1.2, cost: 0.6 }, rng: { add: 0.25, cost: 0.4 }, dur: { add: 1, cost: 0.3 } },
+    up: { dmg: { mul: 1.2 }, rng: { add: 0.25 }, dur: {} },
     desc: 'Shoppers nearby stop for a sample. Dads do not.',
   },
   // A 2 x 2 stand where a man demonstrates knives and barbecues on a television. Each shopper
   // walking past may stop to watch, or hurry past to get away from him (see `pitch` on SHOPPERS).
   salesman: {
     name: 'TV Salesman', cost: 450, group: 'security', blocks: true, size: [2, 2], hits: 2, range: 4.5, lift: true, shots: 8,
-    up: { dmg: { mul: 1.15, keep: 0.88, rush: 0.85, cost: 0.5 }, rng: { add: 0.5, cost: 0.4 }, dur: { add: 1, cost: 0.25 } },
+    up: { dmg: { mul: 1.15, keep: 0.88, rush: 0.85 }, rng: { add: 0.5 }, dur: {} },
     desc: 'Demonstrates knives and barbecues on a television. Shoppers in reach may stop to watch, or hurry past.',
   },
   // The Back (0.4): the floor under the shop, where the factory is moving. Its parts are kinds like
@@ -279,7 +260,7 @@ export const buildDef = (k) => (typeof k === 'string' && Object.hasOwn(BUILD, k)
  *   makeSecs    seconds a machine takes to turn one junk into a supply (tier 1)
  *   rebrandSecs seconds a Rebrander takes, by the tier going in (index 0 unused): each pass slower
  *   stockUnits  the most units of one supply a building holds (per track)
- *   tierLevel   the upgrade level a tier counts as, by tier (index 0: no stock)
+ *   tierLevel   the level a tier counts as in its track (BUILD[k].up), by tier (index 0: no stock)
  *   tapeHits    gym bro hits one unit of Duct Tape soaks up, by tier
  *   wireTurns   dads one unit of Razor Wire turns away, by tier (no effect until a later stage)
  *   dropUpCost, dropUpGrow, dropUpMax  the dropUp command: a Returns Drop's next cash level costs
@@ -607,11 +588,8 @@ export const TUNE = {
   // brought them back to where they were.
   bossRefunds: 2,
   bossBounty: 165, // driving him out pays the store this much per tier (times the difficulty's pay, rounded; 150 times Normal's old x1.1 until 0.2.10)
-  // Upgrades: each track's next level costs upGrowth times its last (unless the track has its own
-  // `grow`), up to maxLevel levels per track (unless it has its own `max`). See BUILD[k].up.
-  upGrowth: 1.6,
-  maxLevel: 8,
-  // Rebuilding what a gym bro destroyed costs this share of what had been spent on it.
+  // Rebuilding what a gym bro destroyed costs this share of what had been paid for it (all or
+  // nothing since 0.4: there are no bought levels left to come back without).
   rebuildShare: 0.5,
   // A wreck the player has pressed Rebuild for (0.3.04) but that cannot go back yet (a shopper in
   // the hole, it would wall the route) is tried again this often, in seconds of game time, until
@@ -825,7 +803,7 @@ export const CARDS = {
   hurry: { side: 'bad', per: 'kind', speed: 1.2 },
   clearance: { side: 'bad', sell: 0.85 }, // everything shipped sells for that
   klepto: { side: 'bad', chance: 2, heal: 0.4 }, // shoplifters' chance to go for goods, times; the share of his full patience each theft gives back (reworked 2026-11-24, see DEALABLE: it was 3 tiles further)
-  shrinkflation: { side: 'bad', cost: 1.08 }, // every building's price (not upgrades; 1.1 before the playtest)
+  shrinkflation: { side: 'bad', cost: 1.08 }, // every building's price (not a rebuild's; 1.1 before the playtest)
   pissing: { side: 'bad', pee: 1.5 }, // how long a dog's pee switches security off, times
   doorbuster: { side: 'bad', crowd: 1.1 }, // the ordinary crowd (not the boss, not a Midnight Release mob)
   sensibleshoes: { side: 'bad', slip: 0.7 }, // the chance to slip on a wet floor or a mess, times
@@ -835,8 +813,8 @@ export const CARDS = {
   lootbox: { side: 'good', item: 'box', sell: 3 },
   asseenontv: { side: 'good', item: 'gadget', sell: 1.7 },
   regifting: { side: 'good', item: 'giftset', sell: 1.5 },
-  offatruck: { side: 'good', group: 'factory', free: 1 }, // free upgrade levels on one random track of every new building of that group
-  mallcop: { side: 'good', group: 'security', free: 1 },
+  offatruck: { side: 'good', drop: 1.2 }, // Returns Drops work that many times as fast (0.4; it gave the factory free upgrade levels)
+  mallcop: { side: 'good', units: 2 }, // a security building bought new comes with that many units of Store Brand of every supply it takes but Razor Wire (0.4; it gave free upgrade levels)
   pulledout: { side: 'good', pops: 0.5 },
   eyesup: { side: 'good', share: 0.5, range: 4, gap: 1.5 }, // dads within range of an Exhibitionist ahead fall in that far behind her
   wrongway: { side: 'good', share: 0.35 }, // that share of runaway kids run back toward the entrance

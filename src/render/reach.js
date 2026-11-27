@@ -1,24 +1,20 @@
-// What a selected building's reach looks like on the floor (0.3.02, the owner's request: "When
-// upgrading ranges, the interface should show the new range when mousing over the option.
-// Otherwise, it should show the old range when clicked on a security building.").
+// What a selected building's reach looks like on the floor (0.3.02, the owner's request: "it
+// should show the old range when clicked on a security building").
 //
-// While a building's sheet is open (src/ui/touch.js: clicked or tapped with nothing held, or with
-// the Upgrade tool), the interface passes it to the renderer as view.selected, and the upgrade
-// button under the mouse (or with keyboard focus) as view.track. The renderer then always draws
-// that building's current reach, and, while the Range button is pointed at and Range is not at
-// its top, the reach after one more level on top of it. Only the range track changes what a
-// building reaches (statsOf), so pointing at any other track changes nothing on the floor.
+// While a building's sheet is open (src/ui/touch.js: clicked or tapped with nothing held), the
+// interface passes it to the renderer as view.selected, and the renderer draws that building's
+// current reach (statsOf: its stock of Extension Cord counts). (Until 0.4 it could also show the
+// reach after one more bought Range level; bought upgrades are gone.)
 //
 // Pure (no canvas, no DOM) so the tests can ask it directly.
-import { BUILD, statsOf, boughtIn, maxIn, tracksOf } from '../sim/index.js';
+import { BUILD, statsOf } from '../sim/index.js';
 
 /**
  * The reach to draw for the selected building, or null when there is none to draw: nothing
  * selected, the tile is empty, or the building reaches nothing (a belt, a machine, a crate).
  * @param {Object} s the game state
- * @param {{selected?: {x: number, y: number}|null, track?: string}} view
- * @returns {{ai: number, b: Object, next: boolean}|null} the building's anchor tile, the building,
- *   and whether to draw the reach after one more Range level too
+ * @param {{selected?: {x: number, y: number}|null}} view
+ * @returns {{ai: number, b: Object}|null} the building's anchor tile and the building
  */
 export function selectedReach(s, view) {
   const t = view && view.selected;
@@ -29,8 +25,7 @@ export function selectedReach(s, view) {
   const ai = g.part !== undefined ? g.part : i;
   const b = s.grid[ai];
   if (!b || !BUILD[b.k] || !(statsOf(b, s).range > 0)) return null;
-  const next = view.track === 'rng' && tracksOf(b.k).includes('rng') && boughtIn(b, 'rng') < maxIn(b.k, 'rng'); // (what can still be bought: 0.4)
-  return { ai, b, next };
+  return { ai, b };
 }
 
 /**

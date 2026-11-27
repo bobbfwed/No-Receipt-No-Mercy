@@ -180,9 +180,8 @@ export const CONTROL_SPOTS = {
   doors: { sel: '.topbar .btn-doors', sides: ['below', 'left', 'right', 'above'], opener: '.topbar .btn-more' },
   // DROP is boxed in: HOME above it, Rotate beside it, the edge of the screen on the other sides.
   drop: { sel: '.buildbar .tc-drop', sides: ['above', 'aboveleft', 'left', 'belowleft'] },
-  // (The sheet's buttons carry no names of their own: Rotate is the one that is neither an upgrade nor Remove.)
-  dmg: { sel: '.touch-sheet .ts-dmg', sides: ANY },
-  spin: { sel: '.touch-sheet .ts-btn:not(.ts-up):not(.ts-remove)', sides: ANY },
+  // (The sheet's buttons carry no names of their own: Rotate is the one that is not Remove.)
+  spin: { sel: '.touch-sheet .ts-btn:not(.ts-remove)', sides: ANY },
   remove: { sel: '.touch-sheet .ts-remove', sides: ANY },
 };
 /** Groups of buttons whose other buttons the arrow keeps clear of when it points at one of them. */
@@ -270,8 +269,8 @@ export function createPointer({ root, canvas, renderer, input, selected, target,
   const size = () => (innerWidth < 700 || innerHeight < 560 ? ARROW_SMALL : ARROW);
 
   /** What must stay readable or pressable: the lesson panel's text and buttons, an open building
-   * sheet unless the target is in it, the other buttons of the target's group (the next upgrade
-   * and the close X in a sheet, Rotate beside DROP), the camera pad, the held tool's card, and,
+   * sheet unless the target is in it, the other buttons of the target's group (Remove and the
+   * close X in a sheet, Rotate beside DROP), the camera pad, the held tool's card, and,
    * for the floor, DEB's speech bubble. */
   function avoidFor(targetEl) {
     const out = [];

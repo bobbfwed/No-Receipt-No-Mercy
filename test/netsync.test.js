@@ -85,14 +85,15 @@ test('a busy game sends each client at least ten times less than the old scheme,
     // Two commands a tick until the plan is done, then the doors open.
     for (let n = 0; n < 2 && j < jobs.length; n++, j++) jobs[j][0].send(jobs[j][1]);
     if (i === 90) host.send({ c: 'start' });
-    // Now and then someone upgrades a tower mid-wave.
-    if (i > 90 && i % 60 === 0) steve.send({ c: 'upgrade', x: 10 + ((i / 60) % 8) * 4, y: 6 });
+    // Now and then someone puts a wet floor sign above a tower mid-wave (until 0.4: upgraded it).
+    if (i > 90 && i % 60 === 0) steve.send({ c: 'place', k: 'wetfloor', x: 10 + ((i / 60) % 8) * 4, y: 5 });
   });
   const sent = conns.map((c, k) => c.sent - start[k]);
   assert.equal(st.wave, 11);
   // (Over 150 until 0.2.09 halved the crowd; the old scheme's bytes were measured with the bigger one.)
   assert.ok(st.shoppers.length > 100, `a big crowd (${st.shoppers.length})`);
   assert.ok(st.grid.filter(Boolean).length > 60, 'plenty was built');
+  assert.ok(st.grid.some((b) => b && b.k === 'wetfloor'), 'the signs placed mid-wave went down');
   for (const [k, name] of ['Steve', 'Gaz'].entries()) {
     const ratio = OLD_BYTES[name] / sent[k];
     console.log(`  ${name}: ${sent[k]} bytes in 30 s (${Math.round(sent[k] / 30)} a second); before: ${OLD_BYTES[name]} (${Math.round(OLD_BYTES[name] / 30)} a second); ${ratio.toFixed(1)} times less`);
@@ -134,7 +135,7 @@ test('several commands in one tick from different players, one of them refused, 
   steve.send({ c: 'place', k: 'sprinkler', x: 8, y: 8 });
   gaz.send({ c: 'place', k: 'forklift', x: 8, y: 8 }); // too late: Steve got there first
   gaz.send({ c: 'place', k: 'forklift', x: 9, y: 8 });
-  steve.send({ c: 'upgrade', x: 8, y: 8 });
+  steve.send({ c: 'place', k: 'wetfloor', x: 8, y: 9 });
   host.send({ c: 'start' });
   const now = run(host, clients, 3);
   settle(host, clients, now);
@@ -143,7 +144,8 @@ test('several commands in one tick from different players, one of them refused, 
   for (const c of [steve, gaz]) {
     assert.equal(c.state.grid[8 * w + 8].k, 'sprinkler');
     assert.equal(c.state.grid[8 * w + 8].o, 1);
-    assert.equal(c.state.grid[8 * w + 8].u.dmg, 1);
+    assert.equal(c.state.grid[9 * w + 8].k, 'wetfloor');
+    assert.equal(c.state.grid[9 * w + 8].o, 1);
     assert.equal(c.state.grid[8 * w + 9].o, 2);
     assert.equal(c.state.phase, 'wave');
     assert.ok(same(c, host));

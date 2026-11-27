@@ -7,12 +7,13 @@ import fs from 'node:fs';
 import { fill, generated, pictures } from '../tools/readme.mjs';
 import { versionText } from '../src/version.js';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, TUNE, MAP_DESIGNS, SETTINGS, BOSS,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, levelIn, itemCode, addStock, takesSupply, usesIn, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, TUNE, MAP_DESIGNS, SETTINGS, BOSS,
 } from '../src/sim/index.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, firstWave, countIn,
-  sampleWaves, bossWaves, LONGEST, levelRows, trackRows, factoryFacts,
+  sampleWaves, bossWaves, LONGEST, tierRows, factoryFacts,
 } from '../src/content/facts.js';
+import { SUPPLIES } from '../src/content/supplies.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP } from '../src/content/help.js';
 
 test('README.md shows the current version, every store design and every shopper', () => {
@@ -94,49 +95,48 @@ test('the patience the handbook quotes is the patience shoppers really walk in w
   assert.deepEqual(countIn('karen', 2, 1), { all: 0, sup: 0 });
 });
 
-test('the upgrade tables match what upgrading really costs and does, track by track', () => {
+test('the supply tables match what each tier of stock really does, track by track', () => {
   let tables = 0;
   for (const k of [...SECURITY_ORDER, ...FACTORY_ORDER]) {
     for (const t of ['dmg', 'spd', 'rng', 'dur']) {
-      const rows = trackRows(k, t);
+      const rows = tierRows(k, t);
       if (!tracksOf(k).includes(t)) { assert.deepEqual(rows, []); continue; }
       tables++;
+      assert.deepEqual(rows.map((r) => r.tier), [0, 1, 2, 3, 4], `${k} ${t}: as built, then every tier`);
       const s = createGame({ training: true });
       addPlayer(s, 'Dave');
       s.players[0].cash = 1e9;
-      // (Factory machines go anywhere on this map: it has no marked floor.)
       assert.ok(applyCommand(s, 0, { c: 'place', k, x: 5, y: 5 }).ok);
       const b = s.grid[5 * s.w + 5];
-      let spent = 0;
       for (const row of rows) {
-        if (row.lv > 0) {
-          const before = s.players[0].cash;
-          assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t }).ok, `${k} ${t} level ${row.lv}`);
-          assert.equal(before - s.players[0].cash, row.cost, `${k} ${t} level ${row.lv}: what it cost`);
-          spent += row.cost;
+        // One unit of that tier of the track's supply, sent up the building's Dumbwaiter.
+        delete b.s;
+        if (row.tier) {
+          const code = itemCode(SUPPLIES[t].type, row.tier);
+          assert.ok(takesSupply(b, code), `${k} takes ${t} tier ${row.tier}`);
+          addStock(b, code);
         }
-        assert.equal(row.total, spent, `${k} ${t} level ${row.lv}: spent on the track`);
+        assert.equal(usesIn(b, t), row.uses, `${k} ${t} tier ${row.tier}: what one unit lasts`);
         // The numbers in the row are the building's real numbers.
         const st = statsOf(b);
-        for (const [key, v] of Object.entries(row)) if (key in st) assert.ok(Math.abs(st[key] - v) < 1e-9, `${k} ${t} level ${row.lv}: ${key}`);
+        for (const [key, v] of Object.entries(row)) if (key in st) assert.ok(Math.abs(st[key] - v) < 1e-9, `${k} ${t} tier ${row.tier}: ${key}`);
+        if (t !== 'dur') assert.equal(levelIn(b, t), row.level, `${k} ${t} tier ${row.tier}: the levels it counts as`);
       }
-      assert.equal(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t }).why, 'max', `${k} ${t}: the table ends at the top level`);
     }
   }
-  assert.ok(tables >= 20);
-  // The old single table still loads: the default track, numbered from level 1.
-  const old = levelRows('sprinkler');
-  assert.equal(old[0].lv, 1);
-  assert.equal(old[0].total, BUILD.sprinkler.cost);
-  assert.equal(old[0].next, trackRows('sprinkler', 'dmg')[1].cost);
-  // A level-1 forklift takes exactly its "Hit" off a shopper.
-  const s = createGame({ training: true });
-  addPlayer(s, 'Dave');
-  s.players[0].cash = 1e6;
-  applyCommand(s, 0, { c: 'place', k: 'forklift', x: 3, y: 5 });
-  queueTrainingWave(s, [{ k: 'karen', n: 1, gap: 1, at: 0 }]);
-  applyCommand(s, 0, { c: 'start' });
-  let hit = 0;
-  for (let i = 0; i < 300 && !hit; i++) { step(s); const sh = s.shoppers[0]; if (sh && sh.hp < sh.mhp) hit = sh.mhp - sh.hp; }
-  assert.ok(Math.abs(hit - levelRows('forklift')[0].dmg) < 1e-6);
+  assert.ok(tables >= 18);
+  // An unstocked forklift takes exactly its "Hit" as built off a shopper, and one on Store Brand
+  // Bottled Spite exactly that tier's.
+  for (const tier of [0, 1]) {
+    const s = createGame({ training: true });
+    addPlayer(s, 'Dave');
+    s.players[0].cash = 1e6;
+    applyCommand(s, 0, { c: 'place', k: 'forklift', x: 3, y: 5 });
+    if (tier) addStock(s.grid[5 * s.w + 3], itemCode(SUPPLIES.dmg.type, tier));
+    queueTrainingWave(s, [{ k: 'karen', n: 1, gap: 1, at: 0 }]);
+    applyCommand(s, 0, { c: 'start' });
+    let hit = 0;
+    for (let i = 0; i < 300 && !hit; i++) { step(s); const sh = s.shoppers[0]; if (sh && sh.hp < sh.mhp) hit = sh.mhp - sh.hp; }
+    assert.ok(Math.abs(hit - tierRows('forklift', 'dmg')[tier].dmg) < 1e-6, `tier ${tier}`);
+  }
 });

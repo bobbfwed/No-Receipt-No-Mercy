@@ -14,7 +14,6 @@
 // so such a game plays tick for tick as it did before the cards existed.
 import { CARDS, DEALABLE, CARDS_APART, CARD_SKIP_KINDS, SHOPPERS, BUILD, TUNE, TICK_HZ } from './constants.js';
 import { rand } from './state.js';
-import { tracksOf, maxIn } from './upgrades.js';
 
 // ---- The hand -------------------------------------------------------------------------------------
 
@@ -303,7 +302,7 @@ export function cardSell(state, item) {
 export const cardBonus = (state) => mul(state, 'overtime', 'bonus');
 
 /**
- * What a building of kind k costs to put down in this game (not to rebuild, not its upgrades):
+ * What a building of kind k costs to put down in this game (not to rebuild):
  * shrinkflation and staffdiscount every building, rentacop and sweatshop by its group. Whole
  * dollars, never under one.
  */
@@ -321,24 +320,17 @@ export function buildPrice(state, k) {
 }
 
 /**
- * offatruck (factory) and mallcop (security): a new building of that group comes with free upgrade
- * levels on one of its tracks, picked with rand(state). Free: they add nothing to what it is worth
- * (spentOn leaves them out), and the next level of that track costs what the level after them
- * would. Asked only when a building is bought new, not when one is rebuilt from rubble.
- * @returns {{t: string, n: number}|null} the track and how many levels, or null
+ * mallcop (0.4; until then it gave free upgrade levels): how many units of Store Brand of each
+ * supply it takes, Razor Wire left out, a building of kind k comes with when it is bought new
+ * (not rebuilt from rubble). 0 without the card, and for anything without Dumbwaiters.
  */
-export function freeTrack(state, k) {
-  if (!inForce(state) || !BUILD[k]) return null;
-  for (const id of ['offatruck', 'mallcop']) {
-    if (!hasCard(state, id) || BUILD[k].group !== CARDS[id].group) continue;
-    const ts = tracksOf(k);
-    if (!ts.length) return null;
-    const t = ts[Math.floor(rand(state) * ts.length)];
-    const n = Math.min(maxIn(k, t), CARDS[id].free);
-    return n > 0 ? { t, n } : null;
-  }
-  return null;
-}
+export const cardStock = (state, k) => (BUILD[k] && BUILD[k].lift && hasCard(state, 'mallcop') ? CARDS.mallcop.units : 0);
+
+/**
+ * offatruck (0.4; until then it gave the factory free upgrade levels): how many times as fast every
+ * Returns Drop puts out junk (dropTicks in back.js divides its time by this). 1 without the card.
+ */
+export const cardDrop = (state) => (hasCard(state, 'offatruck') ? CARDS.offatruck.drop : 1);
 
 /**
  * The cards' changes to a building's working numbers (statsOf with the state): premature (towers

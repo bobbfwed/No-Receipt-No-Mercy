@@ -15,14 +15,9 @@ const RULES = [
   [/Press Esc to put your tool away, point at the ([^.,]+?),? and press R until/g, 'Tap DROP to put your tool away, tap the $1, and tap Rotate until'],
   [/\(press B to rebuild it\)/g, '(the Rebuild button in the bar puts it back)'],
   [/Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance\./g, 'Drag the floor with nothing picked to move the view, pinch with two fingers to zoom, tap MAP to see the whole floor and HOME to go back to your entrance.'],
-  [/point at each of the two Sprinklers beside the gap and press U three times, until both show Damage (\d+\/\d+)\. \(Or click a Sprinkler and use its Damage button\.\)/g, 'tap each of the two Sprinklers beside the gap and tap its Damage button three times, until both show Damage $1.'],
-  [/Point at the highlighted Sprinkler and press U\./g, 'Tap the highlighted Sprinkler and tap its Damage button.'],
-  // Part 2 of the training: the forklift upgrade and the Rebuild button.
-  [/point at the Forklift you just built past the gap and press U twice, until it shows Damage (\d+\/\d+)\. \(Or click it and use its Damage button\.\)/g, 'tap the Forklift you just built past the gap and tap its Damage button twice, until it shows Damage $1.'],
-  [/Point at the highlighted Forklift and press U\./g, 'Tap the highlighted Forklift and tap its Damage button.'],
+  // Part 2 of the training: the Rebuild button.
   [/Press B \(or the Rebuild button in the build bar\)/g, 'Tap the Rebuild button in the bar'],
   [/press B \(or the Rebuild button in the build bar\)/g, 'tap the Rebuild button in the bar'],
-  [/Click a building and choose what to upgrade\./g, 'Tap a building and choose what to upgrade.'],
   [/press R before placing to turn it\./g, 'use the rotate button at the end of the bar before placing to turn it.'],
   [/Press R before placing to turn it\./g, 'Use the rotate button at the end of the bar before placing to turn it.'],
   [/drag belt over it again in the new direction, or point at it and press R\./g, 'drag belt over it again in the new direction, or tap it and choose Rotate.'],

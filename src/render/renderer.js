@@ -1,5 +1,5 @@
 // The canvas renderer: draws the store, everything built in it, the shoppers, effects, the
-// placement and upgrade previews and the other players' pointers, through a camera that the
+// placement previews and the other players' pointers, through a camera that the
 // interface moves around (maps run up to 99 x 55 tiles and do not fit the screen).
 //
 //   const renderer = createRenderer(canvas, session);
@@ -30,7 +30,7 @@
 //   shoppers.js   every kind of shopper, their super versions, the boss (and his name plate, drawn
 //                 after everyone), a mom's runaway child, and the carts moms leave behind
 //                 (state.carts)
-//   effects.js    floating cash, speech blips, shots, beams, sprays, wreckage, upgrade sparkles
+//   effects.js    floating cash, speech blips, shots, beams, sprays, wreckage
 //   guides.js     route guides and tutorial marks
 //   back.js       The Back (0.4), the floor under the shop: its belts, items and parts
 //   minimap.js    the whole map small, for the interface's corner (a separate canvas)
@@ -42,8 +42,8 @@
 // bottom-left tile of their footprint (so what stands in front of them is drawn after them);
 // their other tiles (`part`) are skipped everywhere.
 import {
-  BUILD, ZONES, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, canUpgrade, statsOf, levelOf,
-  levelIn, boughtIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
+  BUILD, BACK, ZONES, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, statsOf, levelOf,
+  levelIn, tracksOf, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
@@ -437,10 +437,10 @@ export function createRenderer(canvas, session) {
     drawShoppers(s, alpha);
     fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
     drawWarnings(s, now);
-    // The building whose sheet is open: its reach, and the reach after a Range upgrade while that
-    // button is pointed at (see reach.js). The hover preview then leaves that building's reach out.
+    // The building whose sheet is open: its reach (see reach.js). The hover preview then leaves
+    // that building's reach out.
     const sel = selectedReach(s, view);
-    if (sel) drawSelected(s, sel);
+    if (sel) showRange(s, sel.b, sel.ai, 'sel');
     drawPreview(s, view, sel);
   }
 
@@ -759,7 +759,6 @@ export function createRenderer(canvas, session) {
     // Level badges grow when zoomed out so the number stays readable (in steps, as they are cached).
     const bk = Math.round(Math.max(1, Math.min(1.6, 34 / cam.zoom)) * 10) / 10;
     const bres = stepScale(step);
-    const upAt = fx.timers.upAt;
     for (let y = y0; y < y1; y++) {
       for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
         let b = grid[i];
@@ -780,38 +779,28 @@ export function createRenderer(canvas, session) {
         // Which way the goods go, over any damage (belts show it with their chevrons).
         if (b.k !== 'belt' && FLOW[b.k] !== undefined) drawFlow(ctx, b, ai, F, buildingSprites);
         const r = rectOf(b, ai, w);
-        const since = now - upAt[ai];
-        if (since < 450) {
-          // A flash of light over a building that has just been upgraded.
-          ctx.globalAlpha = 0.75 * (1 - since / 450);
-          rr(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 8);
-          ctx.fillStyle = '#fff3b0';
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-        // The level it is working at (0.4: its stock counts, levelIn), not only the levels bought.
-        const lv = b.u || b.s ? workingLevel(b) : 1;
+        // The level it is working at: 1 plus what its stock gives every track (levelOf).
+        const lv = b.s ? levelOf(b) : 1;
         if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b), badgeCorner(b));
         if (BUILD[b.k].lift) drawPips(b, r);
       }
     }
   }
 
-  const trackLists = {};
-  /** 1 plus the levels every track of a building works at (bought or stocked: levelIn), for its badge. */
-  function workingLevel(b) {
-    const ts = trackLists[b.k] || (trackLists[b.k] = tracksOf(b.k));
-    let n = 1;
-    for (const t of ts) n += levelIn(b, t);
-    return n;
-  }
-
-  /** True if every upgrade track a building has is at its top level. */
+  /** The level the best tier (Platinum) stands for in a track. */
+  const TOP_LEVEL = BACK.tierLevel[BACK.tierLevel.length - 1];
+  /**
+   * True if every track a building works at by levels is stocked at the best tier (Duct Tape is
+   * never counted as levels, so durability is left out). The badge then turns pink.
+   */
   function maxedOut(b) {
-    const ts = trackLists[b.k] || (trackLists[b.k] = tracksOf(b.k));
-    if (!ts.length) return false;
-    for (const t of ts) if (levelIn(b, t) < maxIn(b.k, t)) return false;
-    return true;
+    let any = false;
+    for (const t of tracksOf(b.k)) {
+      if (t === 'dur') continue;
+      if (levelIn(b, t) < TOP_LEVEL) return false;
+      any = true;
+    }
+    return any;
   }
 
   /** Which way a shopper faces, remembered so one who stops keeps facing the same way. */
@@ -987,8 +976,7 @@ export function createRenderer(canvas, session) {
   /**
    * A range circle. style: 'ok' placement allowed, 'bad' not allowed, 'faint' a tower's range
    * shown on hover, 'sel' the reach of the building whose sheet is open (a solid white edge over
-   * a dark one, so it reads on any floor without looking like "you may place it here"), 'next'
-   * (dashed gold outline) the range after an upgrade.
+   * a dark one, so it reads on any floor without looking like "you may place it here").
    */
   function rangeCircle(cx, cy, range, style) {
     if (!(range > 0)) return;
@@ -999,17 +987,6 @@ export function createRenderer(canvas, session) {
       ctx.fill();
       ctx.lineWidth = 4.5; ctx.strokeStyle = 'rgba(17,24,39,0.55)'; ctx.stroke();
       ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(255,255,255,0.92)'; ctx.stroke();
-      return;
-    }
-    if (style === 'next') {
-      ctx.setLineDash(RANGE_DASH);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = INK;
-      ctx.stroke();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ffd23f';
-      ctx.stroke();
-      ctx.setLineDash(NO_DASH);
       return;
     }
     const faint = style === 'faint', ok = style !== 'bad';
@@ -1034,13 +1011,6 @@ export function createRenderer(canvas, session) {
     const w = dx ? len : half * 2, h = dy ? len : half * 2;
     ctx.beginPath();
     ctx.rect(x, y, w, h);
-    if (style === 'next') {
-      ctx.setLineDash(RANGE_DASH);
-      ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
-      ctx.lineWidth = 2; ctx.strokeStyle = '#ffd23f'; ctx.stroke();
-      ctx.setLineDash(NO_DASH);
-      return;
-    }
     if (style === 'sel') {
       // The beam it fires now: solid edges, and the centre line with its arrowhead.
       ctx.fillStyle = 'rgba(255,70,70,0.14)';
@@ -1097,11 +1067,6 @@ export function createRenderer(canvas, session) {
     ctx.strokeStyle = color;
     ctx.stroke();
   }
-
-  /** A scratch building for range previews: { k, d, u }. */
-  const probe = { k: '', d: 0, u: null, s: null };
-  const probeU = {};
-  const TRACK_NAME = { dmg: 'DAMAGE', spd: 'SPEED', rng: 'RANGE', dur: 'TOUGHER' };
 
   const AIM_REACH = 5; // tiles each arm of the crosshair reaches out from the aimed tile
   const AIM_DASH = [8, 6];
@@ -1161,29 +1126,8 @@ export function createRenderer(canvas, session) {
   }
 
   /**
-   * The building whose sheet is open (view.selected, from selectedReach): its reach now, in the
-   * 'sel' style, and, while the sheet's Range button is pointed at (view.track 'rng') and Range is
-   * not at its top, the reach after one more level, dashed gold, on top.
-   */
-  function drawSelected(s, sel) {
-    showRange(s, sel.b, sel.ai, 'sel');
-    if (sel.next) showNext(s, sel.b, sel.ai);
-  }
-
-  /** The reach building b (anchor ai) would have with one more Range level: dashed gold. */
-  function showNext(s, b, ai) {
-    const ts = tracksOf(b.k);
-    // (One more level bought, its stock kept: 0.4.)
-    for (const t of ts) probeU[t] = boughtIn(b, t);
-    probeU.rng = boughtIn(b, 'rng') + 1;
-    probe.k = b.k; probe.d = b.d | 0; probe.u = probeU; probe.s = b.s;
-    showRange(s, probe, ai, 'next');
-    for (const t of ts) delete probeU[t];
-  }
-
-  /**
-   * Ghost of the selected building at the hovered tile, the remove highlight, or the upgrade
-   * preview. `sel` is the building whose sheet is open (selectedReach): its reach is drawn
+   * Ghost of the selected building at the hovered tile, or the remove highlight. `sel` is the
+   * building whose sheet is open (selectedReach): its reach is drawn
    * already, so it is not drawn again here when the mouse (or a finger) is on it.
    */
   function drawPreview(s, view, sel = null) {
@@ -1219,34 +1163,6 @@ export function createRenderer(canvas, session) {
       return;
     }
 
-    if (tool === 'upgrade') {
-      if (!here) { tileOutline(px, py, 'rgba(255,255,255,0.5)', 2); return; }
-      // The track being bought: the one the interface names, or the kind's default.
-      const ts = tracksOf(here.k);
-      const track = view.track && ts.includes(view.track) ? view.track : defaultTrack(here.k);
-      const why = track ? canUpgrade(s, h.x, h.y, session.me, track) : 'noup';
-      const ok = why === null;
-      const mine = drawnBySelection(sel, ai);
-      if (!mine) showRange(s, here, ai, ok ? 'ok' : 'faint');
-      // Only a range upgrade changes what it reaches: show the reach it would have after (unless
-      // the selection has just drawn it).
-      if (track === 'rng' && boughtIn(here, 'rng') < maxIn(here.k, 'rng') && !(mine && sel.next)) showNext(s, here, ai);
-      rr(ctx, hr.x + 1, hr.y + 1, hr.w - 2, hr.h - 2, 5);
-      ctx.fillStyle = ok ? 'rgba(74,222,128,0.22)' : 'rgba(239,68,68,0.25)';
-      ctx.fill();
-      ctx.lineWidth = 3.5;
-      ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
-      ctx.stroke();
-      // What the click would do: the track's next level and its price, or why not.
-      let txt;
-      if (!track) txt = 'NO UPGRADES';
-      // (What buying does: the levels bought, never the stock, 0.4.)
-      else if (boughtIn(here, track) >= maxIn(here.k, track)) txt = `${TRACK_NAME[track]} MAXED`;
-      else txt = `${TRACK_NAME[track]} ${boughtIn(here, track) + 1}  $${upgradeCost(here, track)}`;
-      label(ctx, txt, hr.x + hr.w / 2, hr.y - 10, 12, ok ? '#86efac' : '#ff8a80', INK, 3.5);
-      return;
-    }
-
     const def = tool ? BUILD[tool] : null;
     if (def) {
       const d = def.rot ? (view.dir | 0) & 3 : 0;
@@ -1263,7 +1179,6 @@ export function createRenderer(canvas, session) {
       ghost.d = gd;
       ghost.o = session.me;
       ghost.a = gd * Math.PI / 2;
-      ghost.u = null;
       const fr = rectOf(ghost, gi, s.w);
       const gx = fr.x, gy = fr.y, gw = fr.w, gh = fr.h;
       showRange(s, ghost, gi, ok ? 'ok' : 'bad');

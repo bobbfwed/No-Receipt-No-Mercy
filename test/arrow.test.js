@@ -108,7 +108,7 @@ test('every named control has a place on screen', () => {
 function trainingSession(seed = 9) {
   return new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: createGame({ seed, training: true, zones: true }) });
 }
-const TOOLS = new Set(['upgrade', 'rebuild']);
+const TOOLS = new Set(['rebuild']);
 
 /** A target the screen can show: a known kind, a real button, a tile on the map, a named control. */
 function valid(t, s, label) {
@@ -271,22 +271,17 @@ test('a wrong building on the tile: its sheet fixes it (Remove, or Rotate), and 
   assert.deepEqual(at({ selected: { x: 10, y: 2 } }), { kind: 'control', name: 'remove' });
 });
 
-test('an upgrade: the Upgrade tool (with a mouse), then the building, then the Damage button in its sheet', () => {
+test('super shoppers: the Sprinkler button (a drag on a touch screen), its tile beside the samples, then the doors', () => {
+  // (Until 0.4 this lesson had the player buy damage upgrades; now he places a third Sprinkler.)
   const session = trainingSession();
   const tut = createTutorial(session);
-  tut.autoplay(STEPS.findIndex((st) => st.title === 'Upgrades, and super shoppers'));
+  tut.autoplay(STEPS.findIndex((st) => st.title === 'Super shoppers'));
   const st = tut.step, s = session.state;
   const at = (ui) => arrowTarget(st, s, tut.marks(), ui);
-  assert.deepEqual(at({}), { kind: 'button', k: 'upgrade' });
-  assert.deepEqual(at({ tool: 'upgrade' }), { kind: 'tile', x: 9, y: 13 });
-  assert.deepEqual(at({ tool: 'upgrade', selected: { x: 9, y: 13 } }), { kind: 'control', name: 'dmg' });
-  // A finger needs no tool: the building, then its sheet.
-  assert.deepEqual(at({ touch: true }), { kind: 'tile', x: 9, y: 13 });
-  assert.deepEqual(at({ touch: true, selected: { x: 9, y: 13 } }), { kind: 'control', name: 'dmg' });
-  // The first one done: on to the second, even with the first one's sheet still open.
-  for (let n = 0; n < 3; n++) session.send({ c: 'upgrade', x: 9, y: 13, t: 'dmg' });
-  assert.deepEqual(at({ selected: { x: 9, y: 13 } }), { kind: 'tile', x: 11, y: 13 });
-  for (let n = 0; n < 3; n++) session.send({ c: 'upgrade', x: 11, y: 13, t: 'dmg' });
+  assert.deepEqual(at({}), { kind: 'button', k: 'sprinkler' });
+  assert.deepEqual(at({ tool: 'sprinkler' }), { kind: 'tile', x: 7, y: 13 });
+  assert.deepEqual(at({ touch: true }), { kind: 'drag', k: 'sprinkler', x: 7, y: 13 });
+  session.send({ c: 'place', k: 'sprinkler', x: 7, y: 13, d: 0 });
   assert.deepEqual(at({}), { kind: 'control', name: 'doors' });
 });
 

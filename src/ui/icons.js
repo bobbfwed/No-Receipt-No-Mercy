@@ -113,8 +113,6 @@ const BUILDING = {
     <path d="M8 12l8-8M8 22l18-18M8 32l28-28M18 36l18-18M28 36l8-8" stroke="#222" stroke-width="3"/>
     <rect x="12" y="12" width="20" height="18" rx="2" fill="#121417" ${S}/>
     <path d="M17 18l6-2 5 1v6l-4 2-6-1z" fill="#c8924f" stroke="#111" stroke-width="1.2"/>`,
-  upgrade: `<circle cx="20" cy="20" r="15" fill="#16a34a" ${S}/>
-    <path d="M12 21l8-9 8 9M12 29l8-9 8 9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`,
   rebuild: `<circle cx="20" cy="20" r="15" fill="#2563eb" ${S}/>
     <path d="M12 28l10-10" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
     <path d="M21 12a6 6 0 0 1 8 8l-3-1-3-3z" fill="#fff"/>`,

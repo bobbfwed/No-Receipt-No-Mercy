@@ -6,7 +6,7 @@
 //   sound.attach(session)   listen to 'fx', 'say', 'review', 'report', 'players'; returns an unsubscribe
 //   sound.unlock()          call from a click or key press: browsers only allow audio after one
 //   sound.play(name, opts)  interface sounds: select, place, remove, rotate, nope, click, tutorial,
-//                           upgrade, rebuild, chat; and the deal of the cards (0.3.01): cardDeal,
+//                           rebuild, chat; and the deal of the cards (0.3.01): cardDeal,
 //                           cardIn {side, i}, cardSlot {i}, cardHand
 //                           (opts: passed to the effect, as the simulation's events are)
 //   sound.get(key) / sound.set(key, value)   levels 0..1 (0.3.03): 'volume' (the master) and the
@@ -30,7 +30,6 @@ import { hashText, built } from './synth.js';
 import { createGate } from './crowd.js';
 import { readSettings, settingsToSave, setLevel, toggleLevel, isOn, GROUP_KEYS } from './groups.js';
 import { SOUND_CHECK } from '../content/lines.js';
-import { maxIn } from '../sim/index.js';
 
 const STORE_KEY = 'returnsDept.sound';
 /** The four effect groups the old "Sound effects" switch stood for (get/set 'sfx'). */
@@ -48,7 +47,7 @@ const SAMPLES = {
 };
 
 /** Interface sounds play() accepts. */
-const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']);
+const UI_SOUNDS = new Set(['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'rebuild', 'chat']);
 // The deal of the cards (0.3.01): played by the deal screen from the state (src/ui/deal.js).
 for (const n of ['cardDeal', 'cardIn', 'cardSlot', 'cardHand']) UI_SOUNDS.add(n);
 
@@ -56,12 +55,11 @@ for (const n of ['cardDeal', 'cardIn', 'cardSlot', 'cardHand']) UI_SOUNDS.add(n)
 const BIG = new Set(['waveStart', 'waveEnd', 'won', 'lost', 'report', 'begun', 'bossIn', 'bossOut', 'bossEscape', 'endless']);
 /** Never thinned out or dropped for being busy (rare, and they mean something). */
 const VIP = new Set([...BIG, ...UI_SOUNDS, 'ready', 'side', 'gave', 'crawl', 'pep', 'pause', 'unpause']);
-/** Someone else's upgrade, rebuild or gift: still heard, but quieter than your own. */
+/** Someone else's rebuild or gift: still heard, but quieter than your own. */
 const OTHERS = 0.6;
 /**
- * The host hears his own upgrade and rebuild twice: the simulation event (which knows the new
- * level or how many came back) arrives during the click, then the interface asks for its button
- * sound. Whichever comes first plays; the other, within this many seconds, is skipped.
+ * The host hears his own rebuild twice: the simulation event (which knows how many came back)
+ * arrives during the click, then the interface asks for its button sound. Whichever comes first plays; the other, within this many seconds, is skipped.
  */
 const PAIR_SECS = 1.0;
 /** How far ahead the music is scheduled, and how often the scheduler wakes up (seconds). */
@@ -71,17 +69,6 @@ const TICK_MS = 120;
 const DUCK = 0.45;
 /** Music level while the game is paused (on top of DUCK while she talks). */
 const PAUSED = 0.3;
-
-/**
- * Did this upgrade take its track to the top level? Tracks have different tops (TUNE.maxLevel,
- * or the track's own `max`), so the rules are asked; with no track in the event, level 10.
- */
-function isTop(e) {
-  try {
-    const top = e.t ? maxIn(e.k, e.t) : 0;
-    return top > 0 ? (e.lv | 0) >= top : (e.lv | 0) >= 10;
-  } catch { return false; }
-}
 
 /** The settings saved in this browser (old saves with three on/off switches are read too). */
 function loadSettings() {
@@ -116,7 +103,7 @@ export function createSound() {
   const gate = createGate((Math.random() * 2147483646) | 0);
   let lastBigAt = -10;
   let session = null;       // the last attached session, for session.me
-  const unpaired = { ui: { upgrade: [], rebuild: [] }, fx: { upgrade: [], rebuild: [] } };
+  const unpaired = { ui: { rebuild: [] }, fx: { rebuild: [] } };
 
   // Music state.
   let music = null;         // { out: GainNode, timer, nextAt, bar } while playing
@@ -153,7 +140,7 @@ export function createSound() {
   }
 
   /**
-   * Own upgrades and rebuilds arrive both as an event and as a button sound (see PAIR_SECS).
+   * Own rebuilds arrive both as an event and as a button sound (see PAIR_SECS).
    * Returns true if the other one was already heard, so this one should stay quiet.
    */
   function heardAlready(from, key) {
@@ -236,15 +223,9 @@ export function createSound() {
         case 'shield': fire('shield'); break;
         // left > 0: the building took a hit and stands (the small clang); 0: destroyed (the wreck).
         case 'smash': fire('smash', { k: e.k, left: e.left | 0 }, { sub: e.left > 0 ? 'hit' : e.k }); break;
-        case 'upgraded': {
-          const o = { k: e.k, t: e.t, lv: e.lv, top: isTop(e) };
-          if (!mine(e.by)) fire('upgraded', o, { gain: OTHERS });
-          else if (!heardAlready('fx', 'upgrade')) fire('upgraded', o);
-          break;
-        }
         case 'rebuilt':
-          if (!mine(e.by)) fire('rebuilt', { n: e.n, short: e.short | 0 }, { gain: OTHERS });
-          else if (!heardAlready('fx', 'rebuild')) fire('rebuilt', { n: e.n, short: e.short | 0 });
+          if (!mine(e.by)) fire('rebuilt', { n: e.n }, { gain: OTHERS });
+          else if (!heardAlready('fx', 'rebuild')) fire('rebuilt', { n: e.n });
           break;
         // A Rebuild press paid for wrecks that must wait (0.3.04): money changing hands, nothing
         // built yet, so the sound of money handed over. Its building comes later as 'rebuilt'.
@@ -408,7 +389,7 @@ export function createSound() {
 
   function play(name, opts) {
     if (!UI_SOUNDS.has(name)) return;
-    if ((name === 'upgrade' || name === 'rebuild') && heardAlready('ui', name)) return;
+    if (name === 'rebuild' && heardAlready('ui', name)) return;
     fire(name, opts && typeof opts === 'object' ? opts : {});
   }
 
@@ -500,7 +481,7 @@ export function createSound() {
 
   function attach(ses) {
     if (!ses || typeof ses.on !== 'function') return () => {};
-    session = ses; // for session.me: whose upgrade, rebuild or gift an event is
+    session = ses; // for session.me: whose rebuild or gift an event is
     const offs = [
       ses.on('fx', onFx),
       ses.on('say', onSay),

@@ -1,6 +1,6 @@
 // Short-lived effects driven by simulation events: floating cash, speech blips, "WHOA" pops,
 // forklift shots, barcode laser beams, sprinkler bursts, wreckage when a gym bro smashes something,
-// shield flashes round cosplayers, sparkles when something is upgraded, the boss's entrance,
+// shield flashes round cosplayers, the boss's entrance,
 // pep talks, exit and (worst of all) arrival at a till, and a Pregnant Lady popping (or a Barcode
 // Laser stopping her: "NOT TODAY") and her babies' small refunds, a Midnight Release's mob
 // walking in (the boss's banner in purple) and a Card Trader ripping a pack. A fixed pool of effect
@@ -12,7 +12,7 @@ import { drawItem } from './items.js';
 import { KIND_COLOURS } from './buildings.js';
 
 const T = TILE;
-const TEXT = 1, BLIP = 2, POP = 3, SHOT = 4, SPRAY = 5, DEBRIS = 6, UPGRADE = 7, DENT = 8;
+const TEXT = 1, BLIP = 2, POP = 3, SHOT = 4, SPRAY = 5, DEBRIS = 6, DENT = 8;
 const BEAM = 9, MARK = 10, SHIELD = 11;
 // The boss: his title over the entrance he came in by, his pep talks, him storming off (the
 // bounty), and him reaching a till (a disaster).
@@ -44,10 +44,6 @@ const PEP_WORDS = [
 /** What he says as he storms off, and when he reaches a till. */
 const BOSS_QUITS = ["I'M CALLING CORPORATE", 'THIS IS GOING IN YOUR REVIEW', "YOU'RE ALL FIRED", 'NOT A CULTURE FIT'];
 const BOSS_WINS = ['FULL REFUND. AND YOUR JOBS.', 'I OWN THIS STORE NOW', 'ENJOY UNEMPLOYMENT', 'BONUS SEASON, BITCHES'];
-/** Upgrade tracks: the colour of the flash and the word on it. */
-const TRACK_LOOK = {
-  dmg: ['#ff6b5e', 'DMG'], spd: ['#5cc8ff', 'SPD'], rng: ['#4ade80', 'RNG'], dur: ['#ffd23f', 'DUR'],
-};
 /** What the TV Salesman shouts now and then, from his stand. */
 const PITCH_LINES = ['ONLY $19.99', 'BUT WAIT!', 'LOOK AT THAT MEAT', 'CUTS LIKE YOUR EX', 'NO MONEY DOWN', 'CALL NOW, LOSER'];
 /** Ms between the salesman's shouts (pitch events come several a second in a crowd). */
@@ -87,7 +83,7 @@ export function createEffects() {
    * the till on that tile, so only the till the shopper reached flashes, whichever wall it is in);
    * bossEscAt: when a boss last reached a till (the renderer flashes the edges of the screen red).
    */
-  const timers = { sprayAt: null, shotAt: null, railAt: null, saleAt: null, upAt: null, tillAt: null, bossEscAt: -1e9 };
+  const timers = { sprayAt: null, shotAt: null, railAt: null, saleAt: null, tillAt: null, bossEscAt: -1e9 };
   let W = 0, H = 0;
   let pitchAt = -1e9; // when the salesman last shouted
   /** Sizes the per-tile timers for a map (they are kept if the size has not changed). */
@@ -98,7 +94,6 @@ export function createEffects() {
     timers.shotAt = new Float64Array(W * H).fill(-1e9);
     timers.railAt = new Float64Array(W * H).fill(-1e9);
     timers.saleAt = new Float64Array(W * H).fill(-1e9);
-    timers.upAt = new Float64Array(W * H).fill(-1e9);
     timers.tillAt = new Float64Array(W * H).fill(-1e9);
   }
   /**
@@ -402,21 +397,6 @@ export function createEffects() {
           }
           break;
         }
-        case 'upgraded': {
-          if (!(e.x >= 0 && e.y >= 0 && e.x < W && e.y < H)) break;
-          const ai = e.y * W + e.x;
-          timers.upAt[ai] = now;
-          const b = s && s.grid[ai];
-          const [cx, cy] = centre(s, ai, e.k, b ? b.d | 0 : 0);
-          f = add(UPGRADE, now, cx, cy);
-          if (f) {
-            const look = TRACK_LOOK[e.t];
-            f.text = look ? `${look[1]} ${e.lv | 0}` : 'LV ' + (e.lv | 0);
-            f.color = look ? look[0] : '#ffd23f';
-            f.r = (e.x * 7 + e.y * 3) % 10;
-          }
-          break;
-        }
         default:
       }
     }
@@ -439,7 +419,7 @@ export function createEffects() {
   function nearestSalesman(s, x, y) {
     let best = -1, bd = Infinity;
     const g = s.grid;
-    // Only near the shopper: his reach is a few tiles, upgraded a few more.
+    // Only near the shopper: his reach is a few tiles, stocked with Extension Cord a few more.
     const r = 10, x0 = Math.max(0, (x | 0) - r), x1 = Math.min(W - 1, (x | 0) + r);
     const y0 = Math.max(0, (y | 0) - r), y1 = Math.min(H - 1, (y | 0) + r);
     for (let ty = y0; ty <= y1; ty++) {
@@ -477,7 +457,6 @@ export function createEffects() {
         case SPRAY: spray(ctx, e, k01); break;
         case DEBRIS: if (e.text === 'crate') debris(ctx, e, k01); else wreckage(ctx, e, k01); break;
         case DENT: dent(ctx, e, k01); break;
-        case UPGRADE: upgrade(ctx, e, k01); break;
         case BEAM: beam(ctx, e, k01); break;
         case MARK: mark(ctx, e, k01); break;
         case SHIELD: shield(ctx, e, k01); break;
@@ -1059,7 +1038,7 @@ function wreckage(ctx, e, k) {
   ctx.globalAlpha = 1;
 }
 
-/** An upgraded building that was hit and lost a level: a jolt of stars and a few chips. */
+/** A building that was hit and is still standing: a jolt of stars and a few chips. */
 function dent(ctx, e, k) {
   const seed = e.x2 | 0;
   const col = KIND_COLOURS[e.text] || KIND_COLOURS.crate;
@@ -1078,28 +1057,6 @@ function dent(ctx, e, k) {
     paint(ctx, col[j % 3], 1);
     ctx.restore();
   }
-  ctx.globalAlpha = 1;
-}
-
-/** Upgraded: a gold ring bursting out, sparkles spinning off, and the new level rising. */
-function upgrade(ctx, e, k) {
-  const r = 10 + k * 26;
-  ctx.globalAlpha = Math.max(0, 1 - k * 1.3);
-  ctx.beginPath();
-  ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-  ctx.strokeStyle = e.color || '#ffd23f';
-  ctx.lineWidth = 4 * (1 - k) + 1;
-  ctx.stroke();
-  ctx.globalAlpha = fadeOut(k, 0.55);
-  for (let j = 0; j < 6; j++) {
-    const a = e.r + (j * Math.PI * 2) / 6 + k * 2;
-    const d = 8 + k * 30;
-    starPath(ctx, e.x + Math.cos(a) * d, e.y + Math.sin(a) * d * 0.8, 4.5 * (1 - k * 0.5), a);
-    paint(ctx, j % 2 ? '#ffffff' : '#ffe14a', 1.1);
-  }
-  ctx.globalAlpha = fadeOut(k, 0.6);
-  const grow = k < 0.15 ? 0.5 + (k / 0.15) * 0.5 : 1;
-  label(ctx, e.text, e.x, e.y - 24 - k * 18, 15 * grow, e.color || '#ffd23f', INK, 4);
   ctx.globalAlpha = 1;
 }
 

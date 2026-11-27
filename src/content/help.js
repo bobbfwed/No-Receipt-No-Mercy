@@ -45,22 +45,22 @@ export const HOW = {
   },
   sprinkler: {
     does: 'Wears down the patience of up to four shoppers within about 2 tiles, twice a second. In a crowd it picks the four nearest the tills.',
-    use: 'Short range, so put it right beside the route, best of all where shoppers are slowed or stopped. It can be upgraded for damage, speed, range and durability.',
+    use: 'Short range, so put it right beside the route, best of all where shoppers are slowed or stopped. Supplies from The Back make it hit harder, spray faster and reach further.',
     maze: 'Blocks all shoppers.',
   },
   forklift: {
     does: 'Hits one shopper hard from up to 6 tiles away. It always picks the shopper closest to the tills.',
-    use: 'Put it where its circle covers a long stretch of the route. It can be upgraded for damage, speed, range and durability.',
+    use: 'Put it where its circle covers a long stretch of the route. Supplies from The Back make it hit harder, fire faster and reach further.',
     maze: 'Blocks all shoppers.',
   },
   wetfloor: {
     does: 'Shoppers crossing it walk at half speed. Dads ignore the sign and have a 1 in 3 chance of slipping and lying stunned.',
-    use: 'It does not block the way, so it can sit right in a gap, next to a sprinkler. Mobility scooters are not affected. Upgrades make it slower to cross and slippier.',
+    use: 'It does not block the way, so it can sit right in a gap, next to a sprinkler. Mobility scooters are not affected. Bottled Spite from The Back makes it slower to cross and slippier.',
     maze: 'Does not block anyone.',
   },
   samples: {
     does: 'Bargain Hunters, Coupon Clippers and Pregnant Ladies within about 2 tiles stop for 2 seconds to eat.',
-    use: 'Put sprinklers beside it so they are sprayed while they stand there. Dads, Karens and scooters do not stop. Upgrades hold shoppers longer and reach further.',
+    use: 'Put sprinklers beside it so they are sprayed while they stand there. Dads, Karens and scooters do not stop. Supplies from The Back make them stop for longer, from further away.',
     maze: 'Blocks all shoppers.',
   },
   railgun: {
@@ -70,7 +70,7 @@ export const HOW = {
   },
   salesman: {
     does: 'A man demonstrating knives and barbecues on a television. Each shopper who comes within 4.5 tiles may walk over to the stand and watch for 2.5 seconds, or hurry past to get away from him. If something is in his way he watches from as near as he can get. Runaway kids usually stop to watch the television.',
-    use: 'It takes up two tiles by two. It is the one thing that makes some dads stop (1 in 5), but more of them speed up (3 in 10), so put damage round the stand, where they stop, not after it. Mobility scooters nearly always stop. Upgrading his pitch makes more shoppers stop, for longer, and fewer hurry.',
+    use: 'It takes up two tiles by two. It is the one thing that makes some dads stop (1 in 5), but more of them speed up (3 in 10), so put damage round the stand, where they stop, not after it. Mobility scooters nearly always stop. Bottled Spite from The Back makes more shoppers stop, for longer, and fewer hurry.',
     maze: 'Blocks all shoppers.',
   },
 };
@@ -103,15 +103,15 @@ export const BACK_HOW = {
   },
   // The machines (0.4, stage 3). Each takes junk and makes one supply at Store Brand.
   still: {
-    does: `Takes returned junk and boils it down into Bottled Spite, one every ${secs(BACK.makeSecs)}. Security stocked with Spite hits harder: Store Brand works like ${BACK.tierLevel[1]} damage upgrades, and each tier up from a Rebrander adds ${BACK.tierLevel[2] - BACK.tierLevel[1]} more.`,
+    does: `Takes returned junk and boils it down into Bottled Spite, one every ${secs(BACK.makeSecs)}. Security stocked with Spite hits harder: Store Brand works like ${BACK.tierLevel[1]} levels of damage, and each tier up from a Rebrander adds ${BACK.tierLevel[2] - BACK.tierLevel[1]} more.`,
     use: 'Feed junk into its back or either side; the Spite comes out of the side with the arrow. Run a belt from there into a Dumbwaiter, the hatch under every security building, or past an Unpaid Intern standing beside one. Press R before placing to turn it.',
   },
   cannery: {
-    does: `Takes returned junk and cans it as Rage Cola, one every ${secs(BACK.makeSecs)}. Security on Cola fires faster: Store Brand works like ${BACK.tierLevel[1]} speed upgrades.`,
+    does: `Takes returned junk and cans it as Rage Cola, one every ${secs(BACK.makeSecs)}. Security on Cola fires faster: Store Brand works like ${BACK.tierLevel[1]} levels of speed.`,
     use: 'Junk in at the back or the sides, Cola out of the side with the arrow, and on to a Dumbwaiter. Press R before placing to turn it.',
   },
   spooler: {
-    does: `Takes returned junk and winds it into Extension Cord, one every ${secs(BACK.makeSecs)}. Security plugged into Cord reaches further: Store Brand works like ${BACK.tierLevel[1]} range upgrades.`,
+    does: `Takes returned junk and winds it into Extension Cord, one every ${secs(BACK.makeSecs)}. Security plugged into Cord reaches further: Store Brand works like ${BACK.tierLevel[1]} levels of range.`,
     use: 'Junk in at the back or the sides, Cord out of the side with the arrow, and on to a Dumbwaiter. Press R before placing to turn it.',
   },
   winder: {
@@ -143,7 +143,7 @@ export const SHOPPER_HELP = {
   scooter: { trick: 'Cannot be slowed by anything.', beat: 'Raw damage over a long route.' },
   gymbro: {
     trick: `Walks straight through crate stacks, wrecking any in his way and any he passes, and now and then something else beside him: a belt, a machine, a tower. But he only has ${word(TUNE.smashMax)} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else.`,
-    beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts, even one a Durability upgrade soaks up (the damage is forgotten every sales event), so a durable crate stack where he first meets your maze takes a hit off him for nothing, and makes him walk the long way round. Press B to rebuild what he wrecked at half price.',
+    beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts, even one that Duct Tape from The Back soaks up (the damage is forgotten every sales event), so a taped-up building where he first meets your maze takes a hit off him for nothing. A crate stack goes down in one hit. Press B to rebuild what he wrecked for half of what you paid.',
   },
   drinker: { trick: 'Weaves along at a speed that keeps changing. At corners of the route he may fall over and lie there for 4 seconds, and everyone else has to squeeze past him at a third of their speed.', beat: 'Corners near your security: when he goes down, the queue behind him stands in the spray.' },
   dog: { trick: 'Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.', beat: 'Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.' },
@@ -222,23 +222,16 @@ export const SUPER_HELP = {
   cosplay: 'Two and a half times the patience. Shields shoppers within 1.6 tiles and takes only half of what he soaks up.',
 };
 
-/** What the Upgrade tool does, for the same info card. */
-export const HOW_UPGRADE = {
-  does: 'Upgrades a building. Each building has its own kinds of upgrade, bought separately: damage, speed, range and durability for security; speed and durability for factory machines; durability only for belts, chutes and crates.',
-  use: 'Click a building and choose what to upgrade. Each level of one kind costs more than the last. Durability is how many gym bro hits it survives in one sales event.',
-  maze: '',
-};
-
 /** What the Rebuild button does (0.3.04: the money goes when you press; the building when it can). */
 export const HOW_REBUILD = {
-  does: 'Pays to put back everything of yours that gym bros have wrecked, oldest first, at half of what you had spent on it, upgrades included.',
-  use: 'Press it (or B) once. The money is taken there and then. Each wreck goes back at once, or as soon as nothing is in the way (a shopper standing in the hole, or the crowd it would wall in); an orange cone marks one that is paid for and waiting. Short of money, a wreck is ordered with only the upgrades you can afford, and takes more of your cash while it waits, up to all of them. If you cannot afford even half its base price it is not ordered: press again when you can. Anything wrecked after you press needs another press. Building the same thing by hand on its rubble gets the same deal.',
+  does: 'Pays to put back everything of yours that gym bros have wrecked, oldest first, each for half of what you paid for it. Its supplies are gone: The Back has to stock it again.',
+  use: 'Press it (or B) once. The money is taken there and then. Each wreck goes back at once, or as soon as nothing is in the way (a shopper standing in the hole, or the crowd it would wall in); an orange cone marks one that is paid for and waiting. A wreck you cannot afford in full is not ordered: press again when you can. Anything wrecked after you press needs another press. Building the same thing by hand on its rubble gets the same deal.',
   maze: '',
 };
 
 /** What the Remove tool does, for the same info card. */
 export const HOW_REMOVE = {
-  does: 'Removes a building and gives back 75% of everything spent on it, to whoever paid.',
+  does: 'Removes a building and gives back 75% of what was paid for it, to whoever paid.',
   use: 'Click or drag over buildings. Right-clicking does the same without picking this tool.',
   maze: '',
 };

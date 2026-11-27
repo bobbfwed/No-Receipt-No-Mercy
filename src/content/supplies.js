@@ -1,8 +1,9 @@
 // The Back's supplies (0.4) as the interface shows them: their names, colours and the words on the
-// warnings, which tracks a building takes, what its stock is doing for it right now, and a Returns
-// Drop's rate. Pure: no DOM, so the tests read it too. The numbers all come from the rules.
+// warnings, which tracks a building takes, what its stock is doing for it right now, what each
+// track is called and its numbers look like, and a Returns Drop's rate. Pure: no DOM, so the tests
+// and the README tool read it too. The numbers all come from the rules.
 import {
-  BUILD, BACK, TICK_HZ, STOCK_TRACKS, unitsIn, usesIn, stockLevel, boughtIn, dropTicks, dropUpCost,
+  BUILD, BACK, TICK_HZ, SHOPPERS, STOCK_TRACKS, unitsIn, usesIn, stockLevel, dropTicks, dropUpCost,
 } from '../sim/index.js';
 
 /**
@@ -27,8 +28,8 @@ export const outOfText = (track) => `OUT OF ${SUPPLIES[track] ? SUPPLIES[track].
 
 const tracksCache = new Map();
 /**
- * The tracks a building of kind k takes supplies for, in STOCK_TRACKS order: the upgrade tracks it
- * has, and Razor Wire for every kind with Dumbwaiters (`lift`). Empty for anything else. The same
+ * The tracks a building of kind k takes supplies for, in STOCK_TRACKS order: the tracks it has
+ * (BUILD[k].up), and Razor Wire for every kind with Dumbwaiters (`lift`). Empty for anything else. The same
  * list every time for a kind (the renderer asks every frame).
  */
 export function stockTracks(k) {
@@ -51,17 +52,52 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * What one track of a building's stock is doing for it right now, in a few words: "+2 levels of
- * damage", "soaks up 3 gym bro hits", or "EMPTY". A stocked track that gives no more than the levels
- * already bought says so (until bought upgrades go, a track works at the larger of the two).
+ * damage", "soaks up 3 gym bro hits", or "EMPTY".
  */
 export function stockGives(b, track) {
   if (!usesIn(b, track)) return 'EMPTY';
-  const s = SUPPLIES[track];
   if (track === 'dur') return `soaks up ${plural(usesIn(b, track), 'gym bro hit')}`;
   if (track === 'wire') return `enough for ${plural(usesIn(b, track), 'dad')} (it does nothing yet)`;
-  const lv = stockLevel(b, track), bought = boughtIn(b, track);
-  if (lv <= bought) return `nothing more than the ${plural(bought, 'level')} bought`;
-  return `+${plural(lv, 'level')} of ${s.gives}`;
+  return `+${plural(stockLevel(b, track), 'level')} of ${SUPPLIES[track].gives}`;
+}
+
+const one = (n) => (Math.round(n * 10) / 10).toString();
+const pct = (n) => `${Math.round(n * 100)}%`;
+/** Seconds: short times need two decimals, or a 10% faster sprinkler reads "0.5 → 0.5". */
+const sec = (n) => (n < 2 ? (Math.round(n * 100) / 100).toString() : one(n));
+
+/** What a track is called on a kind of building ("Damage" on a tower, "Pitch" on the salesman). */
+export function trackName(k, track) {
+  if (track === 'dmg') {
+    if (k === 'wetfloor') return 'Slipperiness';
+    if (k === 'samples') return 'Hold time';
+    if (k === 'salesman') return 'Pitch';
+    return 'Damage';
+  }
+  if (track === 'spd') return 'Speed';
+  if (track === 'rng') return k === 'railgun' ? 'Beam length' : 'Range';
+  return 'Durability';
+}
+
+/** A dad's chances at a salesman with these numbers: the owner's yardstick for the pitch. */
+const dadStops = (st) => 1 - (1 - SHOPPERS.dad.pitch[0]) * st.stopLeft;
+const dadRushes = (st) => SHOPPERS.dad.pitch[1] * st.rushMul;
+
+/**
+ * What the numbers of one track look like, as [label, value] pairs, for a building's stats (statsOf):
+ * the building sheet's working numbers, and the handbook's and README's tables by tier.
+ */
+export function trackNumbers(k, track, st) {
+  const def = BUILD[k];
+  if (track === 'dmg') {
+    if (def.tower) return [['hit', one(st.dmg)]];
+    if (k === 'wetfloor') return [['walking speed', pct(st.slow)], ['dads slip', pct(st.slip)]];
+    if (k === 'samples') return [['holds for', `${one(st.secs)} s`]];
+    if (k === 'salesman') return [['they watch', `${one(st.secs)} s`], ['dads stop', pct(dadStops(st))], ['dads hurry', pct(dadRushes(st))]];
+  }
+  if (track === 'spd') return [['fires every', `${sec(st.cd)} s`]];
+  if (track === 'rng') return [[k === 'railgun' ? 'beam' : 'reach', `${one(st.range)} tiles`]];
+  return [['survives', `${st.hits} gym bro hit${st.hits === 1 ? '' : 's'} a sales event`]];
 }
 
 /**
@@ -79,18 +115,21 @@ export function stockRows(b) {
   });
 }
 
-/** Pieces of junk a minute from a Returns Drop with `lv` cash levels, to one decimal place. */
-export const junkPerMinute = (lv) => Math.round((600 * TICK_HZ) / dropTicks(lv)) / 10;
+/**
+ * Pieces of junk a minute from a Returns Drop with `lv` cash levels, to one decimal place. With
+ * `state`, the game's cards count (offatruck: dropTicks).
+ */
+export const junkPerMinute = (lv, state = null) => Math.round((600 * TICK_HZ) / dropTicks(lv, state)) / 10;
 
 /**
  * What a Returns Drop's sheet says: { perMin, lv, max, cost (0 at the top), next (junk a minute
  * after one more level, or 0), why ('' when the MORE JUNK button works, else why it does not) }.
  */
-export function dropInfo(p, cash) {
+export function dropInfo(p, cash, state = null) {
   const lv = (p && p.lv) | 0, max = BACK.dropUpMax;
   const cost = dropUpCost(lv);
   let why = '';
   if (lv >= max) why = 'Top level';
   else if (cash < cost) why = `$${Math.ceil(cost - cash).toLocaleString('en-US')} short`;
-  return { perMin: junkPerMinute(lv), lv, max, cost, next: lv < max ? junkPerMinute(lv + 1) : 0, why };
+  return { perMin: junkPerMinute(lv, state), lv, max, cost, next: lv < max ? junkPerMinute(lv + 1, state) : 0, why };
 }

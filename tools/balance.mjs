@@ -18,14 +18,15 @@
 //   honest    builds a fixed plan as money allows (production lines that wall the floor into a
 //             zigzag, with security at every gap and on the dads' short cut), patches what gym
 //             bros wreck, and then stops spending
-//   keen      the same, then keeps buying forklifts on a loose grid, and when the floor is full
-//             spends everything on upgrades (damage, speed and range of its towers), cheapest first
-//   focus     like keen, but pours its upgrade money into the sprinklers nearest the entrance,
-//             one at a time, as far as each will go, cheapest track first (how the owner plays)
+//   keen      the same, then keeps buying forklifts on a loose grid
+//   focus     until 0.4 like keen, but it poured its upgrade money into the sprinklers nearest the
+//             entrance (how the owner plays). Bought upgrades are gone (0.4) and the bots do not yet
+//             build supply lines in The Back (a later stage rewrites them), so it now plays exactly
+//             as keen; it is kept so the earlier results and tools/cardtest.mjs still line up
 //   stalls    like keen, but before its forklifts it also puts a TV Salesman, two Free Sample
 //             tables and four Wet Floor Signs in each channel of the maze (to measure the cards
 //             about those buildings; tools/cardtest.mjs stalls)
-// None of the others builds the Barcode Laser or the TV Salesman, and none buys durability. The
+// None of the others builds the Barcode Laser or the TV Salesman. The
 // honest plan already has a Free Sample table at each gap but the first, and Wet Floor Signs.
 // Any bot may be given the steady opening by adding "+steady" to its name (keen+steady): it never
 // sits on cash that would buy its next Press while nothing else in its plan is affordable. Without
@@ -35,11 +36,8 @@
 // --bots=keen,focus+steady chooses the bots (default: nothing, honest, keen, focus).
 import { pathToFileURL } from 'node:url';
 import {
-  createGame, addPlayer, applyCommand, step, canPlace, canUpgrade, upgradeCost, buildPrice, BUILD, TICK_HZ, MAP_SIZES, mapSize,
+  createGame, addPlayer, applyCommand, step, canPlace, buildPrice, TICK_HZ, MAP_SIZES, mapSize,
 } from '../src/sim/index.js';
-
-/** The upgrade tracks the bots buy for their towers. */
-const BOT_TRACKS = ['dmg', 'spd', 'rng'];
 
 const S = 1, N = 3;
 
@@ -133,7 +131,7 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
   const total = list.length + machines.length;
   let fund = 0, lastCash = me.cash;
   let next = 0; // how far down the list it has got
-  let bought = 0, upgrades = 0, rebuilt = 0, wrecked = 0, stolen = 0;
+  let bought = 0, rebuilt = 0, wrecked = 0, stolen = 0;
   // Mystery Boxes Card Traders took off the belts and ripped open (0.3.01), in all and this wave.
   let ripped = 0, rippedNow = 0;
   const rows = [];
@@ -178,43 +176,6 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
       next++;
     }
     lastCash = me.cash;
-    if (next < list.length) return;
-    if (bot === 'focus') {
-      // The first sprinklers in the plan are the ones nearest the entrance.
-      for (const [k, x, y] of list) {
-        if (k !== 'sprinkler') continue;
-        for (;;) {
-          const b = s.grid[y * s.w + x];
-          if (!b || b.k !== 'sprinkler') break;
-          // Its cheapest track next.
-          let t = null, cost = Infinity;
-          for (const tr of BOT_TRACKS) { const c = upgradeCost(b, tr); if (c && c < cost) { cost = c; t = tr; } }
-          if (!t) break; // every track is at the top: on to the next sprinkler
-          if (canUpgrade(s, x, y, 0, t) !== null || !applyCommand(s, 0, { c: 'upgrade', x, y, t }).ok) return; // save up for it
-          upgrades++;
-        }
-      }
-      return;
-    }
-    if (bot !== 'keen' && bot !== 'stalls') return;
-    // Nothing left to build: upgrade, cheapest first. Sprinklers sit at the gaps everyone must
-    // pass, so it will pay up to three times as much for one of those as for a forklift.
-    for (;;) {
-      let best = -1, track = null, cost = Infinity, score = Infinity;
-      for (let i = 0; i < s.grid.length; i++) {
-        const b = s.grid[i];
-        if (!b || b.part !== undefined || !BUILD[b.k].tower) continue;
-        for (const t of BOT_TRACKS) {
-          const c = upgradeCost(b, t);
-          const sc = b.k === 'sprinkler' ? c / 3 : c;
-          if (c && sc < score) { score = sc; cost = c; best = i; track = t; }
-        }
-      }
-      if (best < 0 || me.cash < cost) return;
-      const x = best % s.w, y = (best / s.w) | 0;
-      if (canUpgrade(s, x, y, 0, track) !== null || !applyCommand(s, 0, { c: 'upgrade', x, y, t: track }).ok) return;
-      upgrades++;
-    }
   }
 
   while (s.phase !== 'won' && s.phase !== 'lost' && s.tick < limit) {
@@ -245,7 +206,7 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
         stolen += s.ws.stolen;
         rows.push({
           wave: s.wave, escaped: s.ws.escaped, stopped: s.ws.stopped, wrecked: s.ws.wrecked, stolen: s.ws.stolen,
-          earned: s.ws.earned, cash: Math.round(me.cash), refunds: s.refunds, built: bought, up: upgrades, ripped: rippedNow,
+          earned: s.ws.earned, cash: Math.round(me.cash), refunds: s.refunds, built: bought, ripped: rippedNow,
           who: Object.entries(byKind).map(([k, n]) => k + ' ' + n).join(', '),
         });
         rippedNow = 0;
@@ -255,7 +216,7 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
   return {
     hand: s.cards || [],
     bot, result: s.phase, wave: s.wave, refunds: s.refunds, limit: s.refundLimit, cash: Math.round(me.cash),
-    bought, of: total, upgrades, rebuilt, wrecked, stolen, ripped, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
+    bought, of: total, rebuilt, wrecked, stolen, ripped, minutes: (s.tick / TICK_HZ / 60).toFixed(1), rows,
     ...(keep ? { state: s } : null),
   };
 }
@@ -285,13 +246,13 @@ function main() {
       const result = r.result === 'lost' ? 'LOST' : endless ? 'ALIVE' : r.result.toUpperCase();
       console.log(`== ${bot.padEnd(7)} ${result.padEnd(5)} wave ${String(r.wave).padStart(2)}, `
         + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
-        + `${r.upgrades} upgrades, ${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.stolen} stolen (${r.ripped} boxes ripped), ${r.minutes} min`
+        + `${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.stolen} stolen (${r.ripped} boxes ripped), ${r.minutes} min`
         + (cards ? `, cards ${r.hand.join(' ') || 'none'}` : ''));
       if (!verbose) continue;
-      console.log('wave  escaped  stopped  wrecked  stolen  ripped  earned    cash  refunds   built  upgr  who got through');
+      console.log('wave  escaped  stopped  wrecked  stolen  ripped  earned    cash  refunds   built  who got through');
       for (const w of r.rows) {
-        console.log([w.wave, w.escaped, w.stopped, w.wrecked, w.stolen, w.ripped, w.earned, w.cash, w.refunds, w.built, w.up]
-          .map((v, i) => String(v).padStart([4, 8, 8, 8, 7, 7, 7, 7, 8, 7, 5][i])).join(' ') + '  ' + w.who);
+        console.log([w.wave, w.escaped, w.stopped, w.wrecked, w.stolen, w.ripped, w.earned, w.cash, w.refunds, w.built]
+          .map((v, i) => String(v).padStart([4, 8, 8, 8, 7, 7, 7, 7, 8, 7][i])).join(' ') + '  ' + w.who);
       }
     }
   }

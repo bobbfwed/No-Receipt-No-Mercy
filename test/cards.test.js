@@ -8,8 +8,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, canPlace, setPlayerOnline, waveSpec, statsOf, spentOn, upgradeCost,
-  levelCost, rebuildDeal, buildPrice, dealCards, cleanHand, hasCard, cardKind, cardKinds, cardParts, cardsShown,
+  createGame, addPlayer, applyCommand, step, canPlace, setPlayerOnline, waveSpec, statsOf, spentOn,
+  rebuildDeal, buildPrice, dropTicks, itemCode, unitsIn, BACK, STOCK_TRACKS, DIRS, dealCards, cleanHand, hasCard, cardKind, cardKinds, cardParts, cardsShown,
   revealTick, dealLength, idShare, smashReady, patienceFor, bossPatience, CARDS, DEALABLE, CARDS_APART,
   CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
@@ -174,11 +174,11 @@ test('the deal: a lead-in, a card every TUNE.cardSecs, a pause, then the first b
   assert.ok(s.phaseT > 0, 'the clock starts on the first build');
 });
 
-test('nothing can be built, upgraded or started during the deal; skipping, speed and role can be set', () => {
+test('nothing can be built or started during the deal; skipping, speed and role can be set', () => {
   const s = game(true);
   step(s);
   assert.equal(canPlace(s, 'crate', 5, 5, 0), 'cards');
-  for (const cmd of [{ c: 'place', k: 'crate', x: 5, y: 5 }, { c: 'start' }, { c: 'upgrade', x: 5, y: 5 }, { c: 'rebuild' },
+  for (const cmd of [{ c: 'place', k: 'crate', x: 5, y: 5 }, { c: 'start' }, { c: 'rebuild' },
     { c: 'side', side: 'office' }, { c: 'give', to: 0, n: 1 }, { c: 'remove', x: 5, y: 5 }, { c: 'ready', on: true }]) {
     assert.deepEqual(applyCommand(s, 0, cmd), { ok: false, why: 'cards' }, cmd.c);
   }
@@ -429,7 +429,7 @@ test('clearance, lootbox, asseenontv, regifting, artisanal: what goods sell for'
 
 test('artisanal and premature: machines take longer; security fires faster and reaches less far', () => {
   const s = game(['artisanal', 'premature']), plain = game();
-  for (const b of [{ k: 'press' }, { k: 'packer', u: { spd: 2 } }]) {
+  for (const b of [{ k: 'press' }, { k: 'packer' }]) {
     near(statsOf(b, s).time, statsOf(b).time * CARDS.artisanal.work, b.k);
   }
   near(statsOf({ k: 'unpacker' }, s).period, statsOf({ k: 'unpacker' }).period * CARDS.artisanal.work, 'unpacker');
@@ -641,7 +641,7 @@ test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, 
       assert.equal(price([card], k), Math.round(BUILD[k].cost * CARDS[card].cost[BUILD[k].group]), `${card} ${k}`);
     }
   }
-  // Paid, and sold back at the usual share of what was paid. Upgrades keep their prices.
+  // Paid, sold back at the usual share of what was paid, and rebuilt for half of what was paid.
   const s = game(['shrinkflation']);
   const cash = s.players[0].cash;
   assert.ok(applyCommand(s, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
@@ -649,7 +649,7 @@ test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, 
   const b = s.grid[5 * s.w + 5];
   assert.equal(b.c, price(['shrinkflation'], 'forklift'));
   assert.equal(spentOn(b), b.c);
-  assert.equal(upgradeCost(b, 'dmg'), levelCost('forklift', 'dmg', 0));
+  assert.equal(rebuildDeal({ k: 'forklift', c: b.c }, Infinity).pay, Math.floor(b.c * TUNE.rebuildShare));
   const before = s.players[0].cash;
   applyCommand(s, 0, { c: 'remove', x: 5, y: 5 });
   assert.equal(s.players[0].cash - before, Math.floor(b.c * TUNE.sellBack));
@@ -663,43 +663,81 @@ test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, 
   assert.equal('c' in plain.grid[5 * plain.w + 5], false);
 });
 
-test('offatruck and mallcop: a new building of the group comes with a free level that adds nothing to its worth', () => {
-  for (const [card, k, other] of [['offatruck', 'press', 'forklift'], ['mallcop', 'forklift', 'press']]) {
-    const s = game([card]);
-    const cash = s.players[0].cash;
-    const ev = [];
-    assert.ok(applyCommand(s, 0, { c: 'place', k, x: 5, y: 5, d: 0 }, ev).ok);
-    assert.equal(cash - s.players[0].cash, BUILD[k].cost, 'paid the usual price');
+test('mallcop: security bought new arrives with Store Brand of every supply it takes but Razor Wire', () => {
+  const units = CARDS.mallcop.units;
+  for (const k of SHOP_KINDS.filter((kind) => BUILD[kind].lift)) {
+    const s = game(['mallcop']);
+    const cash = s.players[0].cash, rng = s.rng;
+    assert.ok(applyCommand(s, 0, { c: 'place', k, x: 5, y: 5, d: 0 }).ok, k);
+    assert.equal(cash - s.players[0].cash, BUILD[k].cost, `${k}: paid the usual price`);
+    assert.equal(s.rng, rng, 'no random number drawn for it (the old card picked a track at random)');
     const b = s.grid[5 * s.w + 5];
-    const t = b.f;
-    assert.ok(t && b.u[t] === CARDS[card].free, `${card}: ${JSON.stringify(b)}`);
-    assert.equal(ev.find((e) => e.e === 'placed').free, t);
-    assert.equal(spentOn(b), BUILD[k].cost, 'worth only what was paid');
-    assert.equal(upgradeCost(b, t), levelCost(k, t, 1), 'the next level costs a second level\'s price');
-    // Upgraded once more: worth what was paid for that level too, never the free one.
-    assert.ok(applyCommand(s, 0, { c: 'upgrade', x: 5, y: 5, t }).ok);
-    assert.equal(spentOn(b), BUILD[k].cost + levelCost(k, t, 1));
-    // Wrecked and rebuilt: the free level comes back free, and is still not worth anything.
-    const r = { i: 5 * s.w + 5, k, d: 0, o: 0, u: { ...b.u }, spent: spentOn(b), f: b.f };
-    assert.deepEqual(rebuildDeal(r, 1e9).u, b.u);
-    const short = rebuildDeal(r, Math.floor(BUILD[k].cost * TUNE.rebuildShare));
-    assert.equal(short.u[t], 1, 'short of cash, the free level still comes back');
-    // The other group gets nothing.
-    assert.ok(applyCommand(s, 0, { c: 'place', k: other, x: 15, y: 5, d: 0 }).ok);
-    assert.equal(s.grid[5 * s.w + 15].u, undefined);
+    assert.equal(spentOn(b), BUILD[k].cost, 'the stock is never money: worth only what was paid');
+    for (const t of STOCK_TRACKS) {
+      const takes = t !== 'wire' && !!BUILD[k].up[t];
+      assert.equal(unitsIn(b, t), takes ? units : 0, `${k} ${t}`);
+      if (takes) assert.equal(b.s[t][0], 1, `${k} ${t}: Store Brand`);
+    }
   }
-  // A short rebuild in play: the free level is back and still free.
+  // Not a Crate Stack (no Dumbwaiter), not a Back part, and nothing without the card.
   const s = game(['mallcop']);
-  applyCommand(s, 0, { c: 'place', k: 'forklift', x: 5, y: 5 });
-  const b = s.grid[5 * s.w + 5];
-  s.grid[5 * s.w + 5] = 0;
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'crate', x: 5, y: 5 }).ok);
+  assert.equal(s.grid[5 * s.w + 5].s, undefined);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'conv', x: 9, y: 9, d: 0, f: 1 }).ok);
+  assert.equal(s.back[9 * s.w + 9].s, undefined);
+  const plain = game();
+  assert.ok(applyCommand(plain, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
+  assert.equal(plain.grid[5 * plain.w + 5].s, undefined);
+  // Rebuilt from rubble: no new stock (only a building bought new gets it).
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'forklift', x: 12, y: 5 }).ok);
+  s.grid[5 * s.w + 12] = 0;
   s.gridVer++;
-  s.rubble.push({ i: 5 * s.w + 5, k: 'forklift', d: 0, o: 0, u: { ...b.u }, spent: spentOn(b), f: b.f });
-  s.players[0].cash = Math.floor(BUILD.forklift.cost * TUNE.rebuildShare);
-  assert.ok(applyCommand(s, 0, { c: 'rebuild' }).ok);
-  const back = s.grid[5 * s.w + 5];
-  assert.equal(back.f, b.f);
-  assert.equal(spentOn(back), BUILD.forklift.cost);
+  s.rubble.push({ i: 5 * s.w + 12, k: 'forklift', d: 0, o: 0 });
+  assert.equal(applyCommand(s, 0, { c: 'rebuild' }).n, 1);
+  assert.equal(s.grid[5 * s.w + 12].k, 'forklift');
+  assert.equal(s.grid[5 * s.w + 12].s, undefined);
+  // Never past what a Dumbwaiter holds, whatever the card's number.
+  const was = CARDS.mallcop.units;
+  try {
+    CARDS.mallcop.units = BACK.stockUnits + 4;
+    const big = game(['mallcop']);
+    assert.ok(applyCommand(big, 0, { c: 'place', k: 'sprinkler', x: 5, y: 5 }).ok);
+    assert.equal(unitsIn(big.grid[5 * big.w + 5], 'dmg'), BACK.stockUnits);
+  } finally {
+    CARDS.mallcop.units = was;
+  }
+});
+
+test('offatruck: every Returns Drop puts out junk faster by the card\'s number', () => {
+  const card = game(['offatruck']), plain = game();
+  for (let lv = 0; lv <= BACK.dropUpMax; lv++) {
+    const raw = BACK.dropSecs * BACK.dropMul ** lv * TICK_HZ, base = Math.max(1, Math.round(raw));
+    assert.equal(dropTicks(lv), base, 'without a game, the plain time');
+    assert.equal(dropTicks(lv, plain), base, 'without the card, unchanged');
+    assert.equal(dropTicks(lv, card), Math.max(1, Math.round(raw / CARDS.offatruck.drop)), `level ${lv}`);
+    assert.ok(dropTicks(lv, card) < base, `level ${lv} is faster`);
+  }
+  // In play: a drop with a Clearance Bin in front of it waits the card's shorter time between junk.
+  const waits = (cards) => {
+    const s = createGame({ seed: 5, cards, map: { design: 'warehouse', size: 's' } });
+    addPlayer(s, 'Dave');
+    s.players[0].cash = 1e6;
+    const i = s.back.findIndex((x) => x && x.k === 'drop');
+    const drop = s.back[i];
+    const [dx, dy] = DIRS[drop.d];
+    const fx = (i % s.w) + dx, fy = ((i / s.w) | 0) + dy;
+    assert.ok(applyCommand(s, 0, { c: 'place', k: 'bin', x: fx, y: fy, d: 0, f: 1 }).ok);
+    const seen = new Set();
+    let last = drop.t;
+    for (let n = 0; n < 10 * TICK_HZ; n++) {
+      step(s);
+      if (drop.t > last) seen.add(drop.t);
+      last = drop.t;
+    }
+    return [...seen];
+  };
+  assert.deepEqual(waits(null), [dropTicks(0)]);
+  assert.deepEqual(waits(['offatruck']), [dropTicks(0, card)]);
 });
 
 test('pissing: a dog\'s pee keeps security off half as long again', () => {

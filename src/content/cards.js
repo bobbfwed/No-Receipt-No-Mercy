@@ -108,7 +108,7 @@ const TEXT = {
   },
   shrinkflation: {
     name: 'Shrinkflation',
-    rule: (c) => `Every building costs ${off(c.cost, 'more', 'less')}. Upgrades do not.`,
+    rule: (c) => `Every new building, on either floor, costs ${off(c.cost, 'more', 'less')}. A rebuild costs half of what was paid.`,
     joke: 'You pay more and get the same. You know the feeling. You see it every morning in the shower.',
   },
   pissing: {
@@ -154,13 +154,13 @@ const TEXT = {
   },
   offatruck: {
     name: 'Fell Off the Back of a Truck',
-    rule: (c) => `Every factory building is built with ${fmt(c.free)} free upgrade level${c.free === 1 ? '' : 's'} on a random one of its tracks. Free: it adds nothing to what the building sells back or rebuilds for, and the next level costs as if ${c.free === 1 ? 'it' : 'they'} had been bought.`,
-    joke: "Every machine comes with a free upgrade. Don't ask where from. Don't ask Gary. Gary has a van.",
+    rule: (c) => `Every Returns Drop puts out junk ${off(c.drop, 'faster', 'slower')}.`,
+    joke: "More junk comes down the chute than anybody returned. Don't ask where from. Don't ask Gary. Gary has a van, and the van has no plates.",
   },
   mallcop: {
     name: 'Mall Cop Academy',
-    rule: (c) => `Every security building is built with ${fmt(c.free)} free upgrade level${c.free === 1 ? '' : 's'} on a random one of its tracks. Free: it adds nothing to what the building sells back or rebuilds for, and the next level costs as if ${c.free === 1 ? 'it' : 'they'} had been bought.`,
-    joke: 'Security comes pre-upgraded. Twelve weeks at Mall Cop Academy and they are still better trained than you.',
+    rule: (c) => `Every security building bought new arrives with ${fmt(c.units)} units of Store Brand of every supply it takes except Razor Wire. Not when it is rebuilt.`,
+    joke: 'New security turns up already loaded. Twelve weeks at Mall Cop Academy and they still arrive better stocked than your bedside drawer.',
   },
   pulledout: {
     name: 'Pulling Out Works (Sometimes)',
@@ -209,7 +209,7 @@ const TEXT = {
   },
   staffdiscount: {
     name: 'Employee Discount',
-    rule: (c) => `Every building costs ${off(c.cost, 'more', 'less')}. Upgrades do not.`,
+    rule: (c) => `Every new building, on either floor, costs ${off(c.cost, 'more', 'less')}. A rebuild costs half of what was paid.`,
     joke: "A staff discount. The only perk this job has, and you still can't afford a personality.",
   },
   overtime: {
@@ -285,12 +285,12 @@ const TEXT = {
   },
   rentacop: {
     name: 'Rent-a-Cop Rates',
-    rule: (c) => `Security buildings cost ${off(c.cost.security, 'more', 'less')} and factory buildings ${off(c.cost.factory, 'more', 'less')}. Upgrades do not change.`,
+    rule: (c) => `Security buildings cost ${off(c.cost.security, 'more', 'less')} and factory buildings ${off(c.cost.factory, 'more', 'less')}. A rebuild costs half of what was paid.`,
     joke: 'Security is cheap this week. Rent-a-cops work for exposure. Like your podcast.',
   },
   sweatshop: {
     name: 'Sweatshop Pricing',
-    rule: (c) => `Factory buildings cost ${off(c.cost.factory, 'more', 'less')} and security buildings ${off(c.cost.security, 'more', 'less')}. Upgrades do not change.`,
+    rule: (c) => `Factory buildings cost ${off(c.cost.factory, 'more', 'less')} and security buildings ${off(c.cost.security, 'more', 'less')}. A rebuild costs half of what was paid.`,
     joke: 'The factory is dirt cheap. Ethically sourced? Absolutely not. Neither were you.',
   },
 };

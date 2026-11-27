@@ -6,6 +6,8 @@ import { makeMap, makeZones, makeDrops, MAP_DESIGNS, MAP_SIZES } from './maps.js
 import { dealCards, cleanHand } from './cards.js';
 // (back.js imports from this file too; the same holds.)
 import { newDrop, syncAllLifts } from './back.js';
+// (upgrades.js reaches this file through cards.js; the same holds.)
+import { rebuildDeal } from './upgrades.js';
 
 /**
  * A building. One bigger than a tile (BUILD[k].size) is held by the top-left tile of its
@@ -17,8 +19,6 @@ import { newDrop, syncAllLifts } from './back.js';
  * @property {number} [part] only on the other tiles of a big building: the anchor's tile index
  * @property {number} o   owner player id
  * @property {number} [d] facing direction 0-3
- * @property {{dmg?: number, spd?: number, rng?: number, dur?: number}} [u] upgrade levels bought
- *   in each track (absent or 0 = none; absent altogether until the first upgrade)
  * @property {number} [hit] gym bro hits taken this wave (cleared when a wave ends)
  * @property {number} [off] ticks it stays switched off (a dog peed on it); absent when working
  * @property {Array<[string, number]>} [it] belt only: items as [itemKind, progress 0..1], front item first
@@ -29,9 +29,6 @@ import { newDrop, syncAllLifts } from './back.js';
  * @property {number} [a]   forklift: aim angle in radians (for drawing)
  * @property {number} [c]   what it cost to put down, only where a card made that differ from its
  *   kind's price (see buildPrice in cards.js); spentOn counts this instead of the price
- * @property {string} [f]   the track of its free upgrade levels (the offatruck and mallcop cards):
- *   they are in `u` like any, but spentOn leaves them out
- * @property {number} [fn]  ...how many of them, if not 1
  * @property {number} [bz]  Free Sample table only: 1 if it hands out booze (the eightyproof card;
  *   decided when it is bought new, and kept through wrecking and rebuilding: rubble carries it too)
  * @property {Object<string, number[]>} [s] (0.4) a building with Dumbwaiters (BUILD[k].lift): its
@@ -255,10 +252,9 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
      *  it existed lacks it; the simulation makes it when first needed.) */
     carts: [],
     /** What gym bros have destroyed and nobody has rebuilt yet, oldest first, as
-     *  { i, k, d, o, u, spent }: anchor tile, kind, facing, owner, upgrade levels (as on a
-     *  building, possibly {}), what had been spent on it (spentOn); plus `c`, `f`, `fn`, `bz` when
-     *  a card gave it those. The 'rebuild' command, or placing the same kind there, puts them back
-     *  at TUNE.rebuildShare of that.
+     *  { i, k, d, o }: anchor tile, kind, facing, owner; plus `c` and `bz` when a card gave it
+     *  those (as on a building). The 'rebuild' command, or placing the same kind there, puts them
+     *  back at TUNE.rebuildShare of what was paid for it (rebuildDeal).
      *  Ordered (0.3.04): a wreck somebody has pressed Rebuild for also has `by` (the id of the
      *  player who pressed and paid) and `res` (whole dollars already taken from his cash and held
      *  for it). Without `by` it is not ordered. step() puts an ordered wreck back as soon as nothing
@@ -360,6 +356,11 @@ export const STATE_VERSION = 4;
  * Any version (0.3.04): auto-rebuild is gone, so a player's old `autoRebuild` switch and the
  * tick a wreck broke (`at`, only its delay read it) are dropped. Neither changes how the game
  * plays; it only keeps dead fields out of the state.
+ * Any version (0.4): bought upgrades are gone, so a building's and a wreck's levels (`u`), the
+ * free levels a card gave (`f`, `fn`) and what a wreck had cost with its upgrades (`spent`) are
+ * dropped: it now works at its stock's levels and is rebuilt for a share of its price. A wreck
+ * ordered while its payer was short of the old full price (an order could then hold less) is
+ * cancelled and his money given back, since an order now always holds the whole price.
  * @returns {boolean} whether anything was changed
  */
 export function migrateSave(state) {
@@ -367,6 +368,16 @@ export function migrateSave(state) {
   let changed = false;
   for (const p of state.players || []) if ('autoRebuild' in p) { delete p.autoRebuild; changed = true; }
   for (const r of state.rubble || []) if ('at' in r) { delete r.at; changed = true; }
+  const dropLevels = (b) => {
+    let was = false;
+    for (const f of ['u', 'f', 'fn', 'spent']) if (f in b) { delete b[f]; was = true; }
+    return was;
+  };
+  for (const b of state.grid || []) if (b && dropLevels(b)) changed = true;
+  for (const r of state.rubble || []) {
+    if (dropLevels(r)) changed = true;
+    if (r.by !== undefined && (r.res | 0) < rebuildDeal(r, Infinity).pay) { releaseOrder(state, r); changed = true; }
+  }
   // Any version (0.4): a save from before The Back has none; it gets an empty one (no drops: the
   // marked floor it would place them by is part of the old factory such a save still runs).
   if (!Array.isArray(state.back) || state.back.length !== state.w * state.h) {

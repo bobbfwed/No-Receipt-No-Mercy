@@ -3,18 +3,16 @@
 // drift from what the simulation actually does. No DOM; runs in Node too.
 import {
   SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, priceOf,
-  tracksOf, defaultTrack, maxIn, levelCost, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
+  tracksOf, usesPer, BACK, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
   patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize,
 } from '../sim/index.js';
 import { EDGE_HELP } from './help.js';
+import { TIER_NAMES } from './supplies.js';
 
 /** The order shoppers are listed in: the order they first turn up. */
 export const SHOPPER_ORDER = ['hunter', 'dad', 'clipper', 'mom', 'teen', 'karen', 'drinker', 'blind', 'gymbro', 'scooter', 'dog', 'trader', 'flasher', 'preggo', 'cosplay'];
 export const FACTORY_ORDER = ['belt', 'unpacker', 'press', 'packer', 'chute', 'crate'];
 export const SECURITY_ORDER = ['sprinkler', 'forklift', 'railgun', 'wetfloor', 'samples', 'salesman'];
-
-/** What each upgrade track is called, for tables. */
-export const TRACK_NAMES = { dmg: 'Damage', spd: 'Speed', rng: 'Range', dur: 'Durability' };
 
 /** How much more patient shoppers are in wave n than in wave 1, by growth alone (the simulation's own). */
 export { patienceGrowth };
@@ -272,54 +270,41 @@ export function shopperFacts(k) {
 }
 
 /**
- * One row per level of one upgrade track of a building, from 0 (as built) to the most it can
- * have: { lv, cost (what that level costs; 0 for level 0), total (spent on this track so far),
- * ...the numbers that track changes }, with the other tracks at 0:
- *   dmg  towers: dmg, dps, most · wet floor sign: slow, slip, slipDmg · samples: secs ·
- *        salesman: secs, stopLeft, rushMul (see statsOf) · dps is damage a second to one shopper
- *        (a Barcode Laser does it to everyone in line); most is that times how many it can hit at once
- *   spd  towers: cd, perSec (shots a second), dps, most · unpacker: period, perMin · press and
- *        packer: time, perMin
- *   rng  range
- *   dur  hits (gym bro hits it survives in one wave)
+ * One row per brand tier of the supply one track of a security building takes, from 0 (unstocked:
+ * as built) to 4 (Platinum), worked out from the rules (statsOf with that tier in stock):
+ * { tier, name ('as built' or the tier's name), uses (what one unit of it lasts: shots or shoppers
+ * acted on, usesPer; for Duct Tape the gym bro hits one roll soaks up; 0 as built), ...numbers }.
+ * Numbers by track (with the other tracks unstocked):
+ *   dmg  level (the levels the tier counts as) · towers: dmg, dps, most · wet floor sign: slow,
+ *        slip, slipDmg · samples: secs · salesman: secs, stopLeft, rushMul (see statsOf) · dps is
+ *        damage a second to one shopper (a Barcode Laser does it to everyone in line); most is that
+ *        times how many it can hit at once
+ *   spd  level · cd, perSec (shots a second), dps, most
+ *   rng  level · range
+ *   dur  nothing more: Duct Tape is never counted as levels, its uses soak up gym bro hits
  * Empty if the kind lacks the track.
  */
-export function trackRows(k, track) {
+export function tierRows(k, track) {
   const def = BUILD[k], rows = [];
   if (!tracksOf(k).includes(track)) return rows;
-  let total = 0;
-  for (let lv = 0; lv <= maxIn(k, track); lv++) {
-    const cost = lv ? levelCost(k, track, lv - 1) : 0;
-    total += cost;
-    const st = statsOf({ k, u: { [track]: lv } });
-    const row = { lv, cost, total };
+  for (let tier = 0; tier < TIER_NAMES.length; tier++) {
+    const st = statsOf(tier ? { k, s: { [track]: [tier, 1] } } : { k });
+    const row = { tier, name: tier ? TIER_NAMES[tier] : 'as built', uses: tier ? usesPer(k, track, tier) : 0 };
     const dps = () => {
       row.dps = st.cd ? st.dmg / st.cd : 0;
       row.most = row.dps * (def.targets || 1);
     };
+    if (track !== 'dur') row.level = BACK.tierLevel[tier];
     if (track === 'dmg') {
       if (def.tower) { row.dmg = st.dmg; dps(); }
       else if (k === 'wetfloor') { row.slow = st.slow; row.slip = st.slip; row.slipDmg = st.slipDmg; }
       else if (k === 'samples') row.secs = st.secs;
       else if (k === 'salesman') { row.secs = st.secs; row.stopLeft = st.stopLeft; row.rushMul = st.rushMul; }
-    } else if (track === 'spd') {
-      if (def.tower) { row.cd = st.cd; row.perSec = 1 / st.cd; dps(); }
-      else if (k === 'unpacker') { row.period = st.period; row.perMin = 60 / st.period; }
-      else { row.time = st.time; row.perMin = 60 / st.time; }
-    } else if (track === 'rng') row.range = st.range;
-    else if (track === 'dur') row.hits = st.hits;
+    } else if (track === 'spd') { row.cd = st.cd; row.perSec = 1 / st.cd; dps(); }
+    else if (track === 'rng') row.range = st.range;
     rows.push(row);
   }
   return rows;
-}
-
-/**
- * The old one-table-per-building view, kept so older screens still load: the rows of the kind's
- * default track (damage where it has it), with `next` (the cost of the level after) as well.
- */
-export function levelRows(k) {
-  const rows = trackRows(k, defaultTrack(k));
-  return rows.map((r, n) => ({ ...r, lv: r.lv + 1, next: n + 1 < rows.length ? rows[n + 1].cost : 0, total: BUILD[k].cost + r.total, range: r.range ?? statsOf({ k }).range }));
 }
 
 /** Plain facts about a factory building, as [label, value] pairs. `pay` is the difficulty's income multiplier. */
@@ -343,7 +328,7 @@ export function factoryFacts(k, pay = 1) {
   }
   if (k === 'chute') out.push(['Sells', Object.keys(ITEMS).map((i) => `${ITEMS[i].name} $${worth(i)}`).join(', ')]);
   if (k === 'crate') {
-    out.push(['Gym bros', `with a hit ready, stop and hit it, and walk through if it falls; each Durability level soaks up one of their hits (a Gym Bro has ${TUNE.smashMax}, a ${SUPERS.gymbro.name} ${SUPERS.gymbro.smashMax ?? TUNE.smashMax}), and resting after a hit they walk round`]);
+    out.push(['Gym bros', `with a hit ready, stop, flatten it with one hit and walk through (a Gym Bro has ${TUNE.smashMax} hits a visit, a ${SUPERS.gymbro.name} ${SUPERS.gymbro.smashMax ?? TUNE.smashMax}); resting after a hit, they walk round`]);
   }
   return out;
 }

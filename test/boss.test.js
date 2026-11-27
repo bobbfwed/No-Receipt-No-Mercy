@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, canPlace, step, queueTrainingWave, waveSpec, waveValue, canBuy, modeOf,
-  bossTier, bossTitle, bossPatience, patienceGrowth, defOf, shopperDef,
+  bossTier, bossTitle, bossPatience, patienceGrowth, defOf, shopperDef, addStock, itemCode,
   BOSS, SHOPPERS, SUPERS, OFFICE, TUNE, TICK_HZ, ST, NORMAL,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
@@ -149,7 +149,8 @@ function race(distractions) {
     assert.ok(place(s, 'samples', 12, 5).ok);
     assert.ok(place(s, 'samples', 14, 10).ok);
     assert.ok(place(s, 'salesman', 16, 4).ok);
-    applyCommand(s, 0, { c: 'upgrade', x: 16, y: 4, t: 'dmg' });
+    // His pitch at its strongest: Platinum Bottled Spite (until 0.4, a bought level).
+    addStock(s.grid[4 * s.w + 16], itemCode(1, 4));
     for (let x = 1; x <= 27; x++) for (let y = 6; y <= 9; y++) s.messes.push([y * s.w + x, 1e6]);
     // Day drinkers lying across the way.
     let id = 9000;

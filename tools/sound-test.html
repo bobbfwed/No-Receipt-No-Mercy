@@ -102,7 +102,7 @@ import { built } from '../src/audio/synth.js';
 
 const SR = 44100;
 /** Sounds that can happen many times in a few seconds: each must vary from play to play. */
-const OFTEN = ['sale', 'spray', 'shot', 'escape', 'left', 'slip', 'grab', 'sample', 'mess', 'kid', 'caught', 'bolt', 'smash', 'place', 'remove', 'upgraded', 'pitch', 'shield', 'pee', 'flash', 'fall', 'kidtv', 'rail', 'pep', 'bossOut', 'bossEscape', 'pop', 'nopop', 'waah', 'babyTill'];
+const OFTEN = ['sale', 'spray', 'shot', 'escape', 'left', 'slip', 'grab', 'sample', 'mess', 'kid', 'caught', 'bolt', 'smash', 'place', 'remove', 'pitch', 'shield', 'pee', 'flash', 'fall', 'kidtv', 'rail', 'pep', 'bossOut', 'bossEscape', 'pop', 'nopop', 'waah', 'babyTill'];
 const FREQUENT = ['sale', 'spray', 'shot', 'mess', 'pitch', 'shield', 'pep', 'waah', 'babyTill'];
 const RARE = ['waveStart', 'won', 'lost'];
 let failures = 0;
@@ -801,7 +801,7 @@ async function liveSelfTest() {
       ses.emit('fx', [{ e: 'sale', kind: kinds[n % 3] }, { e: 'spray' }, { e: 'spray' }, { e: 'shot' }, { e: 'grab' },
         { e: 'left', k: 'dad' }, { e: 'escape', k: 'hunter' }, { e: 'placed', k: 'belt' }, { e: 'nonsense' }, null,
         { e: 'mess', i: 3 }, { e: 'kid' }, { e: 'caught' }, { e: 'bolt' }, { e: 'smash', i: 9, k: 'belt' }, { e: 'left', k: 'gymbro', sup: 1 },
-        { e: 'left', k: 'karen' }, { e: 'left', k: 'teen' }, { e: 'upgraded', k: 'forklift', lv: 3, by: 1 },
+        { e: 'left', k: 'karen' }, { e: 'left', k: 'teen' }, { e: 'rebuilt', n: 2, by: 1 },
         { e: 'escape', k: 'dad', sup: 1 }, { e: 'sample' }, { e: 'slip' }, { e: 'pitch', r: 'stop' }, { e: 'pitch', r: 'rush' }, { e: 'shield' },
         { e: 'left', k: 'dog' }, { e: 'smash', i: 2, k: 'salesman', left: 0 }]);
       await wait(33);
@@ -1016,20 +1016,13 @@ btn(modBox, 'gym bro wrecks one of everything', () => {
   });
   setTimeout(() => fake.emit('fx', [{ e: 'smash', i: 5, k: 'forklift', left: 2 }]), 9 * 1100);
 });
-btn(modBox, 'upgrade levels 1 to 10 (another player)', () => {
-  for (let lv = 1; lv <= 10; lv++) setTimeout(() => fake.emit('fx', [{ e: 'upgraded', k: 'sprinkler', lv, by: 99 }]), (lv - 1) * 700);
+btn(modBox, 'my own rebuild: event then button (plays once)', () => {
+  fake.emit('fx', [{ e: 'rebuilt', n: 2, by: fake.me }]);
+  sound.play('rebuild');
 });
-btn(modBox, 'my own upgrade: event then button (plays once)', () => {
-  fake.emit('fx', [{ e: 'upgraded', k: 'forklift', lv: 4, by: fake.me }]);
-  sound.play('upgrade');
-});
-btn(modBox, 'upgrade tracks: damage, speed, range, durability, then a top level', () => {
-  ['dmg', 'spd', 'rng', 'dur'].forEach((t, i) => setTimeout(() => fake.emit('fx', [{ e: 'upgraded', k: 'forklift', t, lv: 3, by: 99 }]), i * 900));
-  setTimeout(() => fake.emit('fx', [{ e: 'upgraded', k: 'forklift', t: 'dmg', lv: 8, by: 99 }]), 4 * 900);
-});
-btn(modBox, 'rebuilt 3, then 3 with 2 short', () => {
-  fake.emit('fx', [{ e: 'rebuilt', n: 3, short: 0, by: 99 }]);
-  setTimeout(() => fake.emit('fx', [{ e: 'rebuilt', n: 3, short: 2, by: 99 }]), 1600);
+btn(modBox, 'rebuilt 3, then 8 (another player)', () => {
+  fake.emit('fx', [{ e: 'rebuilt', n: 3, by: 99 }]);
+  setTimeout(() => fake.emit('fx', [{ e: 'rebuilt', n: 8, by: 99 }]), 1600);
 });
 btn(modBox, 'new events: rail, pee, flash, fall, pitch, kidtv, shield, mom carries', () => {
   const seq = [{ e: 'rail', i: 1, d: 0, len: 9, n: 4 }, { e: 'pee', i: 2, x: 3, y: 3, k: 'sprinkler' }, { e: 'flash', x: 1, y: 1, n: 4 },
@@ -1095,7 +1088,7 @@ btn(modBox, 'late-wave storm (3 s)', () => {
     if (++n >= 90) clearInterval(id);
   }, 33);
 });
-for (const name of ['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'upgrade', 'rebuild', 'chat']) btn(modBox, 'play ' + name, () => sound.play(name));
+for (const name of ['select', 'place', 'remove', 'rotate', 'nope', 'click', 'tutorial', 'rebuild', 'chat']) btn(modBox, 'play ' + name, () => sound.play(name));
 
 const setBox = document.getElementById('settings');
 // The levels (0.3.03): the master and one per group, as in the game's sound menu. Letting go of a

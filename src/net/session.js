@@ -130,7 +130,6 @@ export function checksum(s) {
     const b = g[i];
     if (!b) continue;
     mix(i); mix(b.k.charCodeAt(0)); mix(b.part ?? -1); mix(b.o); mix(b.d); dec(b.cd); mix(b.t); mix(b.n);
-    if (b.u) { mix(b.u.dmg); mix(b.u.spd); mix(b.u.rng); mix(b.u.dur); }
     mix(b.hit); mix(b.off);
     if (b.it) mix(b.it.length);
     // (Its stock from The Back, 0.4: every run's tier and uses, track by track in a fixed order.

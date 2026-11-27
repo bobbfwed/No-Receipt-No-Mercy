@@ -25,8 +25,8 @@
     tap on that Rotate button turns the building without cancelling; a second finger on the floor
     cancels a placement and then pinches; a belt drag lays a line facing the way it was dragged,
     and a second finger stops it where it is; the bar's rotate button turns what is held, and a
-    tapped building; tapping a building opens its sheet, whose buttons upgrade and remove; the
-    Upgrade tool opens the sheet of the building the finger lifts from; the Remove tool removes
+    tapped building; tapping a building opens its sheet, which shows what it works at and whose
+    button removes it (0.4: bought upgrades are gone); the Remove tool removes
     exactly one building, where the finger lifts, by tap or drag (a bigger one tapped off its
     top-left tile too) without an error banner; tapping the held tool's button again puts it down,
     as does the put-down button; the map and home buttons move the view.
@@ -48,7 +48,7 @@
 <iframe id="game" src="../index.html?solo=1&name=Thumbs&seed=3&size=xs" title="Game"></iframe>
 <div id="log"></div>
 <script type="module">
-  import { canPlace, statsOf } from '../src/sim/index.js';
+  import { canPlace } from '../src/sim/index.js';
   import { selectedReach } from '../src/render/reach.js';
   import { LIFT, EDGE, liftPx } from '../src/ui/lift.js';
   const frame = document.getElementById('game');
@@ -433,61 +433,35 @@
     const laser = b(rl.x, rl.y);
     check('... lifting places the Barcode Laser facing the turned way', laser?.k === 'railgun' && laser.d === dWant, `${laser?.k || 'nothing'} d=${laser?.d}`);
 
-    // 11. Upgrades: with the Upgrade tool (the sheet of the building the finger lifts from), and
-    // from the sheet.
-    await pick('upgrade');
+    // 11. The sheet of a tapped building (0.4: bought upgrades are gone, so it shows the numbers the
+    // building works at, its stock, Rotate and Remove, and nothing to buy).
+    input.setTool(null);
     renderer.centerOn(sp.x + 0.5, sp.y + 0.5);
-    await wait(60);
-    const [u0] = freeTiles('crate', 1, sp);
-    const camU = { ...renderer.cam };
-    await finger([at(u0.x, u0.y), at(sp.x, sp.y)]);
     await wait(80);
-    check('a drag with the Upgrade tool opens the sheet of the building it lifts from', !sheet.classList.contains('hidden') && input.selected?.x === sp.x && input.selected?.y === sp.y);
-    check('... and does not move the view', renderer.cam.x === camU.x && renderer.cam.y === camU.y);
-    input.select(null);
-    await wait(80); // (the sheet closes on the next frame; until then it is over the floor)
     await tap(at(sp.x, sp.y));
     await wait(80);
-    check('a tap with the Upgrade tool opens the sheet', !sheet.classList.contains('hidden') && input.selected?.x === sp.x && input.selected?.y === sp.y);
-    s().players[me].cash += 1000; // enough for a level of each
-    await wait(80);
-    const ups = [...sheet.querySelectorAll('.ts-up')];
-    check('the sheet of a sprinkler has a button for each of its four upgrades', ups.length === 4 && ups.every((u) => !u.disabled), `${ups.length} buttons`);
-    const lvOf = (t) => b(sp.x, sp.y)?.u?.[t] | 0;
-    if (sheet.querySelector('.ts-dmg')) click(sheet.querySelector('.ts-dmg'));
-    await wait(80);
-    check("the sheet's Damage button buys a level of damage", lvOf('dmg') === 1 && lvOf('dur') === 0, `damage ${lvOf('dmg')}, durability ${lvOf('dur')}`);
-    if (sheet.querySelector('.ts-dur')) click(sheet.querySelector('.ts-dur'));
-    await wait(80);
-    check('... and its Durability button a level of durability', lvOf('dmg') === 1 && lvOf('dur') === 1, `damage ${lvOf('dmg')}, durability ${lvOf('dur')}`);
+    check('a tap with nothing held opens the sheet of a sprinkler', !sheet.classList.contains('hidden') && input.selected?.x === sp.x && input.selected?.y === sp.y);
+    const nums = sheet.querySelector('.ts-nums');
+    check('... which shows the numbers it works at', !!nums && !nums.classList.contains('hidden') && /hit/.test(nums.textContent), nums?.textContent);
+    const sheetBtns = [...sheet.querySelectorAll('.ts-btns .ts-btn')];
+    check('... and has only Remove to press (a sprinkler does not turn)', sheetBtns.length === 1 && sheetBtns[0].classList.contains('ts-remove'), `${sheetBtns.length} buttons`);
 
-    // 11b. The reach of the tapped building (0.3.02): drawn while its sheet is open, whether it was
-    // tapped with the Upgrade tool or with nothing held; pressing Range buys a level and the reach,
-    // grown, stays; closing the sheet or tapping bare floor takes it away. (input.view() is the
-    // object the game hands the renderer each frame: view.selected and view.track are its own.)
+    // 11b. The reach of the tapped building (0.3.02): drawn while its sheet is open; closing the
+    // sheet or tapping bare floor takes it away. (input.view() is the object the game hands the
+    // renderer each frame: view.selected is its own.)
     const reachNow = () => selectedReach(s(), input.view());
     const spB = () => b(sp.x, sp.y);
-    check('a sprinkler tapped with the Upgrade tool has its reach drawn while its sheet is open', reachNow()?.b === spB() && reachNow()?.next === false,
-      JSON.stringify(input.view().selected));
-    const reach0 = statsOf(spB(), s()).range, rng0 = lvOf('rng');
-    if (sheet.querySelector('.ts-rng')) click(sheet.querySelector('.ts-rng'));
-    await wait(80);
-    check('pressing Range buys a level, and the reach stays drawn, bigger', lvOf('rng') === rng0 + 1 && statsOf(spB(), s()).range > reach0 && reachNow()?.b === spB(),
-      `range ${reach0} -> ${statsOf(spB(), s()).range}`);
-    check('... with no second reach (a finger does not hover)', reachNow()?.next === false);
+    check('a tapped sprinkler has its reach drawn while its sheet is open', reachNow()?.b === spB(), JSON.stringify(input.view().selected));
     click(sheet.querySelector('.ts-x'));
     await wait(80);
     check('closing the sheet takes the reach away', !input.view().selected && reachNow() === null);
-    input.setTool(null);
-    await wait(80);
     const [bare] = freeTiles('crate', 1, sp); // (looked for now: the open sheet hides some of the floor)
     await tap(at(sp.x, sp.y));
     await wait(80);
-    check('a sprinkler tapped with nothing held has its reach drawn', reachNow()?.b === spB());
+    check('tapped again, its reach is drawn again', reachNow()?.b === spB());
     await tap(at(bare.x, bare.y));
     await wait(80);
     check('tapping bare floor takes it away', reachNow() === null && sheet.classList.contains('hidden'));
-    await pick('upgrade');
     input.select(null);
 
     // 12. The Remove tool removes exactly one building, where the finger lifts.

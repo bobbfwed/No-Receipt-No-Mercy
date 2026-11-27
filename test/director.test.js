@@ -8,7 +8,7 @@ import {
 } from '../src/content/lines.js';
 import { HostSession, ClientSession } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
-import { createGame, addPlayer, setPlayerOnline, TICK_HZ, TUNE, bossTier, bossTitle } from '../src/sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, TICK_HZ, bossTier, bossTitle } from '../src/sim/index.js';
 
 /** A seeded random number generator, so every run of these tests sees the same numbers. */
 function seeded(seed = 1) {
@@ -38,8 +38,8 @@ const says = (out) => out.filter((m) => m.t === 'say').map((m) => m.text);
 /** The placeholders the director fills for each bank of LINES. */
 const VARS = {
   waveStart: 'pw', dadLine: 'pn', manyEscapes: 'pn', grab: 'p', slip: 'p', kid: 'p', crawl: 'p',
-  caught: 'p', caughtCarry: 'p', smash: 'p', smashOther: 'pk', dented: 'pkn', upgraded: 'pkn',
-  upgradedBy: 'pkn', maxed: 'pkn', gave: 'pqn', rebuilt: 'pn', rebuiltShort: 'pnm', officeTaken: 'p',
+  caught: 'p', caughtCarry: 'p', smash: 'p', smashOther: 'pk', dented: 'pkn',
+  gave: 'pqn', rebuilt: 'pn', officeTaken: 'p',
   officeLeft: 'p', officeWave: 'pn', officeNoPlan: 'p', officeWaiting: 'p', storeWaiting: 'p',
   begun: 'p', cramped: 'pnm', superArrive: 'pk', mess: 'p', bolt: 'p', removed: 'p',
   removedOther: 'p', placed: 'p', firstSale: 'p', sale: 'p', buildEnding: 'p', joined: 'p', quit: 'p',
@@ -62,11 +62,11 @@ const VARS = {
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
 const AT_LEAST = {
   waveStart: 24, dadLine: 27, manyEscapes: 18, grab: 12, slip: 12, kid: 9, crawl: 9, smash: 9,
-  smashOther: 12, upgraded: 9, maxed: 3, gave: 6, rebuilt: 6, officeTaken: 6, officeLeft: 6,
+  smashOther: 12, gave: 6, rebuilt: 6, officeTaken: 6, officeLeft: 6,
   officeWave: 9, officeNoPlan: 3, officeWaiting: 3, storeWaiting: 3, begun: 6, cramped: 3,
   superArrive: 3, mess: 6, bolt: 6, removed: 12, removedOther: 6, firstSale: 6, buildEnding: 6,
   joined: 6, quit: 6, won: 6, lost: 6, report: 21, reportNoStops: 3, reportNoShips: 3,
-  reportPerfect: 3, dented: 9, caught: 6, caughtCarry: 6, rebuiltShort: 6, sale: 9, nearLimit: 9,
+  reportPerfect: 3, dented: 9, caught: 6, caughtCarry: 6, sale: 9, nearLimit: 9,
   pee: 9, flash: 9, fall: 9, pitchStop: 6, pitchRush: 6, kidtv: 6, rail: 12, shield: 9,
   // Version 0.2.06: the boss, endless games, the Food Court and opening early.
   'bossIn.manager': 8, 'bossIn.director': 8, 'bossIn.vp': 8, 'bossIn.ceo': 10, bossOut: 8,
@@ -90,7 +90,7 @@ const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen:
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
 const NEW_KINDS = ['dog', 'cosplay', 'flasher', 'drinker', 'preggo', 'trader'];
 
-/** Each bank of LINES as [name, list], with nested banks (placed, upgradedBy) flattened out. */
+/** Each bank of LINES as [name, list], with nested banks (placed, bossOutBy) flattened out. */
 function lineBanks() {
   const out = [];
   for (const [key, bank] of Object.entries(LINES)) {
@@ -120,7 +120,7 @@ function allBanks() {
 test('every bank has about three times the lines it had, and every new event and shopper has some', () => {
   for (const [name, key, list] of lineBanks()) {
     assert.ok(VARS[key], `${name}: add it to VARS in this test, with the placeholders the director fills`);
-    // A bank inside a group (placed, upgradedBy, bossOutBy) wants 3 unless it is listed by name.
+    // A bank inside a group (placed, bossOutBy) wants 3 unless it is listed by name.
     const want = AT_LEAST[name] ?? (name !== key ? 3 : AT_LEAST[key]);
     assert.ok(want, `${name}: add it to AT_LEAST in this test`);
     assert.ok(list.length >= want, `${name} has ${list.length} lines, wants ${want}`);
@@ -134,7 +134,6 @@ test('every bank has about three times the lines it had, and every new event and
   for (const [t, extra] of Object.entries(LINES.bossOutBy)) assert.ok(LINES.bossOut.length + extra.length >= 12, `bossOut for ${t}`);
   assert.ok(INTRO.boss && ESCAPE_REVIEWS.boss?.length >= 5 && LEFT_REVIEWS.boss?.length >= 3 && SHOPPER_NOUNS.boss);
   for (const [who, banks] of Object.entries(FRIENDS)) assert.ok(banks.boss?.length >= 3, `${who} has boss lines`);
-  for (const t of ['dmg', 'spd', 'rng', 'dur', 'factory']) assert.ok(LINES.upgradedBy[t]?.length >= 3, `upgrade lines for ${t}`);
 
   for (const [k, n] of Object.entries(OLD_ESCAPES)) assert.ok(ESCAPE_REVIEWS[k].length >= 3 * n, `escape reviews for ${k}`);
   for (const [k, n] of Object.entries(OLD_LEFT)) assert.ok(LEFT_REVIEWS[k].length >= 3 * n, `left reviews for ${k}`);
@@ -147,7 +146,10 @@ test('every bank has about three times the lines it had, and every new event and
   assert.ok(EMPLOYEES_OF_THE_WAVE.length >= 18);
   const oldNope = { cash: 3, blocked: 2, zone: 3 };
   for (const [k, list] of Object.entries(NOPE)) assert.ok(list.length >= 3 * (oldNope[k] || 1), `refusals for ${k}`);
-  for (const k of ['fit', 'zone', 'max', 'noup', 'bank']) assert.ok(NOPE[k]?.length >= 3, `refusal ${k}`);
+  for (const k of ['fit', 'zone', 'max', 'bank']) assert.ok(NOPE[k]?.length >= 3, `refusal ${k}`);
+  // (0.4) Bought upgrades are gone, and every line about buying them with them.
+  for (const k of ['upgraded', 'upgradedBy', 'maxed', 'rebuiltShort']) assert.equal(LINES[k], undefined, k);
+  assert.equal(NOPE.noup, undefined);
 });
 
 test('no line is repeated, every placeholder gets filled, and nothing is too long to read at a glance', () => {
@@ -177,7 +179,7 @@ test('no line is repeated, every placeholder gets filled, and nothing is too lon
 
 test('banks whose number or name can be missing still have lines that need neither', () => {
   const optional = {
-    smashOther: 'k', dented: 'kn', upgraded: 'kn', maxed: 'kn', pee: 'k', flash: 'n', pitchStop: 'k', pitchRush: 'k', superArrive: 'k',
+    smashOther: 'k', dented: 'kn', pee: 'k', flash: 'n', pitchStop: 'k', pitchRush: 'k', superArrive: 'k',
     bossOut: 'n', bossEscape: 'nm', pep: 'kn', early: 'm', rip: 'n', litter: 'n', pet: 'n',
   };
   for (const [key, ks] of Object.entries(optional)) {
@@ -247,21 +249,6 @@ test('once a line has been used, its share of picks drops sharply', () => {
   const fresh = new Map();
   const got = choose(bank, random, { used: fresh });
   assert.equal(fresh.get(got), 1);
-});
-
-test('DEB calls an upgrade maxed at the top of its own track (a machine\'s speed goes to 10)', () => {
-  // A line from the 'maxed' bank, whatever was filled into it.
-  const pattern = (l) => new RegExp(`^${textOf(l).replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/\{\w+\}/g, '.*')}$`, 's');
-  const maxedRe = LINES.maxed.map(pattern);
-  const isMaxed = (text) => maxedRe.some((r) => r.test(text));
-  const said = (k, t, lv) => {
-    const state = game('Zed');
-    state.tick = 1e6;
-    return says(createDirector(() => 0).handle([{ e: 'upgraded', k, x: 2, y: 2, by: 0, t, lv }], state));
-  };
-  assert.ok(said('unpacker', 'spd', 8).every((s) => !isMaxed(s)), 'level 8 of 10 is not the top');
-  assert.ok(said('unpacker', 'spd', 10).some(isMaxed), 'level 10 is');
-  assert.ok(said('sprinkler', 'dmg', TUNE.maxLevel).some(isMaxed), 'a tower at the usual top');
 });
 
 test('over a whole game, wave openings rarely repeat, and fade like any other notice', () => {
@@ -428,12 +415,12 @@ test('something first seen late in a long game is still announced', () => {
 });
 
 test('jokes get rarer with every joke told, but never stop', () => {
-  // The first remark on giving money away, after `told` jokes about upgrades.
+  // The first remark on giving money away, after `told` jokes about new buildings.
   const giveChance = (told) => TALK.first * Math.max(TALK.jokeFloor, TALK.jokeDecay ** told);
   const heard = (told, v) => {
     const { r, director } = steered();
     const state = game('Dave', 'Steve');
-    for (let i = 0; i < told; i++) assert.equal(once(director, state, { e: 'upgraded', k: 'sprinkler', by: 0, t: 'dmg', lv: 2 }), 1);
+    for (let i = 0; i < told; i++) assert.equal(once(director, state, { e: 'placed', k: 'sprinkler', x: 2, y: 2, by: 0 }), 1);
     r.v = v;
     return once(director, state, { e: 'gave', by: 0, to: 1, n: 50 });
   };
@@ -451,7 +438,7 @@ test('a new game, or back to the lobby, starts DEB fresh', () => {
   const { r, director } = steered();
   const state = game('Dave');
   for (let i = 0; i < 30; i++) once(director, state, SLIP);
-  for (let i = 0; i < 30; i++) once(director, state, { e: 'upgraded', k: 'sprinkler', by: 0, t: 'dmg', lv: 2 });
+  for (let i = 0; i < 30; i++) once(director, state, { e: 'placed', k: 'sprinkler', x: 2, y: 2, by: 0 });
   r.v = 0.9999;
   assert.equal(once(director, state, SLIP), 0);
   const fresh = createDirector(() => 0.9999);
@@ -480,7 +467,7 @@ function playGame(director, state, by = 1, waves = 20) {
       state.tick += 20 * TICK_HZ;
       said.push(...says(director.handle([
         { e: 'placed', k: 'crate', x: i, y: w, by },
-        { e: 'upgraded', k: 'sprinkler', x: 2, y: 2, by, t: 'dmg', lv: 2 },
+        { e: 'rebuilt', by, n: 3 },
         { e: 'removed', k: 'crate', x: i, y: w, by, owner: by },
       ], state)));
     }
@@ -594,11 +581,8 @@ test('the director handles every new event, with all its fields or none, and ign
     { e: 'smash', i: 5, x: 1, y: 1, k: 'forklift', owner: 1, left: 0 },
     { e: 'smash', i: 5, x: 1, y: 1, k: 'salesman', owner: 1, left: 2 },
     { e: 'smash', i: 5, x: 1, y: 1, k: 'crate', owner: 1, left: 0 },
-    { e: 'upgraded', k: 'forklift', x: 1, y: 1, by: 1, t: 'rng', lv: 3 },
-    { e: 'upgraded', k: 'press', x: 1, y: 1, by: 1, t: 'spd', lv: 2 },
-    { e: 'upgraded', k: 'railgun', x: 1, y: 1, by: 1, t: 'dur', lv: TUNE.maxLevel },
-    { e: 'rebuilt', by: 1, n: 4, short: 2 },
-    { e: 'rebuilt', by: 1, n: 4, short: 0 },
+    { e: 'rebuilt', by: 1, n: 4 },
+    { e: 'rebuilt', by: 1, n: 3, late: 1 },
     { e: 'caught', x: 1, y: 1, carry: 1 },
     { e: 'caught', x: 1, y: 1, carry: 0 },
     { e: 'escape', k: 'dog', sup: 0 },
@@ -652,7 +636,7 @@ test('the director handles every new event, with all its fields or none, and ign
   assert.ok(LINES.pop.some((l) => fill(textOf(l), { p: 'Dave', n: 24 }) === popped), popped);
 
   // Every event with its fields missing, plus nonsense, and nothing breaks.
-  const names = ['pee', 'flash', 'fall', 'pitch', 'kidtv', 'rail', 'shield', 'smash', 'upgraded', 'rebuilt', 'caught',
+  const names = ['pee', 'flash', 'fall', 'pitch', 'kidtv', 'rail', 'shield', 'smash', 'rebuilt', 'caught',
     'waveStart', 'crawl', 'kid', 'begun', 'side', 'ready', 'gave', 'mess', 'bolt', 'escape', 'left', 'grab', 'slip', 'sale',
     'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'bossIn', 'bossOut', 'pep', 'endless', 'early',
     'pop', 'nopop', 'rebuildHeld', 'watching', 'somethingNew', undefined];

@@ -1,20 +1,20 @@
-// Mouse, keyboard and touch: picking tools, building, upgrading and removing on the canvas,
+// Mouse, keyboard and touch: picking tools, building and removing on the canvas,
 // rotating, moving the view around the map, and telling the other players where this player is
 // pointing.
 //
 // Fingers (pointer events with pointerType 'touch') follow their own rules, below the mouse code:
 //   - two fingers always move the view (drag) and zoom it (pinch), and never build
 //   - one finger with nothing held drags the view; a tap on a building selects it (touch.js then
-//     offers rotate, upgrade and remove for it)
-//   - one finger with a building held (not the belt), or the Remove or Upgrade tool, places: the
-//     preview follows the finger while it is down, and the building is placed (or removed, or its
-//     sheet opened) once, where the finger lifts. Lifted off the floor, or over a button or
+//     shows what it is working at and offers rotate and remove for it)
+//   - one finger with a building held (not the belt), or the Remove tool, places: the
+//     preview follows the finger while it is down, and the building is placed (or removed) once,
+//     where the finger lifts. Lifted off the floor, or over a button or
 //     panel, it does nothing. (The owner's request, 0.3.01: a drag used to build a row.)
 //   - a building's preview is lifted above the finger (0.3.03, the owner's request; numbers in
 //     lift.js): a tap places on the tapped tile however long the finger rests, but once the finger
 //     drags at all the preview rises about one and a half tiles above it, stays up for the rest of
 //     that touch, and the building goes there. The
-//     Remove and Upgrade tools act on the tile under the finger, with dashed lines along its row and
+//     Remove tool acts on the tile under the finger, with dashed lines along its row and
 //     column (view.aim) because the finger hides it.
 //   - a building can be dragged up out of its button in the bar (0.3.03, watchBar below): the lifted
 //     preview follows the finger over the floor, and lifting places one. What was held before is
@@ -57,7 +57,7 @@ export const hotkeyOf = (k) => (BUILD[k]?.back ? BACK_HOTKEYS[BACK_KEYS.indexOf(
 /** The kinds laid in lines by dragging: the shop floor's belt and The Back's. */
 const isLine = (k) => k === 'belt' || k === 'conv';
 /** Tools that are not buildings. */
-const TOOLS = ['remove', 'upgrade'];
+const TOOLS = ['remove'];
 
 const CURSOR_EVERY_MS = 100; // at most 10 pointer updates a second
 const CURSOR_TTL_MS = 3000;
@@ -115,7 +115,6 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** Whether kind or tool k can be held on the floor being looked at. */
   function fits(k) {
     if (k === 'remove') return true;
-    if (k === 'upgrade') return !floor; // (the shop's buildings only; The Back has no upgrades)
     const def = BUILD[k];
     return !!def && (floor ? !!def.back && !def.fixed : !def.back);
   }
@@ -124,7 +123,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const next = k && !isOffice() && fits(k) ? k : null;
     if (next === tool) return;
     tool = next;
-    if (tool && tool !== 'upgrade') selected = null;
+    if (tool) selected = null;
     canvas.dataset.tool = tool || '';
     if (tool) playSound('select');
     onChange();
@@ -140,7 +139,6 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       if (!r || r.ok) { did = c.c; last = r; }
     }
     if (did === 'place' || did === 'remove') playSound(did);
-    if (did === 'upgrade') playSound(did);
     // A Rebuild press that only paid for wrecks that must wait builds nothing yet: its own sound
     // comes with the rebuildHeld event (sound.js). The host knows at once. A joined player hears
     // nothing back, so he plays it only when his own copy of the state says the press can order
@@ -166,13 +164,6 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (!s || (s.phase !== 'cards' && s.phase !== 'build' && s.phase !== 'wave')) return;
     playSound('click');
     session.send({ c: 'pause', on: !s.pause });
-  }
-
-  /** Upgrades the building on a tile, if there is one that can be. */
-  function upgrade(t, track) {
-    const b = !floor && t && at(t);
-    if (!b) return;
-    send([track ? { c: 'upgrade', x: t.x, y: t.y, t: track } : { c: 'upgrade', x: t.x, y: t.y }]);
   }
 
   /** Turns the building or part on tile t a quarter turn clockwise, on the floor being looked at. */
@@ -265,9 +256,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const t = renderer.tileAt(e.clientX, e.clientY);
     hover = t;
     if (!t || !session.state) return;
-    // With the Upgrade tool, or with nothing held, a click on a building opens its sheet
-    // (what it has, what each upgrade costs, rotate, remove). A click on bare floor closes it.
-    if (e.button === 0 && (tool === 'upgrade' || !tool)) { e.preventDefault(); selected = anchorTile(t); return; }
+    // With nothing held, a click on a building opens its sheet (what it works at, its stock,
+    // rotate, remove). A click on bare floor closes it.
+    if (e.button === 0 && !tool) { e.preventDefault(); selected = anchorTile(t); return; }
     let mode = null;
     if (e.button === 2 || tool === 'remove') mode = 'remove';
     else if (tool) mode = 'build';
@@ -321,7 +312,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   const builds = () => !isOffice() && (tool === 'remove' || !!BUILD[tool]);
   /** What is held acts once, where the finger lifts (everything but the belt; see the top). */
-  const placesOne = () => !isOffice() && !!tool && !isLine(tool) && (builds() || tool === 'upgrade');
+  const placesOne = () => !isOffice() && !!tool && !isLine(tool) && builds();
   /** The building being placed: one dragged from the bar, or else what is held. */
   const placeKind = () => (carry && carry.picked ? carry.kind : tool);
 
@@ -375,7 +366,6 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   function placeAt(t) {
     if (!t || !session.state || isOffice()) return;
     hover = t;
-    if (tool === 'upgrade') { selected = anchorTile(t); return; }
     if (tool === 'remove') { send([{ c: 'remove', x: t.x, y: t.y }]); return; }
     send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]);
   }
@@ -432,7 +422,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       };
       // Show the ghost of what is held under the finger straight away (a building's rises above the
       // finger once it drags).
-      if (!cancelled && (builds() || tool === 'upgrade')) hover = t;
+      if (!cancelled && builds()) hover = t;
       notePointer(e.clientX, e.clientY, t);
     } else if (touches.size === 2) {
       // A second finger on the floor cancels what the first was placing (belts a drag has already
@@ -587,7 +577,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       if (!fingerish(e) || carry || touches.size || isOffice()) return;
       const btn = e.target && e.target.closest ? e.target.closest('[data-k]') : null;
       const k = btn && btn.dataset.k;
-      // Only buildings: the Upgrade, Rebuild and Remove tools are tapped, as before.
+      // Only buildings: the Rebuild and Remove tools are tapped, as before.
       if (!BUILD[k]) return;
       carry = { id: e.pointerId, kind: k, btn, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, picked: false, above: false, onPick };
     });
@@ -647,13 +637,6 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (lower === 'x' || key === 'Delete' || key === 'Backspace') {
       setTool(tool === 'remove' ? null : 'remove');
       e.preventDefault();
-    } else if (lower === 'u') {
-      // With the mouse on a building, upgrade it (whatever is held: the training shift hands you
-      // the Upgrade tool and then says "press U"); otherwise pick up or put down the upgrade tool.
-      e.preventDefault();
-      if (floor) return; // (nothing in The Back is upgraded)
-      if (hover && at(hover) && BUILD[at(hover).k].up) upgrade(hover);
-      else setTool(tool === 'upgrade' ? null : 'upgrade');
     } else if (lower === 'r') {
       e.preventDefault();
       if (tool && BUILD[tool]) {
@@ -749,7 +732,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /**
    * Where the finger placing something is ({ x, y } in page pixels), or null when no finger is.
    * A placement is one finger down with something held that it will place: any building, the
-   * Remove or the Upgrade tool, or a building dragged out of the bar. touch.js shows the Rotate
+   * Remove tool, or a building dragged out of the bar. touch.js shows the Rotate
    * button and the cancel hint meanwhile.
    */
   function placing() {

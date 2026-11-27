@@ -5,7 +5,7 @@
 // time it ends. They all use opts.seed the way the older sounds do: seed % shapes picks the
 // version, and the pitch, length and timbre are nudged on every play.
 import { voice, tone, noise, bell, brass, formant, mtof, vary, say, babble } from './synth.js';
-import { thud, knock, glass } from './shoppers.js';
+import { thud, glass } from './shoppers.js';
 
 /** A metal clang (the same recipe as in effects.js). */
 function clang(v, t, f, peak = 0.14, d = 0.35, index = 2.5) {
@@ -267,49 +267,6 @@ export function tvWreck(v, t, x) {
     noise(v, { t: t + 0.12, type: 'highpass', f: 2000, q: 0.5, peak: 0.14, a: 0.005, h: 0.2, d: 0.15 }); // static
     tone(v, { t: t + 0.12, f: 1200 * x.j(0.05), type: 'sine', peak: 0.05, a: 0.005, h: 0.18, d: 0.05 }); // a last tinny "ding"
   }
-}
-
-// ------------------------------------------------------------------------- upgrades by track
-
-/**
- * What each track of upgrade adds to the rising "ding-ding-DING": `dmg` hits harder, `spd` whirrs,
- * `rng` pings upward, `dur` tightens a bolt. Returns when the chord should start (seconds after t).
- */
-export function trackIntro(v, t, x, track, base) {
-  if (track === 'dmg') {
-    knock(v, t, 240 * x.j(0.1), 0.22);
-    tone(v, { t, f: 150 * x.j(0.1), f1: 60, glide: 0.08, peak: 0.24, a: 0.003, d: 0.1 });
-    noise(v, { t, type: 'lowpass', f: 900, q: 0.7, peak: 0.15, a: 0.002, d: 0.05 });
-    tone(v, { t: t + 0.1, f: mtof(base - 12), type: 'sawtooth', lp: 500, peak: 0.07, a: 0.01, h: 0.05, d: 0.22 });
-    return 0.1;
-  }
-  if (track === 'spd') {
-    noise(v, { t, type: 'bandpass', f: 400 * x.j(0.15), f1: 3500, glide: 0.22, q: 5, peak: 0.13, a: 0.02, h: 0.1, d: 0.06 });
-    tone(v, { t, f: 120 * x.j(0.1), f1: 760, glide: 0.22, type: 'sawtooth', lp: 1500, peak: 0.06, a: 0.02, h: 0.1, d: 0.06, vib: { rate: 30, depth: 60 } });
-    return 0.14;
-  }
-  if (track === 'rng') {
-    tone(v, { t, f: mtof(base + 7), f1: mtof(base + 19), glide: 0.12, peak: 0.09, a: 0.005, d: 0.18 });
-    bell(v, { t: t + 0.1, f: mtof(base + 19), peak: 0.06, d: 0.3, ratio: 2, index: 0.4 });
-    return 0.1;
-  }
-  if (track === 'dur') {
-    // A bolt being tightened: slow clicks that bunch up, then a solid clunk.
-    [0, 0.07, 0.125, 0.165].forEach((dt, i) => {
-      noise(v, { t: t + dt, type: 'bandpass', f: (2200 - i * 150) * x.j(0.05), q: 3, peak: 0.3, a: 0.002, d: 0.014 });
-      tone(v, { t: t + dt, f: 900 - i * 60, peak: 0.05, a: 0.002, d: 0.014 });
-    });
-    thud(v, t + 0.2, 0.2, 95);
-    return 0.2;
-  }
-  return 0.08;
-}
-
-/** The deflating note: some buildings came back with fewer upgrades than they had. */
-export function deflate(v, t, x) {
-  tone(v, { t, f: mtof(76) * x.j(0.03), f1: mtof(64), glide: 0.35, type: 'triangle', peak: 0.16, a: 0.01, h: 0.12, d: 0.15, vib: { rate: 6, depth: 25, delay: 0.1 } });
-  tone(v, { t, f: mtof(76) * x.j(0.03), f1: mtof(64), glide: 0.35, type: 'square', lp: 1200, peak: 0.03, a: 0.01, h: 0.12, d: 0.15 });
-  return t + 0.35;
 }
 
 /** "Oof, up you get": a mom picks up the child she just caught (she has lost her cart). */

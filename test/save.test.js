@@ -2,7 +2,7 @@
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, addPlayer, applyCommand, step, TICK_HZ, TUNE } from '../src/sim/index.js';
+import { createGame, addPlayer, applyCommand, step, migrateSave, rebuildDeal, addStock, itemCode, TICK_HZ, TUNE, BUILD } from '../src/sim/index.js';
 import { HostSession, ClientSession } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
 import { writeSave, readSave, clearSave, worthSaving, whenSaved } from '../src/ui/save.js';
@@ -20,7 +20,9 @@ function game() {
   addPlayer(s, 'Steve');
   applyCommand(s, 0, { c: 'place', k: 'sprinkler', x: 4, y: 4 });
   applyCommand(s, 1, { c: 'place', k: 'crate', x: 6, y: 6 });
-  applyCommand(s, 0, { c: 'upgrade', x: 4, y: 4 });
+  // Stocked with two units of Name Brand Bottled Spite, as if they had come up its Dumbwaiter, so
+  // the save carries a building's stock (0.4: stock took the place of bought upgrades).
+  for (let n = 0; n < 2; n++) addStock(s.grid[4 * s.w + 4], itemCode(1, 2));
   s.wave = 3;
   applyCommand(s, 0, { c: 'start' });
   for (let i = 0; i < 5 * TICK_HZ; i++) step(s);
@@ -89,7 +91,7 @@ test('resuming makes the saver the host again, and the others get their places a
   assert.equal(host.state.host, 0);
   assert.deepEqual(host.state.players.map((p) => p.on), [true, false], 'Steve is away until he joins again');
   assert.equal(host.state.wave, 4);
-  assert.equal(host.state.grid[4 * host.state.w + 4].u.dmg, 1, 'the upgraded sprinkler is still there');
+  assert.equal(host.state.grid[4 * host.state.w + 4].s.dmg[0], 2, 'the stocked sprinkler is still there, its stock with it');
   // The game runs on while Steve is away, and however long he takes, his money is still his.
   for (let i = 0; i < (TUNE.graceSecs || 90) * 2 * TICK_HZ / 30; i++) host.fastForward(30);
   assert.equal(host.state.players[1].cash, 321);
@@ -100,6 +102,32 @@ test('resuming makes the saver the host again, and the others get their places a
   assert.equal(steve.state.players[1].cash, 321);
   assert.deepEqual(host.state.players.map((p) => p.on), [true, true]);
   assert.equal(host.state.players.length, 2, 'nobody was added twice');
+});
+
+test('a save from before 0.4 loses its bought upgrades, and an underpaid rebuild order is cancelled with a refund', () => {
+  const s = createGame({ seed: 3 });
+  addPlayer(s, 'Dave');
+  applyCommand(s, 0, { c: 'place', k: 'sprinkler', x: 4, y: 4 });
+  applyCommand(s, 0, { c: 'place', k: 'forklift', x: 8, y: 4 });
+  const w = s.w;
+  // What a 0.3 save had: levels bought (u), a card's free levels (f, fn), and on rubble what was
+  // spent with its upgrades (spent). An order then could hold less than the whole price.
+  Object.assign(s.grid[4 * w + 4], { u: { dmg: 2, rng: 1 }, f: 'dmg', fn: 2 });
+  const short = { i: 10 * w + 5, k: 'crate', d: 0, o: 0, u: { dur: 1 }, spent: 20, by: 0, res: 4 };
+  const paid = { i: 10 * w + 9, k: 'forklift', d: 0, o: 0, u: {}, spent: 200, by: 0, res: 100 };
+  s.rubble.push(short, paid);
+  const cash = s.players[0].cash;
+  assert.equal(migrateSave(s), true);
+  const b = s.grid[4 * w + 4];
+  for (const f of ['u', 'f', 'fn']) assert.equal(f in b, false, `the building loses ${f}`);
+  for (const r of s.rubble) for (const f of ['u', 'spent']) assert.equal(f in r, false, `a wreck loses ${f}`);
+  assert.equal(short.by, undefined, 'held less than the whole price (half of $10 is $5): cancelled');
+  assert.equal(short.res, undefined);
+  assert.equal(paid.by, 0, 'held the whole price: kept');
+  assert.equal(paid.res, rebuildDeal(paid, Infinity).pay);
+  assert.equal(rebuildDeal(paid, Infinity).pay, Math.floor(BUILD.forklift.cost * TUNE.rebuildShare));
+  assert.equal(s.players[0].cash, cash + 4, 'the money held for the cancelled order is back');
+  assert.equal(migrateSave(s), false, 'only once');
 });
 
 test('the time a save was made is shown in plain words', () => {

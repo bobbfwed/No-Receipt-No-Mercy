@@ -1,14 +1,15 @@
 // Tests for the Rebuild button as an order (0.3.04, the owner's request: "The auto rebuild makes
 // the game too easy... not having to do anything is too easy and passive"). Auto-rebuild is gone.
 // Pressing Rebuild (or B) takes the money at once and puts each wreck back at once if it can,
-// otherwise as soon as nothing is in the way, with no further press. A wreck he cannot afford even
-// the bare building for is not ordered (the owner's decision), and there is no cancel (the owner's
-// decision): held money goes back only when the wreck stops being rubble some other way.
+// otherwise as soon as nothing is in the way, with no further press. A wreck he cannot afford is not
+// ordered (the owner's decision), and there is no cancel (the owner's decision): held money goes back
+// only when the wreck stops being rubble some other way. Since 0.4 (bought upgrades are gone) the
+// price is half of what was paid for it, all or nothing, and an order always holds the whole price.
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, queueTrainingWave, rebuildDeal, migrateSave, spentOn,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, rebuildDeal, migrateSave,
   heldFor, anchorOf, tilesOf, setPlayerOnline, BUILD, TUNE, TICK_HZ, ST,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
@@ -31,9 +32,9 @@ function stage(seed = 5) {
 }
 const place = (s, k, x, y, pid = 0) => applyCommand(s, pid, { c: 'place', k, x, y, d: 0 });
 /** Rubble as a gym bro leaves it. */
-const crateRubble = (x, y, o = 0) => ({ i: at(x, y), k: 'crate', d: 0, o, u: {}, spent: BUILD.crate.cost });
-/** A forklift's rubble: base 200, rng 80, dmg 120 + 192: full deal 296, bare 100, then rng 40, dmg 60, dmg 96. */
-const forkRubble = (x, y, o = 0, u = { dmg: 2, rng: 1 }) => ({ i: at(x, y), k: 'forklift', d: 0, o, u, spent: spentOn({ k: 'forklift', u }) });
+const crateRubble = (x, y, o = 0) => ({ i: at(x, y), k: 'crate', d: 0, o });
+/** A forklift's rubble: rebuilt for half its $200, $100. */
+const forkRubble = (x, y, o = 0) => ({ i: at(x, y), k: 'forklift', d: 0, o });
 const steps = (s, n) => { const ev = []; for (let i = 0; i < n; i++) ev.push(...step(s)); return ev; };
 /** A fallen drunk lying on a tile (he stays put), so nothing that blocks may be built there. */
 function lieDown(s, x, y, id = 900 + s.shoppers.length) {
@@ -47,7 +48,9 @@ function wreckAt(s, x, y) {
   const ai = anchorOf(s, at(x, y)), b = s.grid[ai];
   for (const t of tilesOf(s, ai)) s.grid[t] = 0;
   s.gridVer++;
-  s.rubble.push({ i: ai, k: b.k, d: b.d | 0, o: b.o, u: { ...(b.u || {}) }, spent: spentOn(b) });
+  const r = { i: ai, k: b.k, d: b.d | 0, o: b.o };
+  if (b.c !== undefined) r.c = b.c;
+  s.rubble.push(r);
 }
 const rebuilt = (ev) => ev.filter((e) => e.e === 'rebuilt');
 const heldEv = (ev) => ev.filter((e) => e.e === 'rebuildHeld');
@@ -70,13 +73,13 @@ test('pressing Rebuild takes the money at once, and with nothing in the way the 
   s.rubble.push(crateRubble(5, 5));
   const cash = s.players[0].cash, spent = s.players[0].all.spent;
   const ev = [];
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }, ev), { ok: true, n: 1, short: 0, held: 0, paid: CRATE_HALF });
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }, ev), { ok: true, n: 1, held: 0, paid: CRATE_HALF });
   assert.equal(s.grid[at(5, 5)].k, 'crate');
   assert.equal(s.grid[at(5, 5)].o, 0);
   assert.equal(s.rubble.length, 0);
   assert.equal(s.players[0].cash, cash - CRATE_HALF);
   assert.equal(s.players[0].all.spent, spent + CRATE_HALF);
-  assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1, short: 0 }]);
+  assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1 }]);
 });
 
 test('a shopper in the hole: the money is taken, nothing is built, and step() builds it once he goes, with no further press', () => {
@@ -85,7 +88,7 @@ test('a shopper in the hole: the money is taken, nothing is built, and step() bu
   s.rubble.push(crateRubble(5, 5));
   const cash = s.players[0].cash, spent = s.players[0].all.spent, built = s.players[0].all.built;
   const ev = [];
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }, ev), { ok: true, n: 0, short: 0, held: 1, paid: CRATE_HALF });
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }, ev), { ok: true, n: 0, held: 1, paid: CRATE_HALF });
   assert.deepEqual(ev, [{ e: 'rebuildHeld', by: 0, n: 1, paid: CRATE_HALF }]);
   assert.equal(s.grid[at(5, 5)], 0, 'not on top of him');
   assert.equal(s.players[0].cash, cash - CRATE_HALF, 'paid now');
@@ -104,16 +107,16 @@ test('a shopper in the hole: the money is taken, nothing is built, and step() bu
   assert.equal(s.players[0].cash, cash - CRATE_HALF, 'charged once');
   assert.equal(s.players[0].all.spent, spent + CRATE_HALF);
   assert.equal(s.players[0].all.built, built + 1);
-  assert.deepEqual(rebuilt(later), [{ e: 'rebuilt', by: 0, n: 1, short: 0, late: 1 }]);
+  assert.deepEqual(rebuilt(later), [{ e: 'rebuilt', by: 0, n: 1, late: 1 }]);
 });
 
 test('a mixed press: the event says only what is held for the wreck left waiting; the result says what the press took in all', () => {
   const s = stage();
   lieDown(s, 5, 5);
-  s.rubble.push(crateRubble(5, 5), forkRubble(9, 5, 0, {}));
+  s.rubble.push(crateRubble(5, 5), forkRubble(9, 5));
   const ev = [];
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }, ev), { ok: true, n: 1, short: 0, held: 1, paid: CRATE_HALF + FORK_HALF });
-  assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1, short: 0 }, { e: 'rebuildHeld', by: 0, n: 1, paid: CRATE_HALF }]);
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }, ev), { ok: true, n: 1, held: 1, paid: CRATE_HALF + FORK_HALF });
+  assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1 }, { e: 'rebuildHeld', by: 0, n: 1, paid: CRATE_HALF }]);
   assert.equal(s.grid[at(9, 5)].k, 'forklift');
 });
 
@@ -131,7 +134,7 @@ test('when it would wall the route: paid for, held, and built by step() once ano
   assert.equal(s.grid[at(15, 7)].k, 'crate');
 });
 
-test('too broke for the bare building: not ordered, refused with "cash", nothing taken; a later press works', () => {
+test('too broke for the whole price: not ordered, refused with "cash", nothing taken; a later press works', () => {
   const s = stage();
   s.rubble.push(crateRubble(5, 5));
   s.players[0].cash = CRATE_HALF - 1;
@@ -146,53 +149,36 @@ test('too broke for the bare building: not ordered, refused with "cash", nothing
   assert.equal(applyCommand(s, 0, { c: 'rebuild' }).n, 1);
   assert.equal(s.players[0].cash, 3);
 });
-
-test('pressed with money for a lower level while it waits: more is taken as cash arrives, and it comes back with every upgrade', () => {
+test('the price is half of what was paid, all or nothing: a card\'s price carries into the rebuild', () => {
+  assert.deepEqual(rebuildDeal(forkRubble(5, 5), Infinity), { pay: FORK_HALF });
+  assert.equal(rebuildDeal(forkRubble(5, 5), FORK_HALF - 1), null, 'a dollar short: nothing, not a cheaper rebuild');
+  // Bought at another price (a card: c), it is rebuilt for half of that.
+  const dear = { ...forkRubble(5, 5), c: 241 };
+  assert.deepEqual(rebuildDeal(dear, Infinity), { pay: 120 });
+  const s = stage();
+  s.rubble.push(dear);
+  s.players[0].cash = 120;
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, held: 0, paid: 120 });
+  assert.equal(s.grid[at(5, 5)].c, 241, 'it keeps the price it was bought at');
+  assert.equal(s.players[0].cash, 0);
+});
+test('an order holds the whole price: while it waits, nothing more is ever taken from him', () => {
   const s = stage();
   const drunk = lieDown(s, 5, 5);
   const r = forkRubble(5, 5);
   s.rubble.push(r);
-  assert.equal(rebuildDeal(r, Infinity).pay, 296);
-  s.players[0].cash = 140;
+  s.players[0].cash = FORK_HALF + 500;
   assert.equal(applyCommand(s, 0, { c: 'rebuild' }).held, 1);
-  assert.equal(r.res, 140, 'the bare forklift and its cheapest level');
-  assert.equal(s.players[0].cash, 0);
-  // 50 more does not buy the next level (60): nothing moves.
-  s.players[0].cash = 50;
-  steps(s, EVERY);
-  assert.equal(r.res, 140);
-  assert.equal(s.players[0].cash, 50);
-  // 60 does.
-  s.players[0].cash = 60;
-  steps(s, EVERY);
-  assert.equal(r.res, 200);
-  assert.equal(s.players[0].cash, 0);
-  // Then plenty: up to the full deal and no further.
-  s.players[0].cash = 1000;
-  steps(s, EVERY);
-  assert.equal(r.res, 296);
-  assert.equal(s.players[0].cash, 1000 - 96);
-  steps(s, 3 * EVERY);
-  assert.equal(r.res, 296, 'never more than the full deal');
-  assert.equal(s.players[0].cash, 1000 - 96);
+  assert.equal(r.res, FORK_HALF);
+  steps(s, 5 * EVERY);
+  assert.equal(r.res, FORK_HALF, 'never more than the price');
+  assert.equal(s.players[0].cash, 500);
   getUp(s, drunk);
   const ev = steps(s, EVERY);
-  assert.deepEqual(s.grid[at(5, 5)].u, { dmg: 2, rng: 1 }, 'every upgrade');
-  assert.equal(s.players[0].cash, 1000 - 96, 'nothing more charged, nothing given back');
-  assert.deepEqual(rebuilt(ev), [{ e: 'rebuilt', by: 0, n: 1, short: 0, late: 1 }]);
+  assert.equal(s.grid[at(5, 5)].k, 'forklift');
+  assert.equal(s.players[0].cash, 500, 'nothing more charged, nothing given back');
+  assert.deepEqual(rebuilt(ev), [{ e: 'rebuilt', by: 0, n: 1, late: 1 }]);
 });
-
-test('pressed with money for a lower level and nothing in the way: back at once at that level', () => {
-  const s = stage();
-  s.rubble.push(forkRubble(5, 5));
-  s.players[0].cash = 140;
-  const ev = [];
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }, ev), { ok: true, n: 1, short: 1, held: 0, paid: 140 });
-  assert.deepEqual(s.grid[at(5, 5)].u, { rng: 1 });
-  assert.equal(s.players[0].cash, 0);
-  assert.deepEqual(ev, [{ e: 'rebuilt', by: 0, n: 1, short: 1 }]);
-});
-
 test('a wreck that breaks after the press is not ordered; pressing again orders only it, and with everything ordered a press is refused "ordered"', () => {
   const s = stage();
   lieDown(s, 5, 5);
@@ -209,56 +195,46 @@ test('a wreck that breaks after the press is not ordered; pressing again orders 
   assert.equal(s.rubble[1].by, undefined);
   assert.equal(s.players[0].cash, cash);
   // Another press: only the new one is paid for, and it goes back at once.
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, short: 0, held: 0, paid: CRATE_HALF });
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, held: 0, paid: CRATE_HALF });
   assert.equal(s.grid[at(9, 5)].k, 'crate');
   assert.equal(s.players[0].cash, cash - CRATE_HALF);
   assert.equal(s.grid[at(5, 5)], 0, 'the first still waits');
 });
 
-test('oldest first: the press orders the oldest it can afford, and waiting orders take new money oldest first', () => {
+test('oldest first: the press orders the oldest it can afford, and one he cannot afford does not stop younger ones', () => {
   // The press: money for the forklift (the oldest) and nothing left for the crate.
   const s = stage();
-  s.rubble.push(forkRubble(5, 5, 0, {}), crateRubble(9, 5));
+  s.rubble.push(forkRubble(5, 5), crateRubble(9, 5));
   s.players[0].cash = FORK_HALF;
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, short: 0, held: 0, paid: FORK_HALF });
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild' }), { ok: true, n: 1, held: 0, paid: FORK_HALF });
   assert.equal(s.grid[at(5, 5)].k, 'forklift');
   assert.equal(s.grid[at(9, 5)], 0, 'the crate is not ordered');
   assert.equal(s.rubble[0].by, undefined);
   // ...but a wreck he cannot afford does not stop younger ones he can.
   const t = stage();
-  t.rubble.push(forkRubble(5, 5, 0, {}), crateRubble(9, 5));
+  t.rubble.push(forkRubble(5, 5), crateRubble(9, 5));
   t.players[0].cash = FORK_HALF - 1;
   assert.equal(applyCommand(t, 0, { c: 'rebuild' }).n, 1);
   assert.equal(t.grid[at(9, 5)].k, 'crate');
   assert.equal(t.rubble.length, 1);
   assert.equal(t.rubble[0].by, undefined);
 
-  // The top-up: two forklifts waiting, each ordered bare.
+  // Two forklifts waiting, money for one: the older is ordered and held, the younger is not.
   const u = stage();
   lieDown(u, 5, 5);
   lieDown(u, 9, 5);
   const a = forkRubble(5, 5), b = forkRubble(9, 5);
-  u.rubble.push(a);
+  u.rubble.push(a, b);
+  u.players[0].cash = FORK_HALF + 40;
+  assert.deepEqual(applyCommand(u, 0, { c: 'rebuild' }), { ok: true, n: 0, held: 1, paid: FORK_HALF });
+  assert.deepEqual([a.res, b.by, u.players[0].cash], [FORK_HALF, undefined, 40]);
+  // More money arriving is not taken by itself: the younger needs another press.
   u.players[0].cash = FORK_HALF;
-  applyCommand(u, 0, { c: 'rebuild' });
-  u.rubble.push(b);
-  u.players[0].cash = FORK_HALF;
-  applyCommand(u, 0, { c: 'rebuild' });
-  assert.deepEqual([a.res, b.res, u.players[0].cash], [100, 100, 0]);
-  // 40: the older one's next level (rng, 40) gets it.
-  u.players[0].cash = 40;
-  steps(u, EVERY);
-  assert.deepEqual([a.res, b.res, u.players[0].cash], [140, 100, 0]);
-  // 40 more: the older one's next level costs 60, so it cannot use it; the younger's can.
-  u.players[0].cash = 40;
-  steps(u, EVERY);
-  assert.deepEqual([a.res, b.res, u.players[0].cash], [140, 140, 0]);
-  // 60: the older one first.
-  u.players[0].cash = 60;
-  steps(u, EVERY);
-  assert.deepEqual([a.res, b.res, u.players[0].cash], [200, 140, 0]);
+  steps(u, 3 * EVERY);
+  assert.deepEqual([b.by, u.players[0].cash], [undefined, FORK_HALF]);
+  assert.equal(applyCommand(u, 0, { c: 'rebuild' }).held, 1);
+  assert.deepEqual([a.res, b.res, u.players[0].cash], [FORK_HALF, FORK_HALF, 0]);
 });
-
 test('one player\'s press never touches another\'s wrecks or money; with all: true it pays for everybody\'s', () => {
   const s = stage();
   addPlayer(s, 'Steve');
@@ -276,7 +252,7 @@ test('one player\'s press never touches another\'s wrecks or money; with all: tr
   s.rubble.push(crateRubble(9, 5, 1));
   assert.equal(applyCommand(s, 0, { c: 'rebuild' }).why, 'empty');
   // With all: Dave pays for Steve's new wreck, but not again for the one Steve already paid.
-  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild', all: true }), { ok: true, n: 1, short: 0, held: 0, paid: CRATE_HALF });
+  assert.deepEqual(applyCommand(s, 0, { c: 'rebuild', all: true }), { ok: true, n: 1, held: 0, paid: CRATE_HALF });
   assert.equal(s.players[0].cash, dave - CRATE_HALF);
   assert.equal(s.players[1].cash, 1000 - CRATE_HALF);
   assert.equal(s.rubble.length, 1);
@@ -331,14 +307,14 @@ test('placing the same kind by hand on a paid-for wreck uses the held money and 
   const drunk = lieDown(s, 5, 5);
   const r = forkRubble(5, 5);
   s.rubble.push(r);
-  s.players[0].cash = 200;
+  s.players[0].cash = FORK_HALF;
   applyCommand(s, 0, { c: 'rebuild' });
-  assert.equal(r.res, 200);
+  assert.equal(r.res, FORK_HALF);
   assert.equal(s.players[0].cash, 0);
   getUp(s, drunk);
   // Before step() gets to it, he places it by hand with no loose cash at all.
   assert.ok(place(s, 'forklift', 5, 5).ok, 'the held money counts as his');
-  assert.deepEqual(s.grid[at(5, 5)].u, { rng: 1, dmg: 1 });
+  assert.equal(s.grid[at(5, 5)].k, 'forklift');
   assert.equal(s.players[0].cash, 0, 'charged once, from what was held');
   assert.equal(s.rubble.length, 0);
   steps(s, 2 * EVERY);
@@ -470,8 +446,6 @@ test('money is conserved: cash plus held plus spent never changes across a scrip
   const start = [total(0), total(1)];
   const check = (what) => assert.deepEqual([total(0), total(1)], start, what);
   for (let y = 2; y <= 12; y += 2) { place(s, 'crate', 4, y); place(s, 'forklift', 6, y); place(s, 'crate', 8, y, 1); }
-  applyCommand(s, 0, { c: 'upgrade', x: 6, y: 4, t: 'dmg' });
-  applyCommand(s, 0, { c: 'upgrade', x: 6, y: 4, t: 'rng' });
   check('after building');
   wreckAt(s, 4, 2); wreckAt(s, 6, 4); wreckAt(s, 8, 6); wreckAt(s, 6, 8);
   const d1 = lieDown(s, 6, 4), d2 = lieDown(s, 8, 6);
@@ -543,13 +517,13 @@ test('the big REBUILD button: hidden with nothing wrecked; count and price; dimm
   assert.equal(rebuildStatus(s, 0), null, 'nothing wrecked: no button');
   const fork = forkRubble(5, 5);
   s.rubble.push(fork, crateRubble(9, 5), crateRubble(11, 5, 1));
-  const full = 296 + CRATE_HALF;
-  const ready = { n: 2, cost: full, can: true, why: '', held: 0, paid: 0, full: 0, wait: '' };
+  const full = FORK_HALF + CRATE_HALF;
+  const ready = { n: 2, cost: full, can: true, why: '', held: 0, paid: 0, wait: '' };
   assert.deepEqual(rebuildStatus(s, 0), ready, 'his two, not Steve\'s');
   assert.deepEqual(rebuildWords(ready), { look: 'ready', count: `REBUILD 2 · $${full}`, sub: 'Your shit is broken. Fix it', label: `Rebuild 2 wrecks for $${full}` });
   assert.equal(rebuildStatus(s, 1).n, 1);
 
-  // Too little cash for anything: dimmed, and what the cheapest needs.
+  // Too little cash for anything: dimmed, and what the cheapest whole rebuild needs.
   s.players[0].cash = CRATE_HALF - 1;
   const broke = rebuildStatus(s, 0);
   assert.equal(broke.can, false);
@@ -560,13 +534,13 @@ test('the big REBUILD button: hidden with nothing wrecked; count and price; dimm
   s.players[0].cash = CRATE_HALF;
   assert.equal(rebuildStatus(s, 0).can, true);
 
-  // Someone lying in the forklift's hole; money for the bare forklift and a level, so it waits.
-  s.players[0].cash = 140;
+  // Someone lying in the forklift's hole; money for the forklift only, so it is held and waits.
+  s.players[0].cash = FORK_HALF;
   lieDown(s, 5, 5);
   const r = applyCommand(s, 0, { c: 'rebuild' });
   assert.equal(r.held, 1);
   const some = rebuildStatus(s, 0);
-  assert.deepEqual(some, { n: 1, cost: CRATE_HALF, can: false, why: `Too broke. Need $${CRATE_HALF}`, held: 1, paid: 140, full: 296, wait: 'Some idiot is standing in the hole' });
+  assert.deepEqual(some, { n: 1, cost: CRATE_HALF, can: false, why: `Too broke. Need $${CRATE_HALF}`, held: 1, paid: FORK_HALF, wait: 'Some idiot is standing in the hole' });
   s.players[0].cash = 1000;
   assert.equal(rebuildWords(rebuildStatus(s, 0)).sub, '1 more paid for and waiting');
   applyCommand(s, 0, { c: 'rebuild' });
@@ -576,18 +550,15 @@ test('the big REBUILD button: hidden with nothing wrecked; count and price; dimm
   assert.equal(waiting.n, 0);
   assert.equal(waiting.held, 1);
   assert.equal(waiting.wait, 'Some idiot is standing in the hole');
-  s.players[0].cash = 0;
-  const words = rebuildWords({ ...waiting, paid: 140 });
+  const words = rebuildWords(waiting);
   assert.equal(words.look, 'waiting');
-  assert.equal(words.count, 'PAID $140 of $296 · 1 waiting');
+  assert.equal(words.count, `PAID $${FORK_HALF} · 1 waiting`);
   assert.equal(words.sub, 'Some idiot is standing in the hole');
-  assert.equal(rebuildWords({ ...waiting, paid: 296 }).count, 'PAID $296 · 1 waiting');
   // Once it has gone back, nothing of his is left.
   s.shoppers.length = 0;
   steps(s, EVERY);
   assert.equal(rebuildStatus(s, 0), null, 'it went back: nothing left');
 });
-
 test('the big REBUILD button: never for Head Office, or when the game is over', () => {
   const s = createGame({ seed: 2 });
   addPlayer(s, 'Dave');
@@ -602,7 +573,7 @@ test('the big REBUILD button: never for Head Office, or when the game is over', 
 
 // ---------------------------------------------------------------- players who are away
 
-/** Dave and Steve; Steve has paid for a bare forklift that waits behind a drunk. */
+/** Dave and Steve; Steve has paid for a forklift that waits behind a drunk. */
 function awayStage() {
   const s = stage();
   addPlayer(s, 'Steve');
@@ -615,7 +586,7 @@ function awayStage() {
   return { s, r, drunk };
 }
 
-test('a payer who is away is not topped up, but what he already paid for still goes back when the way clears', () => {
+test('a payer who is away still gets what he paid for when the way clears, and nothing more is taken from him', () => {
   const { s, r, drunk } = awayStage();
   setPlayerOnline(s, 1, false);
   s.players[1].cash = 1000; // (as if it had been his before he left)
@@ -626,11 +597,9 @@ test('a payer who is away is not topped up, but what he already paid for still g
   const ev = steps(s, EVERY);
   assert.equal(s.grid[at(5, 5)].k, 'forklift');
   assert.equal(s.grid[at(5, 5)].o, 1);
-  assert.equal(s.grid[at(5, 5)].u, undefined, 'bare, as paid');
-  assert.deepEqual(rebuilt(ev), [{ e: 'rebuilt', by: 1, n: 1, short: 1, late: 1 }]);
+  assert.deepEqual(rebuilt(ev), [{ e: 'rebuilt', by: 1, n: 1, late: 1 }]);
   assert.equal(s.players[1].cash, 1000);
 });
-
 test('when an away player\'s grace period runs out, his held money is shared out with his cash and his wrecks are plain rubble again', () => {
   const { s, r } = awayStage();
   s.players[1].cash = 95;
