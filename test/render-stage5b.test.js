@@ -16,19 +16,19 @@ function game() {
   s.players[0].cash = 1e6;
   return s;
 }
-const SPITE = itemCode(1, 1), COLA = itemCode(2, 1), CORD = itemCode(3, 1), TAPE = itemCode(4, 1), WIRE = itemCode(5, 2);
+const SPITE = itemCode(1, 1), COLA = itemCode(2, 1), CORD = itemCode(3, 1), WIRE = itemCode(5, 2);
 
 test('status marks: none, some or all of what a building takes, and its wire', () => {
   const s = game();
   assert.equal(applyCommand(s, 0, { c: 'place', k: 'sprinkler', x: 9, y: 8 }).ok, true);
   const b = s.grid[8 * s.w + 9];
-  // A Sprinkler takes Spite, Cola, Cord and Tape (and Razor Wire, which only counts once it has a
-  // wire direction).
+  // A Sprinkler takes Spite, Cola and Cord (and Razor Wire, which only counts once it has a wire
+  // direction; 0.4.01: Duct Tape is gone).
   assert.equal(stockMark(b), NONE + 3 * NO_WIRE);
   addStock(b, SPITE, s);
-  assert.equal(stockMark(b), SOME + 3 * NO_WIRE, 'one of four');
-  for (const c of [COLA, CORD, TAPE]) addStock(b, c, s);
-  assert.equal(stockMark(b), ALL + 3 * NO_WIRE, 'all four; no wire direction, so wire is not missing');
+  assert.equal(stockMark(b), SOME + 3 * NO_WIRE, 'one of three');
+  for (const c of [COLA, CORD]) addStock(b, c, s);
+  assert.equal(stockMark(b), ALL + 3 * NO_WIRE, 'all three; no wire direction, so wire is not missing');
   // A wire direction makes Razor Wire one of the things it takes: planned while it has none.
   assert.equal(applyCommand(s, 0, { c: 'wire', x: 9, y: 8, d: 3 }).ok, true);
   assert.equal(stockMark(b), SOME + 3 * PLANNED, 'wire planned and not stocked: some, planned');

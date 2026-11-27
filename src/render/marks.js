@@ -5,7 +5,8 @@
 //   an amber half disc  some are
 //   an empty red ring   none are
 // and round it a purple ring of barbs when its Razor Wire is live, a dashed purple ring when its wire
-// is only planned (a direction set, no wire in stock). Which supplies count: every one the building
+// is only planned (a direction set, no wire in stock), with a red lamp on it (0.4.01: the building
+// is asking for Razor Wire, as the lamp on its Dumbwaiter says). Which supplies count: every one the building
 // takes, except Razor Wire while it has no wire direction (wire with nowhere to go is not missing).
 //
 // stockMark() and the numbers are pure (tested in Node); markSprite() paints, in a browser.
@@ -92,6 +93,9 @@ function paintMark(g, level, wire) {
     g.lineWidth = 2.6; g.strokeStyle = '#d8b4fe'; g.stroke();
     g.setLineDash([]);
   }
+  // (0.4.01) Planned wire is wire asking for Razor Wire: a red lamp on the ring, as on the
+  // Dumbwaiter, drawn after the disc so nothing covers it.
+  const lamp = wire === PLANNED;
   g.beginPath(); g.arc(0, 0, R, 0, TAU);
   g.fillStyle = level === NONE ? '#2a1414' : '#1d2125'; g.fill();
   if (level === ALL) {
@@ -108,11 +112,34 @@ function paintMark(g, level, wire) {
   }
   g.beginPath(); g.arc(0, 0, R, 0, TAU);
   g.lineWidth = 2.4; g.strokeStyle = INK; g.stroke();
+  if (lamp) {
+    g.beginPath(); g.arc(LAMP[0], LAMP[1], 4.6, 0, TAU);
+    g.fillStyle = '#ff2d2d'; g.fill();
+    g.lineWidth = 1.8; g.strokeStyle = INK; g.stroke();
+    g.beginPath(); g.arc(LAMP[0] - 1.2, LAMP[1] - 1.2, 1.3, 0, TAU);
+    g.fillStyle = 'rgba(255,255,255,0.8)'; g.fill();
+  }
 }
+
+/** Where a mark's red lamp sits, in the units of a disc of radius 10: on its ring, top right. */
+const LAMP = [9.5, -9.5];
 
 /** Draws mark `code` centred on (x, y) in world pixels with a disc of radius r. */
 export function drawMark(ctx, code, x, y, r) {
   if (code < 0) return;
   const size = MARKBOX * (r / 10);
   ctx.drawImage(markSprite(code), x - size / 2, y - size / 2, size, size);
+}
+
+/**
+ * The glow behind a planned-wire mark's red lamp (drawn before the mark, at the same x, y and r),
+ * growing and fading with k from 0 to 1 (the screen's clock), so the lamp blinks zoomed out too.
+ */
+export function drawMarkLamp(ctx, x, y, r, k) {
+  const u = r / 10;
+  ctx.save();
+  ctx.globalAlpha = 0.2 + 0.45 * k;
+  ctx.fillStyle = '#ff2d2d';
+  ctx.beginPath(); ctx.arc(x + LAMP[0] * u, y + LAMP[1] * u, (6 + 4 * k) * u, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }

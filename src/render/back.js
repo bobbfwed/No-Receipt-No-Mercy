@@ -13,12 +13,12 @@
 // big Back costs a few drawImage calls a tile.
 import {
   BACK, TICK_HZ, beltShape as backShape, overpassDirs, feedsInto, takesFrom, itemType, itemTier, unitsIn,
-  stockCap, makeTicks, rebrandTicks,
+  stockCap, makeTicks, rebrandTicks, wireLive,
 } from '../sim/index.js';
 import { SUPPLIES, stockTracks } from '../content/supplies.js';
 import { TILE, INK, C, rr, paint, box, circle, line, label, text, hazard, makeSprite } from './paint.js';
 import { drawBeltTile, SP } from './buildings.js';
-import { stockMark, useMarks, markRadius, drawMark } from './marks.js';
+import { stockMark, useMarks, markRadius, drawMark, drawMarkLamp } from './marks.js';
 import { createPaintBudget, createSpriteCache } from './spritecache.js';
 import { matchLane, createGlides, ease, progress } from './glide.js';
 
@@ -37,7 +37,7 @@ const PHASES = 8;
 const FLOAT_MS = 1300;
 
 // ---------------------------------------------------------------------------------------------
-// Items: returned junk and the five supplies, upright, about 14 world pixels across. A supply's
+// Items: returned junk and the four supplies, upright, about 14 world pixels across. A supply's
 // tier is a ring round it: none for Store Brand, then bronze, silver and gold.
 
 const TIER_RING = [null, null, '#c98a4b', '#e8ecf0', '#ffc928'];
@@ -106,20 +106,9 @@ const ART = [
     rr(g, 4.5, 4, 4, 4, 0.8);
     paint(g, C.steelLight, 1.1);
   },
-  // 4 Duct Tape (durability): a silver roll.
-  function tape(g) {
-    circle(g, 0, 0, 6.6, C.steelLight, 1.6);
-    g.beginPath(); g.arc(0, 0, 4.9, 0, TAU);
-    g.strokeStyle = C.steel; g.lineWidth = 1; g.stroke();
-    circle(g, 0, 0, 3, C.cardboardLight, 1.2);
-    circle(g, 0, 0, 1.5, '#2a2d31', 0);
-    g.beginPath();
-    g.moveTo(4.6, 4.6); g.lineTo(7.8, 7); g.lineTo(6, 8.4); g.lineTo(3, 6);
-    g.closePath();
-    paint(g, C.steelLight, 1);
-  },
-  // 5 Razor Wire (stops dads): a dark coil bristling with barbs, on a purple tag so it never passes
-  // for the silver tape at a glance.
+  // 4 was Duct Tape, gone in 0.4.01 (the owner: security is reinforced for cash instead).
+  null,
+  // 5 Razor Wire (stops dads): a dark coil bristling with barbs, on a purple tag.
   function wire(g) {
     g.lineCap = 'round';
     for (const cx of [-1.8, 1.8]) {
@@ -138,6 +127,9 @@ const ART = [
     paint(g, '#a855f7', 1);
   },
 ];
+
+/** The supply types there are (0.4.01: 4, Duct Tape, is gone). */
+const SUPPLY_TYPES = [1, 2, 3, 5];
 
 /** Draws item `code` centred on (0, 0) in a sprite painter: its tier ring, then the item. */
 function paintItem(g, code) {
@@ -281,26 +273,36 @@ function paintBridge(g, d, step) {
 }
 
 /**
- * Returns Drop facing d: a steel chute mouth in a hazard frame, its duct going back into the wall
- * behind it, junk coming out, the yellow out arrow on the side it puts junk out of, and the
- * RETURNS plate upright at the top (at the bottom when it faces north, where the arrow is).
+ * Returns Drop (0.4.01: it has no direction, and shares its junk between every side that takes
+ * it): a steel chute coming down from the returns desk, seen from above, in a hazard frame, junk in
+ * its mouth and the RETURNS plate across it, with an outlet on each side. `open` has bit d set for
+ * each side d where something takes junk (a belt leading away or running past, a machine): that
+ * outlet is lit, a yellow arrow pointing out of it; the others are shut steel flaps.
  */
-function paintDrop(g, d) {
-  g.save();
-  g.rotate(ROT[d]);
-  box(g, -34, -14, 16, 28, 2, C.steelDark, 2);
-  hazard(g, -19, -19, 30, 38, 5);
-  box(g, -16, -9, 24, 25, 3, C.steel, 2);
-  box(g, -11, -6, 22, 19, 3, '#121417', 2);
-  box(g, 9, -9, 7, 25, 2, C.steelLight, 2);
-  outMark(g, 0);
-  g.restore();
-  // The junk sitting in the mouth, upright.
-  const jx = [3, -2, -3, 2][d], jy = [3, 3, -2, -2][d];
-  g.save(); g.translate(jx, jy); g.scale(0.95, 0.95); ART[0](g); g.restore();
-  const py = d === 3 ? 10 : -19;
-  box(g, -17, py, 34, 9, 1.5, INK, 0);
-  text(g, 'RETURNS', 0, py + 4.8, 7.5, '#ffd23f', 900);
+function paintDrop(g, open) {
+  shadow(g, 36, 36);
+  hazard(g, -18, -18, 36, 36, 5);
+  box(g, -14, -14, 28, 28, 3, C.steel, 2);
+  for (let d = 0; d < 4; d++) {
+    g.save();
+    g.rotate(ROT[d]);
+    if (open & (1 << d)) {
+      box(g, 12.5, -6.5, 5.5, 13, 1.5, '#121417', 1.6);
+      g.lineJoin = 'round';
+      g.beginPath();
+      g.moveTo(13, -2.6); g.lineTo(16, -2.6); g.lineTo(16, -6.5); g.lineTo(23, 0);
+      g.lineTo(16, 6.5); g.lineTo(16, 2.6); g.lineTo(13, 2.6); g.closePath();
+      paint(g, '#ffe14a', 1.8);
+    } else {
+      box(g, 13, -6, 5, 12, 1.2, C.steelDark, 1.4);
+      line(g, 15.5, -4, 15.5, 4, '#2a2d31', 1.4);
+    }
+    g.restore();
+  }
+  box(g, -9.5, -11, 19, 15, 3, '#121417', 2);
+  g.save(); g.translate(0, -4); g.scale(0.82, 0.82); ART[0](g); g.restore();
+  box(g, -12, 5, 24, 7, 1.5, INK, 0);
+  text(g, 'RETURNS', 0, 8.8, 5.6, '#ffd23f', 900);
 }
 
 /** Clearance Bin: a wire bin with leftovers in it and a red CLEARANCE tag. */
@@ -329,7 +331,6 @@ const MACHINE = {
   still: { body: C.red, dark: C.redDark, type: 1 },
   cannery: { body: C.green, dark: C.greenDark, type: 2 },
   spooler: { body: C.orange, dark: C.orangeDark, type: 3 },
-  winder: { body: '#b9bfc6', dark: C.steelDark, type: 4 },
   bender: { body: '#8b5cf6', dark: '#5b21b6', type: 5 },
 };
 
@@ -405,6 +406,39 @@ function paintLift(g, gauges) {
   if (gauges) box(g, 7.5, -18, 12.5, 36, 2.5, '#262b31', 1.6);
 }
 
+/**
+ * True if the building b has a wire direction but no Razor Wire (0.4.01, the owner): its
+ * Dumbwaiter shows a red lamp asking for some, which goes out the moment a unit arrives.
+ */
+export function wantsWire(b) {
+  return !!b && b.wd !== undefined && b.wd !== null && !wireLive(b);
+}
+
+/** The lamp's slow pulse, 0 to 1, from the screen's clock in milliseconds (never the game's). */
+export const lampPulse = (now) => 0.5 + 0.5 * Math.sin(((now || 0) / 1000) * TAU / 1.2);
+
+/**
+ * The red "send Razor Wire" lamp: a round beacon in a black housing, centred on (x, y), its glow
+ * growing and fading with `k` (lampPulse). Round and glowing, so it never passes for one of the
+ * supply gauges (flat bars) beside it.
+ */
+function drawWireLamp(ctx, x, y, k) {
+  ctx.save();
+  ctx.globalAlpha = 0.25 + 0.4 * k;
+  ctx.fillStyle = '#ff2d2d';
+  ctx.beginPath(); ctx.arc(x, y, 8 + 4 * k, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(x, y, 6.2, 0, TAU);
+  ctx.fillStyle = INK; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, 4.6, 0, TAU);
+  // From a dull red to a hot one: it blinks without ever going dark enough to miss.
+  const r = Math.round(150 + 105 * k), g = Math.round(20 + 50 * k);
+  ctx.fillStyle = `rgb(${r},${g},${g})`; ctx.fill();
+  ctx.beginPath(); ctx.arc(x - 1.5, y - 1.6, 1.4, 0, TAU);
+  ctx.fillStyle = `rgba(255,255,255,${0.45 + 0.45 * k})`; ctx.fill();
+  ctx.restore();
+}
+
 /** One step in each direction (0 east, 1 south, 2 west, 3 north). */
 const AHEAD_X = [1, 0, -1, 0], AHEAD_Y = [0, 1, 0, -1];
 
@@ -469,6 +503,22 @@ function nb(s, x, y, d) {
 }
 
 /**
+ * The Returns Drop on tile i's open outlets (0.4.01: it shares its junk between every side that
+ * takes it): bit d set for each side d where the part there takes junk from it, by the layout (a
+ * belt leading away or running past, a machine, a Splitter from behind, a Clearance Bin). A
+ * Dumbwaiter or a Rebrander takes from any side but never junk, so its side stays shut.
+ */
+export function dropOutlets(s, i) {
+  const x = i % s.w, y = (i / s.w) | 0;
+  let open = 0;
+  for (let d = 0; d < 4; d++) {
+    const j = nb(s, x, y, d), q = j >= 0 ? s.back[j] : 0;
+    if (q && q.k !== 'lift' && q.k !== 'rebrand' && takesFrom(s, j, d)) open |= 1 << d;
+  }
+  return open;
+}
+
+/**
  * Whether something on tile j puts items onto the belt next to it travelling in direction dir: the
  * rules' own feedsInto (back.js), plus an Unpaid Intern, who sets things down on a belt from behind.
  * (Only for where a belt gets an end roller.)
@@ -522,7 +572,7 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
 
   /** An item's sprite (null for a code that is no item). */
   function itemSprite(code) {
-    if (!(code === 1 || (code >= 11 && code <= 54 && code % 10 >= 1 && code % 10 <= 4))) return null;
+    if (!(code === 1 || (SUPPLY_TYPES.includes((code / 10) | 0) && code % 10 >= 1 && code % 10 <= 4))) return null;
     let sp = items.have(code);
     if (!sp) {
       budget.begin();
@@ -536,9 +586,10 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
   /** Every item and part sprite, for the prepaint queue ([cache, key, args]). */
   function jobs() {
     const out = [[items, 1, 1]];
-    for (let type = 1; type <= 5; type++) for (let tier = 1; tier <= 4; tier++) out.push([items, type * 10 + tier, type * 10 + tier]);
+    for (const type of SUPPLY_TYPES) for (let tier = 1; tier <= 4; tier++) out.push([items, type * 10 + tier, type * 10 + tier]);
     const add = (kind, d, step) => { const key = kind * 64 + d * 8 + step; out.push([parts, key, key]); };
-    for (let d = 0; d < 4; d++) { add(SPLIT, d, 0); add(DROP, d, 0); add(INTERN, d, 0); add(REBRAND, d, 0); add(REBRAND, d, 1); }
+    for (let d = 0; d < 4; d++) { add(SPLIT, d, 0); add(INTERN, d, 0); add(REBRAND, d, 0); add(REBRAND, d, 1); }
+    for (let open = 0; open < 16; open++) add(DROP, open >> 2, open & 3);
     for (const id of Object.values(MACHINE_ID)) for (let d = 0; d < 4; d++) { add(id, d, 0); add(id, d, 1); }
     for (const d of [1, 3]) for (let st = 0; st < PHASES; st++) add(BRIDGE, d, st);
     add(BIN, 0, 0); add(LIFT, 0, 0); add(LIFT, 0, 1);
@@ -547,10 +598,11 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
 
   const SPLIT = 1, BRIDGE = 2, DROP = 3, BIN = 4, INTERN = 5, REBRAND = 11, LIFT = 12;
   // (A machine's sprite is per kind: 6 to 10. For machines and the Rebrander `step` is 1 at work;
-  // for a Dumbwaiter it is 1 on the tile that carries the gauges.)
-  const MACHINE_ID = { still: 6, cannery: 7, spooler: 8, winder: 9, bender: 10 };
+  // for a Dumbwaiter it is 1 on the tile that carries the gauges. A Returns Drop's sprite is one per
+  // set of open outlets: bits 2 and 3 of the set in d, bits 0 and 1 in step.)
+  const MACHINE_ID = { still: 6, cannery: 7, spooler: 8, bender: 10 };
   const PAINT = {
-    [SPLIT]: paintSplitPlate, [BRIDGE]: paintBridge, [DROP]: paintDrop, [BIN]: paintBin, [INTERN]: paintIntern,
+    [SPLIT]: paintSplitPlate, [BRIDGE]: paintBridge, [DROP]: (g, d, step) => paintDrop(g, d * 4 + step), [BIN]: paintBin, [INTERN]: paintIntern,
     [REBRAND]: (g, d, on) => paintRebrand(g, d, on === 1), [LIFT]: (g, d, on) => paintLift(g, on === 1),
   };
   for (const [k, id] of Object.entries(MACHINE_ID)) PAINT[id] = (g, d, on) => paintMachine(g, k, d, on === 1);
@@ -806,9 +858,11 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
             laneItems(ctx, s, p.b, x, y, db, 0, alpha);
             break;
           }
-          case 'drop':
-            stamp(ctx, part(DROP, p.d), cx, cy);
+          case 'drop': {
+            const open = dropOutlets(s, i);
+            stamp(ctx, part(DROP, open >> 2, open & 3), cx, cy);
             break;
+          }
           case 'bin':
             stamp(ctx, part(BIN), cx, cy);
             break;
@@ -874,7 +928,9 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
   /**
    * A Dumbwaiter, and on its building's anchor tile the gauges: one bar for each supply the
    * building above takes, in that supply's colour, filled to the units it holds out of
-   * the most it holds in this game, stockCap (red Spite, green Cola, orange Cord, silver Tape, purple Wire).
+   * the most it holds in this game, stockCap (red Spite, green Cola, orange Cord, purple Wire).
+   * A building with a wire direction and no Razor Wire gets a blinking red lamp on its hatch
+   * (wantsWire), or zoomed out on its mark.
    */
   function drawLift(ctx, s, p, i, cx, cy, F) {
     const b = s.grid[p.a];
@@ -883,8 +939,16 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
     const marks = useMarks(F.zoom);
     const gauges = anchor && !marks;
     stamp(ctx, part(LIFT, 0, gauges ? 1 : 0), cx, cy);
-    if (anchor && marks) { drawMark(ctx, stockMark(b), cx, cy, markRadius(F.zoom)); return; }
+    // (0.4.01, the owner) A building with a wire direction and no Razor Wire is asking for some.
+    const asking = anchor && wantsWire(b);
+    if (anchor && marks) {
+      const r = markRadius(F.zoom);
+      if (asking) drawMarkLamp(ctx, cx, cy, r, lampPulse(F.now));
+      drawMark(ctx, stockMark(b), cx, cy, r);
+      return;
+    }
     if (!gauges) return;
+    if (asking) drawWireLamp(ctx, cx - 6.5, cy - 13, lampPulse(F.now));
     const tracks = stockTracks(b.k), n = tracks.length;
     if (!n) return;
     const x0 = cx + 9.2, w = 9.2, bw = (w - (n - 1) * 0.5) / n, top = cy - 16, h = 32;

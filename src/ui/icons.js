@@ -74,11 +74,6 @@ const BUILDING = {
     <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
     <circle cx="20" cy="19" r="5.5" fill="none" stroke="#111" stroke-width="4.5"/><circle cx="20" cy="19" r="5.5" fill="none" stroke="#ff8c1a" stroke-width="2.6"/>
     <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
-  winder: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
-    <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#b9bfc6" stroke="#111" stroke-width="1.6"/>
-    <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
-    <circle cx="20" cy="19" r="6.5" fill="#d4d8dc" stroke="#111" stroke-width="1.5"/><circle cx="20" cy="19" r="3" fill="#e8c88a" stroke="#111" stroke-width="1.2"/>
-    <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
   bender: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
     <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#8b5cf6" stroke="#111" stroke-width="1.6"/>
     <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
@@ -90,11 +85,13 @@ const BUILDING = {
     <path d="M20 9.5l1.2 2.5 2.7.3-2 1.8.6 2.7-2.5-1.4-2.5 1.4.6-2.7-2-1.8 2.7-.3z" fill="#ffc928" stroke="#111" stroke-width=".8"/>
     <rect x="8" y="25" width="24" height="7" rx="1.5" fill="#1d2125"/><path d="M11 28.5h18" stroke="#ffd23f" stroke-width="2.5" stroke-dasharray="2.5 1"/>
     <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
-  drop: `<rect x="2" y="10" width="10" height="20" fill="#5b6168" ${S}/>
-    <rect x="8" y="4" width="28" height="32" fill="#f2c21b" ${S}/>
-    <path d="M8 12l8-8M8 22l18-18M8 32l28-28M18 36l18-18M28 36l8-8" stroke="#222" stroke-width="3"/>
-    <rect x="12" y="12" width="20" height="18" rx="2" fill="#121417" ${S}/>
-    <path d="M17 18l6-2 5 1v6l-4 2-6-1z" fill="#c8924f" stroke="#111" stroke-width="1.2"/>`,
+  // The Returns Drop (0.4.01): a chute from above in a hazard frame, with an outlet on every side.
+  drop: `<rect x="5" y="5" width="30" height="30" fill="#f2c21b" ${S}/>
+    <path d="M5 13l8-8M5 23l18-18M5 33l28-28M15 35l20-20M25 35l10-10" stroke="#222" stroke-width="3"/>
+    <rect x="10" y="10" width="20" height="20" rx="2" fill="#8f979f" ${S}/>
+    <rect x="13.5" y="13" width="13" height="13" rx="2" fill="#121417" stroke="#111" stroke-width="1.4"/>
+    <path d="M16 18.5l4-1.5 3.5 1v4l-3 1.5-4-1z" fill="#c8924f" stroke="#111" stroke-width="1"/>
+    <path d="M20 0.5l4.5 4.5h-9zM20 39.5l4.5-4.5h-9zM0.5 20l4.5-4.5v9zM39.5 20l-4.5-4.5v9z" fill="#ffe14a" stroke="#111" stroke-width="1.3" stroke-linejoin="round"/>`,
   // The shop floor's tools (0.4): Razor Wire's coil with its purple tag, and a crate with a steel
   // strap and corner plates.
   wire: `<path d="M3 26q4-16 8 0t8 0 8 0 8 0" fill="none" stroke="#111" stroke-width="5" stroke-linecap="round"/>
