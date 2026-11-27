@@ -442,15 +442,24 @@ function drawWireLamp(ctx, x, y, k) {
 /** One step in each direction (0 east, 1 south, 2 west, 3 north). */
 const AHEAD_X = [1, 0, -1, 0], AHEAD_Y = [0, 1, 0, -1];
 
-/** Where the Unpaid Intern holds his item, from the tile's middle, by the way he faces. */
-const HAND = [[12, -5], [-1, 4], [-14, -5], [-1, -23]];
+/**
+ * Where the Unpaid Intern holds his item as he hands it over, from the tile's middle, by the way he
+ * faces: out over the tile in front of him (a glide into a Dumbwaiter or onto a belt starts here).
+ */
+const HAND = [[16, -5], [-1, 9], [-18, -5], [-1, -25]];
+/** Where he picks it up: the edge of the belt behind him. */
+const PICK = [[-18, 0], [-1, -22], [18, 0], [-1, 17]];
+/** His shoulders, from the tile's middle (his body stands the same way whatever he faces). */
+const SHOULDERS = [[-6, -5], [3, -5]];
 
 /**
- * Unpaid Intern facing d: a small man in a hi-vis vest, arms out toward the tile he hands to, and
- * a white arrow beside him from the belt behind him to the tile in front. (His item is drawn on
- * top, at HAND, so one sprite per facing does for whatever he holds.)
+ * Unpaid Intern facing d: a small man in a hi-vis vest, and a white arrow beside him from the belt
+ * behind him to the tile in front. `pose`: 0 arms out toward the tile he hands to (the placement
+ * preview, and far zoomed out); 1 no arms (the arms are drawn each frame, internArms, as he works);
+ * 2 bored: both hands on his phone, head down. (His item is drawn on top, so one sprite per facing
+ * and pose does for whatever he holds.)
  */
-function paintIntern(g, d) {
+function paintIntern(g, d, pose = 0) {
   if (d === 3 || d === 1) {
     const s = d === 3 ? -1 : 1;
     arrow(g, 14, -s * 11, 14, s * 11);
@@ -479,18 +488,66 @@ function paintIntern(g, d) {
   g.restore();
   circle(g, 1, -25.5, 6.6, C.skin, 2);
   hairCap(g, 1, -25.5, 6.6, '#6b4423');
-  face(g, 1, -24.5);
-  if (d === 3) {
-    limb(g, -4.5, -17, -4, -31, C.orange, 3);
-    limb(g, 5, -17, 6, -31, C.orange, 3);
-  } else if (d === 1) {
-    limb(g, -4, -16, -1, -9, C.orange, 3);
-    limb(g, 5, -16, 3, -9, C.orange, 3);
+  if (pose === 2) {
+    // Head down over his phone: eyes on the screen, a flat little mouth.
+    g.fillStyle = INK;
+    g.beginPath(); g.arc(2.2, -22.6, 1.1, 0, TAU); g.arc(5.6, -22.6, 1.1, 0, TAU); g.fill();
+    g.beginPath(); g.moveTo(2.4, -20); g.lineTo(5, -20);
+    g.strokeStyle = INK; g.lineWidth = 1.1; g.lineCap = 'round'; g.stroke();
+    limb(g, -4, -16, -1, -10.5, C.orange, 3);
+    limb(g, 5, -16, 3, -10.5, C.orange, 3);
+    // The phone, its screen lit.
+    rr(g, -2.6, -13.5, 6.2, 4.4, 1);
+    paint(g, '#1f2937', 1.2);
+    g.fillStyle = '#7dd3fc';
+    g.fillRect(-1.6, -12.6, 4.2, 2.6);
   } else {
-    const s = d === 0 ? 1 : -1;
-    limb(g, 1, -16, 1 + s * 9, -17, C.orange, 3);
+    face(g, 1, -24.5);
+  }
+  if (pose === 0) {
+    if (d === 3) {
+      limb(g, -4.5, -17, -4, -31, C.orange, 3);
+      limb(g, 5, -17, 6, -31, C.orange, 3);
+    } else if (d === 1) {
+      limb(g, -4, -16, -1, -9, C.orange, 3);
+      limb(g, 5, -16, 3, -9, C.orange, 3);
+    } else {
+      const s = d === 0 ? 1 : -1;
+      limb(g, 1, -16, 1 + s * 9, -17, C.orange, 3);
+    }
   }
   g.restore();
+}
+
+/** Both arms from the shoulders to his hands at (hx, hy), from the tile's middle (cx, cy). */
+function internArms(ctx, cx, cy, hx, hy) {
+  ctx.save();
+  for (const [sx, sy] of SHOULDERS) limb(ctx, cx + sx, cy + sy, cx + hx, cy + hy, C.orange, 3);
+  circle(ctx, cx + hx, cy + hy, 2.4, C.skin, 1.2);
+  ctx.restore();
+}
+
+const smooth = (u) => u * u * (3 - 2 * u);
+
+/**
+ * Where the intern facing d has his hands, and where the item he holds is, `f` of the way through
+ * his hold (0 just taken off the belt, 1 handed over), from the tile's middle: { hx, hy, ix, iy }.
+ * A fifth of the way he reaches back from where he last let go to the belt, where the item still
+ * lies; then he grabs it, swings it up and over, and holds it out over the tile in front.
+ * Only the rules' own numbers (the item and the hold time left) decide f, so it looks the same on
+ * every screen, and the item ends exactly where a glide into a Dumbwaiter or onto a belt begins.
+ */
+export function internPose(d, f) {
+  const [px, py] = PICK[d], [fx, fy] = HAND[d];
+  if (f < 0.2) {
+    const u = smooth(f / 0.2);
+    return { hx: fx + (px - fx) * u, hy: fy + (py - fy) * u - 5 * Math.sin(u * Math.PI), ix: px, iy: py };
+  }
+  if (f < 0.3) return { hx: px, hy: py, ix: px, iy: py - 2 * ((f - 0.2) / 0.1) };
+  const u = smooth(Math.min(1, (f - 0.3) / 0.55)), arc = Math.sin(u * Math.PI);
+  // Swung up and over; facing up or down the screen, round his right side, not through his head.
+  const x = px + (fx - px) * u + (d & 1 ? 11 * arc : 0), y = py - 2 + (fy - py + 2) * u - (d & 1 ? 3 : 9) * arc;
+  return { hx: x, hy: y, ix: x, iy: y };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -588,7 +645,7 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
     const out = [[items, 1, 1]];
     for (const type of SUPPLY_TYPES) for (let tier = 1; tier <= 4; tier++) out.push([items, type * 10 + tier, type * 10 + tier]);
     const add = (kind, d, step) => { const key = kind * 64 + d * 8 + step; out.push([parts, key, key]); };
-    for (let d = 0; d < 4; d++) { add(SPLIT, d, 0); add(INTERN, d, 0); add(REBRAND, d, 0); add(REBRAND, d, 1); }
+    for (let d = 0; d < 4; d++) { add(SPLIT, d, 0); add(INTERN, d, 0); add(INTERN, d, 1); add(INTERN, d, 2); add(REBRAND, d, 0); add(REBRAND, d, 1); }
     for (let open = 0; open < 16; open++) add(DROP, open >> 2, open & 3);
     for (const id of Object.values(MACHINE_ID)) for (let d = 0; d < 4; d++) { add(id, d, 0); add(id, d, 1); }
     for (const d of [1, 3]) for (let st = 0; st < PHASES; st++) add(BRIDGE, d, st);
@@ -602,7 +659,7 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
   // set of open outlets: bits 2 and 3 of the set in d, bits 0 and 1 in step.)
   const MACHINE_ID = { still: 6, cannery: 7, spooler: 8, bender: 10 };
   const PAINT = {
-    [SPLIT]: paintSplitPlate, [BRIDGE]: paintBridge, [DROP]: (g, d, step) => paintDrop(g, d * 4 + step), [BIN]: paintBin, [INTERN]: paintIntern,
+    [SPLIT]: paintSplitPlate, [BRIDGE]: paintBridge, [DROP]: (g, d, step) => paintDrop(g, d * 4 + step), [BIN]: paintBin, [INTERN]: (g, d, pose) => paintIntern(g, d, pose),
     [REBRAND]: (g, d, on) => paintRebrand(g, d, on === 1), [LIFT]: (g, d, on) => paintLift(g, on === 1),
   };
   for (const [k, id] of Object.entries(MACHINE_ID)) PAINT[id] = (g, d, on) => paintMachine(g, k, d, on === 1);
@@ -867,8 +924,7 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
             stamp(ctx, part(BIN), cx, cy);
             break;
           case 'intern':
-            stamp(ctx, part(INTERN, p.d), cx, cy);
-            if (p.h) item(ctx, p.h, cx + HAND[p.d][0], cy + HAND[p.d][1]);
+            drawIntern(ctx, p, i, cx, cy, F);
             break;
           case 'lift':
             drawLift(ctx, s, p, i, cx, cy, F);
@@ -917,6 +973,39 @@ export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
       ctx.fillStyle = rebrand ? '#ffc928' : C.cardboard; ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = INK; ctx.stroke();
     }
+  }
+
+  /** Ticks an Unpaid Intern holds an item before handing it over (the rules' own number). */
+  const HOLD = Math.max(1, Math.round(BACK.internSecs * TICK_HZ));
+
+  /**
+   * An Unpaid Intern at work (0.4.01, the owner): he reaches back to the belt, grabs the item, swings
+   * it over and holds it out over the tile in front until it is taken; with nothing to do he stands
+   * on his phone, swaying a little. The swing is worked out from his hold time left (p.t) and the
+   * tick's fraction, so it is smooth between ticks and the same on every screen; the sway and a
+   * blocked intern's impatient jiggle come from the screen's clock. Far zoomed out, one still pose.
+   */
+  function drawIntern(ctx, p, i, cx, cy, F) {
+    const d = p.d & 3;
+    if (F.zoom > 0 && F.zoom < GLIDE_ZOOM) {
+      stamp(ctx, part(INTERN, d, 0), cx, cy);
+      if (p.h) item(ctx, p.h, cx + HAND[d][0], cy + HAND[d][1]);
+      return;
+    }
+    const now = F.now || 0;
+    if (!p.h) {
+      // Bored: on his phone, swaying on his feet, each intern to his own beat.
+      const sway = Math.sin(now / 900 + (i % 7)) * 0.9;
+      stamp(ctx, part(INTERN, d, 2), cx + sway, cy);
+      return;
+    }
+    stamp(ctx, part(INTERN, d, 1), cx, cy);
+    const f = p.t > 0 ? Math.max(0, Math.min(1, (HOLD - p.t + F.alpha) / HOLD)) : 1;
+    const pose = internPose(d, f);
+    // Held out and nobody taking it: he jiggles it at them.
+    const jig = p.t > 0 ? 0 : Math.sin(now / 70) * 1.3;
+    internArms(ctx, cx, cy, pose.hx, pose.hy + jig);
+    item(ctx, p.h, cx + pose.ix, cy + pose.iy + jig);
   }
 
   /** An item sprite drawn smaller, centred on (x, y). */

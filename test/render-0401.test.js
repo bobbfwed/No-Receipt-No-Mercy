@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, addPlayer, applyCommand, addStock, itemCode, addTrainingDrops } from '../src/sim/index.js';
-import { wantsWire, lampPulse, dropOutlets } from '../src/render/back.js';
+import { wantsWire, lampPulse, dropOutlets, internPose } from '../src/render/back.js';
 import { stockMark, PLANNED } from '../src/render/marks.js';
 
 function game() {
@@ -59,4 +59,24 @@ test("a Returns Drop's outlets open on every side that takes its junk", () => {
   assert.equal(applyCommand(s, 0, { c: 'remove', x: 8, y: 5, f: 1 }).ok, true);
   assert.equal(applyCommand(s, 0, { c: 'place', k: 'still', x: 8, y: 5, d: 3, f: 1 }).ok, true);
   assert.equal(dropOutlets(s, i), 15, 'a machine with its back to the drop takes junk: all four open');
+});
+
+test("the Unpaid Intern's swing: from the belt behind him to the tile in front, ending where the hand-over glide starts", () => {
+  for (let d = 0; d < 4; d++) {
+    const ax = [1, 0, -1, 0][d], ay = [0, 1, 0, -1][d];
+    const start = internPose(d, 0), pick = internPose(d, 0.25), end = internPose(d, 1);
+    // At the start the item still lies at the edge of the belt behind him...
+    assert.ok(start.ix * ax + start.iy * ay < -12, `facing ${d}: picked up from behind`);
+    assert.deepEqual([pick.hx, pick.hy], [start.ix, start.iy], `facing ${d}: his hands reach it`);
+    // ...and at the end it is held out over the tile in front, in his hands.
+    assert.ok(end.ix * ax + end.iy * ay > 8, `facing ${d}: handed over in front`);
+    assert.deepEqual([end.hx, end.hy], [end.ix, end.iy]);
+    // No jumps: small steps of f move it a little.
+    let last = internPose(d, 0.3);
+    for (let f = 0.31; f <= 1.0001; f += 0.01) {
+      const p = internPose(d, Math.min(1, f));
+      assert.ok(Math.hypot(p.ix - last.ix, p.iy - last.iy) < 3, `facing ${d} at ${f.toFixed(2)}`);
+      last = p;
+    }
+  }
 });
