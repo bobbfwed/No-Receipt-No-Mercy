@@ -490,6 +490,33 @@ The owner: "The auto rebuild makes the game too easy... not having to do anythin
 - **Balance** (`tools/balance.mjs`, Normal, one-player Open Warehouse, eight seeds 11, 5, 23, 7, 42, 3, 99, 1234; the sales event each scripted player loses in, honest / keen / focus, averaged; the bots press Rebuild whenever they shop, every half second): 0.3.03 9.4 / 12.4 / 12.3, 0.3.04 9.4 / 12.4 / 12.1. Only one result moved: focus on seed 11 loses in event 15 instead of 16. A few games differ by a wreck or two, a few dollars and a few goods stolen, because a held wreck now goes back within 0.2 s of the way clearing instead of at the bot's next press. (The last numbers noted above, 0.2.17 on seed 11, were 11 / 17 / 16; 0.3.03 gave 11 / 16 / 16 before this change.)
 - Decisions made on the owner's behalf: a press with all: true (everybody's wrecks) puts what it rebuilds in the presser's name, as before; a waiting order whose payer is away but still within his grace period is still built (his money is already in it); the payer, not the wreck's original owner, owns the rebuilt building; held money is safe from refunds while it waits.
 
+## Version 0.4: the factory moves under the shop and feeds the security buildings (owner's direction of 2026-11-26, planned, nothing built yet)
+The owner's aim: make the game more its own, and make the factory decide who wins. Concept pictures are in `docs/mockups/0.4/` (the page `mockups.html` draws them).
+- **The idea.** Belts and machines leave the shop floor for a second floor underneath, on the same tile grid, called **The Back**. The factory no longer makes money. It turns **returned junk** into **supplies**, and belts carry the supplies to a **Dumbwaiter** under each security building. Supplies replace bought upgrades: a stocked building is stronger, the stock is used up as the building works, and an empty building is exactly today's un-upgraded building. Nothing is stored anywhere except in the dumbwaiters.
+- **Money** comes from beating a sales event (more for beating it quickly), boss bounties, and pennies from leftover supplies. It buys buildings on both floors and more junk from the Returns Drops.
+- **Owner's decisions (2026-11-26):**
+  - Stock is used **per use**: a shot, a shopper affected, or a hit absorbed. Idle buildings keep their stock, so gauges refill between shoppers and between events.
+  - **Four brand tiers** per supply (Store Brand, Name Brand, Premium, Platinum), worth today's upgrade levels 2, 4, 6 and 8. Each tier up is one more pass through a Rebrander, slower each time.
+  - **Dads walk through every building** unless stopped, and the dad-stopper is a **fifth supply** made in The Back and fed through the dumbwaiter. When it runs out, dads walk through again.
+  - The work is committed **directly on `main`**, so nothing can be pushed from the first 0.4 game-code commit until 0.4 is playable. 0.3.04 should be pushed before that commit.
+- **Names (proposed, the owner has seen them):** The Back; Returns Drop (fixed inlet); Bottled Spite (damage, from the Spite Still), Rage Cola (speed, Cola Cannery), Extension Cord (range, Cord Spooler), Duct Tape (durability, Tape Winder); Rebrander; Dumbwaiter; Unpaid Intern (takes items off a belt and hands them on); Splitter; Overpass (belts crossing at right angles); Clearance Bin (sells leftovers).
+- **Defaults put to the owner, taken unless he objects:** belts carry whatever is put on them and an intern only takes what his target accepts, so a mixed belt can jam; more junk comes from a cash upgrade on the Returns Drop; each event has a par time and every second under it pays extra, capped at half the event's pay; starting an event early no longer runs the factory ahead for free; old saves do not load in 0.4; the "2x2 factory buildings" card idea is dropped.
+- **Still to settle with the owner:** how the dad-stopping supply covers a wall (see the stages), its name, and whether Crate Stacks get dumbwaiters.
+- **What it changes that is easy to miss:**
+  - The maze is now security buildings and Crate Stacks only. Where a building stands decides where its dumbwaiter is, and a dumbwaiter can only be fed from its four sides, so a building boxed in by others cannot be supplied.
+  - Goods were the main income and upgrades the main thing to buy. Both go, so every price and the event pay are re-tuned.
+  - Card Traders, shoplifters and the Klepto card steal from belts today; about 10 of the 48 cards change goods prices or factory costs. Thieves will steal from a building's stock instead.
+  - A Pepper Sprinkler fires nine times as often as a Barcode Laser, so each building needs its own "uses per unit of stock" number.
+  - Six training lessons, the handbook's factory tab, the README's map pictures, about a third of the tests and the balance bots all describe the old factory.
+- **Stages, in order. Each ends with the tests passing and something the owner can try locally.**
+  1. **The rules on paper** (the coordinator): the new contract in `docs/architecture.md`: the second floor in the state, how belts store and move items (whole lines, front to back, shaped so two lanes can be added later), splitter, overpass, intern, dumbwaiter stock, use-up numbers, the dad rule, event pay and par times.
+  2. **Belts in The Back**: the second floor in the simulation, the new belt engine and its parts, placing and removing on either floor, with tests. Drawn plainly: floor switch on Tab, the other floor showing through.
+  3. **Supplies replace upgrades**: Returns Drops on every map, the five machines, the Rebrander, dumbwaiters and stock, building strength from stock, the Clearance Bin. Bought upgrades and the money-making machines are removed.
+  4. **Money and shoppers**: event pay and the speed bonus, dads through buildings and the dad-stopping supply, thieves taking stock, the cards that no longer make sense.
+  5. **Look and interface**: The Back's own art, a build bar per floor, supply pips and "out of" warnings on the shop floor, the building sheet as a gauge panel.
+  6. **Words and teaching**: training shift, handbook and facts, DEB's lines, help screens, README and its pictures, sounds.
+  7. **Balance**: new scripted players that build supply lines, then tuning against the results recorded above.
+
 ## Ideas for later (not started)
 - Fewer gym bros in the middle of the game. The owner lost his first Normal game to them in sales events 12 and 13 (2026-11-16) and asked for this to be kept as a possible change only: the durability upgrades and half-price rebuilding added in 0.2 may make it unnecessary. Revisit after playing 0.2.
 - Security that needs supplies delivered by belt, tying the two jobs closer together.
