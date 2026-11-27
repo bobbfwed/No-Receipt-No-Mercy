@@ -48,6 +48,7 @@ import {
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
+import { drawBackChunk } from './backfloor.js';
 import {
   drawBuilding, createBeltSprites, createBuildingSprites,
   drawBadge, drawRubble, drawWear, rectOf, BIG, drawOutArrow,
@@ -63,6 +64,8 @@ import { drawRoutes, drawMarks } from './guides.js';
 import { selectedReach, drawnBySelection } from './reach.js';
 import { createBackArt } from './back.js';
 import { createWireArt } from './wire.js';
+import { createPaintBudget, createPrepaint, comingKinds } from './spritecache.js';
+import { stockMark, useMarks, markRadius, drawMark } from './marks.js';
 import { SUPPLIES, TIER_RINGS, stockTracks, tierIn, outOfText } from '../content/supplies.js';
 
 const T = TILE;
@@ -74,6 +77,8 @@ const START_MIN = 24;
 const START_ZOOM = 30;
 /** How far (in tiles) the view may go past the edge of the map. */
 const EDGE = 1;
+/** Milliseconds a frame may spend painting sprites ahead of need or to replace scaled ones. */
+const PAINT_MS = 3;
 const RANGE_DASH = [7, 5];
 const NO_DASH = [];
 
@@ -107,18 +112,25 @@ export function createRenderer(canvas, session) {
   const base = { s: 1, ox: 0, oy: 0 };
   let step = -999;
   let sprites = buildItemSprites(1);
-  const beltSprites = createBeltSprites();
-  const buildingSprites = createBuildingSprites();
-  const shopperSprites = createShopperSprites();
-  const messSprites = createMessSprites();
-  const backArt = createBackArt();
-  const wireArt = createWireArt();
+  // (0.4, stage 5b) How long a frame may spend painting sprites it could do without for now: on a
+  // zoom step the old ones are drawn scaled meanwhile, and in a build pause the next event's
+  // shoppers are painted ahead of need (spritecache.js). A sprite with nothing to stand in for it is
+  // always painted at once.
+  const budget = createPaintBudget({ ms: PAINT_MS });
+  const prepaint = createPrepaint(budget);
+  const beltSprites = createBeltSprites(budget);
+  const buildingSprites = createBuildingSprites(budget);
+  const shopperSprites = createShopperSprites(budget);
+  const messSprites = createMessSprites(budget);
+  const backArt = createBackArt(budget);
+  const wireArt = createWireArt(budget);
   // The faint floor's layer (see beginLayer), and whether it holds anything from the last frame.
   const layer = document.createElement('canvas');
   const lctx = layer.getContext('2d');
   let layerUsed = false;
   const fx = createEffects();
-  const floor = createFloorCache();
+  const floor = createFloorCache(undefined, budget);
+  const backFloor = createFloorCache(drawBackChunk, budget);
   let info = null;
   const order = []; // shoppers (and loose children) sorted for drawing, reused every frame
   const kids = []; // reusable stand-ins for loose children in `order`: { kid: true, y, m: mom }
@@ -294,8 +306,11 @@ export function createRenderer(canvas, session) {
       layer.width = canvas.width;
       layer.height = canvas.height;
     } else if (layerUsed) {
+      // Only the part used last frame needs emptying (stage 5b: on a phone the layer is a
+      // 2532 x 1170 canvas, and clearing, darkening and laying all of it over every frame is three
+      // full-screen passes for what is often a few belts).
       lctx.setTransform(1, 0, 0, 1, 0, 0);
-      lctx.clearRect(0, 0, layer.width, layer.height);
+      lctx.clearRect(lr.x, lr.y, lr.w, lr.h);
     }
     layerUsed = true;
     lctx.setTransform(scale, 0, 0, scale, ox, oy);
@@ -306,26 +321,41 @@ export function createRenderer(canvas, session) {
     ctx = lctx;
   }
 
+  /** The part of the faint layer drawn into, in device pixels (all of it unless told otherwise). */
+  const lr = { x: 0, y: 0, w: 0, h: 0 };
+  const DARKS = new Map();
   /**
    * Lays the faint layer over the canvas at `alpha`, darkened first by `darken` (0 to 1) if given.
    * `used` false: nothing was drawn into it, so nothing is laid over (and it need not be emptied).
+   * `box` ({x0, y0, x1, y1} in tiles, end exclusive), if given, is all that was drawn into: only
+   * that part (with a tile's margin for sprites that spill over) is darkened and laid over.
    */
-  function endLayer(alpha, darken = 0, used = true) {
+  function endLayer(alpha, darken = 0, used = true, box = null) {
     lctx.restore();
     ctx = main;
     layerUsed = used;
     if (!used) return;
+    if (box) {
+      const S = T * scale;
+      lr.x = Math.max(0, Math.floor(ox + (box.x0 - 1) * S));
+      lr.y = Math.max(0, Math.floor(oy + (box.y0 - 1) * S));
+      lr.w = Math.min(layer.width, Math.ceil(ox + (box.x1 + 1) * S)) - lr.x;
+      lr.h = Math.min(layer.height, Math.ceil(oy + (box.y1 + 1) * S)) - lr.y;
+    } else { lr.x = 0; lr.y = 0; lr.w = layer.width; lr.h = layer.height; }
+    if (lr.w <= 0 || lr.h <= 0) return;
     if (darken) {
+      let fill = DARKS.get(darken);
+      if (!fill) { fill = `rgba(12,14,18,${darken})`; DARKS.set(darken, fill); }
       lctx.setTransform(1, 0, 0, 1, 0, 0);
       lctx.globalCompositeOperation = 'source-atop';
-      lctx.fillStyle = `rgba(12,14,18,${darken})`;
-      lctx.fillRect(0, 0, layer.width, layer.height);
+      lctx.fillStyle = fill;
+      lctx.fillRect(lr.x, lr.y, lr.w, lr.h);
       lctx.globalCompositeOperation = 'source-over';
     }
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = alpha;
-    ctx.drawImage(layer, 0, 0);
+    ctx.drawImage(layer, lr.x, lr.y, lr.w, lr.h, lr.x, lr.y, lr.w, lr.h);
     ctx.restore();
   }
 
@@ -337,6 +367,7 @@ export function createRenderer(canvas, session) {
     const now = performance.now();
     const dt = Math.min(0.1, Math.max(0, (now - lastNow) / 1000));
     lastNow = now;
+    budget.frame();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!s) return;
@@ -344,6 +375,10 @@ export function createRenderer(canvas, session) {
     if (mapChanged(info, s)) {
       info = analyzeMap(s);
       floor.reset(info);
+      // The Back's floor paints hazard paint round the Returns Drops, which are fixed by the map.
+      const drops = [];
+      if (s.back) for (let i = 0; i < s.back.length; i++) if (s.back[i] && s.back[i].k === 'drop') drops.push(i);
+      backFloor.reset({ ...info, drops });
     }
     F.w = s.w;
     F.zoom = cam.zoom;
@@ -382,16 +417,17 @@ export function createRenderer(canvas, session) {
     vis.x1 = Math.min(s.w, Math.ceil(vr.x1) + 1);
     vis.y1 = Math.min(s.h, Math.ceil(vr.y1) + 2); // tall things on the row below reach up
 
-    floor.draw(ctx, scale, floorRes, ox, oy, vis);
+    // Each floor has its own cached picture: the shop's, or The Back's basement (backfloor.js).
+    (floorNo === 1 ? backFloor : floor).draw(ctx, scale, floorRes, ox, oy, vis);
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, s.w * T, s.h * T);
     ctx.clip();
 
-    // Doors slide open while a wave is on.
+    // Doors slide open while a wave is on (the shop floor's doors and tills; The Back has neither).
     doorOpen += ((s.phase === 'wave' ? 1 : 0) - doorOpen) * Math.min(1, dt * 4);
-    drawDynamic(ctx, info, doorOpen, fx.timers.tillAt, now);
+    if (floorNo === 0) drawDynamic(ctx, info, doorOpen, fx.timers.tillAt, now);
     if (floorNo === 1) drawBackView(s, view, now, alpha);
     else drawShopView(s, view, now, alpha);
     if (view.aim) drawAim(s, view.hover);
@@ -407,6 +443,27 @@ export function createRenderer(canvas, session) {
     // A boss got his refund: the edges of the screen throb red for a moment, wherever you are looking.
     const esc = now - fx.timers.bossEscAt;
     if (esc >= 0 && esc < 1800) bossAlarm(esc / 1800);
+    paintAhead(s);
+  }
+
+  /**
+   * After the frame is drawn, with what is left of its painting budget: sprites last drawn scaled
+   * from an earlier zoom are painted again, then, between events (and in the lobby), the pictures the
+   * next event will need: The Back's parts and items, the belts, and every pose of each kind of
+   * shopper coming (its super version too, if any come), in the order they arrive.
+   */
+  function paintAhead(s) {
+    shopperSprites.idle(); buildingSprites.idle(); beltSprites.idle();
+    messSprites.idle(); backArt.idle(); wireArt.idle();
+    if (s.phase === 'wave' || s.phase === 'won' || s.phase === 'lost' || !budget.ok()) return;
+    const key = `${step}:${s.wave}:${s.training ? (s.nextWave ? s.nextWave.length : 0) : ''}`;
+    if (!prepaint.planned(key)) {
+      const jobs = [];
+      for (const { k, sup } of comingKinds(s)) for (const j of shopperSprites.poses(k, sup)) jobs.push(j);
+      if (s.back) for (const j of backArt.jobs().concat(beltSprites.jobs())) jobs.push(j);
+      prepaint.plan(key, jobs);
+    }
+    prepaint.run();
   }
 
   /**
@@ -424,7 +481,7 @@ export function createRenderer(canvas, session) {
     if (s.back) {
       beginLayer(s);
       const n = backArt.draw(ctx, s, vis, F, base, beltSprites, now);
-      endLayer(needsLift ? 0.6 : 0.27, needsLift ? 0.15 : 0.45, n > 0);
+      endLayer(needsLift ? 0.6 : 0.27, needsLift ? 0.15 : 0.45, n > 0, backArt.bounds);
       if (needsLift && n > 0) markBlocked(s);
     }
 
@@ -458,15 +515,13 @@ export function createRenderer(canvas, session) {
    * out: from down here they are noise.
    */
   function drawBackView(s, view, now, alpha) {
-    ctx.fillStyle = 'rgba(10,12,18,0.52)';
-    ctx.fillRect(0, 0, s.w * T, s.h * T);
     backArt.draw(ctx, s, vis, F, base, beltSprites, now, true);
     if (view.route) drawRoutes(ctx, s, now / 1000, 0.45, false);
     beginLayer(s);
-    drawBuildings(s, now);
+    drawBuildings(s, now, false);
     wireArt.draw(ctx, s, vis, F);
     drawShoppers(s, alpha);
-    endLayer(0.3, 0.25);
+    endLayer(0.3, 0.35);
     drawFootprints(s);
     drawWarnings(s, now);
     // The Returns Drop whose sheet is open.
@@ -710,7 +765,7 @@ export function createRenderer(canvas, session) {
     }
   }
 
-  function drawBuildings(s, now) {
+  function drawBuildings(s, now, supplies = true) {
     const grid = s.grid, w = s.w;
     const { y0, x1, y1 } = vis;
     // Start two tiles further left: a big building is drawn from the bottom-left of its footprint,
@@ -719,6 +774,7 @@ export function createRenderer(canvas, session) {
     // Level badges grow when zoomed out so the number stays readable (in steps, as they are cached).
     const bk = Math.round(Math.max(1, Math.min(1.6, 34 / cam.zoom)) * 10) / 10;
     const bres = stepScale(step);
+    const marks = useMarks(cam.zoom), markR = markRadius(cam.zoom);
     for (let y = y0; y < y1; y++) {
       for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
         let b = grid[i];
@@ -742,7 +798,11 @@ export function createRenderer(canvas, session) {
         if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b));
         // A reinforced Crate Stack (0.4): its level, pink at the top one.
         else if (b.r > 0) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, b.r, bk, bres, b.r >= CRATE_TOP);
-        if (BUILD[b.k].lift) drawPips(b, r);
+        // Its supplies: the row of pips, or zoomed out one status mark (marks.js).
+        if (supplies && BUILD[b.k].lift) {
+          if (marks) drawMark(ctx, stockMark(b), r.x + r.w / 2, r.y + 2, markR);
+          else drawPips(b, r);
+        }
       }
     }
   }
@@ -1252,5 +1312,10 @@ export function createRenderer(canvas, session) {
 
   resize();
   sync();
-  return { resize, tileAt, draw, cam, pan, centerOn, zoomBy, fit, viewRect, warn };
+  /**
+   * For test and timing pages (0.4, stage 5b): the last frame's sprite painting (how many, how many
+   * milliseconds) and the glides under way in The Back ([onto belts, into Dumbwaiters or Bins]).
+   */
+  const stats = () => ({ painted: budget.painted, paintMs: budget.spent, glides: backArt.gliders() });
+  return { resize, tileAt, draw, cam, pan, centerOn, zoomBy, fit, viewRect, warn, stats };
 }

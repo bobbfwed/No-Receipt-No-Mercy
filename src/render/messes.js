@@ -6,6 +6,7 @@
 // enough to run into the next one, so the five tiles read as one spill.
 import { TUNE, TICK_HZ } from '../sim/index.js';
 import { TILE, INK, paint, hash2, makeSprite } from './paint.js';
+import { createPaintBudget, createSpriteCache } from './spritecache.js';
 
 const T = TILE;
 const TAU = Math.PI * 2;
@@ -23,14 +24,23 @@ const SPILL_PULL = 7;
 const FLAVOURS = [['#3fc6ff', '#1d8fd6', '#c9f3ff'], ['#ff4f7a', '#c92a52', '#ffd0dc']];
 
 /** Mess sprites at the current screen scale. Call setScale() on resize; made on first use. */
-export function createMessSprites() {
+export function createMessSprites(budget = createPaintBudget({ ms: Infinity })) {
   let scale = 1;
-  let list = [];
+  // (0.4, stage 5b) A new scale keeps the old splats to draw meanwhile (spritecache.js).
+  const make = (v) => makeSprite(v >= VARIANTS ? SPILL_SIZE : SIZE, scale, (g) => paintMess(g, v));
+  const cache = createSpriteCache(budget, make);
   return {
-    setScale(s) { if (s !== scale) { scale = s; list = []; } },
+    setScale(s) { if (s !== scale) { scale = s; cache.rescale(); } },
+    idle: () => cache.idle(),
     get(v) {
-      if (!list[v]) list[v] = makeSprite(v >= VARIANTS ? SPILL_SIZE : SIZE, scale, (g) => paintMess(g, v));
-      return list[v];
+      let sp = cache.have(v);
+      if (!sp) {
+        budget.begin();
+        sp = make(v);
+        budget.end();
+        cache.put(v, sp, v);
+      }
+      return sp;
     },
   };
 }

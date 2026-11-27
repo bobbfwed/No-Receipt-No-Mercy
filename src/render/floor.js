@@ -304,8 +304,12 @@ const CHUNK = 16;
  * offscreen canvas and only the visible part is ever painted. Chunks are painted at the exact zoom
  * (so they are copied to the screen 1:1, which is much faster than scaling) and, while the zoom is
  * changing, at a few fixed steps; chunks not drawn lately are thrown away.
+ * `paintChunk(g, info, x0, y0, x1, y1, zoom)` paints one chunk: the shop floor's drawChunk by
+ * default; The Back passes its own (drawBackChunk in backfloor.js, 0.4). `budget` (optional, see
+ * spritecache.js): the renderer's painting budget, which decides how many chunks a frame paints
+ * while another resolution of them can stand in.
  */
-export function createFloorCache() {
+export function createFloorCache(paintChunk = drawChunk, budget = null) {
   let info = null;
   const chunks = new Map(); // key -> { c, used }
   const levels = new Set();
@@ -335,7 +339,7 @@ export function createFloorCache() {
     g.setTransform(kx, 0, 0, ky, -cx * CHUNK * T * kx, -cy * CHUNK * T * ky);
     // On-screen size of a tile in CSS pixels, so painted lettering can be sized for the eye.
     const zoom = (res * T) / (globalThis.devicePixelRatio || 1);
-    drawChunk(g, info, cx * CHUNK, cy * CHUNK, cx * CHUNK + tw, cy * CHUNK + th, zoom);
+    paintChunk(g, info, cx * CHUNK, cy * CHUNK, cx * CHUNK + tw, cy * CHUNK + th, zoom);
     const entry = { c, used: frame };
     chunks.set(keyOf(level, cx, cy), entry);
     levels.add(level);
@@ -377,14 +381,21 @@ export function createFloorCache() {
         let e = chunks.get(keyOf(level, cx, cy));
         if (!e) {
           // Painting a chunk takes a few milliseconds: paint a handful per frame and show another
-          // resolution of the same chunk meanwhile, so zooming across a step never stalls.
-          if (builds >= 4) {
+          // resolution of the same chunk meanwhile, so zooming across a step never stalls. (Stage
+          // 5b: with the renderer's painting budget, as many as fit in it; a slow phone took four
+          // at once, about 40 ms.)
+          if (budget ? !budget.ok() : builds >= 4) {
             for (const lv of levels) {
               const alt = chunks.get(keyOf(lv, cx, cy));
               if (alt) { e = alt; break; }
             }
           }
-          if (!e) { e = build(level, cx, cy); builds++; }
+          if (!e) {
+            if (budget) budget.begin();
+            e = build(level, cx, cy);
+            if (budget) budget.end();
+            builds++;
+          }
         }
         e.used = frame;
         const tx0 = cx * CHUNK, ty0 = cy * CHUNK;

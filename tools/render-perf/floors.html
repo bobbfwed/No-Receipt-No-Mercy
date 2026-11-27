@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Floor timing</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1f24; overflow: hidden; }
+  canvas#c { display: block; width: 100vw; height: 100vh; }
+</style>
+<!--
+  The Back's look and the sprite painting (0.4, stage 5b): times the real renderer on a saved game
+  state with either floor in front, so the cost of drawing The Back's own floor and the faint
+  other floor can be compared. Driven by tools/render-perf/floors.mjs; can be opened by hand too.
+  It reads the states tools/perf/game2p.mjs writes (tools/perf/out/states/).
+  URL options:
+    state=<url of a state JSON>
+    frames=600     frames to time
+    floor=0|1      the shop floor, or The Back
+    zoom=fit|N     the whole store, or N CSS pixels a tile (centred on cx,cy, default the middle)
+    cx=, cy=       camera centre in tiles
+    sim=1          step the game as it is drawn (0: the same frame again and again)
+    rezoom=N       at frame N zoom in by 1.5x (across one sprite resolution step)
+  Results land in window.__perf once done is true.
+-->
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+let made = 0;
+const ce = document.createElement.bind(document);
+document.createElement = (tag, o) => { if (String(tag).toLowerCase() === 'canvas') made++; return ce(tag, o); };
+
+const { createRenderer } = await import('../../src/render/renderer.js');
+const { HostSession } = await import('../../src/net/session.js');
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
+const frames = num('frames', 600);
+const res = { done: false, error: null };
+window.__perf = res;
+try {
+  const state = await (await fetch(q.get('state'))).json();
+  state.speed = 1;
+  const session = new HostSession({ name: state.players[0].name, state, resume: true });
+  const canvas = document.getElementById('c');
+  const renderer = createRenderer(canvas, session);
+  renderer.resize();
+  const zoom = q.get('zoom') || 'fit';
+  renderer.fit();
+  if (zoom !== 'fit') {
+    renderer.zoomBy(Number(zoom) / renderer.cam.zoom);
+    renderer.centerOn(num('cx', state.w / 2), num('cy', state.h / 2));
+  }
+  const view = { tool: null, dir: 0, hover: null, route: true, routeFaint: true, cursors: new Map(), floor: num('floor', 0) };
+  const sim = q.get('sim') !== '0';
+  const draw = [], canv = [];
+  let n = 0;
+  res.zoom = renderer.cam.zoom;
+  res.canvas = [canvas.width, canvas.height];
+  await new Promise((resolve) => {
+    function frame(now) {
+      const m0 = made;
+      if (n === num('rezoom', -1)) renderer.zoomBy(1.5);
+      if (sim) session.update(now);
+      const b = performance.now();
+      renderer.draw(view);
+      draw.push(performance.now() - b);
+      canv.push(made - m0);
+      if (++n >= frames) return resolve();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+  Object.assign(res, { draw, canv, done: true });
+} catch (err) {
+  res.error = String(err && err.stack || err);
+  res.done = true;
+}
+</script>
+</body>
+</html>

@@ -9,6 +9,7 @@ import { dadRoutes, toPoints, SHOPPER_LABEL, DAD_LABEL, DAD_PLAN_LABEL } from '.
 const T = TILE;
 const DASH = [10, 9];
 const PLAN_DASH = [7, 7];
+const TICK_DASH = [3, 25];
 const NO_DASH = [];
 /** The dads' colour on the floor (their route and its label). */
 const DAD_BLUE = '#5cc8ff';
@@ -60,7 +61,7 @@ function strokeDads(ctx, pts, offset, shift) {
   ctx.strokeStyle = DAD_BLUE;
   ctx.lineWidth = 4;
   ctx.stroke();
-  ctx.setLineDash([3, 25]);
+  ctx.setLineDash(TICK_DASH);
   ctx.lineDashOffset = -offset;
   ctx.strokeStyle = '#e0f6ff';
   ctx.lineWidth = 2;

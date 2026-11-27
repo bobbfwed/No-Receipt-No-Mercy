@@ -18,6 +18,9 @@ import {
 import { SUPPLIES, stockTracks } from '../content/supplies.js';
 import { TILE, INK, C, rr, paint, box, circle, line, label, text, hazard, makeSprite } from './paint.js';
 import { drawBeltTile, SP } from './buildings.js';
+import { stockMark, useMarks, markRadius, drawMark } from './marks.js';
+import { createPaintBudget, createSpriteCache } from './spritecache.js';
+import { matchLane, createGlides, ease, progress } from './glide.js';
 
 const T = TILE, HALF = T / 2, TAU = Math.PI * 2;
 const ROT = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
@@ -146,16 +149,6 @@ function paintItem(g, code) {
   }
   const draw = ART[itemType(code)];
   if (draw) draw(g);
-}
-
-/** Every item's sprite at a scale, indexed by item code (1 junk, 11 to 54 the supplies). */
-function itemSprites(scale) {
-  const out = new Array(55).fill(null);
-  out[1] = makeSprite(ITEM, scale, (g) => paintItem(g, 1));
-  for (let type = 1; type <= 5; type++) {
-    for (let tier = 1; tier <= 4; tier++) out[type * 10 + tier] = makeSprite(ITEM, scale, (g) => paintItem(g, type * 10 + tier));
-  }
-  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -504,19 +497,52 @@ function frontCap(s, j, dir) {
 
 // ---------------------------------------------------------------------------------------------
 
-export function createBackArt() {
+/**
+ * @param {Object} [budget] the renderer's painting budget (spritecache.js): on a new scale the old
+ *   sprites are drawn scaled until each is painted again, and jobs() lists them all for painting
+ *   ahead of need.
+ */
+export function createBackArt(budget = createPaintBudget({ ms: Infinity })) {
   let scale = 1;
-  let items = itemSprites(1);
-  /** Part sprites by key (kind * 64 + facing * 8 + chevron step), made when first needed. */
-  const parts = new Map();
+  /** Item sprites by code, and part sprites by key (kind * 64 + facing * 8 + chevron step). */
+  const paintItemSprite = (code) => makeSprite(ITEM, scale, (g) => paintItem(g, code));
+  const items = createSpriteCache(budget, paintItemSprite);
+  const parts = createSpriteCache(budget, (key) => makeSprite(PART, scale, (g) => PAINT[key >> 6](g, (key >> 3) & 7, key & 7)));
   /** Pay floating up from Clearance Bins: { i, v, t }, oldest first. */
   const floats = [];
+  /** The tiles the last draw() drew parts on: x0, y0 to x1, y1 (end exclusive). */
+  const bounds = { x0: 0, y0: 0, x1: 0, y1: 0 };
 
   function setScale(r) {
     if (r === scale) return;
     scale = r;
-    items = itemSprites(r);
-    parts.clear();
+    items.rescale();
+    parts.rescale();
+  }
+
+  /** An item's sprite (null for a code that is no item). */
+  function itemSprite(code) {
+    if (!(code === 1 || (code >= 11 && code <= 54 && code % 10 >= 1 && code % 10 <= 4))) return null;
+    let sp = items.have(code);
+    if (!sp) {
+      budget.begin();
+      sp = paintItemSprite(code);
+      budget.end();
+      items.put(code, sp, code);
+    }
+    return sp;
+  }
+
+  /** Every item and part sprite, for the prepaint queue ([cache, key, args]). */
+  function jobs() {
+    const out = [[items, 1, 1]];
+    for (let type = 1; type <= 5; type++) for (let tier = 1; tier <= 4; tier++) out.push([items, type * 10 + tier, type * 10 + tier]);
+    const add = (kind, d, step) => { const key = kind * 64 + d * 8 + step; out.push([parts, key, key]); };
+    for (let d = 0; d < 4; d++) { add(SPLIT, d, 0); add(DROP, d, 0); add(INTERN, d, 0); add(REBRAND, d, 0); add(REBRAND, d, 1); }
+    for (const id of Object.values(MACHINE_ID)) for (let d = 0; d < 4; d++) { add(id, d, 0); add(id, d, 1); }
+    for (const d of [1, 3]) for (let st = 0; st < PHASES; st++) add(BRIDGE, d, st);
+    add(BIN, 0, 0); add(LIFT, 0, 0); add(LIFT, 0, 1);
+    return out;
   }
 
   const SPLIT = 1, BRIDGE = 2, DROP = 3, BIN = 4, INTERN = 5, REBRAND = 11, LIFT = 12;
@@ -530,16 +556,18 @@ export function createBackArt() {
   for (const [k, id] of Object.entries(MACHINE_ID)) PAINT[id] = (g, d, on) => paintMachine(g, k, d, on === 1);
   function part(kind, d = 0, step = 0) {
     const key = kind * 64 + d * 8 + step;
-    let sp = parts.get(key);
+    let sp = parts.have(key);
     if (!sp) {
+      budget.begin();
       sp = makeSprite(PART, scale, (g) => PAINT[kind](g, d, step));
-      parts.set(key, sp);
+      budget.end();
+      parts.put(key, sp, key);
     }
     return sp.canvas;
   }
   const stamp = (ctx, img, cx, cy) => ctx.drawImage(img, cx - PART / 2, cy - PART / 2, PART, PART);
   function item(ctx, code, x, y) {
-    const sp = items[code];
+    const sp = itemSprite(code);
     if (sp) ctx.drawImage(sp.canvas, x - ITEM / 2, y - ITEM / 2, ITEM, ITEM);
   }
 
@@ -562,7 +590,7 @@ export function createBackArt() {
    * by `alpha` of a tick, as far as they will really get (see frontCap), so they glide smoothly and
    * an item waiting at the end does not creep forward and jump back each tick.
    */
-  function laneItems(ctx, s, it, x, y, d, shape, alpha) {
+  function laneItems(ctx, s, it, x, y, d, shape, alpha, tile = -1, t = 0) {
     const n = it.length;
     if (!n) return;
     const cx = x * T + HALF, cy = y * T + HALF;
@@ -581,8 +609,124 @@ export function createBackArt() {
       }
       let wx = lx, wy = ly;
       if (d === 1) { wx = -ly; wy = lx; } else if (d === 2) { wx = -lx; wy = -ly; } else if (d === 3) { wx = ly; wy = -lx; }
-      item(ctx, it[k], cx + wx, cy + wy - 1);
+      let ix = cx + wx, iy = cy + wy - 1;
+      // An item that has just come on from the side (or from an intern's hand) slides in from there.
+      if (gliding && tile >= 0) {
+        const r = glides.find(tile, it[k], p0, s.tick, STEP);
+        if (r) {
+          const e = ease(progress(r, t));
+          ix = r.x0 + (ix - r.x0) * e;
+          iy = r.y0 + (iy - r.y0) * e;
+        }
+      }
+      item(ctx, it[k], ix, iy);
     }
+  }
+
+  // --- Glides (0.4, stage 5b; the rules in glide.js) ------------------------------------------
+  // Per tile, what was on it when last looked at: belts [tick + 1, n, code, pos, ...] (SNAP numbers
+  // a tile), interns [tick + 1, held code, hold time]. 0 for the tick means never seen.
+  const MAXI = 6, SNAP = 2 + 2 * MAXI;
+  let snap = new Int32Array(0), hands = new Int32Array(0);
+  const glides = createGlides(48);
+  const fresh = new Int32Array(MAXI + 2);
+  /** Interns who handed something over this tick: their tiles (up to 32 a tick on screen). */
+  const gave = new Int32Array(32);
+  let nGave = 0, gliding = 0, seenTick = -1;
+  /** Below this zoom (CSS pixels a tile) a glide would be a pixel or two: none are started. */
+  const GLIDE_ZOOM = 14;
+
+  /** Starts a record: from (x0, y0) to (x1, y1), at game tick t0. */
+  function startGlide(kind, tile, code, pos, x0, y0, x1, y1, t0) {
+    const r = glides.take(t0);
+    r.kind = kind; r.tile = tile; r.code = code; r.pos = pos;
+    r.x0 = x0; r.y0 = y0; r.x1 = x1; r.y1 = y1;
+  }
+
+  /** True if the part on tile j swallows what is handed to it (a Dumbwaiter or a Clearance Bin). */
+  const sink = (s, j) => { const q = j >= 0 ? s.back[j] : 0; return !!q && (q.k === 'lift' || q.k === 'bin'); };
+
+  /**
+   * Once per tick: compares the visible interns and belts with what they held when last seen, and
+   * starts a glide for each item that jumped (see glide.js). Cheap: a few numbers a visible belt.
+   */
+  function spot(s, vis, F) {
+    const back = s.back, W = s.w, n = back.length;
+    if (snap.length !== n * SNAP) { snap = new Int32Array(n * SNAP); hands = new Int32Array(n * 3); glides.clear(); }
+    const tick = s.tick;
+    const on = F.zoom >= GLIDE_ZOOM;
+    nGave = 0;
+    const { x0, y0, x1, y1 } = vis;
+    // Interns first, so a belt can tell an item from a hand from one from the side.
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
+        const p = back[i];
+        if (!p || p.k !== 'intern') continue;
+        const b = i * 3, dt = tick - (hands[b] - 1);
+        const held = hands[b + 1], was = hands[b + 2];
+        if (on && hands[b] && dt >= 1 && dt <= 6 && held && (!p.h || p.h !== held || p.t > was)) {
+          const j = nb(s, x, y, p.d);
+          const hx = x * T + HALF + HAND[p.d][0], hy = y * T + HALF + HAND[p.d][1];
+          if (sink(s, j)) startGlide(1, j, held, 0, hx, hy, (j % W) * T + HALF, ((j / W) | 0) * T + HALF + 4, tick);
+          else if (nGave < gave.length) gave[nGave++] = i;
+        }
+        hands[b] = tick + 1; hands[b + 1] = p.h | 0; hands[b + 2] = p.t | 0;
+      }
+    }
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
+        const p = back[i];
+        if (!p || p.k !== 'conv') continue;
+        const it = p.it, b = i * SNAP, dt = tick - (snap[b] - 1);
+        if (on && snap[b] && dt >= 1 && dt <= 6 && it.length <= 2 * MAXI) {
+          const left = matchLane(snap, b + 2, snap[b + 1], it, dt, STEP, fresh);
+          const cx = x * T + HALF, cy = y * T + HALF, d = p.d;
+          for (let k = 0; k < it.length >> 1; k++) {
+            if (!fresh[k]) continue;
+            const code = it[2 * k], pos = it[2 * k + 1];
+            // From an intern's hand: one who stands facing this tile and just let go.
+            let from = -1;
+            for (let g = 0; g < nGave; g++) {
+              const q = back[gave[g]];
+              if (q && nb(s, gave[g] % W, (gave[g] / W) | 0, q.d) === i) { from = gave[g]; break; }
+            }
+            if (from >= 0) {
+              const q = back[from];
+              startGlide(0, i, code, pos, (from % W) * T + HALF + HAND[q.d][0], ((from / W) | 0) * T + HALF + HAND[q.d][1], 0, 0, tick);
+              continue;
+            }
+            // Too far along to have come on from behind: from a side that feeds it.
+            if (pos <= STEP * dt + 1) continue;
+            const l = (d + 3) & 3, r = (d + 1) & 3;
+            const fl = sendsInto(s, nb(s, x, y, l), r), fr = sendsInto(s, nb(s, x, y, r), l);
+            if (!fl && !fr) continue;
+            const side = fl && fr ? ((pos + code) & 1 ? l : r) : fl ? l : r;
+            startGlide(0, i, code, pos, cx + AHEAD_X[side] * HALF, cy + AHEAD_Y[side] * HALF - 1, 0, 0, tick);
+          }
+          // The front item went on into a Dumbwaiter or a Bin: it drops in.
+          if (left > 0 && sink(s, nb(s, x, y, d))) {
+            const j = nb(s, x, y, d);
+            const ex = cx + AHEAD_X[d] * (END / SUB - 0.5) * T, ey = cy + AHEAD_Y[d] * (END / SUB - 0.5) * T - 1;
+            startGlide(1, j, snap[b + 2], 0, ex, ey, (j % W) * T + HALF, ((j / W) | 0) * T + HALF + 4, tick);
+          }
+        }
+        snap[b] = tick + 1;
+        const m = Math.min(MAXI, it.length >> 1);
+        snap[b + 1] = m;
+        for (let k = 0; k < 2 * m; k++) snap[b + 2 + k] = it[k];
+      }
+    }
+  }
+
+  /** Items dropping into a Dumbwaiter or a Bin: moving in, shrinking and fading as they fall. */
+  function drawSinks(ctx, t) {
+    for (const r of glides.pool) {
+      if (!r.on || r.kind !== 1) continue;
+      const f = progress(r, t), e = ease(f);
+      ctx.globalAlpha = 1 - f * 0.7;
+      itemSmall(ctx, r.code, r.x0 + (r.x1 - r.x0) * e, r.y0 + (r.y1 - r.y0) * e, 1 - 0.65 * f);
+    }
+    ctx.globalAlpha = 1;
   }
 
   /**
@@ -599,12 +743,18 @@ export function createBackArt() {
     const phase = (((F.time * SPEED * T) % SP) + SP) % SP;
     const step = Math.min(PHASES - 1, ((phase / SP) * PHASES) | 0);
     let n = 0;
+    bounds.x0 = x1; bounds.y0 = y1; bounds.x1 = x0; bounds.y1 = y0;
     // 1. Belts: every belt tile, the belts under a Splitter, and an Overpass's lower lane.
     for (let y = y0; y < y1; y++) {
       for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
         const p = back[i];
         if (!p) continue;
         n++;
+        // (The box round everything drawn, for the renderer's faint layer.)
+        if (x < bounds.x0) bounds.x0 = x;
+        if (x >= bounds.x1) bounds.x1 = x + 1;
+        if (y < bounds.y0) bounds.y0 = y;
+        if (y >= bounds.y1) bounds.y1 = y + 1;
         if (p.k === 'conv') {
           const d = p.d, sh = backShape(s, i);
           let type = 4;
@@ -622,13 +772,19 @@ export function createBackArt() {
       }
     }
     if (!n) return 0;
+    // Items that jumped since the last tick start gliding (once a tick; see glide.js).
+    if (s.tick !== seenTick) { seenTick = s.tick; spot(s, vis, F); }
+    const t = s.tick + F.alpha;
+    glides.expire(t);
+    gliding = 0;
+    for (const r of glides.pool) if (r.on) { gliding = 1; break; }
     // 2. Items on belts and on the Overpass's lower lane.
     const alpha = F.alpha;
     for (let y = y0; y < y1; y++) {
       for (let x = x0, i = y * W + x0; x < x1; x++, i++) {
         const p = back[i];
         if (!p) continue;
-        if (p.k === 'conv') laneItems(ctx, s, p.it, x, y, p.d, backShape(s, i), alpha);
+        if (p.k === 'conv') laneItems(ctx, s, p.it, x, y, p.d, backShape(s, i), alpha, i, t);
         else if (p.k === 'over') laneItems(ctx, s, p.a, x, y, overpassDirs(s, i)[0], 0, alpha);
       }
     }
@@ -661,7 +817,7 @@ export function createBackArt() {
             if (p.h) item(ctx, p.h, cx + HAND[p.d][0], cy + HAND[p.d][1]);
             break;
           case 'lift':
-            drawLift(ctx, s, p, i, cx, cy);
+            drawLift(ctx, s, p, i, cx, cy, F);
             break;
           case 'rebrand':
             drawMaker(ctx, p, REBRAND, cx, cy, F, p.t > 0 && p.q.length ? rebrandTicks(s, itemTier(p.q[0])) : 0);
@@ -671,6 +827,7 @@ export function createBackArt() {
         }
       }
     }
+    if (gliding) drawSinks(ctx, t);
     if (withFloats && floats.length) drawFloats(ctx, s, now);
     return n;
   }
@@ -710,7 +867,7 @@ export function createBackArt() {
 
   /** An item sprite drawn smaller, centred on (x, y). */
   function itemSmall(ctx, code, x, y, k) {
-    const sp = items[code];
+    const sp = itemSprite(code);
     if (sp) ctx.drawImage(sp.canvas, x - (ITEM * k) / 2, y - (ITEM * k) / 2, ITEM * k, ITEM * k);
   }
 
@@ -719,10 +876,14 @@ export function createBackArt() {
    * building above takes, in that supply's colour, filled to the units it holds out of
    * the most it holds in this game, stockCap (red Spite, green Cola, orange Cord, silver Tape, purple Wire).
    */
-  function drawLift(ctx, s, p, i, cx, cy) {
+  function drawLift(ctx, s, p, i, cx, cy, F) {
     const b = s.grid[p.a];
-    const gauges = i === p.a && !!b && b.part === undefined;
+    const anchor = i === p.a && !!b && b.part === undefined;
+    // Zoomed out, the gauges would be a few pixels: one status mark instead, on a whole hatch.
+    const marks = useMarks(F.zoom);
+    const gauges = anchor && !marks;
     stamp(ctx, part(LIFT, 0, gauges ? 1 : 0), cx, cy);
+    if (anchor && marks) { drawMark(ctx, stockMark(b), cx, cy, markRadius(F.zoom)); return; }
     if (!gauges) return;
     const tracks = stockTracks(b.k), n = tracks.length;
     if (!n) return;
@@ -788,5 +949,12 @@ export function createBackArt() {
     }
   }
 
-  return { setScale, handle, draw, drawGhost };
+  const idle = () => { items.idle(); parts.idle(); };
+  /** For test pages: how many glides are under way onto belts (0) and into Dumbwaiters or Bins (1). */
+  function gliders() {
+    let a = 0, b = 0;
+    for (const r of glides.pool) if (r.on) { if (r.kind) b++; else a++; }
+    return [a, b];
+  }
+  return { setScale, handle, draw, drawGhost, jobs, idle, gliders, bounds };
 }

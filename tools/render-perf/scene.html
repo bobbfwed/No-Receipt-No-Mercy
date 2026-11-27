@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Render scene</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1f24; overflow: hidden; }
+  canvas#c { display: block; width: 100vw; height: 100vh; }
+</style>
+<!--
+  A real game, played by the perf tools' scripted team (tools/perf/teambot.mjs: Crate Stack walls,
+  security, and a supply line in The Back from every Returns Drop), drawn by the real renderer, on
+  any store: for screenshots of The Back on designs the ?demo=1 layout does not cover (0.4, stage 5b).
+  Photograph it with tools/shot.ps1.
+  URL options:
+    design=aisles size=m players=1 seed=11   the game
+    until=6        play until this sales event has started...
+    t=600          ...and this many ticks into it
+    demo=1         instead: the original small store with the ?demo=1 layout (no scripted team)
+    merge=1        with demo=1: a Cord Spooler at 13,6 feeding the Spite belt along row 5 from the
+                   side (kept supplied with junk by hand), so items join a belt from the side
+    floor=1        look at The Back (0 the shop floor)
+    cam=x,y,zoom   centre on tile x,y at zoom CSS pixels a tile (fit: the whole store)
+    tool=sprinkler hold a building (on the shop floor, The Back shows more strongly)
+    wireprev=x,y,d show that building's wire being tried in direction d
+    live=1         keep the game running at 1x as it is drawn (0: frozen at that moment)
+    seek=glide     (with live=0) step on until an item is gliding onto a belt (sink: dropping into a
+                   Dumbwaiter or Bin), then freeze a tick and a half into it
+-->
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+const { createRenderer } = await import('../../src/render/renderer.js');
+const sim = await import('../../src/sim/index.js');
+const { createTeamBot, direct } = await import('../perf/teambot.mjs');
+const { createGame, addPlayer, applyCommand, applyDemoLayout, step, TICK_HZ } = sim;
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
+const players = num('players', 1), until = num('until', 6), ticks = num('t', 600);
+const demo = q.get('demo') === '1';
+const s = demo
+  ? createGame({ seed: num('seed', 7) })
+  : createGame({ seed: num('seed', 11), map: { design: q.get('design') || 'warehouse', size: q.get('size') || 'm' }, settings: { waves: 30 }, cards: false });
+for (let i = 0; i < players; i++) addPlayer(s, ['Bobb', 'Tusker', 'Phantasm', 'P4'][i]);
+if (s.phase === 'cards') { s.phase = 'build'; delete s.dealT; }
+let spool = null;
+if (demo) {
+  applyDemoLayout(s, 0);
+  if (q.get('merge') === '1') {
+    s.players[0].cash += 100;
+    applyCommand(s, 0, { c: 'place', k: 'spooler', x: 13, y: 6, d: 3, f: 1 });
+    spool = s.back[6 * s.w + 13];
+  }
+  applyCommand(s, 0, { c: 'start' });
+}
+const bot = demo ? null : createTeamBot(() => s, direct(s));
+let fx = [];
+const play = () => {
+  if (s.phase === 'cards') { for (const p of s.players) if (!p.skip) applyCommand(s, p.id, { c: 'skipCards', on: true }); step(s); return; }
+  if (bot && s.tick % 15 === 0) bot.shop();
+  if (s.refunds >= s.refundLimit - 2) s.refundLimit += 10;
+  if (spool && spool.n < 2) spool.n = 2;
+  for (const e of step(s)) fx.push(e);
+};
+if (demo) for (let k = 0; k < ticks; k++) play();
+else while (s.phase !== 'won' && s.phase !== 'lost' && !(s.wave >= until && s.phase === 'wave' && s.tick - s.waveAt >= ticks)) play();
+fx = [];
+let acc = 0;
+const session = { state: s, me: 0, isHost: true, drainFx: () => { const o = fx; fx = []; return o; }, alpha: () => acc, start() {}, on() { return () => {}; } };
+const canvas = document.getElementById('c');
+const renderer = createRenderer(canvas, session);
+renderer.resize();
+const cam = (q.get('cam') || 'fit').split(',');
+renderer.fit();
+if (cam[0] !== 'fit') {
+  if (cam[2]) renderer.zoomBy(Number(cam[2]) / renderer.cam.zoom);
+  renderer.centerOn(Number(cam[0]), Number(cam[1]));
+}
+const wp = q.get('wireprev');
+const view = {
+  tool: q.get('tool') || null, dir: 0, hover: null, route: true, routeFaint: s.phase === 'wave', cursors: new Map(), floor: num('floor', 1),
+  wirePreview: wp ? (([x, y, d]) => ({ x, y, d }))(wp.split(',').map(Number)) : null,
+};
+const live = q.get('live') !== '0';
+const seek = q.get('seek');
+if (seek) {
+  // Step on, a tick at a time (drawing each, so The Back notices what jumped), until a glide of
+  // the kind asked for is under way; then one more tick, and freeze half a tick on.
+  const kind = seek === 'sink' ? 1 : 0;
+  for (let n = 0; n < 3000; n++) {
+    play(); acc = 0; renderer.draw(view);
+    if (renderer.stats().glides[kind] > 0) { play(); acc = 0.5; break; }
+  }
+}
+let last = performance.now();
+function frame(now) {
+  if (live) {
+    acc += ((now - last) / 1000) * TICK_HZ;
+    while (acc >= 1) { play(); acc -= 1; }
+  }
+  last = now;
+  renderer.draw(view);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.__scene = { state: s, renderer };
+</script>
+</body>
+</html>

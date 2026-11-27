@@ -3,9 +3,10 @@
 //
 //   const art = createWireArt();
 //   art.setScale(r)                      when the zoom crosses a resolution step (sprites repainted)
-//   art.draw(ctx, s, vis, F)             every wire on screen: planned wire as a faint dashed coil,
-//                                        live wire as a dark steel coil with barbs, purple tags and
-//                                        glints, over the floor and the buildings it crosses
+//   art.draw(ctx, s, vis, F)             every wire on screen: planned wire as a thin dashed line
+//                                        with small barbs on faint shading, live wire as a dark steel
+//                                        coil with barbs, purple tags and glints, over the floor and
+//                                        the buildings it crosses
 //   art.drawPreview(ctx, s, prev, pid)   a wire direction being tried ({ x, y, d }): green where it
 //                                        may go, red where the rules would refuse it
 //
@@ -17,6 +18,7 @@
 import { canWire, wireTiles, sizeOf, BUILD, DIRS } from '../sim/index.js';
 import { TILE, INK, rr, label, makeSprite, hash2 } from './paint.js';
 import { wireLayout } from './wireplan.js';
+import { createPaintBudget, createSpriteCache } from './spritecache.js';
 
 const T = TILE, TAU = Math.PI * 2;
 /** A wire tile's sprite box: a tile and a margin for the loops that reach over its edges. */
@@ -73,37 +75,55 @@ function coil(g, style) {
     }
     return;
   }
-  // Planned wire, or a direction being tried: dashed outlines of the same loops.
+  // Planned wire, or a direction being tried (stage 5b: the dashed coil read as a slinky): "wire
+  // will go here, not yet live". Faint shading on the tile, and down its middle a thin dashed line
+  // with small barbs, like a line marked out on the floor; nothing like the heavy live coil. The
+  // dash repeats every 10 pixels, so a run of tiles reads as one line.
   const col = style === 'ok' ? '#86efac' : style === 'bad' ? '#fca5a5' : '#d8b4fe';
-  if (style === 'ok' || style === 'bad') {
-    g.fillStyle = style === 'ok' ? 'rgba(74,222,128,0.16)' : 'rgba(239,68,68,0.2)';
-    g.fillRect(-20, -20, 40, 40);
-  }
-  g.setLineDash([3.5, 3]);
-  for (const x of LOOPS) {
-    g.beginPath(); g.ellipse(x, 0, RX, RY, TILT, 0, TAU);
-    g.strokeStyle = 'rgba(15,10,25,0.6)'; g.lineWidth = 3; g.stroke();
-    g.strokeStyle = col; g.lineWidth = 1.5; g.stroke();
-  }
+  g.fillStyle = style === 'ok' ? 'rgba(74,222,128,0.16)' : style === 'bad' ? 'rgba(239,68,68,0.2)' : 'rgba(168,85,247,0.12)';
+  g.fillRect(-20, -20, 40, 40);
+  g.beginPath(); g.moveTo(-20, 0); g.lineTo(20, 0);
+  g.setLineDash([6, 4]);
+  g.lineCap = 'butt';
+  g.strokeStyle = 'rgba(15,10,25,0.7)'; g.lineWidth = 3.6; g.stroke();
+  g.strokeStyle = col; g.lineWidth = 1.8; g.stroke();
   g.setLineDash([]);
-}
-
-/** The sprites at one scale: by style, [east-west, north-south]. */
-function sprites(scale) {
-  const out = {};
-  for (const style of ['live', 'tag', 'plan', 'ok', 'bad']) {
-    out[style] = [0, 1].map((v) => makeSprite(BOX, scale, (g) => { if (v) g.rotate(Math.PI / 2); coil(g, style); }));
+  g.beginPath();
+  for (const x of [-12, 8]) {
+    g.moveTo(x - 2.4, -2.4); g.lineTo(x + 2.4, 2.4);
+    g.moveTo(x + 2.4, -2.4); g.lineTo(x - 2.4, 2.4);
   }
-  return out;
+  g.lineCap = 'round';
+  g.strokeStyle = 'rgba(15,10,25,0.7)'; g.lineWidth = 2.8; g.stroke();
+  g.strokeStyle = col; g.lineWidth = 1.2; g.stroke();
 }
 
-export function createWireArt() {
-  let scale = 0, spr = null;
-  const sp = () => (spr ||= sprites(scale || 1));
+const STYLES = ['live', 'tag', 'plan', 'ok', 'bad'];
+
+/**
+ * @param {Object} [budget] the renderer's painting budget (spritecache.js): on a new scale the old
+ *   sprites are drawn scaled until each is painted again.
+ */
+export function createWireArt(budget = createPaintBudget({ ms: Infinity })) {
+  let scale = 1;
+  // A style's sprite, east-west (v 0) or north-south (v 1), keyed style * 2 + v.
+  const make = (key) => makeSprite(BOX, scale, (g) => { if (key & 1) g.rotate(Math.PI / 2); coil(g, STYLES[key >> 1]); });
+  const cache = createSpriteCache(budget, make);
+  function spr(style, v) {
+    const key = STYLES.indexOf(style) * 2 + v;
+    let c = cache.have(key);
+    if (!c) {
+      budget.begin();
+      c = make(key);
+      budget.end();
+      cache.put(key, c, key);
+    }
+    return c.canvas;
+  }
 
   /** One tile of wire running along direction d (0-3), centred on tile i. */
   function tile(ctx, s, i, d, style) {
-    const c = sp()[style][d & 1].canvas;
+    const c = spr(style, d & 1);
     ctx.drawImage(c, (i % s.w) * T + T / 2 - HALF, ((i / s.w) | 0) * T + T / 2 - HALF, BOX, BOX);
   }
 
@@ -113,7 +133,7 @@ export function createWireArt() {
    */
   function edge(ctx, f, d, style) {
     const along = d & 1 ? 0 : 1; // a wire running east-west leaves from a north-south edge
-    const c = sp()[style][along].canvas;
+    const c = spr(style, along);
     const [dx, dy] = DIRS[d];
     if (along === 0) {
       const ey = (dy > 0 ? f.y + f.h : f.y) * T;
@@ -223,7 +243,8 @@ export function createWireArt() {
   }
 
   return {
-    setScale(r) { if (r !== scale) { scale = r; spr = null; } },
+    setScale(r) { if (r !== scale) { scale = r; cache.rescale(); } },
+    idle: () => cache.idle(),
     draw,
     drawPreview,
   };

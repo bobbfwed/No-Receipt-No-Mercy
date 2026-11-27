@@ -24,6 +24,7 @@
 // bottle are drawn directly every frame.
 import { ST, TUNE, TICK_HZ, defOf, BOSS, HOLIDAYS, CARDS, idShare } from '../sim/index.js';
 import { TILE, INK, C, rr, paint, box, circle, label, ramp, starPath, text, hazard, font } from './paint.js';
+import { createPaintBudget, createSpriteCache } from './spritecache.js';
 
 /** Feet sit this far below the shopper's position, so the figure looks centred on its tile. */
 const FEET = 9;
@@ -3166,15 +3167,22 @@ const pose = { v: 0, sw: 0, moving: false, alt: 0, ph: 0, down: false, face: 1, 
 
 /**
  * Pre-rendered shopper poses. Call setScale() whenever the screen scale changes; sprites are
- * made on first use.
+ * made on first use, or ahead of it through poses() and a prepaint queue. `budget` (spritecache.js)
+ * is the renderer's per-frame painting budget; left out, there is no limit and a new scale's poses
+ * are always painted at once (portraits and test pages).
  */
-export function createShopperSprites() {
-  const map = new Map();
+export function createShopperSprites(budget = createPaintBudget({ ms: Infinity })) {
   let scale = 1;
+  // (0.4, stage 5b) On a new resolution the old poses are kept and drawn scaled until each is
+  // painted again (spritecache.js), and poses can be painted ahead of need (warm, poses).
+  const cache = createSpriteCache(budget, (a) => paintPose(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]));
 
   function setScale(s) {
-    if (s !== scale) { scale = s; map.clear(); }
+    if (s !== scale) { scale = s; cache.rescale(); }
   }
+
+  const keyOf = (K, v, face, frame, alt, sup, dress, grow) =>
+    (((((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 8) + alt) * 2 + (sup ? 1 : 0)) * 16 + (dress & 15)) * 2 + (grow !== 1 ? 1 : 0);
 
   /**
    * A pose's sprite. A super shopper's (sup) is bigger and has room round it for the glow; draw
@@ -3183,12 +3191,42 @@ export function createShopperSprites() {
    */
   function get(K, v, face, frame, alt, sup = false, dress = 0, grow = 1) {
     alt = alt | 0; // a number 0-7 (true counts as 1)
-    const key = (((((((K.n * 8 + v) * 2 + (face > 0 ? 1 : 0)) * 8 + frame) * 8) + alt) * 2 + (sup ? 1 : 0)) * 16 + (dress & 15)) * 2 + (grow !== 1 ? 1 : 0);
-    let c = map.get(key);
+    const key = keyOf(K, v, face, frame, alt, sup, dress, grow);
+    let c = cache.have(key);
     if (c) return c;
+    budget.begin();
+    c = paintPose(K, v, face, frame, alt, sup, dress, grow);
+    budget.end();
+    cache.put(key, c, [K, v, face, frame, alt, sup, dress, grow]);
+    return c;
+  }
+
+  /**
+   * Every pose of kind k (or its super version) that a crowd of it walking about needs: each colour,
+   * both facings, every walking frame and standing, plus the gestures common enough to be worth it
+   * (a dad checking his watch, Karen shouting). Jobs for the prepaint queue: [cache, key, args].
+   */
+  function poses(k, sup) {
+    const K = KIND[k];
+    const out = [];
+    if (!K || k === 'boss') return out; // (his look depends on his tier and the holiday: painted as seen)
+    const alts = k === 'dad' || k === 'karen' ? [0, 1] : [0];
+    for (const alt of alts) {
+      for (let v = 0; v < K.vars; v++) {
+        for (const face of [1, -1]) {
+          for (let frame = 0; frame <= STAND; frame++) {
+            out.push([cache, keyOf(K, v, face, frame, alt, sup, 0, 1), [K, v, face, frame, alt, sup, 0, 1]]);
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  function paintPose(K, v, face, frame, alt, sup, dress, grow) {
     const pad = sup ? SUP_PAD : 0, z = (sup ? SUP_SCALE : 1) * grow;
     const bw = K.bw + pad * 2, bh = K.bh + pad * 2;
-    c = document.createElement('canvas');
+    let c = document.createElement('canvas');
     c.width = Math.max(1, Math.ceil(bw * scale * z));
     c.height = Math.max(1, Math.ceil(bh * scale * z));
     const g = c.getContext('2d');
@@ -3217,11 +3255,10 @@ export function createShopperSprites() {
       gg.drawImage(c, 0, 0);
       c = glow;
     }
-    map.set(key, c);
     return c;
   }
 
-  return { setScale, get };
+  return { setScale, get, poses, idle: () => cache.idle(), get size() { return cache.size; } };
 }
 
 // --- overlays ------------------------------------------------------------------------------
@@ -3351,7 +3388,7 @@ export function drawDownTile(ctx, tx, ty, t) {
   rr(ctx, x + 2, y + 2, TILE - 4, TILE - 4, 6);
   ctx.fillStyle = 'rgba(224,163,58,0.3)';
   ctx.fill();
-  ctx.setLineDash([5, 4]);
+  ctx.setLineDash(DASH_5_4);
   ctx.lineDashOffset = -t * 12;
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = '#f0a830';
@@ -3366,6 +3403,8 @@ export function drawDownTile(ctx, tx, ty, t) {
   ctx.fillRect(x + TILE * 0.42, y + TILE * 0.56, 6, 1.6);
 }
 const NO_DASH = [];
+// Dash patterns made once, not every frame.
+const DASH_5_4 = [5, 4], DASH_4_3 = [4, 3], DASH_5_3 = [5, 3];
 const NO_HOW = { pee: null, gawk: false, tv: false, pack: false, pet: false };
 
 /** A little filled heart, its point at the bottom, centred on (x, y). */
@@ -3594,7 +3633,7 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     ctx.globalAlpha = 0.6 + 0.3 * Math.sin(F.time * 6);
     ctx.strokeStyle = '#fde047';
     ctx.lineWidth = 2;
-    ctx.setLineDash([4, 3]);
+    ctx.setLineDash(DASH_4_3);
     ctx.beginPath();
     ctx.ellipse(sx + face * 2, fy - 8, 21 * z, 12 * z, 0, 0, Math.PI * 2);
     ctx.stroke();
@@ -3709,7 +3748,7 @@ function peeStream(ctx, s, sx, fy, face, z, t, at) {
   ctx.strokeStyle = 'rgba(160,130,10,0.9)';
   ctx.lineWidth = 3.6;
   ctx.stroke();
-  ctx.setLineDash([5, 3]);
+  ctx.setLineDash(DASH_5_3);
   ctx.lineDashOffset = -t * 40;
   ctx.strokeStyle = '#ffe14a';
   ctx.lineWidth = 2.2;

@@ -9,6 +9,7 @@ import {
   TILE, INK, C, rr, paint, box, circle, line, text, label, hazard, hash2, burstPath,
 } from './paint.js';
 import { drawItem } from './items.js';
+import { createPaintBudget, createSpriteCache } from './spritecache.js';
 
 const T = TILE;
 const HALF = T / 2;
@@ -23,28 +24,42 @@ const COS = [1, 0, -1, 0], SIN = [0, 1, 0, -1];
  * Pre-rendered belt tiles, one per look (straight with or without end rollers, or corner) and
  * chevron phase, drawn in the belt's own frame (output to the right). Call setScale() on resize.
  */
-export function createBeltSprites() {
-  const map = new Map();
+export function createBeltSprites(budget = createPaintBudget({ ms: Infinity })) {
   let scale = 1;
+  // (0.4, stage 5b) A new scale keeps the old tiles to draw meanwhile (spritecache.js).
+  const cache = createSpriteCache(budget, (a) => paintBelt(a[0], a[1]));
+  function paintBelt(type, step) {
+    const c = document.createElement('canvas');
+    c.width = c.height = Math.max(1, Math.ceil(T * scale));
+    const g = c.getContext('2d');
+    const k = c.width / T;
+    g.setTransform(k, 0, 0, k, HALF * k, HALF * k);
+    const phase = (step * SP) / PHASES;
+    // Zoomed out (under about 28 screen pixels a tile), fatter chevrons, or they blur into a
+    // stripe and the direction is lost.
+    const bold = scale < 0.7;
+    if (type === 4) cornerBelt(g, phase, bold);
+    else straightBelt(g, phase, !(type & 1), !(type & 2), bold);
+    return c;
+  }
   return {
-    setScale(s) { if (s !== scale) { scale = s; map.clear(); } },
+    setScale(s) { if (s !== scale) { scale = s; cache.rescale(); } },
+    idle: () => cache.idle(),
+    /** Every look and step, for the prepaint queue: [cache, key, args]. */
+    jobs() {
+      const out = [];
+      for (let type = 0; type <= 4; type++) for (let step = 0; step < PHASES; step++) out.push([cache, type * PHASES + step, [type, step]]);
+      return out;
+    },
     /** type: 0-3 straight (bit 1 = roller at the back, bit 2 = roller at the front), 4 corner. */
     get(type, step) {
       const key = type * PHASES + step;
-      let c = map.get(key);
+      let c = cache.have(key);
       if (c) return c;
-      c = document.createElement('canvas');
-      c.width = c.height = Math.max(1, Math.ceil(T * scale));
-      const g = c.getContext('2d');
-      const k = c.width / T;
-      g.setTransform(k, 0, 0, k, HALF * k, HALF * k);
-      const phase = (step * SP) / PHASES;
-      // Zoomed out (under about 28 screen pixels a tile), fatter chevrons, or they blur into a
-      // stripe and the direction is lost.
-      const bold = scale < 0.7;
-      if (type === 4) cornerBelt(g, phase, bold);
-      else straightBelt(g, phase, !(type & 1), !(type & 2), bold);
-      map.set(key, c);
+      budget.begin();
+      c = paintBelt(type, step);
+      budget.end();
+      cache.put(key, c, [type, step]);
       return c;
     },
   };
@@ -875,11 +890,15 @@ function armour(ctx, x, y, w, h, r) {
  * Sprites of machines and security buildings, keyed by kind and look. Call setScale() on resize.
  * `items` are the item sprites (the box on the Forklift Turret's forks).
  */
-export function createBuildingSprites() {
-  const map = new Map();
+export function createBuildingSprites(budget = createPaintBudget({ ms: Infinity })) {
   let scale = 1;
+  // (0.4, stage 5b) A new scale keeps the old pictures to draw scaled while each is painted again as
+  // it is drawn (spritecache.js). They cannot be repainted out of turn: a big kind's box comes from
+  // the pose its look() set just before.
+  const cache = createSpriteCache(budget);
   return {
-    setScale(s) { if (s !== scale) { scale = s; map.clear(); } },
+    setScale(s) { if (s !== scale) { scale = s; cache.rescale(); } },
+    idle: () => cache.idle(),
     /**
      * The sprite for a kind in a look (call the kind's look() first: big kinds take their box from
      * the pose). off: the greyed-out version, for security a dog has peed on. The canvas carries
@@ -887,9 +906,10 @@ export function createBuildingSprites() {
      */
     get(kind, look, items, off = 0) {
       const key = (KIND_INDEX[kind] * 16384 + look) * 2 + (off ? 1 : 0);
-      let c = map.get(key);
+      let c = cache.have(key);
       if (c) return c;
-      if (map.size > 3000) map.clear(); // never let an odd combination of states grow it forever
+      if (cache.size > 3000) cache.clear(); // never let an odd combination of states grow it forever
+      budget.begin();
       const K = KINDS[kind];
       const bx = K.box ? K.box() : BOX_1;
       c = document.createElement('canvas');
@@ -903,7 +923,8 @@ export function createBuildingSprites() {
       P.off = 0;
       if (off) greyOut(c);
       c.box = bx;
-      map.set(key, c);
+      budget.end();
+      cache.put(key, c);
       return c;
     },
   };
