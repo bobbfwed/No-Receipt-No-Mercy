@@ -167,12 +167,46 @@ export function createRenderer(canvas, session) {
   const fitZoom = () => (mapW ? Math.min(cssW / mapW, cssH / mapH) : START_ZOOM);
   const maxZoom = () => Math.max(MAX_ZOOM, fitZoom());
 
-  function clampCam() {
+  // How much of the floor's edge the interface covers, in CSS pixels (0.4.01, the owner: on a phone
+  // the chips, notices, the build card and the building sheet sit over the top and bottom rows of
+  // tiles, and the camera stopped before they came clear). game.js measures it on a touch screen
+  // only; with all four at 0 (a mouse) the camera behaves as before.
+  const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  const hasInsets = () => insets.top > 0 || insets.right > 0 || insets.bottom > 0 || insets.left > 0;
+
+  /**
+   * Where the camera's centre may be on one axis. Without insets: the map's middle when it fits,
+   * otherwise up to EDGE tiles past either end. With insets (a touch screen): far enough past
+   * either end that the end row clears the interface there (at least EDGE), and when the map and
+   * those margins fit on screen, the middle of the uncovered part (the clamp's own middle, so the
+   * view does not jump as the zoom crosses over).
+   * `prev`: where the camera was before a pan. A pan never pushes the camera back when the margins
+   * have shrunk (a notice went away while the player looked at the top row); it only stops it
+   * going further out.
+   */
+  function clampAxis(c, half, size, before, after, prev) {
+    if (!hasInsets()) return 2 * half >= size - 1e-6 ? size / 2 : Math.min(size - half + EDGE, Math.max(half - EDGE, c));
+    const z = cam.zoom || 1;
+    const lo = half - Math.max(EDGE, before / z), hi = size - half + Math.max(EDGE, after / z);
+    if (lo >= hi) return (lo + hi) / 2;
+    const a = prev === undefined ? lo : Math.min(lo, prev), b = prev === undefined ? hi : Math.max(hi, prev);
+    return Math.min(b, Math.max(a, c));
+  }
+
+  function clampCam(prevX, prevY) {
     if (!mapW) return;
     cam.zoom = Math.min(maxZoom(), Math.max(fitZoom(), cam.zoom));
     const hx = cssW / 2 / cam.zoom, hy = cssH / 2 / cam.zoom;
-    cam.x = 2 * hx >= mapW - 1e-6 ? mapW / 2 : Math.min(mapW - hx + EDGE, Math.max(hx - EDGE, cam.x));
-    cam.y = 2 * hy >= mapH - 1e-6 ? mapH / 2 : Math.min(mapH - hy + EDGE, Math.max(hy - EDGE, cam.y));
+    cam.x = clampAxis(cam.x, hx, mapW, insets.left, insets.right, prevX);
+    cam.y = clampAxis(cam.y, hy, mapH, insets.top, insets.bottom, prevY);
+  }
+
+  /**
+   * The interface's cover over each edge of the floor, in CSS pixels ({ top, right, bottom, left };
+   * a missing one is 0). The camera is not moved now: the new margins apply from the next move.
+   */
+  function setInsets(o = {}) {
+    for (const k of ['top', 'right', 'bottom', 'left']) insets[k] = Math.max(0, Math.round(Number(o[k]) || 0));
   }
 
   function startView() {
@@ -232,9 +266,10 @@ export function createRenderer(canvas, session) {
 
   function pan(dx, dy) {
     if (!sync()) return;
+    const px = cam.x, py = cam.y;
     cam.x += Number(dx) || 0;
     cam.y += Number(dy) || 0;
-    clampCam();
+    clampCam(px, py);
   }
 
   function centerOn(x, y) {
@@ -1317,5 +1352,5 @@ export function createRenderer(canvas, session) {
    * milliseconds) and the glides under way in The Back ([onto belts, into Dumbwaiters or Bins]).
    */
   const stats = () => ({ painted: budget.painted, paintMs: budget.spent, glides: backArt.gliders() });
-  return { resize, tileAt, draw, cam, pan, centerOn, zoomBy, fit, viewRect, warn, stats };
+  return { resize, tileAt, draw, cam, pan, centerOn, zoomBy, fit, viewRect, warn, stats, setInsets, insets };
 }

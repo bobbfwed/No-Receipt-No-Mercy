@@ -6,7 +6,11 @@
 //     switch, the camera pad, the REBUILD button, the boss bar, the placing aid, the chat);
 //   - whether any two of those pieces overlap each other, or the top bar or the build bar;
 //   - in the training shift, whether the tile the lesson marks is covered by anything (the floor
-//     itself must be what a finger lands on there).
+//     itself must be what a finger lands on there);
+//   - (0.4.01, the owner: "allow the player to see the edges of the map, even if notifications and
+//     other windows are showing") on the screens marked `edges`, in the situations marked `edges`:
+//     zoomed in, the view pushed as far up as it goes leaves the top row of tiles clear of every
+//     piece, and pushed as far down, the bottom row.
 // Each situation puts DEB mid-sentence (a long line), a customer review and a notice on screen, so
 // the worst case is what is measured.
 //
@@ -34,9 +38,9 @@ const verbose = args.includes('-v');
 // `allow` is added to every situation's limit for that screen: the small phone's floor is only about
 // 240 pixels tall, so the same pieces (each already as small as is readable) cover more of it.
 export const SIZES = [
-  { name: 'phone 844x390', w: 844, h: 390, allow: 0 },
+  { name: 'phone 844x390', w: 844, h: 390, allow: 0, edges: true },
   { name: 'small phone 667x375', w: 667, h: 375, allow: 0.1 },
-  { name: 'phone upright 390x844', w: 390, h: 844, allow: 0 },
+  { name: 'phone upright 390x844', w: 390, h: 844, allow: 0, edges: true },
   { name: 'tablet 1024x768', w: 1024, h: 768, allow: 0 },
 ];
 
@@ -61,9 +65,9 @@ const pick = (k) => `(() => { const b = document.querySelector('.bb-btn[data-k="
  */
 export const SITUATIONS = [
   { name: 'build pause', url: '?demo=1&ff=700&seed=7&cards=1', before: [closeReview], max: 0.30 },
-  { name: 'mid-event', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1', max: 0.30 },
-  { name: 'building held', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&hold=sprinkler&hover=12,9', max: 0.40 },
-  { name: 'sheet open', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&select=9,8', max: 0.45 },
+  { name: 'mid-event', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1', max: 0.30, edges: true },
+  { name: 'building held', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&hold=sprinkler&hover=12,9', max: 0.40, edges: true },
+  { name: 'sheet open', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&select=9,8', max: 0.45, edges: true },
   { name: 'The Back', url: '?demo=1&ff=1300&autostart=1&seed=7&cards=1&back=1', max: 0.30 },
   // (The training shift's steps, 0-based: 5 Free Samples, 8 the Forklift and the dads, 10 the
   // Spite Still in The Back, 16 the Wire tool; tests/tutorial.test.js holds the lesson list.)
@@ -140,6 +144,45 @@ function measure(PIECES, FRAME) {
   return { share: covered / Math.max(1, all), overlaps, marked, pieces: pieces.map(r) };
 }
 
+/**
+ * Runs in the page: zooms in, pushes the view as far up as it goes (`dir` -1) or down (1), and
+ * names the pieces over the top (or bottom) row of tiles. The map must not fit on screen at that
+ * zoom, or the check means nothing: it says so.
+ */
+function edgeRow(PIECES, FRAME, dir) {
+  const canvas = document.querySelector('canvas.world');
+  const g = globalThis.__game, R = g.renderer, s = g.session.state;
+  const f = canvas.getBoundingClientRect();
+  // (36 pixels a tile: zoomed in, yet a tile still fits in the band left between the top pieces
+  // and the bottom ones on a phone on its side with the held tool's card up.)
+  R.zoomBy(36 / R.cam.zoom);
+  R.pan(0, dir * 1e4);
+  const cam = R.cam, z = cam.zoom;
+  if (s.h * z <= f.height) return { fits: true, hit: [] };
+  const row = dir < 0 ? 0 : s.h - 1;
+  const y0 = f.top + f.height / 2 + (row - cam.y) * z, y1 = y0 + z;
+  const x0 = Math.max(f.left, f.left + f.width / 2 - cam.x * z), x1 = Math.min(f.right, f.left + f.width / 2 + (s.w - cam.x) * z);
+  const hit = [];
+  for (const [name, sel] of PIECES) {
+    if (FRAME.has(name) || name === 'placing aid') continue;
+    for (const el of document.querySelectorAll(sel)) {
+      if (!el.getClientRects().length || el.classList.contains('leaving')) continue;
+      let shown = true;
+      for (let e = el; e && e !== document.body; e = e.parentElement) {
+        const cs = getComputedStyle(e);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) { shown = false; break; }
+      }
+      if (!shown) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      if (Math.min(r.right, x1) - Math.max(r.left, x0) > 1 && Math.min(r.bottom, y1) - Math.max(r.top, y0) > 1) {
+        hit.push(`${name} (${Math.round(r.top)}-${Math.round(r.bottom)}, row ${Math.round(y0)}-${Math.round(y1)})`);
+      }
+    }
+  }
+  return { fits: false, hit };
+}
+
 // ---- Plumbing: a dev server, Edge, and its debugging protocol -----------------------------------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const port = 5600 + Math.floor(Math.random() * 300);
@@ -211,6 +254,20 @@ try {
       if (m.overlaps.length) bad.push(`overlaps: ${m.overlaps.join('; ')}`);
       if (sit.marks && !m.marked.length) bad.push('no marked tile found');
       for (const t of m.marked) if (t.hit.length) bad.push(`marked tile ${t.x},${t.y} covered by ${t.hit.join(', ')}`);
+      if (size.edges && sit.edges) {
+        // (After the measuring above, which wants the view as the page left it.)
+        for (const dir of [-1, 1]) {
+          const e = await run(`(${edgeRow})(${JSON.stringify(PIECES)}, new Set(${JSON.stringify([...FRAME])}), ${dir})`);
+          const which = dir < 0 ? 'top' : 'bottom';
+          if (e.fits) bad.push(`the map fits on screen at the zoom of the ${which} row check`);
+          else if (e.hit.length) bad.push(`${which} row of tiles under ${e.hit.join(', ')} with the view pushed ${dir < 0 ? 'up' : 'down'}`);
+          if (shotsDir) {
+            await sleep(150);
+            const shot = await send('Page.captureScreenshot', { format: 'png' });
+            writeFileSync(join(shotsDir, `${label.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-edge-${which}.png`), Buffer.from(shot.result.data, 'base64'));
+          }
+        }
+      }
       rows.push({ label, share: m.share, max, bad });
       console.log(`${bad.length ? 'FAIL' : 'pass'}  ${label.padEnd(52)} ${(m.share * 100).toFixed(1).padStart(5)}% of the floor (limit ${Math.round(max * 100)}%)${bad.length ? `\n      ${bad.join('\n      ')}` : ''}`);
       if (verbose) for (const p of m.pieces) console.log(`        ${p.name.padEnd(14)} ${p.box}`);

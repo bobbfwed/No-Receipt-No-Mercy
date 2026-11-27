@@ -356,6 +356,8 @@ export function startGame(session, {
     requestAnimationFrame(frame);
     const s = session.state;
     if (!s) return;
+    // (First, before this frame changes anything on the page: reading the boxes is then free.)
+    if (now - insetsAt >= INSETS_MS) { insetsAt = now; measureInsets(); }
     // Head Office does not build: swap the build bar for the planner, and drop any tool he held.
     const isOffice = s.players[session.me]?.side === 'office';
     if (isOffice !== office) {
@@ -506,6 +508,50 @@ export function startGame(session, {
     if (pop !== popLift) { popLift = pop; rebuildPop.el.style.bottom = pop ? `${pop}px` : ''; }
   }
 
+  // ---- How far the camera may go past the map (0.4.01) ------------------------------------------------
+  // The owner, on a phone: the chips, notices and reviews at the top and the build card, the
+  // building sheet, DEB and the small map at the bottom covered the first and last rows of tiles,
+  // and the camera stopped before they came clear. On a touch screen the renderer is told how much
+  // of each edge of the floor the interface covers, and lets the camera go that much further, so
+  // black shows past the map instead. A mouse keeps the old limit (one tile), so a PC is unchanged.
+  // Measured four times a second, at the start of a frame (the page is laid out then, so reading
+  // the boxes costs nothing), and again just before the view is moved for an opening sheet.
+  const INSETS_MS = 250;
+  let insetsAt = -1e9;
+  /** What floats over the floor (the same pieces tools/layout.mjs checks, less the placing aid). */
+  const COVER = '.players, .hand-wrap, .eventpay-wrap .eventpay, .notice, .review-toast, .deb, .touch-sheet, .bb-info, '
+    + '.minimap, .floor-switch, .touch-pad, .rebuild-pop .rp-btn, .boss-bar, .chat';
+  /** Least room past the map at the left and right on a touch screen, in CSS pixels. */
+  const SIDE_PX = 24;
+  const shownBox = (el) => {
+    if (!el.getClientRects().length || el.classList.contains('hidden') || el.classList.contains('leaving')) return null;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) return null;
+    return el.getBoundingClientRect();
+  };
+  function measureInsets() {
+    if (!isCoarse()) { if (renderer.insets.top || renderer.insets.bottom || renderer.insets.left || renderer.insets.right) renderer.setInsets({}); return; }
+    const f = canvas.getBoundingClientRect();
+    if (!(f.width > 50 && f.height > 50)) return;
+    const ins = { top: 0, bottom: 0, left: SIDE_PX, right: SIDE_PX };
+    for (const el of root.querySelectorAll(COVER)) {
+      const r = shownBox(el);
+      if (!r || r.width < 1 || r.height < 1) continue;
+      // Only what is over the floor itself.
+      if (r.right <= f.left || r.left >= f.right || r.bottom <= f.top || r.top >= f.bottom) continue;
+      if (r.height > f.height / 2) {
+        // A tall piece stands at a side: room at that side (no more than a third of the floor).
+        if (r.left + r.width / 2 < f.left + f.width / 2) ins.left = Math.max(ins.left, Math.min(f.width / 3, r.right - f.left));
+        else ins.right = Math.max(ins.right, Math.min(f.width / 3, f.right - r.left));
+      } else if (r.top + r.height / 2 < f.top + f.height / 2) ins.top = Math.max(ins.top, r.bottom - f.top);
+      else ins.bottom = Math.max(ins.bottom, f.bottom - r.top);
+    }
+    // A few pixels' gap, so the edge row is clearly clear.
+    if (ins.top) ins.top += 4;
+    if (ins.bottom) ins.bottom += 4;
+    renderer.setInsets(ins);
+  }
+
   // ---- The training shift's marked tiles stay clear (0.4) -------------------------------------------
   // A lesson marks the tile it wants used. If DEB's bubble or the floor switch stands over it (on a
   // phone the camera may not be able to move far enough to bring the tile clear of the bottom of the
@@ -576,6 +622,8 @@ export function startGame(session, {
     if (mouse) { touchUi.sheet.classList.add('at-top'); return; }
     const room = screenY(top) - (r.top + 8);
     const dy = Math.min(over, Math.max(0, room)) / z;
+    // (The sheet has just opened: let the camera know it covers the bottom now, so it may go further.)
+    measureInsets();
     if (dy > 0) renderer.pan(0, dy);
     // The camera stops at the map's edge (and cannot move at all when the store's height fits on
     // screen): if the reach is still under the sheet, the sheet goes to the top of the floor.
