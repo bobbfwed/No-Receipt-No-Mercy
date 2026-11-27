@@ -146,9 +146,13 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  *                          behind, while he trails her
  * @property {number} [bq]  a shopper who drinks (the eightyproof card): how many booze tables he
  *                          has stopped at (each makes the next likelier to turn him)
- * @property {number} [rw]  dad (0.4): the anchor tile of the building whose Razor Wire last turned
- *                          him away (and was charged a use for it), so walking along one wire does
- *                          not use it up twice; absent until a wire first turns him
+ * @property {number[]} [rw] dad (0.4): the anchor tiles of the buildings whose Razor Wire has
+ *                          charged him a use, in order, so no wire charges the same dad twice;
+ *                          absent until one has (a single number before 0.4.00's second wire rule)
+ * @property {number} [dm]  dad (0.4): 1 while he is going round live wire he has bumped into
+ *                          (dadDecide in path.js); absent otherwise
+ * @property {number} [wg]  dad (0.4): the state.wireGen he last saw (absent while it is 0); when
+ *                          it differs he forgets rw and dm, so wire laid differently charges again
  */
 
 /**
