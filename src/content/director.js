@@ -32,7 +32,7 @@
 //   TALK.holidayBoss of the time), and once each build pause DEB may tell a holiday joke (the
 //   'holiday' topic), which fades over the game like any other joke. With no holiday, none of it.
 import {
-  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle,
+  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle, wireMap,
 } from '../sim/index.js';
 import { SUPPLIES, TIER_NAMES } from './supplies.js';
 import { releaseNo, releaseSize, shareCount } from '../sim/index.js';
@@ -221,6 +221,11 @@ export const TOPICS = {
   // pressing P over and over from getting a line every time.
   paused: { note: true, loud: true, gap: 20 },
   resumed: { note: true, loud: true, gap: 20 },
+  // Razor Wire (0.4): a dad turned away by it is news the first time, then a line now and then at
+  // most (a busy store turns dads away every few seconds); the first wire to go live in a game is
+  // always said, once.
+  turned: { note: true, gap: 40 },
+  wireLive: { must: true },
 };
 
 /** The LINES.bossIn and LINES.bossOutBy bank for each boss tier (4 and above are all the last). */
@@ -263,6 +268,20 @@ export function createDirector(random = Math.random) {
   const holidayBossSaid = new Set(); // which of the boss's holiday banks DEB has used this game
   let pauseWave = -1, pauseFrom = 0; // the build pause idle() last saw start, and its tick
   let holidayTried = -1; // the build pause in which a holiday joke was last tried
+  let wireSaid = false, wireVer = -1; // the first live Razor Wire (0.4): said yet, and the layout last looked at
+
+  /**
+   * The first Razor Wire to go live in a game gets a line (0.4). Wire goes live when stock reaches a
+   * building that has a direction, which sends no event of its own, so this looks at the wire map
+   * (cached by the rules against gridVer) whenever the layout has changed, until it has been said.
+   */
+  function firstWire(out, state) {
+    if (wireSaid || state.training || state.gridVer === wireVer || !state.grid) return;
+    wireVer = state.gridVer;
+    if (!wireMap(state).live.some((a) => a >= 0)) return;
+    wireSaid = true;
+    say(out, state, 'wireLive', LINES.wireLive, {}, { mood: 'angry' });
+  }
 
   /** Picks a line from a bank and fills it in; null if no line fits the variables given. */
   function line(bank, vars) {
@@ -676,6 +695,10 @@ export function createDirector(random = Math.random) {
       case 'pee':
         say(out, state, 'pee', LINES.pee, { k: thing(e.k) }, { mood: 'angry' });
         break;
+      case 'turned':
+        // (Not in training, which does its own talking.)
+        if (!state.training) say(out, state, 'turned', LINES.turned, {}, { mood: 'smug' });
+        break;
       case 'flash':
         // A head count reads badly for one person, so it is only given for two or more.
         say(out, state, 'flash', LINES.flash, { n: e.n >= 2 ? e.n : undefined }, { mood: 'smug' });
@@ -752,6 +775,7 @@ export function createDirector(random = Math.random) {
     handle(events, state) {
       const out = [];
       for (const e of events || []) if (e && typeof e === 'object') handleOne(out, state, e);
+      if (state) firstWire(out, state);
       return out;
     },
 
@@ -763,7 +787,9 @@ export function createDirector(random = Math.random) {
      */
     idle(state) {
       const out = [];
-      if (state.phase !== 'build' || !(state.phaseT > 0)) return out;
+      // (Wire can go live in any phase, with no event: see firstWire.)
+      if (state.phase === 'build' || state.phase === 'wave') firstWire(out, state);
+      if (out.length || state.phase !== 'build' || !(state.phaseT > 0)) return out;
       // A holiday joke, at most once a pause. It comes first so that it notes when the pause
       // started; it never speaks in the pause's first seconds (TALK.holidayDelay), which is when
       // a coming Midnight Release is announced, so the two do not get in each other's way.

@@ -11,10 +11,11 @@
 //     finger, where the other hand's thumb reaches and the placing finger is not
 // The pad, the bar buttons and the placing aid are only shown on a touch screen (CSS:
 // `(pointer: coarse)`); the sheet is for everyone.
-import { BUILD, TUNE, levelOf, spentOn, statsOf, tracksOf } from '../sim/index.js';
-import { stockRows, dropInfo, trackName, trackNumbers } from '../content/supplies.js';
+import { BUILD, TUNE, levelOf, spentOn, statsOf, tracksOf, carriesWire } from '../sim/index.js';
+import { stockRows, dropInfo, trackName, trackNumbers, crateInfo, wireWhyText } from '../content/supplies.js';
 import { h, setText, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
+import { WIRE_CYCLE, wireArrow, wireName, wirePicker } from './wiretool.js';
 
 const coarse = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : { matches: false };
 /** True on a device whose main pointer is a finger. */
@@ -140,10 +141,76 @@ export function createTouchControls({ input, session, renderer, playSound = () =
   const sheetNums = h('p', { class: 'ts-nums hidden' });
   // (0.4) A security building's supplies: one row per supply it takes.
   const sheetStock = h('div', { class: 'ts-stock hidden' });
-  const sheet = h('section', { class: 'touch-sheet hidden', 'aria-label': 'Building' }, sheetHead, sheetNums, sheetNote, sheetStock, sheetBtns);
+  // (0.4, stage 4b) Razor Wire's direction, for a building that can carry wire: north, east, south,
+  // west and none, the current one lit, any the rules would refuse greyed with the reason. Pointing
+  // at one (or a finger on it) shows on the floor where that wire would run and how the dads would
+  // walk then (wirePreview). Built once and updated in place, so a pointer resting on a button
+  // keeps its preview while the sheet's other numbers change.
+  let wireAt = null; // the building's tile, while its sheet shows the picker
+  let wireHover = null; // the direction pointed at, or null
+  let pickerKey = '', picker = null;
+  const wireNote = h('small', { class: 'ts-wnote' });
+  const wireBtns = WIRE_CYCLE.map((d) => {
+    const b = h('button', { type: 'button', class: 'ts-wd', 'aria-pressed': 'false', 'aria-label': `Wire ${wireName(d)}` }, wireArrow(d));
+    // While a direction is pointed at, the rest of the sheet fades (.peek) so the floor under it,
+    // where the preview is drawn, can be seen: on a phone the sheet covers most of the floor.
+    const point = () => { wireHover = d; setClass(sheet, 'peek', true); noteWire(); };
+    const away = () => { if (wireHover === d) { wireHover = null; setClass(sheet, 'peek', false); noteWire(); } };
+    b.addEventListener('pointerenter', point);
+    b.addEventListener('pointerleave', away);
+    b.addEventListener('pointercancel', away);
+    b.addEventListener('focus', point);
+    b.addEventListener('blur', away);
+    // A refused direction is still sent: DEB says why, in her own words.
+    b.addEventListener('click', () => { if (wireAt) act({ c: 'wire', x: wireAt.x, y: wireAt.y, d }, 'rotate'); });
+    return b;
+  });
+  const sheetWire = h('div', { class: 'ts-wire hidden' },
+    h('b', { class: 'ts-wlabel' }, 'WIRE'), h('div', { class: 'ts-wbtns', role: 'group', 'aria-label': 'Razor Wire direction' }, wireBtns), wireNote);
+  const sheet = h('section', { class: 'touch-sheet hidden', 'aria-label': 'Building' }, sheetHead, sheetNums, sheetNote, sheetStock, sheetWire, sheetBtns);
   let sheetSig = '';
   let measuredSig = '';
   let sheetOpen = false;
+
+  /** The line under the picker: why the direction pointed at is refused, or how to use it. */
+  function noteWire() {
+    if (!picker) return;
+    const p = wireHover === null ? null : picker.find((e) => e.d === wireHover);
+    const no = picker.filter((e) => e.why);
+    let text;
+    if (p && p.why) text = `${p.arrow} ${wireWhyText(p.why)}`;
+    else if (p) text = p.d < 0 ? 'No wire: dads walk straight through' : `Wire runs ${p.name}: the floor shows it, and the dads' way round`;
+    else if (no.length && no.length < 4) text = `Greyed (${no.map((e) => e.arrow).join(' ')}): ${wireWhyText(no[0].why)}`;
+    else if (no.length) text = wireWhyText(no[0].why);
+    else text = `The way its Razor Wire runs. ${isCoarse() ? 'Hold a finger on one' : 'Point at one'} to see it on the floor.`;
+    setText(wireNote, text);
+  }
+
+  /**
+   * The picker for the building on tile t, kept up to date: worked out again only when the layout,
+   * the phase or the pause changes (each direction is a flood fill in the rules).
+   */
+  function updatePicker(s, t, b) {
+    const show = !!t && !!b && carriesWire(b.k);
+    if (!show) {
+      if (wireAt) { wireAt = null; wireHover = null; picker = null; pickerKey = ''; setClass(sheetWire, 'hidden', true); setClass(sheet, 'peek', false); }
+      return;
+    }
+    const key = `${t.x},${t.y},${s.gridVer},${s.phase},${s.pause ? 1 : 0},${session.me}`;
+    if (key === pickerKey) return;
+    pickerKey = key;
+    if (!wireAt || wireAt.x !== t.x || wireAt.y !== t.y) { wireAt = { x: t.x, y: t.y }; wireHover = null; }
+    setClass(sheetWire, 'hidden', false);
+    picker = wirePicker(s, session.me, t.x, t.y) || [];
+    picker.forEach((e, n) => {
+      const btn = wireBtns[n];
+      setClass(btn, 'on', e.on);
+      setClass(btn, 'no', !!e.why);
+      btn.setAttribute('aria-pressed', String(e.on));
+      if (e.why) { btn.setAttribute('aria-disabled', 'true'); btn.title = `${e.name}: ${wireWhyText(e.why)}`; } else { btn.removeAttribute('aria-disabled'); btn.title = e.d < 0 ? 'No wire' : `Wire runs ${e.name}`; }
+    });
+    noteWire();
+  }
 
   function act(cmd, sound) {
     const r = session.send(cmd);
@@ -162,8 +229,11 @@ export function createTouchControls({ input, session, renderer, playSound = () =
       [trackName(b.k, tr), trackNumbers(b.k, tr, st).map(([label, v]) => `${label} ${v}`).join(', ')]);
     const stock = stockRows(b, s);
     const lv = levelOf(b);
+    // A Crate Stack's reinforcement (0.4): its level and the next one's price, for this player's cash.
+    const mine = s.players[session.me];
+    const crate = def.reinforce ? crateInfo(b, Math.floor(mine ? mine.cash : 0), s) : null;
     const sig = JSON.stringify([t.x, t.y, b.k, b.d, hit, b.off > 0, back, nums, owner ? owner.name : '', s.players.length,
-      stock.map((r) => [r.tier, r.units, r.gives])]);
+      stock.map((r) => [r.tier, r.units, r.gives]), crate]);
     if (sig === sheetSig) return;
     sheetSig = sig;
     // (replaceChildren would write a null out as the word "null")
@@ -171,12 +241,21 @@ export function createTouchControls({ input, session, renderer, playSound = () =
       h('span', { class: 'ts-icon', html: buildingIcon(b.k) }),
       h('b', null, def.name),
       lv > 1 ? h('span', { class: 'ts-lv' }, `level ${lv}`) : null,
+      crate && crate.r > 0 ? h('span', { class: 'ts-lv' }, `level ${crate.r} of ${crate.max}`) : null,
       owner && s.players.length > 1 ? h('span', { class: 'ts-owner' }, `${owner.name}'s`) : null,
       h('button', { type: 'button', class: 'ts-x', 'aria-label': 'Close', onclick: () => input.select(null) }, '×'),
     ].filter(Boolean));
     sheetNums.replaceChildren(...nums.map(([name, v]) => h('span', null, h('b', null, `${name}: `), v)));
     setClass(sheetNums, 'hidden', false);
     const btns = [];
+    if (crate) {
+      // One more gym bro hit a sales event, for cash (the `reinforce` command; anyone may, and pays).
+      btns.push(h('button', {
+        type: 'button', class: `ts-btn ts-more${crate.why ? ' poor' : ''}`, disabled: !!crate.why,
+        title: `Takes ${crate.hits} gym bro hit${crate.hits === 1 ? '' : 's'} a sales event now; one more for each level.`,
+        onclick: () => act({ c: 'reinforce', x: t.x, y: t.y }, 'place'),
+      }, h('b', null, 'REINFORCE'), h('small', { class: 'ts-cost' }, crate.why || `${money(crate.cost)} · level ${crate.r + 1}`)));
+    }
     if (def.rot) {
       btns.push(h('button', { type: 'button', class: 'ts-btn', onclick: () => act({ c: 'rotate', x: t.x, y: t.y }, 'rotate') },
         h('b', null, '⟳ Rotate'), h('small', null, `faces ${ARROWS[b.d & 3]}`)));
@@ -247,6 +326,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
       if (back) renderDrop(s, t, b);
       else { sheetNote.classList.remove('ts-plain'); renderSheet(s, t, b); }
     }
+    updatePicker(s, show && !back ? t : null, show && !back ? b : null);
     if (show !== sheetOpen) {
       sheetOpen = show;
       setClass(sheet, 'hidden', !show);
@@ -274,5 +354,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     get sheetOpen() { return sheetOpen; },
     /** The building whose sheet is open ({ x, y }, its anchor tile), or null: for view.selected. */
     get selected() { return sheetOpen ? input.selected : null; },
+    /** A wire direction pointed at in the sheet's picker ({ x, y, d }), or null: for view.wirePreview. */
+    get wirePreview() { return sheetOpen && wireAt && wireHover !== null ? { x: wireAt.x, y: wireAt.y, d: wireHover } : null; },
   };
 }

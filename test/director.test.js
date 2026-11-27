@@ -57,6 +57,8 @@ const VARS = {
   paused: 'p', resumed: 'p',
   // Version 0.4: a security building out of a supply; the speed bonus, all of it or none.
   stockOut: 'pk', speedFull: 'pnm', speedNone: 'pnm',
+  // Version 0.4 (stage 4b): Razor Wire turning a dad away, and the first wire to go live.
+  turned: 'p', wireLive: 'p',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -87,6 +89,8 @@ const AT_LEAST = {
   paused: 8, resumed: 4,
   // Version 0.4: the speed bonus, all of it or none.
   speedFull: 5, speedNone: 5,
+  // Version 0.4 (stage 4b): Razor Wire.
+  turned: 6, wireLive: 4,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };

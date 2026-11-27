@@ -4,6 +4,7 @@
 // and the README tool read it too. The numbers all come from the rules.
 import {
   BUILD, BACK, TICK_HZ, SHOPPERS, STOCK_TRACKS, unitsIn, usesIn, stockLevel, stockCap, dropTicks, dropUpCost,
+  reinforceCost, statsOf,
 } from '../sim/index.js';
 
 /**
@@ -55,11 +56,45 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
  * damage", "soaks up 3 gym bro hits", or "EMPTY".
  */
 export function stockGives(b, track) {
+  if (track === 'wire') return wireStatus(b);
   if (!usesIn(b, track)) return 'EMPTY';
   if (track === 'dur') return `soaks up ${plural(usesIn(b, track), 'gym bro hit')}`;
-  // (0.4: Razor Wire works only on a building given a wire direction, the `wire` command.)
-  if (track === 'wire') return `enough for ${plural(usesIn(b, track), 'dad')}${b.wd === undefined ? ' (no wire laid: it does nothing)' : ''}`;
   return `+${plural(stockLevel(b, track), 'level')} of ${SUPPLIES[track].gives}`;
+}
+
+/**
+ * What a building's Razor Wire is doing, in plain words (0.4, stage 4b): it works only with a wire
+ * direction (the `wire` command) and while there is wire in stock, each dad it turns away using one.
+ */
+export function wireStatus(b) {
+  const n = usesIn(b, 'wire');
+  if (!b || b.wd === undefined) return n ? `No direction set (${n === 1 ? "1 dad's" : `${n} dads'`} worth waiting)` : 'No direction set';
+  return n ? `LIVE, enough for ${plural(n, 'more dad')}` : 'PLANNED, no wire in stock';
+}
+
+/** Why the wire picker cannot lay a direction, in the game's words, by the rules' reason (canWire). */
+export const WIRE_WHY = {
+  blocked: 'Would cut the dads off from the tills',
+  paused: 'The game is paused',
+  over: 'The store is closed',
+  lobby: 'Not open yet',
+  cards: 'Still dealing the cards',
+  office: 'Head Office keeps its hands off',
+};
+export const wireWhyText = (why) => (why ? (Object.hasOwn(WIRE_WHY, why) ? WIRE_WHY[why] : 'Not allowed') : '');
+
+/**
+ * What a Crate Stack's sheet says about reinforcing it (0.4): { r (its level), max, hits (gym bro
+ * hits it takes a sales event), cost (of the next level, 0 at the top), why ('' when the REINFORCE
+ * button works, else why not) }. With `state` the game's cards count, as in the rules.
+ */
+export function crateInfo(b, cash, state = null) {
+  const rf = BUILD.crate.reinforce;
+  const r = (b && b.r) | 0, cost = reinforceCost(b, state);
+  let why = '';
+  if (r >= rf.max) why = 'Top level';
+  else if (cash < cost) why = `$${Math.ceil(cost - cash).toLocaleString('en-US')} short`;
+  return { r, max: rf.max, hits: statsOf(b, state).hits, cost, why };
 }
 
 const one = (n) => (Math.round(n * 10) / 10).toString();

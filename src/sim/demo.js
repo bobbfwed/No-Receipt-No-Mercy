@@ -37,10 +37,15 @@ export const DEMO_LAYOUT = [
  *   Cola: the drop at 20,12 feeds a Cola Cannery at 19,12, then two Rebranders in a row (Name Brand,
  *   then Premium), and a belt west along row 9, under that Overpass, that ends pointing straight
  *   into the Dumbwaiter of the Forklift Turret at 9,8.
+ *   Razor Wire (0.4, stage 4b): a Splitter at 10,4 shares the first drop's junk between the Spite
+ *   Still and a Barb Bender at 9,4, whose wire runs down column 9 into the same Forklift Turret's
+ *   Dumbwaiter from the north. That forklift's wire runs north across the dads' straight line
+ *   (DEMO_WIRE), so it is live and the dads walk round it.
  * Nothing in it sits on a Dumbwaiter (the security buildings' tiles).
  */
 export const DEMO_BACK = [
-  ['conv', 10, 3, S], ['conv', 10, 4, S], ['still', 10, 5, E],
+  ['conv', 10, 3, S], ['split', 10, 4, S], ['still', 10, 5, E],
+  ['bender', 9, 4, S], ['conv', 9, 5, S], ['conv', 9, 6, S], ['conv', 9, 7, S],
   ['conv', 11, 5, E], ['conv', 12, 5, E], ['conv', 13, 5, E], ['conv', 14, 5, E], ['conv', 15, 5, E],
   ['intern', 12, 4, N], ['intern', 14, 4, N],
   ['split', 16, 5, E], ['bin', 17, 5, 0],
@@ -58,7 +63,22 @@ export const DEMO_BACK = [
  * far Forklift Turret, which it uses up in six shots (so its range runs dry in the first sales
  * event and the "OUT OF CORD" warning is seen), and Duct Tape in the Sprinkler at the bottom.
  */
-const DEMO_STOCK = [[7, 11, 12, 1], [25, 8, 32, 1], [20, 13, 41, 2]];
+const DEMO_STOCK = [[7, 11, 12, 1], [25, 8, 32, 1], [20, 13, 41, 2], [9, 8, 51, 1]];
+
+/**
+ * Razor Wire directions in the demo (0.4, stage 4b), as [x, y, direction]: the Forklift Turret at
+ * 9,8 runs its wire north across the dads' straight line from the entrance, stocked from the first
+ * frame (DEMO_STOCK: a unit of Store Brand) and then by the Barb Bender, so it is live; the one at
+ * 25,8 runs its wire south across the way the dads go round, with no wire in it, so it is only
+ * planned, and the dads' route if it were stocked differs from their route now.
+ */
+const DEMO_WIRE = [[9, 8, N], [25, 8, S]];
+
+/**
+ * Crate Stacks the demo reinforces (0.4, stage 4b), as [x, y, level]: one of every level down the
+ * first wall, nearest the entrance, so how each looks can be judged.
+ */
+const DEMO_CRATES = [[6, 4, 1], [6, 5, 2], [6, 6, 3], [6, 7, 4], [6, 8, 5], [6, 9, 6], [6, 10, 7], [6, 11, 8]];
 
 /**
  * A ring of belts in the top left corner of The Back carrying one of each of the five supplies at
@@ -108,6 +128,26 @@ export function applyDemoBack(state, pid = 0) {
     if (!b || !BUILD[b.k].lift) { problems.push(`stock at ${x},${y}: no security building`); continue; }
     for (let u = 0; u < units; u++) if (takesSupply(b, code, state)) addStock(b, code, state);
   }
+  for (const [x, y, d] of DEMO_WIRE) {
+    const r = applyCommand(state, pid, { c: 'wire', x, y, d });
+    if (!r.ok) problems.push(`wire at ${x},${y}: ${r.why}`);
+  }
+  p.cash = cash;
+  return problems;
+}
+
+/** Reinforces the demo's crates (DEMO_CRATES), free: the player's cash is put back as it was. */
+function applyDemoCrates(state, pid) {
+  const problems = [];
+  const p = state.players[pid];
+  const cash = p.cash;
+  p.cash += 5000;
+  for (const [x, y, level] of DEMO_CRATES) {
+    for (let n = 0; n < level; n++) {
+      const r = applyCommand(state, pid, { c: 'reinforce', x, y });
+      if (!r.ok) { problems.push(`reinforce at ${x},${y}: ${r.why}`); break; }
+    }
+  }
   p.cash = cash;
   return problems;
 }
@@ -129,6 +169,7 @@ export function applyDemoLayout(state, pid = 0, { back = true } = {}) {
     if (!r.ok) problems.push(`${k} at ${x},${y}: ${r.why}`);
   }
   p.cash = Math.max(0, p.cash - 5000) + 300;
+  problems.push(...applyDemoCrates(state, pid));
   return back ? problems.concat(applyDemoBack(state, pid)) : problems;
 }
 

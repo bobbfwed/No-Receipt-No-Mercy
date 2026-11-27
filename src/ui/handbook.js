@@ -5,11 +5,11 @@
 // the ? screen). In a game it uses that game's length, difficulty and number of players; from the
 // menu, the standard game.
 import { BUILD, SHOPPERS, TUNE, SETTINGS, SUPPLY_TRACKS, shareCount, difficultyOf, tracksOf, statsOf } from '../sim/index.js';
-import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
+import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP, HOW_WIRE, HOW_REINFORCE } from '../content/help.js';
 import {
   SHOPPER_ORDER, WALL_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
   tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST,
-  paceText, edgeFacts, payText, wireText,
+  paceText, edgeFacts, payText, wireText, reinforceText,
 } from '../content/facts.js';
 import { releaseWaves } from '../content/facts.js';
 import { trackName, SUPPLIES } from '../content/supplies.js';
@@ -177,6 +177,19 @@ function crateCard(k) {
     facts(crateFacts()));
 }
 
+/**
+ * The shop floor's two tools that are not buildings (0.4, stage 4b): Wire and Reinforce, with
+ * their rules in numbers from facts.js.
+ */
+function toolCard(k, name, key, how, rule) {
+  return h('article', { class: 'hb-card' },
+    h('header', { class: 'hb-head' }, h('span', { class: 'hb-icon', html: buildingIcon(k) }),
+      h('div', null, h('h3', null, name), h('p', { class: 'hb-when' }, `Shop floor: a tool, key ${key}`))),
+    h('p', null, worded(how.does)),
+    h('p', null, h('b', null, 'How: '), worded(how.use)),
+    facts([['The rule', `${rule[0].toUpperCase()}${rule.slice(1)}.`]]));
+}
+
 /** One of The Back's parts: what it does, how to use it, and its numbers. */
 function backCard(k) {
   const def = BUILD[k];
@@ -287,7 +300,8 @@ export function handbook({ state = null, onClose }) {
       body.replaceChildren(suppliesCard(), ...BACK_ORDER.map((k) => backCard(k)));
     } else {
       note.textContent = `Crate Stacks and security are the maze: shoppers walk round them, and only gym bros and dads go through (a dad walks through anything but a wall or live Razor Wire: see The Back's Supplies). Security gets stronger only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range) and Duct Tape (soaks up gym bro hits). Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
-      body.replaceChildren(...WALL_ORDER.map((k) => crateCard(k)), ...SECURITY_ORDER.map((k) => securityCard(k)));
+      body.replaceChildren(...WALL_ORDER.map((k) => crateCard(k)), ...SECURITY_ORDER.map((k) => securityCard(k)),
+        toolCard('wire', 'Wire', 'Z', HOW_WIRE, wireText()), toolCard('reinforce', 'Reinforce', 'U', HOW_REINFORCE, reinforceText()));
     }
     body.dataset.tab = id;
     card.scrollTop = 0;

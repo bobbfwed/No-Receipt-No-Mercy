@@ -6,7 +6,7 @@
 // walking in (the boss's banner in purple), a Card Trader ripping out the best stock, and what
 // thieves took. A fixed pool of effect objects is reused so a big wave does not allocate, and every
 // kind has a cap so the screen stays readable.
-import { BUILD, DIRS, BOSS, statsOf, sizeOf, bossTitle } from '../sim/index.js';
+import { BUILD, DIRS, BOSS, statsOf, sizeOf, bossTitle, wireTiles } from '../sim/index.js';
 import { TILE, INK, C, rr, paint, label, starPath, burstPath, font, hash2 } from './paint.js';
 import { drawItem } from './items.js';
 import { KIND_COLOURS } from './buildings.js';
@@ -21,12 +21,16 @@ const BOSS_IN = 12, PEP = 13, BOSS_OUT = 14, BOSS_ESC = 15;
 // The Pregnant Lady: popping (BURST), a Barcode Laser stopping it (NO_POP), and her babies'
 // refunds at the tills, added up per till (BABY_CASH).
 const BURST = 16, NO_POP = 17, BABY_CASH = 18;
+/** Razor Wire (0.4): a dad snagging on it (sparks off the blades where he hit it). */
+const SNAG = 19;
 /** The boss's banner in its other look: a Midnight Release's mob coming in (its st). */
 const MOB_LOOK = 1;
 /** At most this many of each kind on screen at once; extra events are skipped. */
-const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8, 3, 6, 3, 3, 6, 4, 8];
+const CAP = [0, 24, 6, 12, 16, 24, 6, 8, 8, 8, 10, 8, 3, 6, 3, 3, 6, 4, 8, 10];
 /** Lifetime of each kind in ms. */
-const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550, 480, 700, 420, 3600, 1300, 2200, 2600, 1900, 1500, 1100];
+const DUR = [0, 1100, 1900, 850, 280, 420, 950, 1000, 550, 480, 700, 420, 3600, 1300, 2200, 2600, 1900, 1500, 1100, 520];
+/** What a dad says when the wire turns him away (0.4). */
+const SNAG_LINES = ['#@!', 'MY KHAKIS', 'FFS', 'OW, JESUS', 'NOT TODAY'];
 /** A baby reaching a till within this many ms of the last one there adds to the same figure. */
 const BABY_MERGE = 650;
 /** The line in a bubble over a pop (an Octomom's are her own). */
@@ -369,6 +373,40 @@ export function createEffects() {
           f = add(POP, now, e.x * T + 14, e.y * T - 30);
           if (f) { f.text = 'WOOF!'; f.color = '#d9372b'; f.r = -0.12; f.st = JAGGED; f.sz = 15; }
           break;
+        case 'turned': {
+          // Razor Wire turned a dad away (0.4): sparks off the blades on the wire tile next to him,
+          // and a word from him as he backs off.
+          const [wx, wy] = snagAt(s, e);
+          f = add(SNAG, now, wx, wy);
+          if (f) f.r = hash2(now | 0, 7) * 6;
+          // (Over the dad himself when the event names him, id; otherwise where it happened.)
+          const dad = Number.isInteger(e.id) && s ? s.shoppers.find((o) => o.id === e.id) : null;
+          f = add(MARK, now, (dad ? dad.x : e.x) * T, (dad ? dad.y : e.y) * T - 34);
+          if (f) { pick++; f.text = SNAG_LINES[pick % SNAG_LINES.length]; f.color = '#ff6b6b'; f.st = 2; }
+          // The wire was charged for him (not a second bump on wire he had already paid): the
+          // stock it used, in the supply's colour, as a thief's grab is shown.
+          if (!e.free) {
+            f = add(MARK, now, wx + 16, wy - 18);
+            if (f) { f.text = '-1 WIRE'; f.color = SUPPLIES.wire.color; f.st = 0; }
+          }
+          break;
+        }
+        case 'reinforce': {
+          // A Crate Stack got another level (0.4): a clunk of steel.
+          const [cx, cy] = centre(s, ((e.y | 0) * W) + (e.x | 0), 'crate');
+          f = add(POP, now, cx, cy - 30);
+          if (f) { f.text = e.r >= 8 ? 'MAXED' : 'CLUNK'; f.color = '#cbd5e1'; f.r = -0.08; f.st = STAR; f.sz = 12; }
+          f = add(SNAG, now, cx, cy - 6);
+          if (f) f.r = 1;
+          break;
+        }
+        case 'wire': {
+          // A wire direction laid or taken off (0.4): a word over the building.
+          const [cx, cy, , fh] = centre(s, ((e.y | 0) * W) + (e.x | 0), '');
+          f = add(MARK, now, cx, cy - fh * T / 2 - 8);
+          if (f) { f.text = e.d < 0 ? 'WIRE OFF' : e.live ? 'WIRED' : 'WIRE PLANNED'; f.color = e.d < 0 ? '#cbd5e1' : '#d8b4fe'; f.st = 0; }
+          break;
+        }
         case 'smash': {
           // A building still standing (left > 0) is still on the grid; a destroyed one is in the
           // rubble list, which remembers its facing.
@@ -410,6 +448,31 @@ export function createEffects() {
     const def = BUILD[kind];
     const [fw, fh] = def ? sizeOf(kind, def.rot ? (b ? b.d | 0 : d) : 0) : [1, 1];
     return [(ai % W) * T + (fw * T) / 2, ((ai / W) | 0) * T + (fh * T) / 2, fw, fh];
+  }
+
+  /**
+   * Where a dad turned away by wire hit it (0.4), in world pixels: on the edge of the wire tile the
+   * event names (`t`) nearest him, or else the middle of the tile beside him that the wire of
+   * building e.i covers, nearest him; where he is, failing that.
+   */
+  function snagAt(s, e) {
+    if (Number.isInteger(e.t) && e.t >= 0 && e.t < W * H) {
+      const cx = (e.t % W) + 0.5, cy = ((e.t / W) | 0) + 0.5;
+      const dad = Number.isInteger(e.id) && s ? s.shoppers.find((o) => o.id === e.id) : null;
+      if (!dad) return [cx * T, cy * T - 8];
+      const dx = dad.x - cx, dy = dad.y - cy, d = Math.max(Math.abs(dx), Math.abs(dy)) || 1;
+      return [(cx + (dx / d) * 0.45) * T, (cy + (dy / d) * 0.45) * T - 8];
+    }
+    let bx = e.x * T, by = e.y * T, bd = 2.3;
+    const b = s && s.grid && s.grid[e.i];
+    if (b && b.wd !== undefined) {
+      for (const t of wireTiles(s, e.i % W, (e.i / W) | 0)) {
+        const cx = (t % W) + 0.5, cy = ((t / W) | 0) + 0.5;
+        const d = Math.abs(cx - e.x) + Math.abs(cy - e.y);
+        if (d < bd) { bd = d; bx = (e.x + (cx - e.x) * 0.55) * T; by = (e.y + (cy - e.y) * 0.55) * T; }
+      }
+    }
+    return [bx, by - 8];
   }
 
   /** What a thief took (0.4), over the building he took it from: "-1 SPITE" in the supply's colour. */
@@ -472,6 +535,7 @@ export function createEffects() {
         case BURST: popBurst(ctx, e, k01, W * T); break;
         case NO_POP: noPop(ctx, e, k01); break;
         case BABY_CASH: babyFigure(ctx, e, k01); break;
+        case SNAG: snag(ctx, e, k01); break;
         default:
       }
     }
@@ -1164,6 +1228,43 @@ function mark(ctx, e, k) {
 }
 
 /** A cosplayer soaking up a shot: a bubble shield flashing round him, and a TINK. */
+/**
+ * Sparks off steel (0.4): a dad snagging on Razor Wire, or a crate's new steel going on. A white-hot
+ * flash, then yellow sparks flying out and falling, and a purple glow (the wire's tag colour).
+ */
+function snag(ctx, e, k) {
+  const a = 1 - k;
+  ctx.globalAlpha = 0.55 * a;
+  ctx.beginPath();
+  ctx.arc(e.x, e.y, 7 + k * 12, 0, Math.PI * 2);
+  ctx.fillStyle = '#c084fc';
+  ctx.fill();
+  if (k < 0.25) {
+    ctx.globalAlpha = 1 - k / 0.25;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+  }
+  ctx.globalAlpha = a;
+  ctx.beginPath();
+  for (let j = 0; j < 7; j++) {
+    const ang = e.r + j * 0.9;
+    const d0 = 4 + k * 10, d1 = 9 + k * 22;
+    const fall = k * k * 14;
+    ctx.moveTo(e.x + Math.cos(ang) * d0, e.y + Math.sin(ang) * d0 + fall * 0.5);
+    ctx.lineTo(e.x + Math.cos(ang) * d1, e.y + Math.sin(ang) * d1 + fall);
+  }
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 3.2;
+  ctx.strokeStyle = INK;
+  ctx.stroke();
+  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = '#ffe14a';
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
 function shield(ctx, e, k) {
   const r = 20 + k * 8;
   ctx.globalAlpha = 0.5 * (1 - k);

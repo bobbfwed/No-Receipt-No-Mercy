@@ -45,6 +45,8 @@ export function howToPlay() {
       h('li', null, h('kbd', null, 'R'), ' rotate what you are holding, or the building under the mouse when holding nothing'),
       h('li', null, h('kbd', null, 'Right-click'), ' or ', h('kbd', null, 'X'), ' remove (75% back) · ', h('kbd', null, 'Esc'), ' put it down'),
       h('li', null, h('kbd', null, 'Click'), ' a building with nothing held to see what it is working with, rotate it or remove it'),
+      // (0.4: the shop floor's Wire and Reinforce tools.)
+      h('li', null, h('kbd', null, 'Z'), ' Wire: click a security building to step its Razor Wire north, east, south, west, off, or drag from it the way it should run; right-click takes it off · ', h('kbd', null, 'U'), ' Reinforce: click or drag across Crate Stacks for one more level each'),
       h('li', null, h('kbd', null, 'B'), ' rebuild what gym bros wrecked, for half of what you paid: the money goes at once, each wreck goes back as soon as nothing is in the way, and every new wreck needs another press · the big REBUILD button over the floor does what B does'),
       h('li', null, h('kbd', null, 'W'), h('kbd', null, 'A'), h('kbd', null, 'S'), h('kbd', null, 'D'), ' or arrows move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'F'), ' whole map · ', h('kbd', null, 'H'), ' your entrance · click the small map to jump'),
       h('li', null, h('kbd', null, 'P'), ' or the ⏸ button before the speeds pauses the whole store for everyone (nothing can be built while paused) · ', h('kbd', null, 'P'), ' again carries on; anyone can'),

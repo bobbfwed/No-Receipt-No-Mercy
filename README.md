@@ -162,6 +162,8 @@ With two or more players, one can stop defending and run the other side. Between
 | Click a building with nothing picked | Opens its sheet: the numbers it works at now, the supplies in stock (security gets stronger only on supplies sent up from The Back), rotate and remove |
 | B | Rebuild everything of yours that gym bros have wrecked, for half of what you paid for each (all or nothing; its stock does not come back). The money goes at once; each wreck goes back as soon as nothing is in the way, and every new wreck needs another press |
 | Right-click, or X then click | Remove (75% of what you paid for it back) |
+| Z, the Wire tool | Razor Wire's direction. Click a security building to step its wire north, east, south, west, off; press on it and drag the way the wire should run; right-click takes it off. The floor shows the wire and how the dads would walk with it before you let go. Free. Clicking a security building with nothing picked offers the same choice in its sheet |
+| U, the Reinforce tool | Click a Crate Stack for one more level (one more gym bro hit a sales event), or drag across a wall of them for a level each until the money runs out. A crate's sheet has a REINFORCE button too |
 | OPEN THE DOORS | Start the next sales event without waiting for the timer. It just opens them: whatever The Back would have made in the time skipped is never made |
 | Esc | Put the tool down |
 | P, or the pause button before the speed buttons | Pause the whole store, for everyone; press again (or click the PAUSED sign) to carry on. Any player can do either. Nothing can be built, sold or rebuilt while paused, because the build pause runs on a timer |
@@ -189,6 +191,9 @@ The game works by touch, in either orientation (a tablet, or a phone held sidewa
 | ROTATE button that shows while placing | Turns the building before you lift |
 | Drag with Belt picked | Lay a line of belt that follows your finger |
 | Tap, or slide and lift, with Remove picked | Remove that one building |
+| With Wire picked: drag from a security building, or tap it | The drag sets the way its Razor Wire runs (the floor shows it first); a tap steps it north, east, south, west, off |
+| With Reinforce picked: tap a crate, or drag across crates | One more level on each, until the money runs out |
+| Hold a finger on a direction in a security building's sheet | The sheet fades and the floor shows that wire and how the dads would walk with it; lift on it to lay it |
 | Drag with nothing picked | Move the view |
 | Two fingers | Move the view and pinch to zoom, whatever is picked |
 | Tap a building with nothing picked | Opens its sheet: what it works at now, its stock, rotate, remove |

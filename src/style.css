@@ -3233,6 +3233,34 @@ html, body { overscroll-behavior: none; }
 .ts-btn.ts-more { min-width: 9rem; background: var(--yellow); color: var(--ink); }
 .ts-btn.ts-more.poor { background: #d6d3c9; }
 
+/* Razor Wire's direction in a security building's sheet (0.4, stage 4b): north, east, south, west,
+   none. The one laid is lit purple (the supply's colour); one the rules would refuse is greyed and
+   struck through, but still pressable, so DEB can say why. */
+.ts-wire { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; margin: 0.35rem 0 0.1rem; }
+.ts-wlabel { font: 900 0.82rem var(--font-heavy); color: #6d28d9; letter-spacing: 0.04em; }
+.ts-wbtns { display: flex; gap: 0.25rem; }
+.ts-wd {
+  min-width: 2.6rem;
+  min-height: 2.3rem;
+  border: 0.15rem solid var(--line);
+  border-radius: 0.45rem;
+  background: #4b5563;
+  color: var(--white);
+  font: 900 1.15rem/1 var(--font);
+  box-shadow: 0 0.15rem 0 var(--line);
+  cursor: pointer;
+}
+.ts-wd:hover, .ts-wd:focus-visible { background: #6b7280; outline: none; }
+.ts-wd.on { background: #a855f7; box-shadow: 0 0.15rem 0 var(--line), inset 0 0 0 0.12rem #f3e8ff; }
+.ts-wd.no { background: repeating-linear-gradient(135deg, #d6d3c9 0 0.3rem, #c4c0b5 0.3rem 0.6rem); color: #78716c; text-decoration: line-through; }
+.ts-wd:active { transform: translateY(0.1rem); box-shadow: 0 0.05rem 0 var(--line); }
+.ts-wnote { flex: 1 1 12rem; font-size: 0.76rem; font-weight: 700; color: #44403c; }
+@media (pointer: coarse) { .ts-wd { min-width: 2.9rem; min-height: 2.75rem; } }
+/* A direction pointed at: everything but the picker fades, so the preview on the floor shows. */
+.touch-sheet.peek { background: rgba(250, 246, 235, 0.18); box-shadow: none; transition: background 0.12s; }
+.touch-sheet.peek > :not(.ts-wire) { opacity: 0.07; }
+.touch-sheet.peek .ts-wire { background: rgba(250, 246, 235, 0.94); border-radius: 0.5rem; padding: 0.2rem 0.4rem; }
+
 /* ---------------------------------------------------------------- Employee Handbook: The Back (0.4) */
 /* The supplies card heads The Back's tab across the whole width: its tier table is wide. */
 .hb-card.hb-supplies { grid-column: 1 / -1; }

@@ -2,7 +2,7 @@
 // connects them to the session, and runs the drawing loop.
 import { createRenderer } from '../render/renderer.js';
 import { createMinimap } from '../render/minimap.js';
-import { nopeLine } from '../content/lines.js';
+import { nopeLine, nopeKey } from '../content/lines.js';
 import { h, setText } from './dom.js';
 import { createTopBar, createPlayersPanel } from './hud.js';
 import { createBuildBar } from './buildbar.js';
@@ -52,7 +52,8 @@ const narrow = () => innerWidth < 1100 || innerHeight < 560;
  *   everyone back to the lobby with this (see HostSession.backToLobby) instead of reloading
  * @param {Object} [o.look] how the first frame is looked at (page options, see main.js): floor (1
  *   The Back), and for screenshots cam ('x,y,zoom'), hold (a kind to hold), dir, hover ('x,y'),
- *   outof ('x,y,track': the OUT OF ... warning over a building), select ('x,y': open its sheet)
+ *   outof ('x,y,track': the OUT OF ... warning over a building), select ('x,y': open its sheet),
+ *   wireprev ('x,y,d': a wire direction shown as if being tried, 0.4)
  */
 export function startGame(session, {
   roomCode = null, roomKind = null, prepare = null, ff = 0, autostart = false, mount,
@@ -216,7 +217,8 @@ export function startGame(session, {
   let lastBuzz = 0;
   session.on('nope', (m) => {
     if (replaying) return;
-    deb.nope(m.why, nopeLine(m.why, myName()));
+    // (Some commands have refusals of their own: a wire walling the dads in, 0.4. nopeKey picks.)
+    deb.nope(m.why, nopeLine(nopeKey(m.why, m.cmd), myName()));
     const now = performance.now();
     if (now - lastBuzz > 400) { lastBuzz = now; playSound('nope'); }
   });
@@ -422,6 +424,9 @@ export function startGame(session, {
     // The building whose sheet is open: the floor shows its reach (src/render/reach.js). Head Office
     // has no sheet.
     view.selected = office ? null : touchUi.selected;
+    // A wire direction being tried (0.4): the Wire tool's drag, or a direction pointed at in the
+    // sheet's picker. The floor shows the wire and the dads' routes as they would be with it.
+    if (!view.wirePreview && !office && !input.floor) view.wirePreview = touchUi.wirePreview;
     keepInSight(s, input.floor ? null : view.selected); // (a Returns Drop's sheet, in The Back, has no reach)
     view.marks = training ? training.marks() : null;
     // The captions on highlighted tiles speak of the mouse; on a touch screen, of taps.
@@ -588,6 +593,10 @@ export function startGame(session, {
     if (o.hover) {
       const [x, y] = String(o.hover).split(',').map(Number);
       if (Number.isInteger(x) && Number.isInteger(y)) input.setHover({ x, y });
+    }
+    if (o.wireprev) {
+      const [x, y, d] = String(o.wireprev).split(',').map(Number);
+      input.setWirePreview({ x, y, d });
     }
   }
 

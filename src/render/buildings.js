@@ -175,7 +175,7 @@ const TAU = Math.PI * 2;
 /** Sprite box for one building, in logical pixels: a tile plus room for flags and tops. */
 const BOX = 56;
 /** Pose shared by look() and paint(), filled in fresh for every building. */
-const P = { d: 0, step: 0, spray: false, off: 0 };
+const P = { d: 0, step: 0, spray: false, off: 0, r: 0 };
 /** The usual sprite box: [width, height, centre x, centre y] in logical pixels. */
 const BOX_1 = [BOX, BOX, BOX / 2, BOX / 2];
 /** Barcode laser sprite boxes, lying along x (facing east or west) or along y. */
@@ -275,11 +275,13 @@ function boozeTable(ctx) {
 
 const KINDS = {
   crate: {
-    look() { return 0; },
+    // (0.4) Its reinforcement level, 0 to 8, decides the look: see armour().
+    look(b) { P.r = Math.max(0, Math.min(8, (b && b.r) | 0)); return P.r; },
     paint(ctx) {
       shadow(ctx, 34, 30);
-      crate(ctx, -17, -4, 34, 20);
-      crate(ctx, -12, -19, 22, 16);
+      const r = P.r | 0;
+      crate(ctx, -17, -4, 34, 20, r);
+      crate(ctx, -12, -19, 22, 16, r);
     },
   },
 
@@ -786,21 +788,87 @@ const DASH_RING = [5, 4];
 const NO_DASH = [];
 const SAMPLE_COLOURS = ['#ffb15a', '#f2c21b', '#ff7aa8', '#ffe08a'];
 
-function crate(ctx, x, y, w, h) {
-  box(ctx, x, y, w, h, 1.5, '#b57a3c', 2.2);
+/**
+ * One crate of a Crate Stack. `r` is the stack's reinforcement level (0.4): the timber darkens as
+ * it is braced, and armour() bolts steel on top.
+ */
+function crate(ctx, x, y, w, h, r = 0) {
+  // From level 5 the planks are old dark timber, hardened under the steel bands.
+  box(ctx, x, y, w, h, 1.5, r >= 5 ? '#8a5a2b' : '#b57a3c', 2.2);
   ctx.save();
   rr(ctx, x, y, w, h, 1.5);
   ctx.clip();
   ctx.beginPath();
   ctx.moveTo(x, y); ctx.lineTo(x + w, y + h);
   ctx.moveTo(x + w, y); ctx.lineTo(x, y + h);
-  ctx.strokeStyle = '#7a4f22';
+  ctx.strokeStyle = r >= 5 ? '#5a3815' : '#7a4f22';
   ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.restore();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2.2;
   ctx.strokeRect(x + 2.5, y + 2.5, w - 5, h - 5);
+  if (r > 0) armour(ctx, x, y, w, h, r);
+}
+
+/**
+ * Steel on a reinforced crate (0.4), so its level reads at a glance and its number when zoomed in
+ * (the badge carries the number):
+ *   1    a dark steel strap down the middle, riveted
+ *   2    and one across it
+ *   3-4  plus steel plates over the corners (the bottom two, then all four)
+ *   5    the timber darkens and steel bands run round the top and bottom
+ *   6    plus a riveted steel plate over the middle
+ *   7-8  a steel frame round the whole crate, bolted, and at the top level a yellow-and-black edge
+ */
+function armour(ctx, x, y, w, h, r) {
+  const steel = '#6b737c', dark = '#2e3338', bright = '#e5e7eb';
+  const rivet = (rx, ry) => { ctx.beginPath(); ctx.arc(rx, ry, 1.1, 0, TAU); ctx.fillStyle = bright; ctx.fill(); };
+  // Bands round the top and the bottom (under the straps).
+  if (r >= 5) {
+    for (const by of [y + 2.4, y + h - 2.4]) box(ctx, x - 0.6, by - 2, w + 1.2, 4, 0.6, steel, 1.3);
+  }
+  // Straps: one down the middle, then one across.
+  box(ctx, x + w / 2 - 2.8, y - 0.6, 5.6, h + 1.2, 0.8, steel, 1.4);
+  rivet(x + w / 2, y + 2.6); rivet(x + w / 2, y + h - 2.6);
+  if (r >= 2) {
+    box(ctx, x - 0.6, y + h / 2 - 2.6, w + 1.2, 5.2, 0.8, steel, 1.4);
+    rivet(x + 2.6, y + h / 2); rivet(x + w - 2.6, y + h / 2);
+  }
+  // A steel plate over the middle, four rivets.
+  if (r >= 6) {
+    const pw = Math.min(w * 0.42, 14), ph = h * 0.56;
+    box(ctx, x + w / 2 - pw / 2, y + h / 2 - ph / 2, pw, ph, 1, '#8a929b', 1.4);
+    for (const [px, py] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) rivet(x + w / 2 + px * (pw / 2 - 2), y + h / 2 + py * (ph / 2 - 2));
+  }
+  // Corner plates: triangles of steel with a rivet each.
+  if (r >= 3) {
+    const k = Math.min(9, h * 0.5);
+    const corners = r >= 4 ? [[0, 0], [1, 0], [0, 1], [1, 1]] : [[0, 1], [1, 1]];
+    for (const [cx, cy] of corners) {
+      const px = x + cx * w, py = y + cy * h, sx = cx ? -1 : 1, sy = cy ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(px, py); ctx.lineTo(px + sx * k, py); ctx.lineTo(px, py + sy * k);
+      ctx.closePath();
+      paint(ctx, C.steelLight, 1.2);
+      ctx.fillStyle = dark;
+      ctx.beginPath(); ctx.arc(px + sx * k * 0.3, py + sy * k * 0.3, 0.9, 0, TAU); ctx.fill();
+    }
+  }
+  // A bolted steel frame round the whole thing.
+  if (r >= 7) {
+    ctx.strokeStyle = INK; ctx.lineWidth = 4.6;
+    ctx.strokeRect(x + 0.2, y + 0.2, w - 0.4, h - 0.4);
+    ctx.strokeStyle = r >= 8 ? '#ffd23f' : '#9aa1a9'; ctx.lineWidth = 2.6;
+    if (r >= 8) ctx.setLineDash([3.2, 2.6]);
+    ctx.strokeRect(x + 0.2, y + 0.2, w - 0.4, h - 0.4);
+    ctx.setLineDash(NO_DASH);
+    ctx.fillStyle = C.steelLight;
+    for (const [bx, by] of [[x + 2.5, y + h / 2], [x + w - 2.5, y + h / 2]]) {
+      ctx.beginPath(); ctx.arc(bx, by, 1.4, 0, TAU); ctx.fill();
+      ctx.strokeStyle = INK; ctx.lineWidth = 0.8; ctx.stroke();
+    }
+  }
 }
 
 /**

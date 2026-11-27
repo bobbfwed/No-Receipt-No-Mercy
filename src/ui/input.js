@@ -27,10 +27,21 @@
 // finger that lands a moment after the first turns the touch into a pinch before anything is placed.
 // touch.js shows a Rotate button and a "second finger cancels" hint while a finger is placing.
 // A pen is treated as a finger; only the mouse keeps the mouse's rules.
+//
+// The shop floor's two tools that are not buildings (0.4, stage 4b; the rules of the gestures are in
+// wiretool.js):
+//   - Wire (Z): press on a security building and drag the way its Razor Wire should run (the floor
+//     previews the wire and the dads' route as they would be); a plain click steps it north, east,
+//     south, west, none, skipping directions the rules would refuse; right-click takes it off. A
+//     finger does the same: drag from the building, or tap it. Anything that cannot carry wire gets
+//     DEB's refusal.
+//   - Reinforce (U): click a Crate Stack for one level; press and drag across crates for a level on
+//     each crossed, stopping quietly when the money runs out. A finger taps, or drags.
 import { BUILD, SHOP_KINDS, doorOf, anchorOf, sizeOf } from '../sim/index.js';
-import { startDrag } from './drag.js';
+import { startDrag, gridLine } from './drag.js';
 import { liftFraction, createPress, liftedSpot, edgeVelocity, barGesture, EDGE } from './lift.js';
 import { rebuildStatus } from './rebuild.js';
+import { WIRE_KEY, REINFORCE_KEY, dragDir, wireBuilding, clickWireDir, startReinforce } from './wiretool.js';
 
 // The shop floor's kinds. The Back's parts (0.4) have their own bar and keys: BACK_KEYS below.
 export const BUILD_KEYS = SHOP_KINDS;
@@ -57,8 +68,10 @@ export const BACK_HOTKEYS = BACK_KEYS.map((k, i) => ROW[i] || '');
 export const hotkeyOf = (k) => (BUILD[k]?.back ? BACK_HOTKEYS[BACK_KEYS.indexOf(k)] : HOTKEYS[BUILD_KEYS.indexOf(k)]) || '';
 /** The kind laid in lines by dragging: The Back's belt. */
 const isLine = (k) => k === 'conv';
-/** Tools that are not buildings. */
-const TOOLS = ['remove'];
+/** Tools that are not buildings: Remove, and on the shop floor Wire and Reinforce (0.4). */
+export const TOOL_KEYS = { remove: 'x', wire: WIRE_KEY, reinforce: REINFORCE_KEY };
+/** The tools that belong to the shop floor only. */
+const SHOP_TOOLS = ['wire', 'reinforce'];
 
 const CURSOR_EVERY_MS = 100; // at most 10 pointer updates a second
 const CURSOR_TTL_MS = 3000;
@@ -94,6 +107,14 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   // screen's own business: it is never in the game state and never goes over the network (only
   // the f: 1 on his commands says where they are meant).
   let floor = 0;
+  // The Wire tool's press on a building (0.4): { id, x, y (the tile pressed), rect (its footprint),
+  // d (the direction the drag points, or null while it is still on the building), left (the drag
+  // has been off the building) }, or null.
+  let wdrag = null;
+  // The Reinforce tool's press: { id, r (startReinforce), last (the last tile handled) }, or null.
+  let rdrag = null;
+  // Test pages only (?wireprev=x,y,d): a wire direction shown as if it were being tried.
+  let wireFixed = null;
   const held = new Set(); // view-moving keys that are down
   const cursors = new Map(); // player id -> { x, y, t }
 
@@ -116,7 +137,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** Whether kind or tool k can be held on the floor being looked at. */
   function fits(k) {
     if (k === 'remove') return true;
-    const def = BUILD[k];
+    if (SHOP_TOOLS.includes(k)) return !floor;
+    const def = Object.hasOwn(BUILD, k) ? BUILD[k] : null;
     return !!def && (floor ? !!def.back && !def.fixed : !def.back);
   }
 
@@ -124,6 +146,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const next = k && !isOffice() && fits(k) ? k : null;
     if (next === tool) return;
     tool = next;
+    wdrag = null;
+    rdrag = null;
     if (tool) selected = null;
     canvas.dataset.tool = tool || '';
     if (tool) playSound('select');
@@ -140,6 +164,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       if (!r || r.ok) { did = c.c; last = r; }
     }
     if (did === 'place' || did === 'remove') playSound(did);
+    // (0.4: everyone else hears these from the event, sound.js; this player at once, as for a build.)
+    if (did === 'wire') playSound('rotate');
+    if (did === 'reinforce') playSound('place');
     // A Rebuild press that only paid for wrecks that must wait builds nothing yet: its own sound
     // comes with the rebuildHeld event (sound.js). The host knows at once. A joined player hears
     // nothing back, so he plays it only when his own copy of the state says the press can order
@@ -173,6 +200,63 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     playSound('rotate');
   }
 
+  // ---- Wire and Reinforce (0.4) -------------------------------------------------------------------
+  /**
+   * The Wire tool pressed on tile t (mouse or finger `id`). On a building that can carry wire, a
+   * drag starts; on anything else the command goes at once, so DEB says why not.
+   */
+  function wireDown(id, t) {
+    const s = session.state;
+    const wb = wireBuilding(s, t.x, t.y);
+    if (!wb) { send([{ c: 'wire', x: t.x, y: t.y, d: 3 }]); return false; }
+    wdrag = { id, x: t.x, y: t.y, rect: wb.rect, d: null, left: false };
+    return true;
+  }
+
+  /** The pointer pressing with the Wire tool is at (px, py) in tiles: the direction it means. */
+  function wireMove(px, py) {
+    if (!wdrag) return;
+    const d = dragDir(wdrag.rect, px, py);
+    if (d !== null) wdrag.left = true;
+    wdrag.d = d;
+  }
+
+  /**
+   * The Wire tool let go: a drag sets the direction it points; a plain click steps to the next
+   * direction the rules allow; a drag that came back onto the building does nothing.
+   */
+  function wireUp() {
+    const w = wdrag;
+    wdrag = null;
+    if (!w || !session.state) return;
+    if (w.d !== null) send([{ c: 'wire', x: w.x, y: w.y, d: w.d }]);
+    else if (!w.left) send([{ c: 'wire', x: w.x, y: w.y, d: clickWireDir(session.state, session.me, w.x, w.y) }]);
+  }
+
+  /** Right-click with the Wire tool: takes the wire off the building there (quietly on anything else). */
+  function wireClear(t) {
+    if (wireBuilding(session.state, t.x, t.y)) send([{ c: 'wire', x: t.x, y: t.y, d: -1 }]);
+  }
+
+  /** The Reinforce tool pressed on tile t: the first crate is reinforced at once (or refused, with a word). */
+  function reinforceDown(id, t) {
+    const s = session.state;
+    rdrag = { id, r: startReinforce(Math.floor(s.players[session.me]?.cash ?? 0)), last: t };
+    const c = rdrag.r.at(s, session.me, t.x, t.y);
+    if (c) send([c]);
+  }
+
+  /** The pointer reinforcing has moved to tile t: one level on each crate crossed on the way. */
+  function reinforceMove(t) {
+    if (!rdrag || !t) return;
+    const s = session.state;
+    for (const n of gridLine(rdrag.last, t)) {
+      const c = rdrag.r.at(s, session.me, n.x, n.y);
+      if (c) send([c]);
+    }
+    rdrag.last = t;
+  }
+
   /**
    * Looks at the other floor (0.4): 0 the shop, 1 The Back. Whatever was held is put down (the
    * Back's parts cannot go in the shop and the other way round), and a line being laid, a building
@@ -185,6 +269,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     floor = next;
     drag = null;
     tdrag = null;
+    wdrag = null;
+    rdrag = null;
     dropCarry(true);
     if (gesture && gesture.kind === 'one') gesture.mode = 'pan';
     selected = null;
@@ -240,11 +326,19 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const p = exactTile(e.clientX, e.clientY, t);
     if (p && (!pointer || p.x !== pointer.x || p.y !== pointer.y)) { pointer = p; cursorDirty = true; }
     if (drag) send(drag.planner.moveTo(t, dir));
+    if (wdrag && e.pointerId === wdrag.id) { const q = exactAt(e.clientX, e.clientY); wireMove(q.x, q.y); }
+    if (rdrag && e.pointerId === rdrag.id) reinforceMove(t);
+  }
+
+  /** Where a screen point is on the map, in tiles with decimals, on the map or off it. */
+  function exactAt(clientX, clientY) {
+    const cam = renderer.cam, r = canvas.getBoundingClientRect(), z = cam.zoom || 30;
+    return { x: cam.x + (clientX - (r.left + r.width / 2)) / z, y: cam.y + (clientY - (r.top + r.height / 2)) / z };
   }
 
   function onPointerDown(e) {
     if (fingerish(e)) { onTouchDown(e); return; }
-    if (drag || grab) return;
+    if (drag || grab || wdrag || rdrag) return;
     if (e.button === 1 && renderer.pan) {
       // Middle button: drag the map.
       e.preventDefault();
@@ -260,6 +354,18 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     // With nothing held, a click on a building opens its sheet (what it works at, its stock,
     // rotate, remove). A click on bare floor closes it.
     if (e.button === 0 && !tool) { e.preventDefault(); selected = anchorTile(t); return; }
+    if (tool === 'wire') {
+      e.preventDefault();
+      if (e.button === 2) { wireClear(t); return; }
+      if (wireDown(e.pointerId, t)) { try { canvas.setPointerCapture(e.pointerId); } catch { /* drag still works inside */ } }
+      return;
+    }
+    if (tool === 'reinforce' && e.button === 0) {
+      e.preventDefault();
+      reinforceDown(e.pointerId, t);
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* drag still works inside */ }
+      return;
+    }
     let mode = null;
     if (e.button === 2 || tool === 'remove') mode = 'remove';
     else if (tool) mode = 'build';
@@ -280,6 +386,16 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (grab && (!e || e.pointerId === undefined || e.pointerId === grab.id)) {
       try { canvas.releasePointerCapture(grab.id); } catch { /* already released */ }
       grab = null;
+    }
+    // The Wire tool acts when let go (a cancelled pointer, or the window losing focus, sends nothing).
+    if (wdrag && (!e || e.pointerId === undefined || e.pointerId === wdrag.id)) {
+      const id = wdrag.id;
+      if (e && e.type === 'pointerup') wireUp(); else wdrag = null;
+      try { canvas.releasePointerCapture(id); } catch { /* already released */ }
+    }
+    if (rdrag && (!e || e.pointerId === undefined || e.pointerId === rdrag.id)) {
+      try { canvas.releasePointerCapture(rdrag.id); } catch { /* already released */ }
+      rdrag = null;
     }
     if (!drag || (e && e.pointerId !== undefined && e.pointerId !== drag.id)) return;
     const d = drag;
@@ -416,21 +532,33 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (carry) dropCarry(true);
     if (touches.size === 1) {
       const t = renderer.tileAt(e.clientX, e.clientY);
-      const mode = cancelled ? 'pan' : placesOne() ? 'place' : 'wait';
+      // (0.4: the Wire and Reinforce tools have gestures of their own, 'wire' and 'reinforce'.)
+      const own = !isOffice() && SHOP_TOOLS.includes(tool) && !!t && !!session.state;
+      const mode = cancelled ? 'pan' : placesOne() ? 'place' : own ? tool : 'wait';
       gesture = {
         kind: 'one', id: e.pointerId, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, tile: t,
         mode, lifts: mode === 'place' && !!BUILD[tool], liftAt: null, press: createPress(e.clientX, e.clientY),
       };
       // Show the ghost of what is held under the finger straight away (a building's rises above the
       // finger once it drags).
-      if (!cancelled && builds()) hover = t;
+      if (!cancelled && (builds() || own)) hover = t;
+      // A finger on a building with the Wire tool starts a drag at once; anywhere else it waits to
+      // see whether it is a tap (DEB says why not) or a drag (it moves the view).
+      if (mode === 'wire') {
+        const wb = wireBuilding(session.state, t.x, t.y);
+        wdrag = wb ? { id: e.pointerId, x: t.x, y: t.y, rect: wb.rect, d: null, left: false } : null;
+      }
       notePointer(e.clientX, e.clientY, t);
     } else if (touches.size === 2) {
       // A second finger on the floor cancels what the first was placing (belts a drag has already
       // laid stay; the one still under the finger is not laid), and the two move the view.
       const g = gesture;
-      const placing = g && g.kind === 'one' && (g.mode === 'place' || (g.mode !== 'pan' && isLine(tool)));
+      const placing = g && g.kind === 'one' && (g.mode === 'place' || (g.mode !== 'pan' && isLine(tool))
+        || (g.mode === 'wire' && !!wdrag) || g.mode === 'reinforce');
       tdrag = null;
+      // (A wire not yet set is not set; crates already reinforced by the drag stay reinforced.)
+      wdrag = null;
+      rdrag = null;
       if (placing) { hover = null; playSound('click'); }
       startPinch();
     }
@@ -454,6 +582,30 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       return;
     }
     if (e.pointerId !== g.id) return;
+    if (g.mode === 'wire') {
+      if (wdrag) {
+        g.lx = e.clientX; g.ly = e.clientY;
+        const q = exactAt(e.clientX, e.clientY);
+        wireMove(q.x, q.y);
+        return;
+      }
+      // Not on a building that takes wire: a drag moves the view after all.
+      if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < TAP_SLOP_PX) return;
+      g.mode = 'pan';
+      hover = null;
+    }
+    if (g.mode === 'reinforce') {
+      const t = renderer.tileAt(e.clientX, e.clientY);
+      if (!rdrag) {
+        // Nothing until the finger has really moved (a second finger may yet make it a pinch).
+        if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < TAP_SLOP_PX || !g.tile) return;
+        reinforceDown(g.id, g.tile);
+      }
+      if (t) { hover = t; notePointer(e.clientX, e.clientY, t); }
+      reinforceMove(t);
+      g.lx = e.clientX; g.ly = e.clientY;
+      return;
+    }
     if (g.mode === 'place') {
       g.lx = e.clientX; g.ly = e.clientY;
       // A building's preview rises above the finger once the press is not a quick tap, and then
@@ -512,6 +664,14 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       if (t) placeAt(t); else hover = null;
     } else if (g.mode === 'build') endTouchBuild();
     else if (g.mode === 'wait' && e.type === 'pointerup') touchTap(g.tile);
+    else if (g.mode === 'wire') {
+      // A drag from a building sets its wire; a tap steps it on; a tap on anything else is refused.
+      if (wdrag) { if (e.type === 'pointerup') wireUp(); else wdrag = null; } else if (e.type === 'pointerup' && g.tile && !isOffice()) wireDown(g.id, g.tile);
+    } else if (g.mode === 'reinforce') {
+      // A tap reinforces the crate tapped; a drag has done its work as it went.
+      if (!rdrag && e.type === 'pointerup' && g.tile && !isOffice()) reinforceDown(g.id, g.tile);
+      rdrag = null;
+    }
   }
 
   // ---- Dragging a building out of the bar (0.3.03) -------------------------------------------------
@@ -638,6 +798,11 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (lower === 'x' || key === 'Delete' || key === 'Backspace') {
       setTool(tool === 'remove' ? null : 'remove');
       e.preventDefault();
+    } else if (lower === WIRE_KEY || lower === REINFORCE_KEY) {
+      // The shop floor's Wire and Reinforce tools (0.4). In The Back they do nothing.
+      const k = lower === WIRE_KEY ? 'wire' : 'reinforce';
+      e.preventDefault();
+      if (!e.repeat) setTool(tool === k ? null : k);
     } else if (lower === 'r') {
       e.preventDefault();
       if (tool && BUILD[tool]) {
@@ -660,6 +825,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       goHome();
     } else if (key === 'Escape') {
       if (drag) { drag = null; return; }
+      if (wdrag || rdrag) { wdrag = null; rdrag = null; return; }
       if (onEscape()) return;
       setTool(null);
     }
@@ -741,21 +907,48 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (carry && carry.picked) return { x: carry.lx, y: carry.ly };
     const g = gesture;
     if (!g || g.kind !== 'one') return null;
-    const on = g.mode === 'place' || (isLine(tool) && (g.mode === 'build' || (g.mode === 'wait' && !!g.tile)));
+    const on = g.mode === 'place' || (isLine(tool) && (g.mode === 'build' || (g.mode === 'wait' && !!g.tile)))
+      || (g.mode === 'wire' && !!wdrag) || g.mode === 'reinforce';
     return on ? { x: g.lx, y: g.ly } : null;
   }
 
-  const view = { tool: null, dir: 0, hover: null, aim: false, lift: null, cursors, floor: 0 };
+  /** The wire direction being tried, for the floor's preview: { x, y, d }, or null. */
+  const tryWire = { x: 0, y: 0, d: 0 };
+  function wirePreview() {
+    if (wireFixed) return wireFixed;
+    if (!wdrag || wdrag.d === null) return null;
+    tryWire.x = wdrag.x; tryWire.y = wdrag.y; tryWire.d = wdrag.d;
+    return tryWire;
+  }
+
+  // What a plain click with the Wire tool on the building under the mouse would do (the floor labels
+  // it), worked out again only when the tile or the layout changes: each direction is a flood fill.
+  let nextKey = '', nextDir = null;
+  function wireNext() {
+    const s = session.state;
+    if (tool !== 'wire' || !hover || !s || wdrag) return null;
+    const key = `${hover.x},${hover.y},${s.gridVer},${s.phase},${s.pause ? 1 : 0}`;
+    if (key !== nextKey) {
+      nextKey = key;
+      nextDir = wireBuilding(s, hover.x, hover.y) ? clickWireDir(s, session.me, hover.x, hover.y) : null;
+    }
+    return nextDir;
+  }
+
+  const view = { tool: null, dir: 0, hover: null, aim: false, lift: null, cursors, floor: 0, wirePreview: null, wireNext: null };
   const liftAt = { x: 0, y: 0 };
   function getView() {
     view.tool = placeKind();
     view.dir = dir;
     view.hover = hover;
     view.floor = floor;
+    view.wirePreview = floor ? null : wirePreview();
+    view.wireNext = floor ? null : wireNext();
     // The dashed lines along the tile's row and column, for a finger hiding the tile it acts on;
     // a lifted preview is not under the finger, and gets a thin line down to the finger instead.
+    // (Not for a wire being dragged out: the finger is beside the building, not on it.)
     const l = lifted();
-    view.aim = !!placing() && !l;
+    view.aim = !!placing() && !l && tool !== 'wire';
     view.lift = null;
     if (l && hover) {
       const r = canvas.getBoundingClientRect(), cam = renderer.cam;
@@ -775,6 +968,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     gesture = null;
     endTouchBuild();
     dropCarry(true);
+    wdrag = null;
+    rdrag = null;
   };
   // Stop the middle button turning the pointer into the browser's scroll compass.
   const onMouseDown = (e) => { if (e.button === 1) e.preventDefault(); };
@@ -797,6 +992,13 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     setFloor,
     /** Test pages only (?hover=x,y): puts the mouse on a tile, for a screenshot of the preview. */
     setHover(t) { hover = t; },
+    /**
+     * Test pages only (?wireprev=x,y,d): shows a wire direction as if it were being tried ({ x, y, d },
+     * or null to stop), for a screenshot of the preview.
+     */
+    setWirePreview(p) { wireFixed = p && Number.isInteger(p.x) && Number.isInteger(p.y) && Number.isInteger(p.d) ? { x: p.x, y: p.y, d: p.d } : null; },
+    /** A wire direction being tried with the Wire tool ({ x, y, d }), or null. */
+    get wirePreview() { return wirePreview(); },
     get dir() { return dir; },
     get hover() { return hover; },
     /** The building a finger tapped with nothing held, or null. */

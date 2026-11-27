@@ -215,6 +215,20 @@ export const HOW_REBUILD = {
   maze: '',
 };
 
+/** What the Wire tool does (0.4, stage 4b): Razor Wire's direction, for the same info card. */
+export const HOW_WIRE = {
+  does: `Lays Razor Wire from a security building: over the building and the ${word(BACK.wireReach)} tiles beyond it one way: north, east, south or west on the floor, whichever way the building itself faces. While the building holds Razor Wire from The Back, no dad sets foot on those tiles; empty, the wire is only planned and stops nobody. Free, and anyone can change anyone's, any time.`,
+  use: 'Click a security building to step its wire north, east, south, west, then off, or press on it and drag the way the wire should run. Right-click takes it off. Lay it across the blue DADS line; the faint DADS, IF WIRED line shows where they will walk once every planned wire is stocked. A wire that would cut the dads off from the tills is refused.',
+  maze: '',
+};
+
+/** What the Reinforce tool does (0.4, stage 4b): a Crate Stack's levels, for the same info card. */
+export const HOW_REINFORCE = {
+  does: `Makes a Crate Stack take one more gym bro hit every sales event, for cash: up to ${word(RF.max)} levels, from $${RF.cost}, each dearer than the last. The money counts as paid for the crate: 75% back if it is sold, half to rebuild it, levels and all. Anyone can reinforce anyone's crate; whoever does it pays.`,
+  use: 'Click a crate for one level, or drag across a wall of them for one level each, until the money runs out. Put the levels where the gym bros meet your maze first.',
+  maze: '',
+};
+
 /** What the Remove tool does, for the same info card. */
 export const HOW_REMOVE = {
   does: 'Removes a building and gives back 75% of what was paid for it, to whoever paid.',

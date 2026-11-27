@@ -218,6 +218,12 @@ export function createSound() {
         case 'pitch': fire('pitch', { r: e.r === 'rush' ? 'rush' : 'stop' }, { sub: e.r === 'rush' ? 'rush' : 'stop' }); break;
         case 'kidtv': fire('kidtv'); break;
         case 'shield': fire('shield'); break;
+        // Razor Wire (0.4): a dad turned away by it clangs off the steel. Laying a wire and
+        // reinforcing a crate: the interface plays its own sound for whoever did it (input.js), so
+        // only the other players hear these from the event.
+        case 'turned': fire('smash', { k: 'crate', left: 1 }, { sub: 'hit' }); break;
+        case 'wire': if (!mine(e.by)) fire('rotate', {}, { gain: OTHERS }); break;
+        case 'reinforce': if (!mine(e.by)) fire('place', {}, { gain: OTHERS }); break;
         // left > 0: the building took a hit and stands (the small clang); 0: destroyed (the wreck).
         case 'smash': fire('smash', { k: e.k, left: e.left | 0 }, { sub: e.left > 0 ? 'hit' : e.k }); break;
         case 'rebuilt':

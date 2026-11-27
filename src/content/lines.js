@@ -1048,6 +1048,23 @@ export const LINES = {
     '{p} unpaused. Nothing got better while you were away. Nothing ever does.',
     u("Back on, courtesy of {p}. Hope it was worth it. The queue certainly didn't go anywhere."),
   ],
+  // Razor Wire turned a dad away (0.4; the `turned` event, a dozen a minute in a busy store, so the
+  // topic waits a long while between lines). {p} is anyone.
+  turned: [
+    'A dad just walked into the razor wire and turned round like it was his idea. Classic.',
+    "The wire caught a dad. He's pretending he meant to go the long way. They always pretend.",
+    "That dad hit the wire, swore, and recalculated. He's done it in every car park since 1998.",
+    "One dad, rerouted. He'll tell everyone at the barbecue it was a short cut.",
+    u('The wire just snagged a pair of cargo shorts. Seven pockets, no dignity. Nice work, {p}.'),
+    r("A dad met the razor wire. He said 'well, that's new', took a photo for Facebook and walked the long way round. Most emotion he's shown since his daughter's wedding."),
+  ],
+  // The first Razor Wire in a game to go live (0.4): said once, whoever's it is. {p} is anyone.
+  wireLive: [
+    'Razor wire is live. The dads have to walk round it now. {p}, try not to fall in it. Again.',
+    "The wire's stocked and hot. For the first time in this store's history, something stops a dad.",
+    "Live razor wire on the shop floor. HR has concerns. I am HR. I've decided I love it.",
+    u("Wire's live, {p}. You've finally built something that stops men doing what they want. Your wife must be so proud."),
+  ],
 };
 
 /**
@@ -1581,6 +1598,37 @@ export const NOPE = {
     "That entrance isn't open, {p}. Find one that is. You've had practice.",
     "That door's shut, {p}. Pick an open one. They're the ones with people coming through.",
     u("Closed entrance, {p}. It's not a door if nobody uses it. It's a wall with ambitions."),
+  ],
+  // Razor Wire (0.4): a wire that would leave the dads no way to the tills, counting every planned
+  // wire as stocked (the `wire` command's 'blocked'; nopeKey picks this bank).
+  wireBlocked: [
+    "No. That wire cuts the dads off from the tills, {p}. Make them walk the long way, fine. You can't lock them in. That's a different kind of store.",
+    "Razor wire across the only way through, {p}? That's not loss prevention. That's a war crime with a returns policy.",
+    "The dads still need SOME way to the tills, {p}. Make it long. Make it humiliating. Don't make it impossible. Legal was very clear.",
+    "You've wired them in, {p}. Even a dad can't get through that, and dads get through everything. Marriages. Colonoscopies. Leave a gap.",
+    u("Refused. If those men can't reach a till they'll just stand there sighing until the building falls down. Give them a way round, {p}."),
+    r("{p} wants to cage the dads in with razor wire. Corporate says no. Corporate's lawyer says HELL no. Their wives asked if they can borrow some."),
+  ],
+  // Razor Wire on something with no Dumbwaiter: a Crate Stack (the `wire` command's 'kind').
+  wireKind: [
+    "That's a crate, {p}. No Dumbwaiter under it, so nothing to feed the wire up. Wire goes on security. Try to keep up.",
+    'Razor wire needs a security building, {p}. Something with a Dumbwaiter. Not a box of returned dildos.',
+    "You can't wire that, {p}. Only security gets wire. Crates just stand there. Like you at a party.",
+    "No Dumbwaiter, no wire, {p}. You can't stock what can't be stocked. Same reason nobody stocks you.",
+    u("Wiring a crate, {p}? It's cardboard. Put a security building there and wire THAT, Picasso."),
+  ],
+  // Reinforcing something that is not a Crate Stack (the `reinforce` command's 'kind').
+  crateKind: [
+    'Reinforce is for Crate Stacks, {p}. Security toughens up on Duct Tape from The Back. Read something.',
+    "That's not a crate, {p}. You can't bolt plates onto a sprinkler and call it armour.",
+    "Crates only, {p}. Security wants Duct Tape, not your money. Shocking, I know: something that doesn't want your money.",
+    u("You're reinforcing something that isn't a crate, {p}. Like fixing your marriage with a second marriage."),
+  ],
+  // A Crate Stack already at its top level (the `reinforce` command's 'max').
+  crateMax: [
+    "That crate's at the top level, {p}. It's more steel than wood now. Stop polishing it.",
+    'Maxed out, {p}. Any more and it counts as a bunker. Pick another crate.',
+    u("It can't get any harder, {p}. Unlike some people, it doesn't need the help."),
   ],
   // A Returns Drop already at its top cash level (the dropUp command, 0.4): no more junk for money.
   max: [
@@ -2194,6 +2242,20 @@ export function fill(text, vars = {}) {
 
 // Refusals already shown in this browser, so the same one does not keep coming up.
 const nopeUsed = new Map();
+
+/**
+ * The NOPE bank for a refusal: the reason itself, except where a command has its own words for it
+ * (0.4: a wire that would wall the dads in, a wire or a reinforcement on the wrong kind of thing, a
+ * crate at its top level). `cmd` is the refused command, or its name.
+ */
+export function nopeKey(why, cmd) {
+  const c = typeof cmd === 'string' ? cmd : cmd && typeof cmd === 'object' ? cmd.c : '';
+  if (c === 'wire' && why === 'blocked') return 'wireBlocked';
+  if (c === 'wire' && why === 'kind') return 'wireKind';
+  if (c === 'reinforce' && why === 'kind') return 'crateKind';
+  if (c === 'reinforce' && why === 'max') return 'crateMax';
+  return why;
+}
 
 /** A refusal line for the local player. */
 export function nopeLine(why, name, random = Math.random) {

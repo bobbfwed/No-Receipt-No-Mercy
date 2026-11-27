@@ -42,7 +42,8 @@ test('the tracks a building takes: its tracks and wire, only for kinds with Dumb
 
 test('a sheet row says what the stock gives now, or EMPTY', () => {
   const b = { k: 'sprinkler' };
-  assert.ok(stockRows(b).every((r) => r.gives === 'EMPTY' && r.units === 0 && r.cap === BACK.stockUnits && r.tierName === ''));
+  // (Razor Wire's row says what the wire is doing instead, 0.4 stage 4b: see the wire test below.)
+  assert.ok(stockRows(b).every((r) => r.gives === (r.track === 'wire' ? 'No direction set' : 'EMPTY') && r.units === 0 && r.cap === BACK.stockUnits && r.tierName === ''));
   addStock(b, 12); // Name Brand Spite
   addStock(b, 41); // Store Brand Tape
   assert.equal(tierIn(b, 'dmg'), 2);

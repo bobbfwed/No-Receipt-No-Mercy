@@ -24,6 +24,8 @@ const RULES = [
   [/press R until the arrow on the preview points (\w+)/g, 'tap the rotate button at the end of the bar until its arrow points $1'],
   [/Press it \(or B\) once\./g, 'Tap it once.'],
   [/Click or drag over buildings\. Right-clicking does the same without picking this tool\./g, 'Tap a building to remove it, or slide your finger onto it and lift. Tapping a building with nothing picked also offers Remove.'],
+  // The Wire tool's card (0.4): a tap steps the wire round, and round to off.
+  [/ Right-click takes it off\./g, ' Tapping on round to off takes it off, or tap the building with nothing picked and use its card.'],
   [/Right-click it to remove it/g, 'Tap it and choose Remove'],
   [/Right-click to remove/g, 'Tap, then Remove'],
   // "(or press 2)", "(press 7)": the number keys (and - and =, the Laser's and the Salesman's).

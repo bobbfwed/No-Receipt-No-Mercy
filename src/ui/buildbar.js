@@ -1,11 +1,12 @@
 // The build bar: one button per building, grouped Walls (the Crate Stack) and Security, plus the
 // Rebuild and Remove tools. In The Back (0.4) the same bar shows The Back's parts instead, with Remove.
-import { BUILD, TUNE, rebuildDeal, buildPrice } from '../sim/index.js';
+import { BUILD, TUNE, rebuildDeal, buildPrice, reinforceCost } from '../sim/index.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { BUILD_KEYS, BACK_GROUPS, hotkeyOf } from './input.js';
+import { WIRE_KEY, REINFORCE_KEY } from './wiretool.js';
 import { longPress, touchedLast } from './touch.js';
-import { HOW, BACK_HOW, HOW_REMOVE, HOW_REBUILD } from '../content/help.js';
+import { HOW, BACK_HOW, HOW_REMOVE, HOW_REBUILD, HOW_WIRE, HOW_REINFORCE } from '../content/help.js';
 import { worded, isTouch, PLACE_BY_TOUCH } from '../content/touch.js';
 
 // On a phone the info card is a sheet over the floor; the player can fold it down to one line,
@@ -23,8 +24,11 @@ const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', still: 'Still', cann
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
+  // The shop floor's own tools (0.4, stage 4b): Razor Wire's direction, and a Crate Stack's levels.
+  wire: { name: 'Wire', key: WIRE_KEY.toUpperCase(), price: 'free', how: HOW_WIRE, keys: `key ${WIRE_KEY.toUpperCase()} · right-click takes a wire off`, shop: true },
+  reinforce: { name: 'Reinforce', key: REINFORCE_KEY.toUpperCase(), price: `from $${BUILD.crate.reinforce.cost}`, how: HOW_REINFORCE, keys: `key ${REINFORCE_KEY.toUpperCase()}`, shop: true },
   // Not a tool you hold: one press pays to put back everything of yours that gym bros have wrecked.
-  rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true },
+  rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true, shop: true },
   remove: { name: 'Remove', key: 'X', price: `${Math.round(TUNE.sellBack * 100)}% back`, how: HOW_REMOVE, keys: 'key X or Delete' },
 };
 
@@ -111,7 +115,7 @@ export function createBuildBar(input, session) {
     h('span', { class: 'bb-label' }, g.label),
     h('div', { class: 'bb-btns' }, g.keys.map((k) => makeButton(k)))));
   const tools = h('div', { class: 'bb-group bb-tools', role: 'group', 'aria-label': 'tools' },
-    h('span', { class: 'bb-label' }, 'TOOLS'), h('div', { class: 'bb-btns' }, makeButton('rebuild', -1), makeButton('remove', -1)));
+    h('span', { class: 'bb-label' }, 'TOOLS'), h('div', { class: 'bb-btns' }, ...Object.keys(TOOLS).map((k) => makeButton(k, -1))));
 
   const dirEl = h('b');
   const hint = h('div', { class: 'bb-hints' },
@@ -198,6 +202,8 @@ export function createBuildBar(input, session) {
       setClass(tag, 'dearer', p > def.cost);
       btn.setAttribute('aria-label', `${def.name}, ${p}${priceNote(k)}, key ${hotkeyOf(k)}`);
     }
+    // The first level of reinforcement, as this game's cards price a crate.
+    buttons.get('reinforce').querySelector('.bb-price').textContent = `from $${reinforceCost({ k: 'crate' }, s)}`;
     if (input.tool && BUILD[input.tool]) showInfo(input.tool);
   }
 
@@ -211,7 +217,7 @@ export function createBuildBar(input, session) {
       const back = lastFloor === 1;
       for (const g of groups) setClass(g, 'hidden', back);
       for (const g of backGroups) setClass(g, 'hidden', !back);
-      setClass(rebuildBtn, 'hidden', back);
+      for (const [k, t] of Object.entries(TOOLS)) if (t.shop) setClass(buttons.get(k), 'hidden', back);
       setClass(el, 'on-back', back);
     }
     const cash = Math.floor(s.players[session.me]?.cash ?? 0);

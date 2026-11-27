@@ -28,7 +28,10 @@
 //   &outof=7,11,dmg               test only: the OUT OF ... warning over the building on that tile
 //   &hold=conv&dir=1&hover=12,5   test only: hold a building or part (dir its facing) with the mouse
 //                                 on that tile, so a screenshot shows the build bar's card and the
-//                                 placement preview
+//                                 placement preview (also hold=wire or hold=reinforce, 0.4)
+//   &wireprev=9,8,1               test only: the floor shows the wire of the building on 9,8 run in
+//                                 direction 1 (0-3 east, south, west, north; -1 none) as if it were
+//                                 being tried, with the dads' routes as they would be (0.4)
 import { showError } from './ui/errors.js';
 import { holidayFor } from './content/holidays.js';
 import { HostSession, ClientSession } from './net/session.js';
@@ -67,6 +70,7 @@ const look = {
   hover: q.get('hover'),
   outof: q.get('outof'),
   select: q.get('select'),
+  wireprev: q.get('wireprev'),
 };
 const defaultName = () => opts.name || loadName() || 'New Guy';
 

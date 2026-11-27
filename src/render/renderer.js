@@ -44,6 +44,7 @@
 import {
   BUILD, BACK, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, statsOf, levelOf,
   levelIn, tracksOf, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
+  carriesWire, reinforceCost, canReinforce,
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
@@ -61,6 +62,7 @@ import { createEffects } from './effects.js';
 import { drawRoutes, drawMarks } from './guides.js';
 import { selectedReach, drawnBySelection } from './reach.js';
 import { createBackArt } from './back.js';
+import { createWireArt } from './wire.js';
 import { SUPPLIES, TIER_RINGS, stockTracks, tierIn, outOfText } from '../content/supplies.js';
 
 const T = TILE;
@@ -110,6 +112,7 @@ export function createRenderer(canvas, session) {
   const shopperSprites = createShopperSprites();
   const messSprites = createMessSprites();
   const backArt = createBackArt();
+  const wireArt = createWireArt();
   // The faint floor's layer (see beginLayer), and whether it holds anything from the last frame.
   const layer = document.createElement('canvas');
   const lctx = layer.getContext('2d');
@@ -279,6 +282,7 @@ export function createRenderer(canvas, session) {
     shopperSprites.setScale(r);
     messSprites.setScale(r);
     backArt.setScale(r);
+    wireArt.setScale(r);
   }
 
   /**
@@ -425,11 +429,15 @@ export function createRenderer(canvas, session) {
     }
 
     drawBuildings(s, now);
+    // Razor Wire (0.4): over the floor and the buildings it crosses, under the shoppers, so a dad
+    // can be seen stopping at it. A wire direction being tried shows over the rest.
+    wireArt.draw(ctx, s, vis, F);
+    if (view.wirePreview) wireArt.drawPreview(ctx, s, view.wirePreview, session.me);
     // In the lobby, where the store is chosen, the Returns Drops below stand out: where the junk
     // comes in decides where The Back's supply lines start.
     if (s.phase === 'lobby' && s.back) drawDropMarks(s);
 
-    if (view.route) drawRoutes(ctx, s, now / 1000, view.routeFaint ? 0.6 : 1);
+    if (view.route) drawRoutes(ctx, s, now / 1000, view.routeFaint ? 0.6 : 1, true, view.wirePreview || null);
     const bossGrow = F.bde ? CARDS.bde.size : 1;
     fx.draw(ctx, now, 0, sprites, cam.zoom, bossGrow);
     drawShoppers(s, alpha);
@@ -456,6 +464,7 @@ export function createRenderer(canvas, session) {
     if (view.route) drawRoutes(ctx, s, now / 1000, 0.45, false);
     beginLayer(s);
     drawBuildings(s, now);
+    wireArt.draw(ctx, s, vis, F);
     drawShoppers(s, alpha);
     endLayer(0.3, 0.25);
     drawFootprints(s);
@@ -731,11 +740,15 @@ export function createRenderer(canvas, session) {
         // The level it is working at: 1 plus what its stock gives every track (levelOf).
         const lv = b.s ? levelOf(b) : 1;
         if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b));
+        // A reinforced Crate Stack (0.4): its level, pink at the top one.
+        else if (b.r > 0) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, b.r, bk, bres, b.r >= CRATE_TOP);
         if (BUILD[b.k].lift) drawPips(b, r);
       }
     }
   }
 
+  /** A Crate Stack's top level of reinforcement. */
+  const CRATE_TOP = BUILD.crate.reinforce.max;
   /** The level the best tier (Platinum) stands for in a track. */
   const TOP_LEVEL = BACK.tierLevel[BACK.tierLevel.length - 1];
   /**
@@ -1112,6 +1125,9 @@ export function createRenderer(canvas, session) {
       return;
     }
 
+    if (tool === 'wire') { wireHover(s, view, here, hr, px, py); return; }
+    if (tool === 'reinforce') { reinforceHover(s, h, here, hr, px, py); return; }
+
     const def = tool ? BUILD[tool] : null;
     if (def) {
       const d = def.rot ? (view.dir | 0) & 3 : 0;
@@ -1151,6 +1167,50 @@ export function createRenderer(canvas, session) {
       if (!drawnBySelection(sel, ai)) showRange(s, here, ai, 'faint');
       tileOutline(hr.x, hr.y, 'rgba(255,255,255,0.7)', 2, hr.w, hr.h);
     } else tileOutline(px, py, 'rgba(255,255,255,0.7)', 2);
+  }
+
+  /** Words over a tile or building on the floor, readable however far out the view is zoomed. */
+  function tagOver(text, cx, top, color) {
+    const k = Math.max(1, 30 / cam.zoom);
+    label(ctx, text, cx, top - 9 * k, 11 * k, color, INK, 3.5 * k);
+  }
+
+  const WIRE_WORDS = ['→ EAST', '↓ SOUTH', '← WEST', '↑ NORTH'];
+  /**
+   * The Wire tool over the floor (0.4), before it is pressed: a building that can carry wire is
+   * outlined, with what a click would do; anything else gets a red outline (and a word on a crate).
+   * While pressed and dragged, the preview (view.wirePreview) says it all.
+   */
+  function wireHover(s, view, here, hr, px, py) {
+    if (view.wirePreview) return;
+    if (here && carriesWire(here.k)) {
+      tileOutline(hr.x, hr.y, 'rgba(216,180,254,0.95)', 3, hr.w, hr.h);
+      const n = view.wireNext;
+      if (n !== null && n !== undefined) tagOver(n >= 0 ? `CLICK: WIRE ${WIRE_WORDS[n]}` : 'CLICK: NO WIRE', hr.x + hr.w / 2, hr.y, '#e9d5ff');
+      return;
+    }
+    const x = hr ? hr.x : px, y = hr ? hr.y : py, w = hr ? hr.w : T, hh = hr ? hr.h : T;
+    tileOutline(x, y, 'rgba(239,68,68,0.9)', 2.5, w, hh);
+    if (here) tagOver('NO DUMBWAITER, NO WIRE', x + w / 2, y, '#fca5a5');
+  }
+
+  /**
+   * The Reinforce tool over the floor (0.4): a Crate Stack is outlined green with the price of its
+   * next level and the level it would reach, red if this player cannot pay; at the top level it
+   * says so; anything else gets a red outline.
+   */
+  function reinforceHover(s, h, here, hr, px, py) {
+    if (here && here.k === 'crate') {
+      const cost = reinforceCost(here, s), why = canReinforce(s, session.me, h.x, h.y);
+      const ok = !why;
+      tileOutline(hr.x, hr.y, ok ? '#22c55e' : '#ef4444', 3, hr.w, hr.h);
+      const text = !cost ? `TOP LEVEL (${here.r | 0})` : `$${cost} → LEVEL ${(here.r | 0) + 1}${why === 'cash' ? ': SHORT' : ''}`;
+      tagOver(text, hr.x + hr.w / 2, hr.y, ok ? '#bbf7d0' : '#fca5a5');
+      return;
+    }
+    const x = hr ? hr.x : px, y = hr ? hr.y : py, w = hr ? hr.w : T, hh = hr ? hr.h : T;
+    tileOutline(x, y, 'rgba(239,68,68,0.9)', 2.5, w, hh);
+    if (here) tagOver('CRATES ONLY', x + w / 2, y, '#fca5a5');
   }
 
   // --- screen-space labels (CSS pixel transform) -------------------------------------------------

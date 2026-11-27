@@ -95,6 +95,19 @@ const BUILDING = {
     <path d="M8 12l8-8M8 22l18-18M8 32l28-28M18 36l18-18M28 36l8-8" stroke="#222" stroke-width="3"/>
     <rect x="12" y="12" width="20" height="18" rx="2" fill="#121417" ${S}/>
     <path d="M17 18l6-2 5 1v6l-4 2-6-1z" fill="#c8924f" stroke="#111" stroke-width="1.2"/>`,
+  // The shop floor's tools (0.4): Razor Wire's coil with its purple tag, and a crate with a steel
+  // strap and corner plates.
+  wire: `<path d="M3 26q4-16 8 0t8 0 8 0 8 0" fill="none" stroke="#111" stroke-width="5" stroke-linecap="round"/>
+    <path d="M3 26q4-16 8 0t8 0 8 0 8 0" fill="none" stroke="#9aa1a9" stroke-width="2.2" stroke-linecap="round"/>
+    <ellipse cx="7" cy="20" rx="5" ry="9" fill="none" stroke="#111" stroke-width="2.2"/><ellipse cx="15" cy="20" rx="5" ry="9" fill="none" stroke="#111" stroke-width="2.2"/>
+    <ellipse cx="23" cy="20" rx="5" ry="9" fill="none" stroke="#111" stroke-width="2.2"/><ellipse cx="31" cy="20" rx="5" ry="9" fill="none" stroke="#111" stroke-width="2.2"/>
+    <path d="M5 9l4 4M9 9l-4 4M21 9l4 4M25 9l-4 4M13 27l4 4M17 27l-4 4M29 27l4 4M33 27l-4 4" stroke="#111" stroke-width="1.8"/>
+    <rect x="15" y="30" width="10" height="7" rx="1.5" fill="#a855f7" stroke="#111" stroke-width="1.6"/>`,
+  reinforce: `<rect x="5" y="7" width="30" height="28" fill="#c8915a" stroke="#6b3f17" stroke-width="2.5"/>
+    <path d="M9.5 11.5l21 19M30.5 11.5l-21 19" stroke="#6b3f17" stroke-width="2"/>
+    <rect x="16" y="6" width="8" height="30" fill="#6b7280" stroke="#111" stroke-width="1.8"/>
+    <path d="M5 7h7l-7 7zM35 7h-7l7 7zM5 35h7l-7-7zM35 35h-7l7-7z" fill="#9aa1a9" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>
+    <circle cx="20" cy="12" r="1.6" fill="#e5e7eb"/><circle cx="20" cy="30" r="1.6" fill="#e5e7eb"/>`,
   rebuild: `<circle cx="20" cy="20" r="15" fill="#2563eb" ${S}/>
     <path d="M12 28l10-10" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/>
     <path d="M21 12a6 6 0 0 1 8 8l-3-1-3-3z" fill="#fff"/>`,
