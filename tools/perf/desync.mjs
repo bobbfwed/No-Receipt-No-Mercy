@@ -194,6 +194,11 @@ function think(s, pid, rnd, plan) {
     const near = backParts(s, (p) => p.k !== 'lift');
     let at = tile();
     if (near.length && rnd() < 0.7) { const i = pick(rnd, near) + pick(rnd, [1, -1, s.w, -s.w]); if (i > 0 && i < s.back.length) at = xy(i); }
+    // (0.4.01) A whole belt line dragged from there to somewhere near, crossing whatever is in the way.
+    if (rnd() < 0.3) {
+      const to = { x: Math.max(0, Math.min(s.w - 1, at.x + Math.floor(rnd() * 17) - 8)), y: Math.max(0, Math.min(s.h - 1, at.y + Math.floor(rnd() * 11) - 5)) };
+      return [{ c: 'line', f: 1, ...at, x2: to.x, y2: to.y, a: rnd() < 0.5 ? 0 : 1 }];
+    }
     return [{ c: 'place', k: pick(rnd, BACK), ...at, d: Math.floor(rnd() * 4), f: 1 }];
   }
   if (r < 0.635) { const a = backParts(s, (p) => !BUILD[p.k].fixed); return a.length ? [{ c: 'remove', ...xy(pick(rnd, a)), f: 1 }] : []; }

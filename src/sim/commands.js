@@ -7,11 +7,12 @@ import { beginWave } from './step.js';
 import { spentOn, rebuildDeal, reinforceCost } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, cardStock, boozeRoll } from './cards.js';
-import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode } from './back.js';
+import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode, takeOverBelt } from './back.js';
+import { planLine } from './line.js';
 import { carriesWire, wireCovers, buildingTiles, planWith, wireLive, wireChanged } from './wire.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
-const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp', 'wire', 'reinforce']);
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp', 'wire', 'reinforce', 'line']);
 
 /**
  * Commands that still work while the game is paused (0.3.02; state.pause). Everything else is
@@ -350,6 +351,8 @@ export function stepRebuilds(state, ev) {
  *   { c: 'reinforce', x, y }    (0.4) pay for the next level of the Crate Stack on (x, y): one more
  *                               gym bro hit a sales event (see canReinforce, reinforce)
  *   place, remove and rotate with f: 1 do the same on The Back (0.4; see backCommand)
+ *   { c: 'line', f: 1, x, y, x2, y2, a }  (0.4.01) a whole line of belts in The Back from (x, y)
+ *                               to (x2, y2), paid for at once (see layLine and planLine in line.js)
  *   { c: 'dropUp', x, y }       pay for the next cash level of the Returns Drop on (x, y) in The
  *                               Back: junk comes down faster (0.4; see dropUp)
  *   { c: 'give', to, n }        hand n of your cash to player `to`
@@ -461,6 +464,52 @@ function backCommand(state, pid, cmd, ev) {
   p.d = (p.d + 1) & 3;
   state.backVer = (state.backVer | 0) + 1;
   return { ok: true };
+}
+
+/**
+ * The `line` command (0.4.01): `{ c: 'line', f: 1, x, y, x2, y2, a }` lays a whole line of belts in
+ * The Back from (x, y) to (x2, y2), `a` 0 preferring to leave the start horizontally, 1 vertically.
+ * The host plans it again here (planLine in line.js) and applies every step at once, charging the
+ * total once: new belts as a Back `place` would put them, belts turned free, and straight belts the
+ * line crosses replaced by Overpasses (their items kept on the matching lane). Anyone's belt may be
+ * turned or crossed, as anyone may already turn one. Sends `placed {k, x, y, d, by, f: 1}` for every
+ * new belt and Overpass (as `place` does); a turned belt sends nothing, as a turn never has.
+ * Refused with planLine's reasons, or 'bad' (f not 1, a not 0 or 1), 'bounds' (a tile off the map),
+ * 'same' (one tile: the interface uses `place` for that).
+ * @returns {{ok: true, n: number, cost: number, cut: boolean} | {ok: false, why: string}}
+ */
+function layLine(state, pid, cmd, ev) {
+  if (cmd.f !== 1 || (cmd.a !== 0 && cmd.a !== 1)) return { ok: false, why: 'bad' };
+  for (const [x, y] of [[cmd.x, cmd.y], [cmd.x2, cmd.y2]]) {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return { ok: false, why: 'bounds' };
+  }
+  const plan = planLine(state, pid, idxOf(state, cmd.x, cmd.y), idxOf(state, cmd.x2, cmd.y2), cmd.a);
+  if (plan.why) return { ok: false, why: plan.why };
+  const player = state.players[pid];
+  let placed = 0, changed = false;
+  for (const st of plan.steps) {
+    if (st.keep) continue;
+    changed = true;
+    const x = st.i % state.w, y = (st.i / state.w) | 0;
+    if (st.turn) { state.back[st.i].d = st.d; continue; }
+    const p = newPart(st.k, pid, st.d);
+    const old = state.back[st.i];
+    if (old) {
+      // A straight belt crossed: an Overpass in its place, its items kept, what was spent on the
+      // belt counted in what was spent on the Overpass (so selling it back is fair).
+      takeOverBelt(old, p);
+      p.c = spentOn(old) + st.cost;
+    } else if (st.cost !== BUILD[st.k].cost) p.c = st.cost;
+    state.back[st.i] = p;
+    bump(state, pid, 'built');
+    placed++;
+    ev.push({ e: 'placed', k: st.k, x, y, d: p.d | 0, by: pid, f: 1 });
+  }
+  if (changed) state.backVer = (state.backVer | 0) + 1;
+  player.cash -= plan.cost;
+  if (plan.cost) bump(state, pid, 'spent', plan.cost);
+  if (placed && state.phase === 'build' && state.phaseT === -1 && !state.training) state.phaseT = FIRST_BUILD_SECS * TICK_HZ;
+  return { ok: true, n: placed, cost: plan.cost, cut: plan.cut };
 }
 
 /**
@@ -745,6 +794,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       return orderRebuilds(state, pid, !!cmd.all, ev);
     case 'dropUp':
       return dropUp(state, pid, cmd, ev);
+    case 'line':
+      return layLine(state, pid, cmd, ev);
     case 'side': {
       if (cmd.side !== 'office' && cmd.side !== 'store') return { ok: false, why: 'bad' };
       if (state.training) return { ok: false, why: 'bad' };

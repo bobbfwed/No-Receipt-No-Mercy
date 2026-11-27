@@ -6,7 +6,7 @@
 //            version with two digits: version 0.1, release 7 reads "0.1.07". It starts again
 //            when VERSION changes (at 0 since 0.4, the owner's plan: 0.4.00).
 export const VERSION = '0.4';
-export const RELEASE = 0;
+export const RELEASE = 1;
 
 /** The whole thing as text, e.g. "0.1.07". */
 export const versionText = () => `${VERSION}.${String(RELEASE).padStart(2, '0')}`;

@@ -128,6 +128,19 @@ export function newPart(k, o, d = 0) {
   return p;
 }
 
+/**
+ * What a part laid over a plain belt keeps of the items riding it (0.4.01: the `line` command's
+ * crossings, and a part placed on a belt): an Overpass keeps them all, on the lane that runs the
+ * belt's way, at their positions; a Splitter the front one, in its hand; anything else none.
+ */
+export function takeOverBelt(belt, p) {
+  const it = belt.it || [];
+  if (p.k === 'over') {
+    const lane = belt.d & 1 ? p.b : p.a;
+    for (const x of it) lane.push(x);
+  } else if (p.k === 'split' && it.length) p.h = it[0];
+}
+
 // ---------------------------------------------------------------------------------------------
 // The lane order, derived from the layout and cached against state.backVer.
 
