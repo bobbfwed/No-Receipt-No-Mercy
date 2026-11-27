@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whole-game render timing</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1f24; overflow: hidden; }
+  canvas#c { display: block; width: 100vw; height: 100vh; }
+  #mini { position: fixed; right: 12px; bottom: 26px; width: 200px; height: 110px; display: none; }
+</style>
+<!--
+  Stutter investigation (2026-11-26): plays a whole game with the scripted team of
+  tools/perf/teambot.mjs (the same game tools/perf/game2p.mjs plays in Node, tick for tick) and
+  draws it with the real renderer, recording per sales event how long drawing took and how many
+  canvases (cached sprites) the renderer had to make. It answers: does the drawing cost rise in
+  particular events, for example when a kind of shopper (or its super version) is seen for the
+  first time and its pictures are painted?
+  URL options:
+    seed=11 players=2 size=m design=warehouse waves=30 cards=1   the game (as game2p.mjs)
+    tpf=3          game steps per drawn frame in a sales event (a build pause runs 15 a frame)
+    view=fit|home  the whole store (desktop), or 30 px a tile centred on player `me`'s entrance with
+                   the small map (a phone, which starts there)
+    me=1           whose entrance (the joined player is 1)
+    until=22       stop after this sales event
+  Results in window.__perf once done is true.
+-->
+</head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="mini"></canvas>
+<script type="module">
+let made = 0;
+const ce = document.createElement.bind(document);
+document.createElement = (tag, o) => { if (String(tag).toLowerCase() === 'canvas') made++; return ce(tag, o); };
+
+const { createRenderer } = await import('../../src/render/renderer.js');
+const { createMinimap } = await import('../../src/render/minimap.js');
+const sim = await import('../../src/sim/index.js');
+const { createTeamBot, direct } = await import('./teambot.mjs');
+const { createGame, addPlayer, applyCommand, step, TICK_HZ } = sim;
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
+const res = { done: false, error: null, events: [] };
+window.__perf = res;
+try {
+  const players = num('players', 2), seed = num('seed', 11), until = num('until', 22), tpf = num('tpf', 3), me = num('me', 1);
+  const s = createGame({ seed, map: { design: q.get('design') || 'warehouse', size: q.get('size') || 'm' }, settings: { waves: num('waves', 30) }, cards: q.get('cards') !== '0' });
+  for (let i = 0; i < players; i++) addPlayer(s, ['Bobb', 'Tusker', 'Phantasm', 'P4', 'P5', 'P6', 'P7'][i]);
+  const bot = createTeamBot(() => s, direct(s));
+  let fx = [], acc = 0;
+  const session = { state: s, me, isHost: true, drainFx: () => { const o = fx; fx = []; return o; }, alpha: () => acc, start() {}, on() { return () => {}; } };
+  const canvas = document.getElementById('c');
+  const renderer = createRenderer(canvas, session);
+  renderer.resize();
+  const home = q.get('view') === 'home';
+  const miniEl = document.getElementById('mini');
+  const mini = home ? (miniEl.style.display = 'block', createMinimap(miniEl, session, renderer)) : null;
+  const view = { tool: null, dir: 0, hover: null, route: false, cursors: new Map() };
+  let row = null, frame = 0;
+  const startRow = () => ({ wave: s.wave, phase: s.phase, frames: 0, draw: [], gaps: [], canv: 0, newKinds: [], peak: 0 });
+  let lastRaf = 0;
+  const seen = new Set();
+  const finish = () => {
+    if (!row || !row.frames) return;
+    const d = row.draw.slice().sort((a, b) => a - b);
+    const p = (x) => +d[Math.min(d.length - 1, Math.floor(x * d.length))].toFixed(2);
+    res.events.push({ wave: row.wave, phase: row.phase, frames: row.frames, peak: row.peak, drawMean: +(row.draw.reduce((a, b) => a + b, 0) / d.length).toFixed(2), p50: p(0.5), p95: p(0.95), p99: p(0.99), max: p(1), over33: d.filter((v) => v > 33.3).length, over16: d.filter((v) => v > 16.7).length, gapMax: Math.round(Math.max(0, ...row.gaps)), gapsOver100: row.gaps.filter((v) => v > 100).map(Math.round).join(" "), canvases: row.canv, firstSeen: row.newKinds.join(' ') });
+  };
+  // (The time between animation frames counts what the page's own timing cannot: a stall in the
+  // GPU process, such as a shader being compiled the first time something is drawn.)
+  const ticks = () => new Promise((r) => requestAnimationFrame((now) => { if (lastRaf && row) row.gaps.push(now - lastRaf); lastRaf = now; r(); }));
+  while (s.phase !== 'won' && s.phase !== 'lost' && s.wave <= until) {
+    if (s.phase === 'cards') { for (const p of s.players) if (!p.skip) applyCommand(s, p.id, { c: 'skipCards', on: true }); step(s); continue; }
+    if (!row || row.wave !== s.wave || row.phase !== s.phase) { finish(); row = startRow(); }
+    const n = s.phase === 'wave' ? tpf : 15;
+    for (let k = 0; k < n; k++) {
+      if (s.tick % 15 === 0) bot.shop();
+      if (s.phase === 'build' && s.phaseT === -1 && bot.stats.bought === 0) { step(s); continue; }
+      if (s.refunds >= s.refundLimit - 2) s.refundLimit += 10;
+      for (const e of step(s)) fx.push(e);
+      if (s.phase === 'won') applyCommand(s, 0, { c: 'endless' });
+    }
+    for (const sh of s.shoppers) { const k = (sh.sup ? 'S:' : '') + sh.k; if (!seen.has(k)) { seen.add(k); row.newKinds.push(k); } }
+    row.peak = Math.max(row.peak, s.shoppers.length);
+    acc = (frame % 4) / 4;
+    if (home && frame === 0) renderer.zoomBy(30 / renderer.cam.zoom);
+    if (home) { const i = s.doors[Math.min(me, s.doors.length - 1)][0]; renderer.centerOn((i % s.w) + 0.5 + ((i % s.w) < 1 ? 6 : 0), ((i / s.w) | 0) + 0.5); }
+    // The game screen shows the routes in a build pause.
+    view.route = s.phase === 'build';
+    const m0 = made;
+    const a = performance.now();
+    renderer.draw(view);
+    if (mini && frame % 7 === 0) mini.draw();
+    const b = performance.now();
+    row.draw.push(b - a); row.frames++; row.canv += made - m0;
+    frame++;
+    await ticks();
+  }
+  finish();
+  res.done = true;
+} catch (err) {
+  res.error = String(err && err.stack || err);
+  res.done = true;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live two-player timing</title>
+<link rel="stylesheet" href="../../src/style.css">
+<!--
+  Stutter investigation (2026-11-26): the real game screen (startGame: renderer, top bar, build bar,
+  DEB, reviews, toasts, small map, sound) on a saved two-player game, as host or as joined player,
+  over the same-computer transport (BroadcastChannel, tools/perf/live.mjs opens one tab of each).
+  The host runs the scripted team (teambot.mjs) for both players: player 1's commands are applied
+  on the host exactly as if they had arrived from his browser, so the joined tab only watches.
+  URL options:
+    role=host|join   code=PERF   state=<url of a state JSON> (host only)   secs=120 (how long to record)
+    speed=1          the game speed (host only)
+    sound=1          create the sound module (as main.js does) and unlock it
+  Results in window.__perf once done is true: frame gaps (time between drawn frames), long tasks,
+  the client's sync counters, and the game's progress.
+-->
+</head>
+<body>
+<div id="app"></div>
+<script src="../../vendor/peerjs.min.js"></script>
+<script type="module">
+const q = new URLSearchParams(location.search);
+const res = { done: false, error: null };
+// hide=<css selector>: never show those elements (to test whether one of them causes a stall,
+// for example hide=.pr-wrap, the end-of-event performance review).
+if (q.get('hide')) document.head.append(Object.assign(document.createElement('style'), { textContent: `${q.get('hide')} { display: none !important; }` }));
+window.__perf = res;
+try {
+  const { HostSession, ClientSession } = await import('../../src/net/session.js');
+  const { hostLocal, joinLocal } = await import('../../src/net/transports.js');
+  const { createDirector } = await import('../../src/content/director.js');
+  const { startGame } = await import('../../src/ui/game.js');
+  const { keepSaved } = await import('../../src/ui/save.js');
+  const { TUNE } = await import('../../src/sim/index.js');
+  const { createTeamBot } = await import('./teambot.mjs');
+  let sound = null;
+  if (q.get('sound') !== '0') {
+    const { createSound } = await import('../../src/audio/sound.js');
+    sound = createSound();
+    try { sound.unlock(); } catch { /* headless: no gesture needed with the autoplay flag */ }
+  }
+  const code = q.get('code') || 'PERF';
+  const secs = Number(q.get('secs') || 120);
+  const app = document.getElementById('app');
+  let session;
+  if (q.get('role') === 'host') {
+    const state = await (await fetch(q.get('state'))).json();
+    state.speed = Number(q.get('speed') || 1);
+    // The crowd matters here, not the result: the store never closes (both copies agree, since
+    // the joining player gets this state).
+    TUNE.refundLimit = 100000; state.refundLimit = 100000;
+    session = new HostSession({ name: state.players[0].name, director: createDirector(), state, resume: true });
+    const room = hostLocal(code, (conn) => session.accept(conn));
+    addEventListener('pagehide', () => room.close());
+    startGame(session, { mount: app, sound, roomCode: code, roomKind: 'local' });
+    keepSaved(session, { kind: 'local' });
+    const bot = createTeamBot(() => session.state, (pid, cmd) => (pid === session.me ? session.send(cmd) : session._apply(pid, cmd)));
+    let lastShop = -1;
+    setInterval(() => {
+      const s = session.state;
+      if (s.phase !== 'build' && s.phase !== 'wave') return;
+      const k = Math.floor(s.tick / 15);
+      if (k === lastShop) return;
+      lastShop = k;
+      // Only once the other player is here, so his money is in play.
+      if (s.players.filter((p) => p.on).length < 2) return;
+      bot.shop();
+    }, 50);
+    res.role = 'host';
+  } else {
+    const conn = await joinLocal(code, 20000);
+    session = new ClientSession(conn, 'Tusker');
+    await new Promise((ok) => session.on('ready', ok));
+    startGame(session, { mount: app, sound, roomCode: code, roomKind: 'local' });
+    res.role = 'join';
+  }
+  // Record.
+  const gaps = [], long = [], waves = [];
+  let last = 0;
+  const t0 = performance.now();
+  try {
+    new PerformanceObserver((list) => { for (const e of list.getEntries()) long.push([Math.round(e.startTime - t0), Math.round(e.duration)]); }).observe({ type: 'longtask', buffered: false });
+  } catch { /* no long-task timing in this browser */ }
+  await new Promise((resolve) => {
+    function frame(now) {
+      if (last) gaps.push([Math.round(now - t0), +(now - last).toFixed(1)]);
+      last = now;
+      const s = session.state;
+      if (s && (!waves.length || waves[waves.length - 1][1] !== s.wave || waves[waves.length - 1][2] !== s.phase)) waves.push([Math.round(now - t0), s.wave, s.phase]);
+      if (now - t0 > secs * 1000) return resolve();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+  Object.assign(res, {
+    gaps, long, waves, stats: session.stats || null, n: session._n, shoppers: session.state.shoppers.length,
+    canvasSize: [document.querySelector('canvas.world')?.width, document.querySelector('canvas.world')?.height],
+    done: true,
+  });
+} catch (err) {
+  res.error = String(err && err.stack || err);
+  res.done = true;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Render timing</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1b1f24; overflow: hidden; }
+  canvas#c { display: block; width: 100vw; height: 100vh; }
+  #mini { position: fixed; right: 12px; bottom: 26px; width: 200px; height: 110px; display: none; }
+</style>
+<!--
+  Stutter investigation (2026-11-26): times the real renderer on a saved game state, frame by frame.
+  Driven by tools/perf/render.mjs (headless Edge); can be opened by hand too.
+  URL options:
+    state=<url of a state JSON>   (tools/perf/game2p.mjs writes them to tools/perf/out/states/)
+    frames=600     frames to time
+    zoom=fit|N     the whole store, or N CSS pixels a tile (centred on cx,cy, default the store's centre)
+    cx=, cy=       camera centre in tiles
+    route=1        draw the shoppers' routes (as in a build pause or with a tool held)
+    sim=1          step the game as it is drawn (0 freezes it: the same frame drawn again and again)
+    speed=1        game speed while stepping
+    mini=1         draw the small map every 120 ms, as the game screen does when the store does not fit
+    times=N        multiply the crowd N times (copies of each shopper, spread over nearby floor)
+    nosup=1        make every shopper an ordinary one (no super sprites)
+    routeAt=N      start drawing the routes at frame N (as when a build pause begins)
+    rezoom=N       at frame N zoom in by 1.5x (crosses a sprite resolution step: every cached sprite
+                   is thrown away and painted again at the new size, as when a player zooms)
+  Results land in window.__perf once done is true.
+-->
+</head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="mini"></canvas>
+<script type="module">
+// Count canvases made (each sprite the renderer caches is one or more canvases), per frame.
+let made = 0;
+const ce = document.createElement.bind(document);
+document.createElement = (tag, o) => { if (String(tag).toLowerCase() === 'canvas') made++; return ce(tag, o); };
+
+const { createRenderer } = await import('../../src/render/renderer.js');
+const { createMinimap } = await import('../../src/render/minimap.js');
+const { HostSession } = await import('../../src/net/session.js');
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
+const frames = num('frames', 600);
+const res = { done: false, error: null };
+window.__perf = res;
+try {
+  const state = await (await fetch(q.get('state'))).json();
+  const times = num('times', 1);
+  if (q.get('nosup') === '1') for (const s of state.shoppers) delete s.sup;
+  if (times > 1) {
+    // Copies of every shopper, nudged to nearby walkable floor, with fresh ids.
+    const base = state.shoppers.slice();
+    for (let k = 1; k < times; k++) {
+      for (const s of base) {
+        const c = JSON.parse(JSON.stringify(s));
+        c.id = state.nextId++;
+        for (let t = 0; t < 8; t++) {
+          const nx = s.x + ((t * 7 + k * 3) % 5 - 2) * 0.6, ny = s.y + ((t * 3 + k * 5) % 5 - 2) * 0.6;
+          const i = (ny | 0) * state.w + (nx | 0);
+          if (nx > 0 && ny > 0 && nx < state.w && ny < state.h && state.tiles[i] !== '#' && !state.grid[i]) { c.x = nx; c.y = ny; break; }
+        }
+        state.shoppers.push(c);
+      }
+    }
+  }
+  state.speed = num('speed', 1);
+  // A host session with nobody connected: it steps the game exactly as a solo host does.
+  // (resume: everyone counts as away, then the first player is seated again by name, so no player
+  // is added; the others' absence changes nothing that is drawn.)
+  const session = new HostSession({ name: state.players[0].name, state, resume: true });
+  const canvas = document.getElementById('c');
+  const renderer = createRenderer(canvas, session);
+  renderer.resize();
+  const zoom = q.get('zoom') || 'fit';
+  if (zoom === 'auto') {
+    // The game's own starting view: the whole store if tiles are at least 24 px, else 30 px a tile.
+    renderer.viewRect();
+    if (q.has('cx')) renderer.centerOn(num('cx', 0), num('cy', 0));
+  } else if (zoom === 'fit') renderer.fit();
+  else {
+    renderer.fit();
+    renderer.zoomBy(Number(zoom) / renderer.cam.zoom);
+    renderer.centerOn(num('cx', state.w / 2), num('cy', state.h / 2));
+  }
+  const miniEl = document.getElementById('mini');
+  const mini = q.get('mini') === '1' ? (miniEl.style.display = 'block', createMinimap(miniEl, session, renderer)) : null;
+  const view = { tool: null, dir: 0, hover: null, route: q.get('route') === '1', cursors: new Map() };
+  const sim = q.get('sim') !== '0';
+  const draw = [], step = [], minis = [], gaps = [], canv = [], shoppers = [];
+  let last = 0, miniAt = 0, n = 0;
+  const heap0 = performance.memory ? performance.memory.usedJSHeapSize : 0;
+  res.zoom = renderer.cam.zoom;
+  res.dpr = devicePixelRatio;
+  res.canvas = [canvas.width, canvas.height];
+  await new Promise((resolve) => {
+    function frame(now) {
+      if (last) gaps.push(now - last);
+      last = now;
+      const m0 = made;
+      if (n === num('rezoom', -1)) renderer.zoomBy(1.5);
+      if (n === num('routeAt', -1)) view.route = true;
+      const a = performance.now();
+      if (sim) session.update(now);
+      const b = performance.now();
+      renderer.draw(view);
+      const c = performance.now();
+      let mm = 0;
+      if (mini && now - miniAt > 120) { miniAt = now; mini.draw(); mm = performance.now() - c; }
+      step.push(b - a); draw.push(c - b); minis.push(mm); canv.push(made - m0); shoppers.push(session.state.shoppers.length);
+      if (++n >= frames) return resolve();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+  Object.assign(res, {
+    draw, step, minis, gaps, canv, shoppers,
+    heapMB: performance.memory ? +((performance.memory.usedJSHeapSize - heap0) / 1e6).toFixed(2) : null,
+    canvasesMade: made, done: true,
+  });
+} catch (err) {
+  res.error = String(err && err.stack || err);
+  res.done = true;
+}
+</script>
+</body>
+</html>
