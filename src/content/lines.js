@@ -617,6 +617,45 @@ export const LINES = {
     u("A perfect event. Zero refunds. I'm putting it down to a fault in the cameras. Corporate is sending a technician."),
   ],
   // A stray dog peed on security and switched it off. {k} what it was (may be missing), {p} anyone
+  // A security building has used up the last of one supply from The Back (0.4: the stockOut event),
+  // by track. {k} is the building, {p} whoever owns it.
+  stockOut: {
+    dmg: [
+      "{p}'s {k} is out of Bottled Spite. It's just standing there being polite now. Disgusting.",
+      "The {k} ran dry on Spite, {p}. No hate left in it. Like a marriage after the second kid.",
+      "Out of Spite, {p}. The {k} has nothing left to give. You two should get matching tattoos.",
+      u("{k}: Spite tank empty. It's firing on hope now. Hope has never once hurt a Karen."),
+      r("The {k} needs more Bottled Spite, {p}. Go downstairs and get angry at some junk. You're good at that."),
+    ],
+    spd: [
+      'The {k} is out of Rage Cola, {p}. It moves like you after Thanksgiving dinner.',
+      "No more Cola for the {k}. It's on decaf now, {p}. So it's basically your dad.",
+      '{p}, the {k} ran out of Rage Cola and went soft. The shoppers noticed. They always notice when something goes soft.',
+      u('The {k} has crashed off its sugar high, {p}. Somebody get it a juice box and a nap.'),
+      'Rage Cola: gone. The {k} now fires at the speed of a DMV queue, {p}.',
+    ],
+    rng: [
+      "The {k} is out of Extension Cord, {p}. It can only reach what's right in front of it. Like you on a date.",
+      'No more cord for the {k}. Its reach just shrank, {p}. Happens to all of us. Cold water, mostly.',
+      "{p}, the {k} ran out of Extension Cord. It's unplugged. It's in a mood. It won't say what's wrong.",
+      u("The {k} lost its Extension Cord, {p}. It can't reach the shoppers. It can't reach its potential. Sound familiar?"),
+      'Out of cord on the {k}. Short range only now, {p}. Short and disappointing. Your specialty.',
+    ],
+    dur: [
+      'The {k} is out of Duct Tape, {p}. The next gym bro is going to fold it like a lawn chair.',
+      "No tape left on the {k}. It's held together by prayer and your bad decisions, {p}.",
+      "{p}, the {k} ran out of Duct Tape. Every dad in this store knows that's an emergency.",
+      u('Out of Duct Tape. The {k} is one protein shake away from scrap, {p}.'),
+      'The {k} has no tape left. Gym bros can smell weakness, {p}. They can smell you from the car park.',
+    ],
+    wire: [
+      'The {k} is out of Razor Wire, {p}. The dads are free. God help us all.',
+      'No more wire on the {k}, {p}. Somewhere a dad just loosened his belt a notch to celebrate.',
+      '{p}, the {k} ran out of Razor Wire. The dads have smelled freedom. And cargo shorts.',
+      u('Razor Wire gone from the {k}. A man in New Balance is already heading for the gap, {p}.'),
+      "The {k}'s wire is spent, {p}. The dads will go through it like a hardware store on a Sunday.",
+    ],
+  },
   pee: [
     "A stray dog just pissed on your {k}. It's off for a few seconds. The dog has better aim than your security.",
     'Dog pee on the {k}. Switched off. Somebody is going to have to clean that, {p}. Guess who.',
@@ -1599,6 +1638,14 @@ export const NOPE = {
     'The Returns Drop stays, {p}. Head Office bolted it in. Head Office bolts in everything it wants to keep. Not you, notably.',
     u("Nice try, {p}. That hole has been spewing returns since 1987. It'll be spewing them at your funeral. Point it somewhere useful."),
     r("{p} is trying to remove the Returns Drop. That's like trying to remove the shit end of the pipe, {p}. It's the whole point of the pipe."),
+  ],
+  // The Back (0.4): a security building over a part in The Back, where its Dumbwaiters must go.
+  back: [
+    "There's something in The Back right under that, {p}. Security needs a Dumbwaiter down there. Move your crap first.",
+    "Can't build that there, {p}. Your belts are in the way downstairs. Press Tab and look at the mess you made.",
+    "Not on top of the factory, {p}. That needs the floor below it clear for its Dumbwaiter. It's called plumbing. Look it up.",
+    'Something underneath is in the way, {p}. The Dumbwaiter needs the space. Like your wife needs the whole bed.',
+    u("You're putting security on top of a conveyor belt, {p}. Downstairs is screaming. Clear those tiles in The Back first."),
   ],
   // The Back (0.4): a shop building in The Back, or a Back part on the shop floor. (The interface
   // only offers the right floor's kinds, so this is for a joined player whose screen lagged.)

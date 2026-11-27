@@ -25,6 +25,7 @@
 //                                 its kind), with no deal phase
 //   &back=1                       start looking at The Back (0.4), the floor under the shop
 //   &cam=x,y,zoom                 test only: centre the view on tile x,y at zoom CSS pixels a tile
+//   &outof=7,11,dmg               test only: the OUT OF ... warning over the building on that tile
 //   &hold=conv&dir=1&hover=12,5   test only: hold a building or part (dir its facing) with the mouse
 //                                 on that tile, so a screenshot shows the build bar's card and the
 //                                 placement preview
@@ -64,6 +65,8 @@ const look = {
   hold: q.get('hold'),
   dir: num('dir'),
   hover: q.get('hover'),
+  outof: q.get('outof'),
+  select: q.get('select'),
 };
 const defaultName = () => opts.name || loadName() || 'New Guy';
 

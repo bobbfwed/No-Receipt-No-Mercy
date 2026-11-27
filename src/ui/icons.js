@@ -75,6 +75,44 @@ const BUILDING = {
     <path d="M8 13l14 14M8 21l6 6M14 9l18 18M22 9l10 10M8 27l18-18M8 19l10-10M18 27l14-14M26 27l6-6" stroke="#cfd4d8" stroke-width="1"/>
     <rect x="3" y="25" width="34" height="10" rx="2" fill="#d9372b" ${S}/>
     <path d="M9 30h22" stroke="#fff" stroke-width="2.5" stroke-dasharray="3 1.5"/>`,
+  // The Back's machines and the Rebrander (0.4, stage 3): a coloured machine with a window showing
+  // what it makes, and the yellow out arrow.
+  still: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
+    <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#d9372b" stroke="#111" stroke-width="1.6"/>
+    <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
+    <path d="M18 12h4v3q3 1 3 4v6h-10v-6q0-3 3-4z" fill="#d9372b" stroke="#111" stroke-width="1.4"/><rect x="16.5" y="19" width="7" height="3" fill="#fbfbf4"/>
+    <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
+  cannery: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
+    <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#3fae49" stroke="#111" stroke-width="1.6"/>
+    <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
+    <rect x="16" y="12" width="8" height="14" rx="2" fill="#3fae49" stroke="#111" stroke-width="1.4"/><path d="M21 14l-3 5h2.5l-1.5 4 3.5-5.5h-2.5z" fill="#f2c21b"/>
+    <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
+  spooler: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
+    <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#ff8c1a" stroke="#111" stroke-width="1.6"/>
+    <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
+    <circle cx="20" cy="19" r="5.5" fill="none" stroke="#111" stroke-width="4.5"/><circle cx="20" cy="19" r="5.5" fill="none" stroke="#ff8c1a" stroke-width="2.6"/>
+    <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
+  winder: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
+    <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#b9bfc6" stroke="#111" stroke-width="1.6"/>
+    <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
+    <circle cx="20" cy="19" r="6.5" fill="#d4d8dc" stroke="#111" stroke-width="1.5"/><circle cx="20" cy="19" r="3" fill="#e8c88a" stroke="#111" stroke-width="1.2"/>
+    <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
+  bender: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
+    <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#8b5cf6" stroke="#111" stroke-width="1.6"/>
+    <circle cx="20" cy="19" r="9.5" fill="#fbfbf4" stroke="#111" stroke-width="1.8"/>
+    <ellipse cx="18" cy="19" rx="4.5" ry="5" fill="none" stroke="#111" stroke-width="3"/><ellipse cx="22" cy="19" rx="4.5" ry="5" fill="none" stroke="#111" stroke-width="3"/><ellipse cx="18" cy="19" rx="4.5" ry="5" fill="none" stroke="#8f979f" stroke-width="1.4"/><ellipse cx="22" cy="19" rx="4.5" ry="5" fill="none" stroke="#8f979f" stroke-width="1.4"/>
+    <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
+  rebrand: `<rect x="3" y="3" width="34" height="34" rx="5" fill="#4b5058" ${S}/>
+    <rect x="6.5" y="6.5" width="27" height="27" rx="4" fill="#2f8fe0" stroke="#111" stroke-width="1.6"/>
+    <rect x="9" y="8" width="22" height="10" rx="4.5" fill="#fbfbf4" stroke="#111" stroke-width="1.6"/>
+    <path d="M20 9.5l1.2 2.5 2.7.3-2 1.8.6 2.7-2.5-1.4-2.5 1.4.6-2.7-2-1.8 2.7-.3z" fill="#ffc928" stroke="#111" stroke-width=".8"/>
+    <rect x="8" y="25" width="24" height="7" rx="1.5" fill="#1d2125"/><path d="M11 28.5h18" stroke="#ffd23f" stroke-width="2.5" stroke-dasharray="2.5 1"/>
+    <path d="M31 15l7 5-7 5z" fill="#ffe14a" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/>`,
+  drop: `<rect x="2" y="10" width="10" height="20" fill="#5b6168" ${S}/>
+    <rect x="8" y="4" width="28" height="32" fill="#f2c21b" ${S}/>
+    <path d="M8 12l8-8M8 22l18-18M8 32l28-28M18 36l18-18M28 36l8-8" stroke="#222" stroke-width="3"/>
+    <rect x="12" y="12" width="20" height="18" rx="2" fill="#121417" ${S}/>
+    <path d="M17 18l6-2 5 1v6l-4 2-6-1z" fill="#c8924f" stroke="#111" stroke-width="1.2"/>`,
   upgrade: `<circle cx="20" cy="20" r="15" fill="#16a34a" ${S}/>
     <path d="M12 21l8-9 8 9M12 29l8-9 8 9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`,
   rebuild: `<circle cx="20" cy="20" r="15" fill="#2563eb" ${S}/>

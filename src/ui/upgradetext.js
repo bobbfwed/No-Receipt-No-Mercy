@@ -1,6 +1,6 @@
 // Words for upgrades: what each track is called on each kind of building, and what the next level
 // of it would change. Used by the building sheet, the build bar's info card and the handbook.
-import { BUILD, SHOPPERS, statsOf, levelIn, maxIn, upgradeCost, tracksOf } from '../sim/index.js';
+import { BUILD, SHOPPERS, statsOf, boughtIn, maxIn, upgradeCost, tracksOf } from '../sim/index.js';
 
 const one = (n) => (Math.round(n * 10) / 10).toString();
 const pct = (n) => `${Math.round(n * 100)}%`;
@@ -44,13 +44,14 @@ export function trackNumbers(k, track, st) {
 
 /**
  * Everything the interface shows about one track of one building.
- * @returns {{track, name, lv, max, cost, now: string, gain: string}} `cost` is 0 at the top level;
- *   `gain` reads like "hit 6 → 7.5".
+ * @returns {{track, name, lv, max, cost, now: string, gain: string}} `lv` is the levels bought
+ *   (0.4: stock is not bought, so buying reads only these, boughtIn); `cost` is 0 at the top level;
+ *   `now` and `gain` are the numbers it works at, its stock included: "hit 6 → 7.5".
  */
 export function trackInfo(b, track) {
-  const lv = levelIn(b, track), max = maxIn(b.k, track);
+  const lv = boughtIn(b, track), max = maxIn(b.k, track);
   const now = trackNumbers(b.k, track, statsOf(b));
-  const next = lv < max ? trackNumbers(b.k, track, statsOf({ k: b.k, u: { ...(b.u || {}), [track]: lv + 1 } })) : null;
+  const next = lv < max ? trackNumbers(b.k, track, statsOf({ k: b.k, u: { ...(b.u || {}), [track]: lv + 1 }, s: b.s })) : null;
   return {
     track, name: trackName(b.k, track), lv, max, cost: upgradeCost(b, track),
     now: now.map(([label, v]) => `${label} ${v}`).join(', '),

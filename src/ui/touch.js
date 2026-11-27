@@ -3,7 +3,9 @@
 //   - a small pad on the floor: show the whole map, go to my entrance
 //   - two buttons at the end of the build bar: rotate, put the tool down
 //   - the building sheet, which opens when a building is tapped or clicked with nothing held (or
-//     with the Upgrade tool): one button for each kind of upgrade it has, rotate, remove
+//     with the Upgrade tool): one button for each kind of upgrade it has, rotate, remove, and
+//     (0.4) a security building's stock of supplies from The Back; in The Back, the same sheet for a
+//     Returns Drop: how much junk it sends and the MORE JUNK button (the dropUp command)
 //   - while a finger is down placing something: a big Rotate button (for a building that turns)
 //     and the hint that a second finger cancels, halfway up the side of the floor away from the
 //     finger, where the other hand's thumb reaches and the placing finger is not
@@ -11,6 +13,7 @@
 // `(pointer: coarse)`); the sheet is for everyone.
 import { BUILD, TUNE, levelOf, spentOn, statsOf } from '../sim/index.js';
 import { tracksInfo } from './upgradetext.js';
+import { stockRows, dropInfo } from '../content/supplies.js';
 import { h, setText, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 
@@ -133,7 +136,9 @@ export function createTouchControls({ input, session, renderer, playSound = () =
   const sheetHead = h('div', { class: 'ts-head' });
   const sheetBtns = h('div', { class: 'ts-btns' });
   const sheetNote = h('p', { class: 'ts-note' });
-  const sheet = h('section', { class: 'touch-sheet hidden', 'aria-label': 'Building' }, sheetHead, sheetNote, sheetBtns);
+  // (0.4) A security building's supplies: one row per supply it takes.
+  const sheetStock = h('div', { class: 'ts-stock hidden' });
+  const sheet = h('section', { class: 'touch-sheet hidden', 'aria-label': 'Building' }, sheetHead, sheetNote, sheetStock, sheetBtns);
   let sheetSig = '';
   let measuredSig = '';
   let sheetOpen = false;
@@ -174,7 +179,9 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     const owner = s.players[b.o];
     const tracks = tracksInfo(b);
     const hits = statsOf(b).hits, hit = b.hit | 0;
-    const sig = JSON.stringify([t.x, t.y, b.k, b.u, b.d, hit, b.off > 0, back, tracks.map((tr) => cash >= tr.cost), owner ? owner.name : '', s.players.length]);
+    const stock = stockRows(b);
+    const sig = JSON.stringify([t.x, t.y, b.k, b.u, b.d, hit, b.off > 0, back, tracks.map((tr) => cash >= tr.cost), owner ? owner.name : '', s.players.length,
+      stock.map((r) => [r.tier, r.units, r.gives])]);
     if (sig === sheetSig) return;
     sheetSig = sig;
     // (replaceChildren would write a null out as the word "null")
@@ -208,17 +215,63 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     if (short.length && short.length === tracks.filter((tr) => tr.cost).length) notes.push(`You are ${money(Math.min(...short.map((tr) => tr.cost)) - cash)} short of the cheapest upgrade.`);
     setText(sheetNote, notes.join(' '));
     setClass(sheetNote, 'hidden', !notes.length);
+    renderStock(stock);
+  }
+
+  /**
+   * The stock rows (0.4): the supply's name and tier, a gauge of units against the cap (one block a
+   * unit), and what it is giving the building now, or EMPTY.
+   */
+  function renderStock(rows) {
+    setClass(sheetStock, 'hidden', !rows.length);
+    sheetStock.replaceChildren(...rows.map((r) => h('div', { class: `ts-srow${r.units ? '' : ' empty'}` },
+      h('span', { class: 'ts-sdot', style: { background: r.color } }),
+      h('b', { class: 'ts-sname' }, r.name),
+      h('small', { class: 'ts-stier' }, r.tierName || 'none'),
+      h('span', { class: 'ts-gauge', 'aria-label': `${r.units} of ${r.cap}` },
+        ...Array.from({ length: r.cap }, (_, n) => h('i', n < r.units ? { style: { background: r.color } } : null))),
+      h('small', { class: 'ts-sgives' }, r.gives))));
+  }
+
+  /** The sheet for a Returns Drop in The Back (0.4): its junk a minute and the MORE JUNK button. */
+  function renderDrop(s, t, p) {
+    const mine = s.players[session.me];
+    const cash = Math.floor(mine ? mine.cash : 0);
+    const d = dropInfo(p, cash);
+    const sig = JSON.stringify(['drop', t.x, t.y, d]);
+    if (sig === sheetSig) return;
+    sheetSig = sig;
+    sheetHead.replaceChildren(
+      h('span', { class: 'ts-icon', html: buildingIcon('drop') }),
+      h('b', null, 'Returns Drop'),
+      h('span', { class: 'ts-lv' }, `level ${d.lv} of ${d.max}`),
+      h('button', { type: 'button', class: 'ts-x', 'aria-label': 'Close', onclick: () => input.select(null) }, '×'));
+    setText(sheetNote, `${d.perMin} junk a minute comes down it.${d.next ? ` One more level: ${d.next} a minute.` : ' It is as fast as it goes.'}`);
+    setClass(sheetNote, 'hidden', false);
+    sheetNote.classList.add('ts-plain');
+    renderStock([]);
+    const why = d.why;
+    sheetBtns.replaceChildren(h('button', {
+      type: 'button', class: `ts-btn ts-more${why ? ' poor' : ''}`, disabled: !!why,
+      title: 'Pay to have junk sent down faster. Anyone can, for the whole store.',
+      onclick: () => act({ c: 'dropUp', x: t.x, y: t.y }, 'upgrade'),
+    }, h('b', null, 'MORE JUNK'), h('small', { class: 'ts-cost' }, why || money(d.cost))));
   }
 
   let lastTool, lastDir, lastRot;
   function update(s) {
     // The sheet: only for a building tapped with nothing held.
     const t = input.selected;
-    const b = t && (!input.tool || input.tool === 'upgrade') ? s.grid[t.y * s.w + t.x] : 0;
+    // In The Back (0.4) only a Returns Drop has a sheet.
+    const back = input.floor === 1;
+    const b = t && (!input.tool || input.tool === 'upgrade') ? (back ? s.back?.[t.y * s.w + t.x] : s.grid[t.y * s.w + t.x]) : 0;
     const office = s.players[session.me]?.side === 'office';
-    const show = !!b && !office && s.phase !== 'won' && s.phase !== 'lost' && s.phase !== 'lobby';
+    const show = !!b && (!back || b.k === 'drop') && !office && s.phase !== 'won' && s.phase !== 'lost' && s.phase !== 'lobby';
     if (!show && t && !b) input.select(null); // it was removed (or never was)
-    if (show) renderSheet(s, t, b);
+    if (show) {
+      if (back) renderDrop(s, t, b);
+      else { sheetNote.classList.remove('ts-plain'); renderSheet(s, t, b); }
+    }
     if (show !== sheetOpen) {
       sheetOpen = show;
       setClass(sheet, 'hidden', !show);

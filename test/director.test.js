@@ -55,6 +55,8 @@ const VARS = {
   litter: 'pn', drunk: 'p', bought: 'pnk', trail: 'p', wrongway: 'p', pet: 'pn',
   // Version 0.3.02: pausing and resuming the game.
   paused: 'p', resumed: 'p',
+  // Version 0.4: a security building out of a supply.
+  stockOut: 'pk',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */

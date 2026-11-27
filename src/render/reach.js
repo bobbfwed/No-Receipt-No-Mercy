@@ -10,7 +10,7 @@
 // building reaches (statsOf), so pointing at any other track changes nothing on the floor.
 //
 // Pure (no canvas, no DOM) so the tests can ask it directly.
-import { BUILD, statsOf, levelIn, maxIn, tracksOf } from '../sim/index.js';
+import { BUILD, statsOf, boughtIn, maxIn, tracksOf } from '../sim/index.js';
 
 /**
  * The reach to draw for the selected building, or null when there is none to draw: nothing
@@ -29,7 +29,7 @@ export function selectedReach(s, view) {
   const ai = g.part !== undefined ? g.part : i;
   const b = s.grid[ai];
   if (!b || !BUILD[b.k] || !(statsOf(b, s).range > 0)) return null;
-  const next = view.track === 'rng' && tracksOf(b.k).includes('rng') && levelIn(b, 'rng') < maxIn(b.k, 'rng');
+  const next = view.track === 'rng' && tracksOf(b.k).includes('rng') && boughtIn(b, 'rng') < maxIn(b.k, 'rng'); // (what can still be bought: 0.4)
   return { ai, b, next };
 }
 

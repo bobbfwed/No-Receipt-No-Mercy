@@ -3260,3 +3260,20 @@ html, body { overscroll-behavior: none; }
 /* The Back's group in the build bar. */
 .bb-back { border-color: #a3a9b0; }
 .bb-back .bb-label { color: #e5e7eb; }
+.bb-back-machines { border-color: #8b5cf6; }
+.bb-back-machines .bb-label { color: #c4b5fd; }
+
+/* A security building's supplies in its sheet (0.4): one row per supply it takes. */
+.ts-stock { display: grid; grid-template-columns: auto auto auto auto 1fr; align-items: center; gap: 0.15rem 0.45rem; margin: 0.3rem 0 0.1rem; font-size: 0.78rem; }
+.ts-srow { display: contents; }
+.ts-sdot { width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 0.12rem solid var(--line); }
+.ts-sname { white-space: nowrap; }
+.ts-stier { color: #57534e; font-weight: 700; white-space: nowrap; }
+.ts-gauge { display: inline-flex; gap: 0.12rem; }
+.ts-gauge i { width: 0.55rem; height: 0.8rem; border: 0.1rem solid var(--line); border-radius: 0.12rem; background: #d6d3c9; }
+.ts-sgives { font-weight: 700; color: #1f2937; }
+.ts-srow.empty .ts-sgives { color: var(--red-2); font-weight: 900; }
+.ts-srow.empty .ts-sname, .ts-srow.empty .ts-sdot { opacity: 0.55; }
+.ts-note.ts-plain { color: var(--ink); }
+.ts-btn.ts-more { min-width: 9rem; background: var(--yellow); color: var(--ink); }
+.ts-btn.ts-more.poor { background: #d6d3c9; }

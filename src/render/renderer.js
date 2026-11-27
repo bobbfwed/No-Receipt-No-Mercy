@@ -43,7 +43,7 @@
 // their other tiles (`part`) are skipped everywhere.
 import {
   BUILD, ZONES, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, canUpgrade, statsOf, levelOf,
-  levelIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
+  levelIn, boughtIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
@@ -61,6 +61,7 @@ import { createEffects } from './effects.js';
 import { drawRoutes, drawMarks } from './guides.js';
 import { selectedReach, drawnBySelection } from './reach.js';
 import { createBackArt } from './back.js';
+import { SUPPLIES, TIER_RINGS, stockTracks, tierIn, outOfText } from '../content/supplies.js';
 
 const T = TILE;
 /** Closest zoom, in CSS pixels per tile. */
@@ -356,6 +357,7 @@ export function createRenderer(canvas, session) {
     F.bde = hasCard(s, 'bde');
     fx.handle(events, now, s);
     backArt.handle(events, now);
+    if (events) for (const e of events) if (e && e.e === 'stockOut') warn(e.i, e.t, now);
     const floorNo = view.floor === 1 ? 1 : 0;
 
     // While the game is paused (0.3.02) the host's clock still runs its empty steps, so the fraction
@@ -417,10 +419,14 @@ export function createRenderer(canvas, session) {
     // Teenagers' slushie spills and wrecked buildings, on the floor under everything else.
     if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites, s.w);
     if (s.rubble && s.rubble.length) drawWreckage(s);
+    // Holding a security building, which needs a Dumbwaiter under every tile: The Back shows more
+    // strongly, and the tiles where a part below is in the way are marked in red.
+    const needsLift = !!(view.tool && BUILD[view.tool] && BUILD[view.tool].lift);
     if (s.back) {
       beginLayer(s);
       const n = backArt.draw(ctx, s, vis, F, base, beltSprites, now);
-      endLayer(0.27, 0.45, n > 0);
+      endLayer(needsLift ? 0.6 : 0.27, needsLift ? 0.15 : 0.45, n > 0);
+      if (needsLift && n > 0) markBlocked(s);
     }
 
     drawBuildings(s, now);
@@ -430,6 +436,7 @@ export function createRenderer(canvas, session) {
     fx.draw(ctx, now, 0, sprites, cam.zoom, bossGrow);
     drawShoppers(s, alpha);
     fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
+    drawWarnings(s, now);
     // The building whose sheet is open: its reach, and the reach after a Range upgrade while that
     // button is pointed at (see reach.js). The hover preview then leaves that building's reach out.
     const sel = selectedReach(s, view);
@@ -455,6 +462,10 @@ export function createRenderer(canvas, session) {
     // (Darkened a little first, so the old shop belts' bright chevrons do not compete with The Back's.)
     endLayer(0.3, 0.25);
     drawFootprints(s);
+    drawWarnings(s, now);
+    // The Returns Drop whose sheet is open.
+    const sl = view.selected;
+    if (sl && s.back && s.back[sl.y * s.w + sl.x]) tileOutline(sl.x * T, sl.y * T, 'rgba(255,255,255,0.95)', 3);
     drawBackPreview(s, view);
   }
 
@@ -531,6 +542,115 @@ export function createRenderer(canvas, session) {
       ghost.k = tool; ghost.d = d;
       drawFlow(ctx, ghost, i, F, buildingSprites, 'belt');
     }
+  }
+
+  /**
+   * The tiles of The Back where a part is in the way of a security building's Dumbwaiter, for a
+   * player holding one on the shop floor: a red wash and outline on each (on screen only).
+   */
+  function markBlocked(s) {
+    const back = s.back, w = s.w;
+    const { x0, y0, x1, y1 } = vis;
+    ctx.beginPath();
+    let any = false;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
+        const q = back[i];
+        if (!q || q.k === 'lift') continue;
+        ctx.rect(x * T + 2, y * T + 2, T - 4, T - 4);
+        any = true;
+      }
+    }
+    if (!any) return;
+    ctx.fillStyle = 'rgba(239,68,68,0.28)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,110,100,0.85)';
+    ctx.stroke();
+  }
+
+  /**
+   * The supply pips over a security building (0.4): a dark strip straddling its top edge with a pip
+   * for each supply it takes, in that supply's colour while it has some (its tier as the items show
+   * it: no ring for Store Brand, then bronze, silver, gold), dark when it has none.
+   */
+  function drawPips(b, r) {
+    const tracks = stockTracks(b.k), n = tracks.length;
+    if (!n) return;
+    const gap = 7.2, w = n * gap + 3, cx = r.x + r.w / 2, cy = r.y + 1;
+    rr(ctx, cx - w / 2, cy - 5, w, 10, 5);
+    ctx.fillStyle = 'rgba(20,24,28,0.88)';
+    ctx.fill();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    for (let k = 0; k < n; k++) {
+      const t = tracks[k], tier = tierIn(b, t), px = cx - ((n - 1) * gap) / 2 + k * gap;
+      ctx.beginPath();
+      ctx.arc(px, cy, 2.6, 0, Math.PI * 2);
+      ctx.fillStyle = tier ? SUPPLIES[t].color : '#3a4048';
+      ctx.fill();
+      const ring = TIER_RINGS[tier];
+      if (ring) {
+        ctx.beginPath();
+        ctx.arc(px, cy, 3.5, 0, Math.PI * 2);
+        ctx.lineWidth = 1.3;
+        ctx.strokeStyle = ring;
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** "OUT OF ..." warnings over buildings: { i, t, at }, newest last (see warn). */
+  const warnings = [];
+  const WARN_MS = 4500;
+  /**
+   * A security building on anchor tile i has run out of a track's supply (a stockOut event, or a
+   * test page): a red bubble pops up over it for a few seconds, on either floor.
+   */
+  function warn(i, track, now = performance.now()) {
+    for (let k = warnings.length - 1; k >= 0; k--) if (warnings[k].i === i) warnings.splice(k, 1);
+    warnings.push({ i, t: track, at: now });
+    if (warnings.length > 24) warnings.shift();
+  }
+
+  /** The "OUT OF SPITE" bubbles: red, with a ! and a tail down to the building; they pop and fade. */
+  function drawWarnings(s, now) {
+    if (!warnings.length) return;
+    // Readable when zoomed out too (about 11 screen pixels at least).
+    const k = Math.max(1, 30 / cam.zoom);
+    for (let n = warnings.length - 1; n >= 0; n--) {
+      const wn = warnings[n], age = now - wn.at;
+      if (age > WARN_MS || age < 0) { warnings.splice(n, 1); continue; }
+      const b = s.grid[wn.i];
+      if (!b || b.part !== undefined || !BUILD[b.k]) { warnings.splice(n, 1); continue; }
+      const r = rectOf(b, wn.i, s.w);
+      const pop = age < 160 ? 0.6 + 0.4 * (age / 160) : 1;
+      ctx.globalAlpha = age > WARN_MS - 600 ? (WARN_MS - age) / 600 : 1;
+      const txt = outOfText(wn.t), size = 11 * k * pop;
+      ctx.font = font(size, 900);
+      const tw = ctx.measureText(txt).width, h = 17 * k * pop, bw = tw + 26 * k * pop;
+      const cx = Math.max(bw / 2 + 2, Math.min(s.w * T - bw / 2 - 2, r.x + r.w / 2));
+      const by = r.y - 10 * k - h;
+      // The tail, then the bubble.
+      ctx.beginPath();
+      ctx.moveTo(r.x + r.w / 2 - 5 * k, by + h - 1); ctx.lineTo(r.x + r.w / 2, r.y - 3); ctx.lineTo(r.x + r.w / 2 + 5 * k, by + h - 1);
+      ctx.closePath();
+      ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
+      rr(ctx, cx - bw / 2, by, bw, h, h / 2);
+      ctx.fillStyle = '#dc2626'; ctx.fill(); ctx.lineWidth = 2.2; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx - bw / 2 + h / 2, by + h / 2, h * 0.34, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffd23f'; ctx.fill();
+      ctx.fillStyle = INK;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = font(size * 0.9, 900);
+      ctx.fillText('!', cx - bw / 2 + h / 2, by + h / 2 + 0.5);
+      ctx.font = font(size, 900);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(txt, cx + 7 * k * pop, by + h / 2 + 0.5);
+    }
+    ctx.globalAlpha = 1;
   }
 
   /** The red alarm round the edges of the screen after a boss reaches a till (k 0..1). */
@@ -669,13 +789,23 @@ export function createRenderer(canvas, session) {
           ctx.fill();
           ctx.globalAlpha = 1;
         }
-        const lv = b.u ? levelOf(b) : 1;
+        // The level it is working at (0.4: its stock counts, levelIn), not only the levels bought.
+        const lv = b.u || b.s ? workingLevel(b) : 1;
         if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b), badgeCorner(b));
+        if (BUILD[b.k].lift) drawPips(b, r);
       }
     }
   }
 
   const trackLists = {};
+  /** 1 plus the levels every track of a building works at (bought or stocked: levelIn), for its badge. */
+  function workingLevel(b) {
+    const ts = trackLists[b.k] || (trackLists[b.k] = tracksOf(b.k));
+    let n = 1;
+    for (const t of ts) n += levelIn(b, t);
+    return n;
+  }
+
   /** True if every upgrade track a building has is at its top level. */
   function maxedOut(b) {
     const ts = trackLists[b.k] || (trackLists[b.k] = tracksOf(b.k));
@@ -969,7 +1099,7 @@ export function createRenderer(canvas, session) {
   }
 
   /** A scratch building for range previews: { k, d, u }. */
-  const probe = { k: '', d: 0, u: null };
+  const probe = { k: '', d: 0, u: null, s: null };
   const probeU = {};
   const TRACK_NAME = { dmg: 'DAMAGE', spd: 'SPEED', rng: 'RANGE', dur: 'TOUGHER' };
 
@@ -1043,9 +1173,10 @@ export function createRenderer(canvas, session) {
   /** The reach building b (anchor ai) would have with one more Range level: dashed gold. */
   function showNext(s, b, ai) {
     const ts = tracksOf(b.k);
-    for (const t of ts) probeU[t] = levelIn(b, t);
-    probeU.rng = levelIn(b, 'rng') + 1;
-    probe.k = b.k; probe.d = b.d | 0; probe.u = probeU;
+    // (One more level bought, its stock kept: 0.4.)
+    for (const t of ts) probeU[t] = boughtIn(b, t);
+    probeU.rng = boughtIn(b, 'rng') + 1;
+    probe.k = b.k; probe.d = b.d | 0; probe.u = probeU; probe.s = b.s;
     showRange(s, probe, ai, 'next');
     for (const t of ts) delete probeU[t];
   }
@@ -1099,7 +1230,7 @@ export function createRenderer(canvas, session) {
       if (!mine) showRange(s, here, ai, ok ? 'ok' : 'faint');
       // Only a range upgrade changes what it reaches: show the reach it would have after (unless
       // the selection has just drawn it).
-      if (track === 'rng' && levelIn(here, 'rng') < maxIn(here.k, 'rng') && !(mine && sel.next)) showNext(s, here, ai);
+      if (track === 'rng' && boughtIn(here, 'rng') < maxIn(here.k, 'rng') && !(mine && sel.next)) showNext(s, here, ai);
       rr(ctx, hr.x + 1, hr.y + 1, hr.w - 2, hr.h - 2, 5);
       ctx.fillStyle = ok ? 'rgba(74,222,128,0.22)' : 'rgba(239,68,68,0.25)';
       ctx.fill();
@@ -1109,8 +1240,9 @@ export function createRenderer(canvas, session) {
       // What the click would do: the track's next level and its price, or why not.
       let txt;
       if (!track) txt = 'NO UPGRADES';
-      else if (levelIn(here, track) >= maxIn(here.k, track)) txt = `${TRACK_NAME[track]} MAXED`;
-      else txt = `${TRACK_NAME[track]} ${levelIn(here, track) + 1}  $${upgradeCost(here, track)}`;
+      // (What buying does: the levels bought, never the stock, 0.4.)
+      else if (boughtIn(here, track) >= maxIn(here.k, track)) txt = `${TRACK_NAME[track]} MAXED`;
+      else txt = `${TRACK_NAME[track]} ${boughtIn(here, track) + 1}  $${upgradeCost(here, track)}`;
       label(ctx, txt, hr.x + hr.w / 2, hr.y - 10, 12, ok ? '#86efac' : '#ff8a80', INK, 3.5);
       return;
     }
@@ -1213,5 +1345,5 @@ export function createRenderer(canvas, session) {
 
   resize();
   sync();
-  return { resize, tileAt, draw, cam, pan, centerOn, zoomBy, fit, viewRect };
+  return { resize, tileAt, draw, cam, pan, centerOn, zoomBy, fit, viewRect, warn };
 }

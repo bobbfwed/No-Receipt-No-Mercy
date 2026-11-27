@@ -51,7 +51,8 @@ const narrow = () => innerWidth < 1100 || innerHeight < 560;
  * @param {() => void} [o.onLobby] host of a multiplayer game only: the end screen's button takes
  *   everyone back to the lobby with this (see HostSession.backToLobby) instead of reloading
  * @param {Object} [o.look] how the first frame is looked at (page options, see main.js): floor (1
- *   The Back), and for screenshots cam ('x,y,zoom'), hold (a kind to hold), dir, hover ('x,y')
+ *   The Back), and for screenshots cam ('x,y,zoom'), hold (a kind to hold), dir, hover ('x,y'),
+ *   outof ('x,y,track': the OUT OF ... warning over a building), select ('x,y': open its sheet)
  */
 export function startGame(session, {
   roomCode = null, roomKind = null, prepare = null, ff = 0, autostart = false, mount,
@@ -470,7 +471,7 @@ export function startGame(session, {
     // and what a Range upgrade would add (src/render/reach.js). Head Office has no sheet.
     view.selected = office ? null : touchUi.selected;
     view.track = office ? undefined : touchUi.track;
-    keepInSight(s, view.selected);
+    keepInSight(s, input.floor ? null : view.selected); // (a Returns Drop's sheet, in The Back, has no reach)
     view.marks = training ? training.marks() : null;
     // The captions on highlighted tiles speak of the mouse; on a touch screen, of taps.
     if (view.marks && touchWords) for (const m of view.marks) if (m.label) m.label = forTouch(m.label);
@@ -623,6 +624,15 @@ export function startGame(session, {
     if (o.hold) {
       input.setTool(o.hold);
       for (let n = 0; n < ((o.dir | 0) & 3); n++) input.rotate();
+    }
+    if (o.outof) {
+      const [x, y, tr] = String(o.outof).split(',');
+      const s = session.state;
+      if (s && Number.isInteger(+x) && Number.isInteger(+y)) renderer.warn(+y * s.w + +x, tr);
+    }
+    if (o.select) {
+      const [x, y] = String(o.select).split(',').map(Number);
+      if (Number.isInteger(x) && Number.isInteger(y)) input.select({ x, y });
     }
     if (o.hover) {
       const [x, y] = String(o.hover).split(',').map(Number);

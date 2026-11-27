@@ -176,6 +176,9 @@ export const TOPICS = {
   grab: { note: true, gap: 14 },
   slip: { note: true, gap: 10 },
   pee: { note: true, gap: 20 },
+  // A security building ran out of a supply from The Back (0.4): a moan now and then, never a
+  // stream of them (a busy store runs dry somewhere every few seconds).
+  stockOut: { note: true, gap: 40 },
   flash: { note: true, gap: 25 },
   fall: { note: true, gap: 20 },
   pitch: { note: true, chance: 0.04, gap: 45 },
@@ -686,6 +689,13 @@ export function createDirector(random = Math.random) {
         } else if (was && state.tick - was.tick < 8 * TICK_HZ) {
           say(out, state, 'removed', LINES.removed, {}, { pid });
         }
+        break;
+      }
+      case 'stockOut': {
+        const b = Number.isInteger(e.i) ? state.grid[e.i] : null;
+        const bank = own(LINES.stockOut, e.t);
+        if (!bank || !b || !thing(b.k)) break;
+        say(out, state, 'stockOut', bank, { k: thing(b.k) }, { pid: state.players[b.o] ? b.o : undefined, mood: 'angry' });
         break;
       }
       case 'pee':

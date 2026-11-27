@@ -39,8 +39,19 @@ export const BUILD_KEYS = SHOP_KINDS;
 const KEY_OF = { belt: '1', unpacker: '2', press: '3', packer: '4', chute: '5', crate: '6', sprinkler: '7', forklift: '8', wetfloor: '9', samples: '0', railgun: '-', salesman: '=' };
 export const HOTKEYS = BUILD_KEYS.map((k) => KEY_OF[k] || '');
 /** The parts a player can build in The Back (0.4; not the map's Returns Drops), keys 1 to 5 there. */
-export const BACK_KEYS = Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed);
-export const BACK_HOTKEYS = BACK_KEYS.map((k, i) => String(i + 1));
+/**
+ * The Back's build bar in two groups (0.4): what moves things (belts, Splitter, Overpass, Intern,
+ * Bin) and what makes them (the five machines and the Rebrander). Every part a player can buy is in
+ * one of them, in the order of BUILD.
+ */
+export const BACK_GROUPS = [
+  { id: 'belts', label: 'BELTS', keys: Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed && !BUILD[k].supply && k !== 'rebrand') },
+  { id: 'machines', label: 'MACHINES', keys: Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed && (BUILD[k].supply || k === 'rebrand')) },
+];
+export const BACK_KEYS = BACK_GROUPS.flatMap((g) => g.keys);
+/** The keys along the top row, as the shop floor's bar uses them: 1 to 9, then 0, -, =. */
+const ROW = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+export const BACK_HOTKEYS = BACK_KEYS.map((k, i) => ROW[i] || '');
 /** A buildable kind's hotkey on its own floor, or ''. */
 export const hotkeyOf = (k) => (BUILD[k]?.back ? BACK_HOTKEYS[BACK_KEYS.indexOf(k)] : HOTKEYS[BUILD_KEYS.indexOf(k)]) || '';
 /** The kinds laid in lines by dragging: the shop floor's belt and The Back's. */
@@ -92,8 +103,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** The top-left tile of the building on a tile (a big building is selected as a whole). */
   function anchorTile(t) {
     const s = session.state;
-    // (The Back's parts have no sheet: nothing to select there.)
-    if (!t || !s || floor || !at(t)) return null;
+    if (!t || !s || !at(t)) return null;
+    // (In The Back only a Returns Drop has a sheet, 0.4: nothing else can be selected there.)
+    if (floor) return at(t).k === 'drop' ? { x: t.x, y: t.y } : null;
     const i = anchorOf(s, t.y * s.w + t.x);
     return { x: i % s.w, y: (i / s.w) | 0 };
   }

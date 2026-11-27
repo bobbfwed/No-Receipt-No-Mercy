@@ -2,12 +2,14 @@
 // building is picked in the build bar, and used by the tutorial. These are the "manual": keep them
 // clear first and funny second. If a number in src/sim/constants.js changes, update the text here
 // (the gym bro's limits are read from the rules below).
-import { TUNE, SUPERS } from '../sim/index.js';
+import { TUNE, SUPERS, BACK } from '../sim/index.js';
 
 /** A small count as a word ("two"), for text that reads better that way. */
 const word = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
 const cap = (t) => t[0].toUpperCase() + t.slice(1);
 const ROID = SUPERS.gymbro;
+/** A time in seconds, as words: "2 seconds". */
+const secs = (n) => `${n} second${n === 1 ? '' : 's'}`;
 
 /** Per building: `does` = what it is for, `use` = how to place it so it works. */
 export const HOW = {
@@ -98,6 +100,31 @@ export const BACK_HOW = {
   bin: {
     does: 'Takes anything from any side and gets rid of it. Junk pays nothing; leftover supplies pay pennies.',
     use: 'Put one at the end of a line, so the line keeps moving instead of jamming up when nothing downstream wants what is on it.',
+  },
+  // The machines (0.4, stage 3). Each takes junk and makes one supply at Store Brand.
+  still: {
+    does: `Takes returned junk and boils it down into Bottled Spite, one every ${secs(BACK.makeSecs)}. Security stocked with Spite hits harder: Store Brand works like ${BACK.tierLevel[1]} damage upgrades, and each tier up from a Rebrander adds ${BACK.tierLevel[2] - BACK.tierLevel[1]} more.`,
+    use: 'Feed junk into its back or either side; the Spite comes out of the side with the arrow. Run a belt from there into a Dumbwaiter, the hatch under every security building, or past an Unpaid Intern standing beside one. Press R before placing to turn it.',
+  },
+  cannery: {
+    does: `Takes returned junk and cans it as Rage Cola, one every ${secs(BACK.makeSecs)}. Security on Cola fires faster: Store Brand works like ${BACK.tierLevel[1]} speed upgrades.`,
+    use: 'Junk in at the back or the sides, Cola out of the side with the arrow, and on to a Dumbwaiter. Press R before placing to turn it.',
+  },
+  spooler: {
+    does: `Takes returned junk and winds it into Extension Cord, one every ${secs(BACK.makeSecs)}. Security plugged into Cord reaches further: Store Brand works like ${BACK.tierLevel[1]} range upgrades.`,
+    use: 'Junk in at the back or the sides, Cord out of the side with the arrow, and on to a Dumbwaiter. Press R before placing to turn it.',
+  },
+  winder: {
+    does: `Takes returned junk and rolls it into Duct Tape, one every ${secs(BACK.makeSecs)}. A building with tape in it shrugs off gym bro hits: a roll of Store Brand soaks up ${BACK.tapeHits[1]}, Platinum ${BACK.tapeHits[4]}.`,
+    use: 'Junk in at the back or the sides, Tape out of the side with the arrow. Send it to whatever the gym bros keep smashing. Press R before placing to turn it.',
+  },
+  bender: {
+    does: `Takes returned junk and twists it into Razor Wire, one every ${secs(BACK.makeSecs)}. It is for stopping dads, but that comes in a later version: for now the wire only sits in the building's Dumbwaiter.`,
+    use: 'Junk in at the back or the sides, Wire out of the side with the arrow. Press R before placing to turn it.',
+  },
+  rebrand: {
+    does: `Takes any supply below Platinum and puts the same thing out one tier up, with a better label: Store Brand to Name Brand in ${secs(BACK.rebrandSecs[1])}, Name Brand to Premium in ${secs(BACK.rebrandSecs[2])}, Premium to Platinum in ${secs(BACK.rebrandSecs[3])}. It never takes junk.`,
+    use: 'Put it in a supply line after a machine. Two in a row make Premium, three Platinum, but each pass is slower than the last. In at the back or the sides, out of the side with the arrow. Press R before placing to turn it.',
   },
 };
 

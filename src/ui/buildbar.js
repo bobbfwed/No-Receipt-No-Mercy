@@ -4,7 +4,7 @@ import { BUILD, TUNE, ZONES, anchorOf, levelOf, rebuildDeal, buildPrice } from '
 import { tracksInfo } from './upgradetext.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
-import { BUILD_KEYS, BACK_KEYS, hotkeyOf } from './input.js';
+import { BUILD_KEYS, BACK_GROUPS, hotkeyOf } from './input.js';
 import { longPress, touchedLast } from './touch.js';
 import { HOW, BACK_HOW, HOW_REMOVE, HOW_UPGRADE, HOW_REBUILD } from '../content/help.js';
 import { worded, isTouch, PLACE_BY_TOUCH } from '../content/touch.js';
@@ -20,7 +20,7 @@ try { const v = localStorage.getItem(FOLD_KEY); if (v !== null) folded = v === '
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
 /** Names short enough for a button; the tooltip has the full one. */
-const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
+const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', still: 'Still', cannery: 'Cannery', spooler: 'Spooler', winder: 'Winder', bender: 'Bender', chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
@@ -112,10 +112,11 @@ export function createBuildBar(input, session) {
   const groups = ['factory', 'security'].map((g) => h('div', { class: `bb-group bb-${g}`, role: 'group', 'aria-label': g },
     h('span', { class: 'bb-label' }, g.toUpperCase()),
     h('div', { class: 'bb-btns' }, BUILD_KEYS.map((k, i) => (BUILD[k].group === g ? makeButton(k, i) : null)))));
-  // The Back's parts (0.4): shown instead of the two groups above while The Back is looked at.
-  const backGroup = h('div', { class: 'bb-group bb-back hidden', role: 'group', 'aria-label': 'The Back' },
-    h('span', { class: 'bb-label' }, 'THE BACK'),
-    h('div', { class: 'bb-btns' }, BACK_KEYS.map((k, i) => makeButton(k, i))));
+  // The Back's parts (0.4): shown instead of the two groups above while The Back is looked at, in
+  // two groups of their own, Belts and Machines (BACK_GROUPS in input.js).
+  const backGroups = BACK_GROUPS.map((g) => h('div', { class: `bb-group bb-back bb-back-${g.id} hidden`, role: 'group', 'aria-label': g.label.toLowerCase() },
+    h('span', { class: 'bb-label' }, g.label),
+    h('div', { class: 'bb-btns' }, g.keys.map((k) => makeButton(k)))));
   const tools = h('div', { class: 'bb-group bb-tools', role: 'group', 'aria-label': 'tools' },
     h('span', { class: 'bb-label' }, 'TOOLS'), h('div', { class: 'bb-btns' }, makeButton('upgrade', -1), makeButton('rebuild', -1), makeButton('remove', -1)));
 
@@ -131,7 +132,7 @@ export function createBuildBar(input, session) {
   const info = h('aside', { class: `bb-info hidden${folded ? ' folded' : ''}`, 'aria-live': 'polite' });
   // The buttons scroll sideways on a narrow screen. On a wide one this wrapper is invisible to
   // the layout (display: contents), so the bar is laid out as it always was.
-  const scroller = h('div', { class: 'bb-scroll' }, groups, backGroup, tools);
+  const scroller = h('div', { class: 'bb-scroll' }, groups, backGroups, tools);
   const el = h('footer', { class: 'buildbar' }, scroller, info, hint);
   // A finger (or pen) can drag a building up out of its button onto the floor (0.3.03, input.js);
   // a sideways swipe still scrolls the bar (touch-action: pan-x in style.css).
@@ -241,7 +242,7 @@ export function createBuildBar(input, session) {
       lastFloor = input.floor;
       const back = lastFloor === 1;
       for (const g of groups) setClass(g, 'hidden', back);
-      setClass(backGroup, 'hidden', !back);
+      for (const g of backGroups) setClass(g, 'hidden', !back);
       setClass(buttons.get('upgrade'), 'hidden', back);
       setClass(rebuildBtn, 'hidden', back);
       setClass(el, 'on-back', back);

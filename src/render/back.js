@@ -11,7 +11,10 @@
 // Everything is drawn in world pixels (TILE a tile), like the rest of the renderer. Only the tiles
 // in `vis` are visited, and every part and item is a sprite painted once per resolution step, so a
 // big Back costs a few drawImage calls a tile.
-import { BACK, TICK_HZ, beltShape as backShape, overpassDirs, itemType, itemTier } from '../sim/index.js';
+import {
+  BACK, TICK_HZ, beltShape as backShape, overpassDirs, feedsInto, takesFrom, itemType, itemTier, unitsIn,
+} from '../sim/index.js';
+import { SUPPLIES, stockTracks } from '../content/supplies.js';
 import { TILE, INK, C, rr, paint, box, circle, line, label, text, hazard, makeSprite } from './paint.js';
 import { drawBeltTile, SP } from './buildings.js';
 
@@ -327,6 +330,87 @@ function paintBin(g) {
   g.restore();
 }
 
+/** Each machine's colours and the supply it makes (its type; see ART). */
+const MACHINE = {
+  still: { body: C.red, dark: C.redDark, type: 1 },
+  cannery: { body: C.green, dark: C.greenDark, type: 2 },
+  spooler: { body: C.orange, dark: C.orangeDark, type: 3 },
+  winder: { body: '#b9bfc6', dark: C.steelDark, type: 4 },
+  bender: { body: '#8b5cf6', dark: '#5b21b6', type: 5 },
+};
+
+/**
+ * A machine from above, facing d (the concept pictures' design): a steel housing with a top in its
+ * own colour, a round window showing what it makes, and the yellow out arrow on its front. `on`: at
+ * work, its lamp lit; idle, the lamp is dark.
+ */
+function paintMachine(g, kind, d, on) {
+  const M = MACHINE[kind];
+  shadow(g);
+  box(g, -17, -17, 34, 34, 5, '#4b5058', 2.5);
+  box(g, -14.5, -14.5, 29, 29, 4, M.body, 2);
+  // Vent slots and corner bolts.
+  g.fillStyle = M.dark;
+  for (let k = 0; k < 3; k++) g.fillRect(-9 + k * 7, 11, 4, 2);
+  for (const sx of [-11, 11]) for (const sy of [-11, 11]) circle(g, sx, sy, 1.5, C.steelLight, 1);
+  circle(g, 0, -1, 9.5, C.paper, 2);
+  g.save(); g.translate(0, -1); g.scale(0.92, 0.92); ART[M.type](g); g.restore();
+  // The lamp: green while it works.
+  circle(g, -11, 11.5, 2.4, on ? '#7CFC00' : '#2b2f34', 1.2);
+  outMark(g, d);
+}
+
+/**
+ * The Rebrander facing d: a big roll of labels on a blue machine with a gold star sticker, its
+ * stencil plate (PREMIUM) below the arrows, and the yellow out arrow. `on` lights its lamp.
+ */
+function paintRebrand(g, d, on) {
+  shadow(g);
+  box(g, -17, -17, 34, 34, 5, '#4b5058', 2.5);
+  box(g, -14.5, -14.5, 29, 29, 4, C.blue, 2);
+  g.fillStyle = C.paper;
+  g.fillRect(-6, -4, 12, 6);
+  box(g, -12, -14, 24, 11, 5, C.paper, 2);
+  g.fillStyle = '#d9d4c2';
+  g.fillRect(-11, -7, 22, 2.5);
+  box(g, -14, -12.5, 4, 8, 1.5, C.steelDark, 1.4);
+  box(g, 10, -12.5, 4, 8, 1.5, C.steelDark, 1.4);
+  g.beginPath();
+  for (let k = 0; k < 10; k++) {
+    const a = (k * Math.PI) / 5 - Math.PI / 2, rad = k % 2 ? 1.8 : 4;
+    const px = Math.cos(a) * rad, py = -9.5 + Math.sin(a) * rad;
+    if (k) g.lineTo(px, py); else g.moveTo(px, py);
+  }
+  g.closePath();
+  paint(g, '#ffc928', 1);
+  circle(g, 11, 4, 2.2, on ? '#7CFC00' : '#2b2f34', 1.1);
+  outMark(g, d);
+  box(g, -16, 8.5, 32, 9, 2, INK, 0);
+  text(g, 'PREMIUM', 0, 13.2, 6.6, '#ffd23f', 900);
+}
+
+/**
+ * A Dumbwaiter's hatch: a steel lift door in a hazard frame with a yellow up arrow. `gauges`: the
+ * tile that carries its building's gauges (one per building) has the hatch to the left and room for
+ * them on the right; every other tile of a big building has the whole hatch.
+ */
+function paintLift(g, gauges) {
+  const x = gauges ? -19 : -18, w = gauges ? 25 : 36;
+  g.fillStyle = 'rgba(0,0,0,0.3)';
+  g.fillRect(x + 3, -14, w, 34);
+  hazard(g, x, -18, w, 36, 5);
+  box(g, x + 4, -13, w - 8, 26, 2, C.steelDark, 2);
+  box(g, x + 6, -11, w - 12, 22, 1.5, C.steel, 1.5);
+  const cx = x + w / 2;
+  g.beginPath();
+  g.moveTo(cx, -9); g.lineTo(cx + 6, -2); g.lineTo(cx + 2.5, -2);
+  g.lineTo(cx + 2.5, 8); g.lineTo(cx - 2.5, 8); g.lineTo(cx - 2.5, -2);
+  g.lineTo(cx - 6, -2); g.closePath();
+  g.lineJoin = 'round';
+  paint(g, '#ffe14a', 1.6);
+  if (gauges) box(g, 7.5, -18, 12.5, 36, 2.5, '#262b31', 1.6);
+}
+
 /** One step in each direction (0 east, 1 south, 2 west, 3 north). */
 const AHEAD_X = [1, 0, -1, 0], AHEAD_Y = [0, 1, 0, -1];
 
@@ -390,25 +474,15 @@ function nb(s, x, y, d) {
   return nx < 0 || ny < 0 || nx >= s.w || ny >= s.h ? -1 : ny * s.w + nx;
 }
 
-/** Whether the part on tile j puts items out in direction dir (into the next tile). */
+/**
+ * Whether something on tile j puts items onto the belt next to it travelling in direction dir: the
+ * rules' own feedsInto (back.js), plus an Unpaid Intern, who sets things down on a belt from behind.
+ * (Only for where a belt gets an end roller.)
+ */
 function sendsInto(s, j, dir) {
+  if (feedsInto(s, j, dir)) return true;
   const p = j >= 0 ? s.back[j] : 0;
-  if (!p) return false;
-  if (p.k === 'conv' || p.k === 'drop' || p.k === 'intern') return p.d === dir;
-  if (p.k === 'split') return dir !== ((p.d + 2) & 3);
-  if (p.k === 'over') return overpassDirs(s, j)[dir & 1] === dir;
-  return false;
-}
-
-/** Whether the part on tile j takes items arriving travelling in direction dir. */
-function takesFrom(s, j, dir) {
-  const p = j >= 0 ? s.back[j] : 0;
-  if (!p) return false;
-  if (p.k === 'conv') return p.d !== ((dir + 2) & 3);
-  // (An intern takes from the belt behind him, which is the one running into his tile.)
-  if (p.k === 'split' || p.k === 'intern') return p.d === dir;
-  if (p.k === 'over') return overpassDirs(s, j)[dir & 1] === dir;
-  return p.k === 'bin';
+  return !!p && p.k === 'intern' && p.d === dir;
 }
 
 /**
@@ -444,8 +518,16 @@ export function createBackArt() {
     parts.clear();
   }
 
-  const SPLIT = 1, BRIDGE = 2, DROP = 3, BIN = 4, INTERN = 5;
-  const PAINT = { [SPLIT]: paintSplitPlate, [BRIDGE]: paintBridge, [DROP]: paintDrop, [BIN]: paintBin, [INTERN]: paintIntern };
+  const SPLIT = 1, BRIDGE = 2, DROP = 3, BIN = 4, INTERN = 5, REBRAND = 11, LIFT = 12;
+  // (A machine's sprite is per kind: 6 to 10. For machines and the Rebrander `step` is 1 at work;
+  // for a Dumbwaiter it is 1 on the tile that carries the gauges.)
+  const MACHINE_ID = { still: 6, cannery: 7, spooler: 8, winder: 9, bender: 10 };
+  const PAINT = {
+    [SPLIT]: paintSplitPlate, [BRIDGE]: paintBridge, [DROP]: paintDrop, [BIN]: paintBin, [INTERN]: paintIntern,
+    [REBRAND]: (g, d, on) => paintRebrand(g, d, on === 1), [LIFT]: (g, d, on) => paintLift(g, on === 1),
+  };
+  for (const [k, id] of Object.entries(MACHINE_ID)) PAINT[id] = (g, d, on) => paintMachine(g, k, d, on === 1);
+  const MAKE_TICKS = Math.max(1, Math.round(BACK.makeSecs * TICK_HZ));
   function part(kind, d = 0, step = 0) {
     const key = kind * 64 + d * 8 + step;
     let sp = parts.get(key);
@@ -578,11 +660,83 @@ export function createBackArt() {
             stamp(ctx, part(INTERN, p.d), cx, cy);
             if (p.h) item(ctx, p.h, cx + HAND[p.d][0], cy + HAND[p.d][1]);
             break;
+          case 'lift':
+            drawLift(ctx, s, p, i, cx, cy);
+            break;
+          case 'rebrand':
+            drawMaker(ctx, p, REBRAND, cx, cy, F, p.t > 0 && p.q.length ? Math.round(BACK.rebrandSecs[itemTier(p.q[0])] * TICK_HZ) : 0);
+            break;
+          default:
+            if (MACHINE_ID[p.k]) drawMaker(ctx, p, MACHINE_ID[p.k], cx, cy, F, MAKE_TICKS);
         }
       }
     }
     if (withFloats && floats.length) drawFloats(ctx, s, now);
     return n;
+  }
+
+  /**
+   * A machine or a Rebrander (sprite `id`): at work, its lamp is lit, it shudders a little and a
+   * ring fills round its window (the Rebrander's sticker) as the job goes on, `total` ticks a job;
+   * what it is working on shows in the Rebrander's roll; what it has made and cannot hand on yet
+   * waits at its front; junk waiting to go into a machine shows as small pips at its back.
+   */
+  function drawMaker(ctx, p, id, cx, cy, F, total) {
+    const on = p.t > 0;
+    const jig = on ? Math.sin(F.time * 47) * 0.6 : 0;
+    stamp(ctx, part(id, p.d, on ? 1 : 0), cx + jig, cy);
+    const rebrand = id === REBRAND;
+    if (on && total > 0) {
+      const f = Math.max(0, Math.min(1, 1 - (p.t - F.alpha) / total));
+      const ry = rebrand ? cy - 9.5 : cy - 1, r = rebrand ? 6.5 : 11.5;
+      ctx.beginPath();
+      ctx.arc(cx + jig, ry, r, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.lineWidth = 2.2; ctx.strokeStyle = '#7CFC00'; ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
+    if (rebrand && on && p.q.length) itemSmall(ctx, p.q[0], cx + jig, cy - 1, 0.7);
+    if (p.out) item(ctx, p.out, cx + AHEAD_X[p.d] * 13, cy + AHEAD_Y[p.d] * 13 - 1);
+    const waiting = rebrand ? p.q.length - (on ? 1 : 0) : p.n;
+    for (let k = 0; k < waiting; k++) {
+      // Along the back edge, across the line of travel.
+      const bx = cx - AHEAD_X[p.d] * 18.5 + AHEAD_Y[p.d] * (k * 6 - 3), by = cy - AHEAD_Y[p.d] * 18.5 - AHEAD_X[p.d] * (k * 6 - 3);
+      ctx.beginPath(); ctx.arc(bx, by, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = rebrand ? '#ffc928' : C.cardboard; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = INK; ctx.stroke();
+    }
+  }
+
+  /** An item sprite drawn smaller, centred on (x, y). */
+  function itemSmall(ctx, code, x, y, k) {
+    const sp = items[code];
+    if (sp) ctx.drawImage(sp.canvas, x - (ITEM * k) / 2, y - (ITEM * k) / 2, ITEM * k, ITEM * k);
+  }
+
+  /**
+   * A Dumbwaiter, and on its building's anchor tile the gauges: one bar for each supply the
+   * building above takes, in that supply's colour, filled to the units it holds out of
+   * BACK.stockUnits (red Spite, green Cola, orange Cord, silver Tape, purple Wire).
+   */
+  function drawLift(ctx, s, p, i, cx, cy) {
+    const b = s.grid[p.a];
+    const gauges = i === p.a && !!b && b.part === undefined;
+    stamp(ctx, part(LIFT, 0, gauges ? 1 : 0), cx, cy);
+    if (!gauges) return;
+    const tracks = stockTracks(b.k), n = tracks.length;
+    if (!n) return;
+    const x0 = cx + 9.2, w = 9.2, bw = (w - (n - 1) * 0.5) / n, top = cy - 16, h = 32;
+    for (let k = 0; k < n; k++) {
+      const bx = x0 + k * (bw + 0.5);
+      ctx.fillStyle = '#0d1014';
+      ctx.fillRect(bx, top, bw, h);
+      const f = Math.min(1, unitsIn(b, tracks[k]) / BACK.stockUnits);
+      if (f > 0) {
+        ctx.fillStyle = SUPPLIES[tracks[k]].color;
+        ctx.fillRect(bx, top + h * (1 - f), bw, h * f);
+      }
+    }
   }
 
   /** "+$0.25" rising from a Clearance Bin and fading, for a moment after it is paid. */
@@ -626,6 +780,11 @@ export function createBackArt() {
       case 'bin':
         stamp(ctx, part(BIN), cx, cy);
         break;
+      case 'rebrand':
+        stamp(ctx, part(REBRAND, d, 0), cx, cy);
+        break;
+      default:
+        if (MACHINE_ID[k]) stamp(ctx, part(MACHINE_ID[k], d, 0), cx, cy);
     }
   }
 

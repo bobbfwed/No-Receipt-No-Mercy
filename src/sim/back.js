@@ -185,6 +185,37 @@ export function beltShape(state, i) {
 }
 
 /**
+ * Whether the part on tile j puts items out in direction dir into the next tile, by the layout
+ * alone: the same rule that makes belts corners (a belt, a Returns Drop, a machine's or a
+ * Rebrander's front, a Splitter's three ways, an Overpass lane; not an Unpaid Intern). For drawing
+ * (where a belt gets an end roller), so the drawing can never disagree with the rules.
+ */
+export function feedsInto(state, j, dir) {
+  if (!state.back || !(j >= 0 && j < state.back.length)) return false;
+  return feeds(state.back, cacheOf(state).od, j, dir);
+}
+
+/**
+ * Whether the part on tile j ever takes items arriving travelling in direction dir, by the layout
+ * alone (wants() says whether it has room right now): a belt from anywhere but head-on, an Overpass
+ * lane running that way, a Splitter from behind, a machine or a Rebrander from anywhere but its
+ * front, a Clearance Bin or a Dumbwaiter from anywhere, and an Unpaid Intern from the belt behind
+ * him (he takes off it). For drawing: a belt pointing into such a part has no end roller.
+ */
+export function takesFrom(state, j, dir) {
+  const p = state.back && j >= 0 ? state.back[j] : 0;
+  if (!p) return false;
+  switch (p.k) {
+    case 'conv': return p.d !== ((dir + 2) & 3);
+    case 'over': return cacheOf(state).od[j * 2 + (dir & 1)] === dir;
+    case 'split': case 'intern': return p.d === dir;
+    case 'bin': case 'lift': return true;
+    case 'drop': return false;
+    default: return makes(p) && dir !== ((p.d + 2) & 3);
+  }
+}
+
+/**
  * True if an item travelling in direction dir comes onto the belt p on tile i as if from behind:
  * straight along it, or round it when it is a corner fed from that side.
  */
