@@ -106,7 +106,7 @@ export function applyDemoBack(state, pid = 0) {
   for (const [x, y, code, units] of DEMO_STOCK) {
     const b = state.grid[y * state.w + x];
     if (!b || !BUILD[b.k].lift) { problems.push(`stock at ${x},${y}: no security building`); continue; }
-    for (let u = 0; u < units; u++) if (takesSupply(b, code)) addStock(b, code);
+    for (let u = 0; u < units; u++) if (takesSupply(b, code, state)) addStock(b, code, state);
   }
   p.cash = cash;
   return problems;

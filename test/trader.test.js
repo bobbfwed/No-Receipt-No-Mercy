@@ -1,19 +1,22 @@
 // Tests for the Card Trader and the Midnight Release (0.3.01): the fixed schedule, the size of the
-// mob, all of it through one entrance at once, the Scalpers, ripping Mystery Boxes (and nobody
-// else taking them), the onlookers and their cooldown, a mob never getting stuck, Head Office
-// unable to buy or stop it, a saved copy playing on identically, and DEB's lines.
+// mob, all of it through one entrance at once, the Scalpers, ripping the best-branded stock out of
+// security (0.4; Mystery Boxes off belts until then), the onlookers and their cooldown, a mob never
+// getting stuck, Head Office unable to buy or stop it, a saved copy playing on identically, and
+// DEB's lines.
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, waveSpec, releaseNo, releaseSize, releaseDoor, bossTier, canBuy,
-  checkPlan, waveValue, priceOf, SHOPPERS, SUPERS, OFFICE, TUNE, TICK_HZ, ST,
+  checkPlan, waveValue, priceOf, addStock, itemCode, SHOPPERS, SUPERS, OFFICE, TUNE, TICK_HZ, ST,
 } from '../src/sim/index.js';
 import { createDirector } from '../src/content/director.js';
 import { LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, textOf, fill } from '../src/content/lines.js';
 import { shopperFacts, shopperTraits, countIn, firstWave, releaseWaves, releaseText } from '../src/content/facts.js';
 
 const secs = (x) => Math.max(1, Math.round(x * TICK_HZ));
+/** Uses in a unit of stock for a forklift's damage, speed and range (its shots). */
+const BUILD_SHOTS = 6;
 
 /** An ordinary game, `players` players, on a store with that many entrances open. */
 function game(players = 1, seed = 5, map = undefined) {
@@ -53,22 +56,26 @@ function walker(s, k, x, y, more = {}) {
   s.shoppers.push(sh);
   return sh;
 }
+/** A forklift on tile (x, y), stocked with these supplies ([type, tier] a unit each) and switched off, so it shoots nobody. */
+function stocked(s, x, y, units) {
+  assert.ok(place(s, 'forklift', x, y).ok);
+  const b = s.grid[y * s.w + x];
+  for (const [type, tier] of units) addStock(b, itemCode(type, tier), s);
+  b.off = 1e9;
+  return b;
+}
 /**
- * The doors open on the small map with nobody coming, and a short belt along row 6 (x 8 to 12,
- * facing east into a crate, so what is on it stays there) carrying `item`s. The route to the
- * tills runs east just below it.
+ * The doors open on the small map with nobody coming, and a stocked forklift on (12, 6), switched
+ * off. The route to the tills runs east just below it.
  */
-function shelf(items = ['box', 'box']) {
+function shelf(units = [[1, 1], [1, 1], [2, 4]]) {
   const s = game(1, 6);
-  assert.ok(place(s, 'crate', 13, 6).ok);
-  for (let x = 8; x <= 12; x++) assert.ok(place(s, 'belt', x, 6, 0).ok);
-  s.grid[6 * s.w + 12].it.push(...items.map((k, i) => [k, 1 - i * 0.5]));
+  const b = stocked(s, 12, 6, units);
   openOn(s, 1);
   s.spawnQ = [];
   s.shoppers.length = 0;
-  return s;
+  return { s, b };
 }
-const onBelt = (s) => s.grid[6 * s.w + 12].it.map((i) => i[0]);
 
 // ---------------------------------------------------------------- the schedule
 
@@ -180,63 +187,65 @@ test('Scalpers: from the second release, a growing share; tougher and a double r
   assert.equal(SUPERS.trader.weak, 'sprinkler');
 });
 
-// ---------------------------------------------------------------- ripping packs
+// ---------------------------------------------------------------- ripping stock
 
-test('only a Card Trader takes Mystery Boxes off a belt, and he takes nothing else', (t) => {
-  tune(t, { liftChance: 1 });
-  // A bargain hunter and a mom walk right past a belt of boxes and leave them.
-  let s = shelf(['box', 'box']);
-  walker(s, 'hunter', 8.5, 7.5);
-  walker(s, 'preggo', 9.5, 7.5);
+test('a Card Trader rips out the best-branded unit; a shoplifter takes from the fullest supply; the rest steal nothing', (t) => {
+  tune(t, { grabChance: 1e6 }); // whoever steals, steals the moment he is beside it
+  // Two units of Store Brand Spite and one of Platinum Cola. The bargain hunter takes a Spite
+  // (the supply it holds most of), once, then walks on to the tills.
+  let { s, b } = shelf();
+  walker(s, 'hunter', 10.5, 7.5);
   let ev = run(s, 60, () => !s.shoppers.length);
+  const grabs = ev.filter((e) => e.e === 'grab');
+  assert.equal(grabs.length, 1);
+  assert.deepEqual([grabs[0].i, grabs[0].t, grabs[0].tier], [6 * s.w + 12, 'dmg', 1]);
+  assert.deepEqual(b.s, { dmg: [1, BUILD_SHOTS], spd: [4, BUILD_SHOTS] });
+  assert.equal(s.ws.stolen, 1);
+  assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'hunter'));
+  // Dads, teenagers and Karens walk past and leave it.
+  ({ s, b } = shelf());
+  for (const k of ['dad', 'teen', 'karen']) walker(s, k, 10.5, 7.5);
+  ev = run(s, 90, () => !s.shoppers.length);
   assert.ok(!ev.some((e) => e.e === 'grab' || e.e === 'rip'));
-  assert.deepEqual(onBelt(s), ['box', 'box']);
-  // A Card Trader walks past gadgets and gift sets and leaves them.
-  s = shelf(['gadget', 'giftset']);
-  walker(s, 'trader', 8.5, 7.5);
-  ev = run(s, 60, () => !s.shoppers.length);
-  assert.ok(!ev.some((e) => e.e === 'grab' || e.e === 'rip'));
-  assert.deepEqual(onBelt(s), ['gadget', 'giftset']);
-  // But a box he takes.
-  s = shelf(['box']);
-  const tr = walker(s, 'trader', 8.5, 7.5);
+  assert.equal(s.ws.stolen, 0);
+  // A Card Trader goes for the Platinum Cola: a rip, not a grab, and his track runs dry.
+  ({ s, b } = shelf());
+  walker(s, 'trader', 10.5, 7.5);
   ev = run(s, 60, () => !s.shoppers.length);
   const rip = ev.find((e) => e.e === 'rip');
-  assert.ok(rip, 'he ripped it');
+  assert.ok(rip, 'he ripped one out');
+  assert.deepEqual([rip.i, rip.t, rip.tier], [6 * s.w + 12, 'spd', 4]);
   assert.ok(!ev.some((e) => e.e === 'grab'), 'a rip, not a grab');
-  assert.deepEqual(onBelt(s), []);
+  assert.deepEqual(b.s, { dmg: [1, 2 * BUILD_SHOTS] });
+  assert.ok(ev.some((e) => e.e === 'stockOut' && e.t === 'spd' && e.i === 6 * s.w + 12), 'the Cola ran out');
   assert.equal(s.ws.stolen, 1);
   assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'trader'), 'then he went on to the tills');
-  assert.equal(tr.lf, undefined);
-  // And he ignores free samples.
-  s = shelf([]);
+  // An empty building is left alone. And he ignores free samples.
+  ({ s, b } = shelf([]));
   assert.ok(place(s, 'samples', 10, 9).ok);
   walker(s, 'trader', 8.5, 8.5);
   ev = run(s, 60, () => !s.shoppers.length);
-  assert.ok(!ev.some((e) => e.e === 'sample'));
+  assert.ok(!ev.some((e) => e.e === 'sample' || e.e === 'rip'));
 });
 
-test('he goes further out of his way for a box than a shoplifter goes for goods', (t) => {
-  tune(t, { ripChance: 1, liftChance: 1 });
-  assert.ok(TUNE.ripMax > TUNE.liftMax);
-  // Seven tiles' walk from the belt (and further with every step towards the tills): too far for a
-  // hunter after a gadget, near enough for a box.
-  let s = shelf(['gadget']);
-  const h = walker(s, 'hunter', 19.5, 7.5);
-  let ev = run(s, 60, () => { assert.equal(h.lf, undefined); return !s.shoppers.length; });
-  assert.ok(!ev.some((e) => e.e === 'grab'));
-  s = shelf(['box']);
-  const tr = walker(s, 'trader', 19.5, 7.5);
-  let went = false;
-  ev = run(s, 60, () => { if (tr.lf !== undefined) went = true; return !s.shoppers.length; });
-  assert.ok(went, 'he set off for it');
-  const rip = ev.find((e) => e.e === 'rip');
-  assert.ok(rip && rip.far === 1, 'and ripped it');
+test('thieves steal only from what they walk past: stock a few tiles off the route is safe', (t) => {
+  tune(t, { grabChance: 1e6 });
+  // A stocked forklift three rows above the route: in reach of a 0.3 detour, not of a hand.
+  const s = game(1, 6);
+  const b = stocked(s, 12, 4, [[1, 4], [1, 4]]);
+  openOn(s, 1);
+  s.spawnQ = [];
+  s.shoppers.length = 0;
+  for (const k of ['hunter', 'trader', 'clipper']) walker(s, k, 8.5, 7.5);
+  const ev = run(s, 60, () => !s.shoppers.length);
+  assert.ok(!ev.some((e) => e.e === 'grab' || e.e === 'rip'));
+  assert.deepEqual(b.s, { dmg: [4, 2 * BUILD_SHOTS] });
+  assert.equal(ev.filter((e) => e.e === 'escape').length, 3);
 });
 
 test('a rip stops him for three seconds and the Card Traders round him for a second and a half, each with a cooldown', (t) => {
   tune(t, { grabChance: 1e6 }); // he takes it the moment he is beside it
-  const s = shelf(['box']);
+  const { s, b } = shelf([[3, 2]]);
   const ripper = walker(s, 'trader', 12.5, 7.5);
   const near = [walker(s, 'trader', 12.5, 8.5), walker(s, 'trader', 11.6, 7.6), walker(s, 'trader', 13.4, 8.3, { sup: 1 })];
   const tired = walker(s, 'trader', 12.0, 8.0, { ro: secs(2) }); // watched one a moment ago
@@ -260,9 +269,9 @@ test('a rip stops him for three seconds and the Card Traders round him for a sec
   // After a second and a half they walk on; a second rip straight after does not stop them again.
   run(s, TUNE.ripWatch + 0.1);
   for (const m of near) assert.equal(m.st, ST.WALK);
-  s.grid[6 * s.w + 12].it.push(['box', 1]);
+  addStock(b, itemCode(3, 2), s);
   const again = walker(s, 'trader', 12.5, 7.5);
-  for (const m of near) { m.x = 12.5; m.y = 8.2; }
+  for (const m of near) { m.x = 12.5; m.y = 8.2; m.cd = 1e6; }
   const ev2 = step(s);
   const rip2 = ev2.find((e) => e.e === 'rip');
   assert.ok(rip2 && again.st === ST.BROWSE);
@@ -274,40 +283,36 @@ test('a rip stops him for three seconds and the Card Traders round him for a sec
   assert.ok(TUNE.ripCool > TUNE.ripWatch);
 });
 
-test('a mob never gets stuck: belts taken away and put back, detours walled off, all of them leave the store', () => {
+test('a mob never gets stuck: stocked security taken away and put back, all of them leave the store', () => {
   const s = game(1, 11);
-  // Boxes all along the way in from the entrance.
-  for (let x = 3; x <= 14; x++) assert.ok(place(s, 'belt', x, 5, 0).ok);
-  assert.ok(place(s, 'crate', 15, 5).ok);
-  for (let x = 3; x <= 14; x++) s.grid[5 * s.w + x].it.push(['box', 1]);
+  // Stocked (switched off) forklifts all along the way in from the entrance.
+  for (let x = 3; x <= 14; x++) stocked(s, x, 6, [[1, 4], [2, 3], [3, 2]]);
   openOn(s, 7);
   // Only the mob.
   s.spawnQ = s.spawnQ.filter((q) => q[1] === 'trader');
   const start = s.tick;
   const stillSince = new Map();
-  let k = 0, ripped = 0;
+  let k = 0;
   const ev = run(s, 240, () => !s.shoppers.length && !s.spawnQ.length, () => {
-    // Every couple of seconds, take a belt away or put one back, and wall in a detour's target.
+    // Every few seconds, take a building away or put one back.
     if (s.tick > start + secs(TUNE.releaseAt + 4) && s.tick % 90 === 0) {
       const x = 3 + (k++ % 12);
-      const b = s.grid[5 * s.w + x];
-      if (b) applyCommand(s, 0, { c: 'remove', x, y: 5 });
-      else if (place(s, 'belt', x, 5, 0).ok) s.grid[5 * s.w + x].it.push(['box', 1]);
+      if (s.grid[6 * s.w + x]) applyCommand(s, 0, { c: 'remove', x, y: 6 });
+      else if (place(s, 'forklift', x, 6).ok) { addStock(s.grid[6 * s.w + x], itemCode(1, 4), s); s.grid[6 * s.w + x].off = 1e9; }
     }
     for (const m of s.shoppers) {
       if (m.k !== 'trader') continue;
-      // (Half of them: the other half get their boxes.)
-      if (m.lf !== undefined && m.id % 2 && s.tick % 45 === 0) place(s, 'crate', m.lf % s.w, (m.lf / s.w) | 0);
       const was = stillSince.get(m.id);
       if (m.st !== ST.WALK || !was || Math.hypot(m.x - was.x, m.y - was.y) > 0.05) stillSince.set(m.id, { x: m.x, y: m.y, tick: s.tick });
       else assert.ok(s.tick - was.tick < 12 * TICK_HZ, `trader ${m.id} stuck at ${m.x.toFixed(2)}, ${m.y.toFixed(2)}`);
     }
   });
-  ripped = ev.filter((e) => e.e === 'rip').length;
+  const ripped = ev.filter((e) => e.e === 'rip').length;
   assert.equal(s.shoppers.length, 0, 'every one of them left the store');
   const out = ev.filter((e) => (e.e === 'escape' || e.e === 'left') && e.k === 'trader').length;
   assert.equal(out, releaseSize(7, 1));
-  assert.ok(ripped >= 1, `they ripped boxes (${ripped})`);
+  assert.ok(ripped >= 1, `they ripped stock out (${ripped})`);
+  assert.equal(s.ws.stolen, ripped + ev.filter((e) => e.e === 'grab').length, 'every theft is one unit');
 });
 
 // ---------------------------------------------------------------- Head Office
@@ -327,15 +332,12 @@ test('Head Office cannot buy a Card Trader, and the release comes whatever he pl
 
 // ---------------------------------------------------------------- saving
 
-test('a copy of the game made mid-release, with packs being ripped, plays on identically', (t) => {
-  tune(t, { ripChance: 1 });
+test('a copy of the game made mid-release, with stock being ripped, plays on identically', (t) => {
   const s = game(1, 4);
-  for (let x = 3; x <= 14; x++) assert.ok(place(s, 'belt', x, 5, 0).ok);
-  assert.ok(place(s, 'crate', 15, 5).ok);
-  for (let x = 3; x <= 14; x++) s.grid[5 * s.w + x].it.push(['box', 1]);
+  for (let x = 3; x <= 14; x++) stocked(s, x, 5, [[1, 4], [4, 2]]);
   assert.ok(place(s, 'sprinkler', 8, 7).ok);
   openOn(s, 12);
-  // Until one of them is ripping a pack and another is watching him.
+  // Until one of them is gloating over what he ripped and another is watching him.
   const ev = run(s, 90, () => s.shoppers.some((m) => m.k === 'trader' && m.st === ST.BROWSE)
     && s.shoppers.some((m) => m.k === 'trader' && m.st === ST.WATCH));
   assert.ok(ev.some((e) => e.e === 'rip'), 'mid-release, mid-rip');
@@ -343,7 +345,7 @@ test('a copy of the game made mid-release, with packs being ripped, plays on ide
   for (let i = 0; i < 20 * TICK_HZ; i++) { step(s); step(copy); }
   assert.deepEqual(JSON.parse(JSON.stringify(copy)), JSON.parse(JSON.stringify(s)));
   // An older save's shoppers have no `ro`: it reads as no cooldown.
-  const old = shelf(['box']);
+  const { s: old } = shelf();
   const tr = walker(old, 'trader', 12.5, 7.5);
   const watcher = walker(old, 'trader', 12.5, 8.4);
   delete watcher.ro;
@@ -359,7 +361,8 @@ test('the handbook, the help and DEB know about him: schedule, rip, lines that t
   assert.ok(f.releaseOnly && f.first === 7 && f.superFrom === 12);
   const traits = new Map(shopperTraits('trader', 0));
   assert.match(traits.get('When'), /Midnight Release events only/);
-  assert.match(traits.get('Ripping a pack'), /Card Trader/);
+  assert.match(traits.get('Ripping'), /Card Trader/);
+  assert.match(traits.get('Free samples and stock'), /best-branded stock/);
   assert.match(releaseText(), /7, 12, 17/);
   assert.deepEqual(releaseWaves(20), [7, 12, 17, 22, 27]);
   assert.ok(releaseWaves(0).length > releaseWaves(20).length);
@@ -389,7 +392,7 @@ test('the handbook, the help and DEB know about him: schedule, rip, lines that t
   assert.equal(arrive.length, 1);
   assert.match(arrive[0].text, /16/);
   s.tick += 120 * TICK_HZ;
-  const ripped = d2.handle([{ e: 'rip', x: 1, y: 1, sup: 0, n: 0 }], s).filter((m) => m.t === 'say');
+  const ripped = d2.handle([{ e: 'rip', x: 1, y: 1, sup: 0, n: 0, i: 4, t: 'dmg', tier: 4 }], s).filter((m) => m.t === 'say');
   assert.equal(ripped.length, 1);
   assert.ok(!/\{\w\}|undefined/.test(ripped[0].text));
   // The first release introduces the kind; the second the Scalper.

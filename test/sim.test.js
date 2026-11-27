@@ -148,8 +148,12 @@ test('undefended shoppers reach the tills and take refunds', () => {
   const escapes = ev.filter((e) => e.e === 'escape').length;
   assert.equal(escapes, waveSpec(1)[0].n);
   assert.equal(s.refunds, escapes);
-  assert.ok(s.players[0].cash < TUNE.startCash + TUNE.waveBonus + TUNE.waveBonusStep);
-  assert.ok(ev.some((e) => e.e === 'waveEnd'));
+  const end = ev.find((e) => e.e === 'waveEnd');
+  assert.ok(end);
+  // The event pays all the same (0.4), but every one of them was refunded: no speed bonus.
+  assert.equal(end.pay, TUNE.payBase + TUNE.payStep);
+  assert.equal(end.speed, 0);
+  assert.ok(s.players[0].cash < TUNE.startCash + end.pay);
   assert.equal(s.phase, 'build');
   assert.ok(s.phaseT > 0);
 });

@@ -228,7 +228,7 @@ export const SOUNDS = {
   },
 
   grab: {
-    about: 'A shopper nicks something off a belt: a quick rising "yoink", a sly swipe and pop, or a tiptoe "tip-tip-yoink".',
+    about: 'A shopper nicks a unit of stock from a security building: a quick rising "yoink", a sly swipe and pop, or a tiptoe "tip-tip-yoink".',
     max: 0.25,
     shapes: 3,
     play(ctx, dest, t, o = {}) {
@@ -813,7 +813,7 @@ export const SOUNDS = {
   },
 
   rip: {
-    about: 'A Card Trader rips open a Mystery Box he stole: a long crinkly foil tear, then an awed "ooooh", a gasp and "whoa", or a breathy "yesss". With onlookers, one of them answers.',
+    about: 'A Card Trader rips the best-branded stock out of a building: a long crinkly foil tear, then an awed "ooooh", a gasp and "whoa", or a breathy "yesss". With onlookers, one of them answers.',
     max: 0.95,
     shapes: 3,
     variants: [

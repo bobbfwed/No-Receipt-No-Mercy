@@ -1,7 +1,7 @@
 // Full-screen overlays: the end of the game, losing the host, and the in-game "how to play".
 import { TUNE, SHOPPERS, SUPERS, BUILD, SETTINGS, isEndless } from '../sim/index.js';
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
-import { bossFacts, edgeText, fmt } from '../content/facts.js';
+import { bossFacts, edgeText, fmt, payFacts } from '../content/facts.js';
 import { recordWhere } from './record.js';
 import { h, money, safeColor } from './dom.js';
 import { debFace } from './icons.js';
@@ -13,10 +13,11 @@ export function howToPlay() {
     h('p', null, `Shoppers come in through the entrances (one per player, mostly on the left) and head for the tills on the right. Every one who gets there takes a refund. ${TUNE.refundLimit} refunds (${TUNE.refundPerPlayer} more per extra player) and corporate shuts the store. Survive every sales event (${TUNE.waves} unless the host changes it), or choose Endless and see how long you last.`),
     h('h3', null, 'Two halves'),
     h('ul', null,
+      h('li', null, h('b', null, 'Beating a sales event pays. '), payLine()),
       h('li', null, h('b', null, 'Factory makes cash. '), 'Unpackers spit out boxes, belts carry them, the Press and the Packer turn them into pricier goods, and a Shipping Chute sells whatever lands in it. Each of those four only goes on its own painted floor (Loading Bay, Press Shop, Gift Wrap, Shipping), so the belts between them are the factory.'),
       h('li', null, h('b', null, 'Security makes them leave. '), 'Sprinklers, forklifts and barcode lasers wear down patience until shoppers storm out empty-handed; wet floor signs, free samples and the TV salesman hold them in range for longer. Shoppers get more patient every sales event.'),
       h('li', null, h('b', null, 'The factory is the maze. '), 'Belts and machines are in the way of most shoppers, so lay your lines to make the walk long and painful. A few kinds of shopper get past things the rest cannot. You cannot block the tills completely. Legal checked.'),
-      h('li', null, h('b', null, 'Your money is yours. '), 'Each player has his own cash and pays for what he builds. Everything the store earns, and every refund, is split evenly between you, whoever built what. You can hand a colleague money from the list of players.'),
+      h('li', null, h('b', null, 'Your money is yours. '), 'Each player has his own cash and pays for what he builds. A sales event\'s pay and speed bonus go to each of you in full; everything else the store earns, and every refund, is split evenly between you, whoever built what. You can hand a colleague money from the list of players.'),
       h('li', null, h('b', null, 'Supplies make security stronger. '), 'Under the shop is The Back (Tab, or the floor switch at the bottom right, to look): belts and machines there turn returned junk into supplies and send them up a Dumbwaiter under each security building, which hits harder, fires faster, reaches further or shrugs off gym bros while it is stocked. Pick one with nothing held to see what it is working with.'),
       h('li', null, h('b', null, 'It gets worse. '), 'From sales event 6, super versions of every shopper turn up: bigger, with a gold crown, and a double refund. ',
         `Every ${ordinal(TUNE.bossEvery)} sales event a boss walks in as well, a little after the doors open: nothing slows him, his pep talks cheer up the shoppers around him, and if he reaches a till he counts as ${TUNE.bossRefunds} refunds.`),
@@ -33,7 +34,7 @@ export function howToPlay() {
       h('li', null, 'While anything of yours is wrecked, a big ', h('b', null, 'REBUILD'), ' button shows over the floor: tap it to pay, and each wreck goes back as soon as nothing is in the way · every new wreck needs another tap'),
       h('li', null, h('b', null, '⏸'), ' (top bar, under ☰ on a phone, before the speeds) pauses the whole store for everyone; nothing can be built while paused · tap the ', h('b', null, 'PAUSED'), ' sign to carry on'),
       h('li', null, h('b', null, 'Hold a button'), ' in the bar to read what it does'),
-      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It costs you nothing: the factory is paid at once for the time you skip')),
+      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It just opens them: whatever The Back would have made in the time you skip is never made')),
     h('ul', { class: 'keys key-only' },
       h('li', null, h('kbd', null, '1'), '–', h('kbd', null, '0'), ', ', h('kbd', null, '-'), ' and ', h('kbd', null, '='), ' pick a building, or click it in the bar'),
       h('li', null, h('kbd', null, 'Click'), ' build · ', h('kbd', null, 'Drag'), ' build a line; belts follow the drag'),
@@ -44,7 +45,13 @@ export function howToPlay() {
       h('li', null, h('kbd', null, 'W'), h('kbd', null, 'A'), h('kbd', null, 'S'), h('kbd', null, 'D'), ' or arrows move the view · ', h('kbd', null, 'Wheel'), ' zoom · ', h('kbd', null, 'F'), ' whole map · ', h('kbd', null, 'H'), ' your entrance · click the small map to jump'),
       h('li', null, h('kbd', null, 'P'), ' or the ⏸ button before the speeds pauses the whole store for everyone (nothing can be built while paused) · ', h('kbd', null, 'P'), ' again carries on; anyone can'),
       h('li', null, h('kbd', null, 'Enter'), ' chat with the other players'),
-      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It costs you nothing: the factory is paid at once for the time you skip')));
+      h('li', null, h('b', null, 'OPEN THE DOORS'), ' starts the next sales event early. It just opens them: whatever The Back would have made in the time you skip is never made')));
+}
+
+/** The money rule in a sentence, numbers from the rules (0.4: the factory no longer pays the bills). */
+function payLine() {
+  const p = payFacts();
+  return `Each one you survive pays every one of you the whole amount (${money(p.pay(1))} for the first, more each time), plus a speed bonus of up to ${Math.round(p.share * 100)}% of that for clearing the floor within ${p.best} seconds of the last shopper coming in (nothing after ${p.par}), scaled by how many you stopped rather than refunded. The EVENT PAY panel shows both.`;
 }
 
 /** "5th", "3rd", "21st". */

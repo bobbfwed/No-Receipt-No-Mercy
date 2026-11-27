@@ -3,7 +3,7 @@
 import { BUILD, BACK, TUNE, TICK_HZ, ST, ROLES, SPEEDS, buildDef } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf, releaseOrder } from './state.js';
 import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './path.js';
-import { beginWave, skipBuild } from './step.js';
+import { beginWave } from './step.js';
 import { spentOn, rebuildDeal } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, cardStock, boozeRoll } from './cards.js';
@@ -563,7 +563,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
       const units = deal ? 0 : cardStock(state, cmd.k);
       for (let type = 1; type <= 4; type++) {
         const code = itemCode(type, 1);
-        for (let n = 0; n < units && takesSupply(b, code); n++) addStock(b, code);
+        for (let n = 0; n < units && takesSupply(b, code, state); n++) addStock(b, code, state);
       }
       put(state, at.tiles, b);
       clearRubble(state, at.tiles);
@@ -659,8 +659,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
           return { ok: true, waiting: true };
         }
       }
-      // Opening early must not cost the players what the factory would have sold meanwhile.
-      skipBuild(state, ev);
+      // (Opening early just opens, 0.4: what the rest of the pause would have done in The Back, and
+      // the drying of puddles, is given up. Until then skipBuild played it through in one go.)
       beginWave(state, ev);
       return { ok: true };
     }

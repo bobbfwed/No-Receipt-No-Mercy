@@ -37,7 +37,7 @@
 import { BACK, BUILD, TICK_HZ, buildDef } from './constants.js';
 // (state.js and cards.js import from this file too. That is safe: none uses another while loading.)
 import { earn, bump, inBounds, idxOf, footprint } from './state.js';
-import { buildPrice, cardDrop } from './cards.js';
+import { buildPrice, cardDrop, cardBin, cardRebrand, cardUnits, cardWork, cardUses } from './cards.js';
 
 const SUB = BACK.sub, GAP = BACK.gap, STEP = BACK.step, END = BACK.end;
 /** Where an item lands when it comes onto a belt from the side. */
@@ -75,6 +75,20 @@ const makes = (p) => p.k === 'rebrand' || !!BUILD[p.k].supply;
  */
 export const dropTicks = (lv = 0, state = null) =>
   Math.max(1, Math.round((BACK.dropSecs * BACK.dropMul ** (lv | 0) * TICK_HZ) / (state ? cardDrop(state) : 1)));
+
+/**
+ * Ticks a machine takes to make one supply, and a Rebrander to raise one from `tier`, in this game
+ * (the artisanal card slows both, asseenontv speeds the Rebrander up). The drawing of their progress
+ * reads the same numbers.
+ */
+export const makeTicks = (state) => ticks(BACK.makeSecs * cardWork(state));
+export const rebrandTicks = (state, tier) => ticks((BACK.rebrandSecs[tier] * cardWork(state)) / cardRebrand(state));
+
+/** The most units of one supply a building holds in this game (BACK.stockUnits; the regifting card adds). */
+export const stockCap = (state) => BACK.stockUnits + (state ? cardUnits(state) : 0);
+
+/** What a Clearance Bin pays for one supply of `tier` in this game (lootbox pays more). */
+const binPay = (state, tier) => (BACK.binPay[tier] || 0) * cardBin(state);
 
 /** A Returns Drop as the map puts it down (makeDrops in maps.js), facing d. */
 export const newDrop = (d) => ({ k: 'drop', d: d & 3, t: dropTicks(0), lv: 0 });
@@ -396,7 +410,7 @@ export function wants(state, i, code, dir, over = 0) {
     switch (p.k) {
       case 'bin': return true;
       case 'split': return dir === p.d && !p.h;
-      case 'lift': return takesSupply(state.grid[p.a], code);
+      case 'lift': return takesSupply(state.grid[p.a], code, state);
       case 'rebrand': {
         const tier = itemTier(code);
         return tier >= 1 && tier < 4 && dir !== ((p.d + 2) & 3) && p.q.length - (p.t > 0 ? 1 : 0) < 2;
@@ -476,7 +490,7 @@ export function give(state, i, code, dir, over = 0) {
     }
     case 'bin': {
       // Leftover supplies fetch pennies, shared like any income; junk nothing.
-      const v = BACK.binPay[itemTier(code)] || 0;
+      const v = binPay(state, itemTier(code));
       if (v > 0) {
         earn(state, v);
         state.ws.earned = Math.round((state.ws.earned + v) * 1000) / 1000;
@@ -487,7 +501,7 @@ export function give(state, i, code, dir, over = 0) {
       return true;
     }
     case 'lift':
-      addStock(state.grid[p.a], code);
+      addStock(state.grid[p.a], code, state);
       return true;
     case 'rebrand':
       p.q.push(code);
@@ -666,8 +680,8 @@ export function stepBack(state, ev = null) {
         if (p.out && front >= 0 && give(state, front, p.out, d, 0)) p.out = 0;
         if (p.out || p.t > 0) break;
         if (kind === MACHINE) {
-          if (p.n > 0) { p.n--; p.t = ticks(BACK.makeSecs); }
-        } else if (p.q.length) p.t = ticks(BACK.rebrandSecs[itemTier(p.q[0])]);
+          if (p.n > 0) { p.n--; p.t = makeTicks(state); }
+        } else if (p.q.length) p.t = rebrandTicks(state, itemTier(p.q[0]));
         break;
       }
     }
@@ -683,24 +697,28 @@ export function stepBack(state, ev = null) {
  * How many uses one unit of a supply at `tier` gives a building of kind k in `track`: for damage,
  * speed and range the kind's own BUILD[k].shots (whatever the tier: the tier sets the level, see
  * levelIn); for durability BACK.tapeHits[tier] (hits soaked up); for wire BACK.wireTurns[tier]
- * (dads turned away, a later stage).
+ * (dads turned away, a later stage). With `state`, the game's cards count (artisanal: times
+ * cardUses, rounded up); without, the plain number the handbook shows.
  */
-export function usesPer(k, track, tier) {
-  if (track === 'dur') return BACK.tapeHits[tier] | 0;
-  if (track === 'wire') return BACK.wireTurns[tier] | 0;
-  return (BUILD[k] && BUILD[k].shots) | 0;
+export function usesPer(k, track, tier, state = null) {
+  const n = track === 'dur' ? BACK.tapeHits[tier] | 0
+    : track === 'wire' ? BACK.wireTurns[tier] | 0
+      : (BUILD[k] && BUILD[k].shots) | 0;
+  const m = state ? cardUses(state) : 1;
+  return m === 1 ? n : Math.ceil(n * m);
 }
 
 /**
  * How many units of one supply a building holds: each run's uses over what a unit of its tier
  * gives, a unit partly used counting as a whole one. So a building takes a new unit only once a
- * whole one is used up, and the count is a whole number on every browser.
+ * whole one is used up, and the count is a whole number on every browser. Pass the game's state
+ * wherever there is one, so a card that changes the uses in a unit (usesPer) is counted alike.
  */
-export function unitsIn(b, track) {
+export function unitsIn(b, track, state = null) {
   const run = b && b.s && b.s[track];
   if (!run) return 0;
   let n = 0;
-  for (let k = 0; k < run.length; k += 2) n += Math.ceil(run[k + 1] / (usesPer(b.k, track, run[k]) || 1));
+  for (let k = 0; k < run.length; k += 2) n += Math.ceil(run[k + 1] / (usesPer(b.k, track, run[k], state) || 1));
   return n;
 }
 
@@ -716,9 +734,9 @@ export function usesIn(b, track) {
  * Would building b (from the grid; its anchor) take supply `code` through its Dumbwaiters right
  * now? Only a standing building whose kind has `lift`, only a supply for a track its kind has
  * (BUILD[k].up; every such kind takes Razor Wire), and only while that track holds fewer than
- * BACK.stockUnits units. No side effects.
+ * stockCap(state) units. No side effects.
  */
-export function takesSupply(b, code) {
+export function takesSupply(b, code, state = null) {
   if (!b || b.part !== undefined) return false;
   const def = BUILD[b.k];
   if (!def || !def.lift) return false;
@@ -727,7 +745,7 @@ export function takesSupply(b, code) {
   const track = SUPPLY_TRACKS[type];
   if (track !== 'wire' && !(def.up && def.up[track])) return false;
   if (!usesPer(b.k, track, tier)) return false;
-  return unitsIn(b, track) < BACK.stockUnits;
+  return unitsIn(b, track, state) < stockCap(state);
 }
 
 /**
@@ -735,13 +753,52 @@ export function takesSupply(b, code) {
  * go on the newest run of that track if the tier is the same, otherwise they start a new run. So
  * mixed tiers are used in the order they came.
  */
-export function addStock(b, code) {
+export function addStock(b, code, state = null) {
   const track = SUPPLY_TRACKS[itemType(code)], tier = itemTier(code);
   const s = b.s || (b.s = {});
   const run = s[track] || (s[track] = []);
-  const n = usesPer(b.k, track, tier);
+  const n = usesPer(b.k, track, tier, state);
   if (run.length && run[run.length - 2] === tier) run[run.length - 1] += n;
   else run.push(tier, n);
+}
+
+/**
+ * A thief takes one unit of stock from building b (anchor tile i), 0.4: a shoplifter (`best`
+ * false) from the track holding the most units (unitsIn; a tie goes to the first in STOCK_TRACKS),
+ * off its newest run; a Card Trader (`best` true) from the run with the highest tier in stock (a tie
+ * goes to the first track in STOCK_TRACKS, then to the newest run). He takes a whole unit's worth of
+ * uses (usesPer) or what is left of that run if less. A track he empties is deleted and sends
+ * `stockOut`, as one used up does.
+ * @returns {{t: string, tier: number}|null} what he took, or null if b holds no stock
+ */
+export function stealStock(state, b, i, best, ev) {
+  const s = b && b.s;
+  if (!s) return null;
+  let track = null, at = -1, top = 0;
+  for (const t of STOCK_TRACKS) {
+    const run = s[t];
+    if (!run || !run.length) continue;
+    if (best) {
+      for (let k = run.length - 2; k >= 0; k -= 2) if (run[k] > top) { top = run[k]; track = t; at = k; }
+    } else {
+      const n = unitsIn(b, t, state);
+      if (n > top) { top = n; track = t; at = run.length - 2; }
+    }
+  }
+  if (!track) return null;
+  const run = s[track], tier = run[at];
+  run[at + 1] -= Math.min(run[at + 1], usesPer(b.k, track, tier, state));
+  if (run[at + 1] <= 0) {
+    run.splice(at, 2);
+    // (A run taken out of the middle leaves its neighbours side by side: one run if their tier is the same.)
+    if (at > 0 && at < run.length && run[at - 2] === run[at]) { run[at - 1] += run[at + 1]; run.splice(at, 2); }
+  }
+  if (!run.length) {
+    delete s[track];
+    if (!STOCK_TRACKS.some((t) => s[t])) delete b.s;
+    if (ev) ev.push({ e: 'stockOut', i, t: track });
+  }
+  return { t: track, tier };
 }
 
 /**

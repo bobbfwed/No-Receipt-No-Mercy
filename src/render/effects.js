@@ -3,13 +3,14 @@
 // shield flashes round cosplayers, the boss's entrance,
 // pep talks, exit and (worst of all) arrival at a till, and a Pregnant Lady popping (or a Barcode
 // Laser stopping her: "NOT TODAY") and her babies' small refunds, a Midnight Release's mob
-// walking in (the boss's banner in purple) and a Card Trader ripping a pack. A fixed pool of effect
-// objects is reused so a big wave does not allocate, and every kind has a cap so the screen stays
-// readable.
+// walking in (the boss's banner in purple), a Card Trader ripping out the best stock, and what
+// thieves took. A fixed pool of effect objects is reused so a big wave does not allocate, and every
+// kind has a cap so the screen stays readable.
 import { BUILD, DIRS, BOSS, statsOf, sizeOf, bossTitle } from '../sim/index.js';
 import { TILE, INK, C, rr, paint, label, starPath, burstPath, font, hash2 } from './paint.js';
 import { drawItem } from './items.js';
 import { KIND_COLOURS } from './buildings.js';
+import { SUPPLIES } from '../content/supplies.js';
 
 const T = TILE;
 const TEXT = 1, BLIP = 2, POP = 3, SHOT = 4, SPRAY = 5, DEBRIS = 6, DENT = 8;
@@ -189,9 +190,10 @@ export function createEffects() {
           if (f) { f.text = 'Midnight Release'; f.t2 = (e.n | 0) + ' CARD TRADERS'; f.st = MOB_LOOK; f.sz = 0; }
           break;
         case 'rip':
-          // A Card Trader ripping open a stolen Mystery Box, and the ones who stopped to look.
+          // A Card Trader ripping the best stock out of a building, and the ones who stopped to look.
           f = add(POP, now, e.x * T, e.y * T - 44);
           if (f) { f.text = 'RIIIP!'; f.color = '#c084fc'; f.r = -0.1; f.st = JAGGED; f.sz = 13; }
+          stolenMark(e, now, s);
           if (e.n > 0) {
             f = add(MARK, now, e.x * T + 24, e.y * T - 28);
             if (f) { f.text = e.n > 1 ? 'OOOH x' + e.n : 'OOOH'; f.color = '#f0abfc'; f.st = 1; }
@@ -240,6 +242,7 @@ export function createEffects() {
           f = add(POP, now, e.x * T, e.y * T - 30);
           // (`heal`: the klepto card gave the thief patience back for the thrill of it.)
           if (f) { f.text = e.heal ? 'YOINK!' : 'yoink'; f.color = e.heal ? '#ff4fa3' : '#ff8c1a'; f.r = 0.1; }
+          stolenMark(e, now, s);
           break;
         case 'sample':
           f = add(POP, now, e.x * T, e.y * T - 30);
@@ -413,6 +416,15 @@ export function createEffects() {
     const def = BUILD[kind];
     const [fw, fh] = def ? sizeOf(kind, def.rot ? (b ? b.d | 0 : d) : 0) : [1, 1];
     return [(ai % W) * T + (fw * T) / 2, ((ai / W) | 0) * T + (fh * T) / 2, fw, fh];
+  }
+
+  /** What a thief took (0.4), over the building he took it from: "-1 SPITE" in the supply's colour. */
+  function stolenMark(e, now, s) {
+    const sup = Object.hasOwn(SUPPLIES, e.t) ? SUPPLIES[e.t] : null;
+    if (!sup || !(e.i >= 0)) return;
+    const [cx, cy] = centre(s, e.i, '');
+    const f = add(MARK, now, cx, cy - T * 0.6);
+    if (f) { f.text = '-1 ' + sup.word; f.color = sup.color; f.st = 0; }
   }
 
   /** The anchor tile of the TV Salesman nearest (x, y) in tiles, or -1. */

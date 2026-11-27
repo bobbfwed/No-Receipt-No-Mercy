@@ -1,6 +1,6 @@
 // The end-of-wave performance review. It floats over the warehouse without stopping anything:
 // the game runs on behind it, it can be closed at any time, and it closes itself when the doors open.
-import { TUNE } from '../sim/index.js';
+import { TUNE, TICK_HZ } from '../sim/index.js';
 import { STAMPS } from '../content/lines.js';
 import { h, setText, setStyle, money, clock, safeColor } from './dom.js';
 import { badge, debFace, CLOCK } from './icons.js';
@@ -28,7 +28,7 @@ export function createReview(session, { onClose = () => {} } = {}) {
       h('b', { class: 'pr-mval' }, fmt(value)));
   }
 
-  /** { wave, bonus, rows, employee, deb, totals } */
+  /** { wave, pay, speed, took, rows, employee, deb, totals } */
   function show(m) {
     report = m;
     const rows = Array.isArray(m.rows) ? m.rows : [];
@@ -78,9 +78,12 @@ export function createReview(session, { onClose = () => {} } = {}) {
       h('div', { class: 'pr-totals' },
         stat('Refunds this event', String(num(t.escaped)), num(t.escaped) ? 'bad' : 'good'),
         stat('Shoppers stopped', String(num(t.stopped))),
-        stat('Goods stolen', String(num(t.stolen)), num(t.stolen) ? 'bad' : ''),
+        stat('Stock stolen', String(num(t.stolen)), num(t.stolen) ? 'bad' : ''),
         stat('Cash earned', money(num(t.earned))),
-        stat('Survival bonus', `+${money(num(m.bonus))}`, 'good'),
+        // (0.4: what beating the event paid each player, and the speed bonus on top, with how long the
+        // floor took to clear after the last shopper came in.)
+        stat('Event pay', `+${money(num(m.pay))}`, 'good'),
+        stat(`Speed bonus · ${clock(Math.round(num(m.took) * TICK_HZ))}`, `+${money(num(m.speed))}`, num(m.speed) ? 'good' : 'bad'),
         stat('Refunds so far', `${num(t.refunds)} / ${num(t.refundLimit) || TUNE.refundLimit}`)),
       h('div', { class: 'pr-foot' },
         h('button', { type: 'button', class: 'btn-clockin', onclick: close }, 'CLOCK BACK IN'),

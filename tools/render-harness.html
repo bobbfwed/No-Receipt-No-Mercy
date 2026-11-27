@@ -413,7 +413,7 @@ if (q.get('allfx') === '1' && session.fx) {
     { e: 'left', k: 'dad', x: 16.5, y: 6.5, by: 0, why: 'bored' },
     { e: 'left', k: 'karen', x: 19, y: 12.5, by: 0, why: 'annoyed' },
     { e: 'slip', x: 13.5, y: 2.5 },
-    { e: 'grab', x: 11.5, y: 9.5, kind: 'gadget' },
+    { e: 'grab', x: 11.5, y: 9.5 },
     { e: 'sample', x: 9.5, y: 12.2 },
     { e: 'spray', i: 3 * W + 12 },
     { e: 'shot', i: 8 * W + 9, x: 12.5, y: 6.5 },
@@ -820,8 +820,7 @@ function buildShowcase(s, me) {
     return b;
   };
   // Barcode Lasers facing each way: charged, half charged, just fired, switched off. (Their charge
-  // is set again after the doors open, by showcaseCrowd: opening early plays the build timer
-  // through, which charges everything.)
+  // is set again after the doors open, by showcaseCrowd.)
   put('railgun', 2, 1, E, { cd: 0 });
   SHOW.half = put('railgun', 2, 3, Wd);
   SHOW.fired = put('railgun', 6, 1, N);

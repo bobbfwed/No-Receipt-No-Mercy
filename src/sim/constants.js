@@ -290,7 +290,7 @@ export const BACK = {
 /**
  * Shopper types. `hp` is patience: when it reaches zero the shopper storms out and gets no refund.
  * speed: tiles per second. refund: cash taken when the shopper reaches the tills.
- * browses: stops for free samples and for goods on belts.
+ * browses: stops for free samples, and steals stock from the security buildings he walks past.
  * drain: patience lost per second just for being in the store.
  * ignoresSigns: not slowed by wet floor signs, but may slip on them.
  * hopsBelts: steps over conveyor belts instead of walking around them (machines and crates still stop him).
@@ -400,8 +400,8 @@ export const SHOPPERS = {
   // below) run for the tills from where she stood. Not if the hit that takes her last patience is a
   // Barcode Laser's: then she just leaves. That is the intended counter. Reaching a till she takes
   // her refund like anyone and nothing pops. She stops for free samples (eating for thirteen) and
-  // grabs goods off belts (nesting), and the TV Salesman's barbecues stop her often; she cannot
-  // hurry. Octomom: two dozen.
+  // helps herself to security's stock (nesting), and the TV Salesman's barbecues stop her often; she
+  // cannot hurry. Octomom: two dozen.
   preggo: {
     name: 'Pregnant Lady', hp: 117, speed: 0.85, refund: 30, browses: true, pops: 12, pitch: [0.45, 0],
     sup: { name: 'Octomom', from: 14, hp: 2.5, pops: 24 },
@@ -409,9 +409,9 @@ export const SHOPPERS = {
   // Card Trader (0.3.01, the owner's request): grown men who collect "Mythic Bastards", a trading
   // card game made up for this store. He never comes in an ordinary group, only as the mob at a
   // Midnight Release (TUNE.releaseFrom and on; see releaseNo in step.js), so weak one by one and
-  // dangerous all together. rips: he steals nothing but Mystery Boxes (he is the only one who
-  // does), going out of his way for them further than a shoplifter (TUNE.ripMax), and stands and
-  // opens one for TUNE.ripSecs while the other Card Traders near him stop to see what he pulled
+  // dangerous all together. rips: from a security building he passes he rips out one unit of the
+  // best-branded stock it holds (0.4; until then he stole Mystery Boxes off belts), and stands and
+  // gloats over it for TUNE.ripSecs while the other Card Traders near him stop to see what he pulled
   // (TUNE.ripLook, ripWatch, ripCool). He ignores free samples: nothing free is worth having.
   // Weak to the sprinkler: the cards are no longer mint. Not in OFFICE.kinds: Head Office cannot
   // buy him. The Scalper comes from the second release, pushing a hand truck of boxes he is going
@@ -567,7 +567,7 @@ export const TUNE = {
   // event after it multiplies everyone's patience by surgeHp and the head count by surgeCrowd once
   // more, compounding. Together about 2 times the threat at event 40 and 4.3 at event 50. Most of
   // it is patience, so the screen does not drown in shoppers. Rewards do not follow: refund cash,
-  // the end-of-event bonus and the boss's bounty stay as they were.
+  // the event pay and the boss's bounty stay as they were.
   surgeFrom: 30,
   surgeHp: 1.055,
   surgeCrowd: 1.02,
@@ -610,36 +610,36 @@ export const TUNE = {
   // gentle early, steep late.
   hpGrowth: 0.15,
   hpGrowth2: 0.016,
-  // (80 and 15 times Normal's old x1.1 pay until 0.2.10: the same money on Normal.)
-  waveBonus: 88, // cash for finishing a wave (times the difficulty's pay, rounded)...
-  waveBonusStep: 16.5, // ...plus this much per wave number
+  // Event pay (0.4, the owner's decision: the factory no longer makes money, so beating a sales
+  // event is where the money comes from). Every store player sharing income gets the whole of
+  // round((payBase + payStep * event) * the difficulty's pay * the cards). It was 88 + 16.5 an
+  // event while goods paid the bills. (eventPay in step.js.)
+  payBase: 150,
+  payStep: 45,
+  // The speed bonus, paid with the event pay. Its clock starts when the event's last shopper has
+  // come in through a door and stops when the floor is clear: done within speedBest seconds pays
+  // speedShare of the event pay, at speedPar seconds or later nothing, in between a straight line.
+  // A boss event's par is twice as long (he is slow and stubborn by design). It is then multiplied
+  // by the share of the event's shoppers who were stopped rather than refunded, so letting them
+  // run to the tills is no way to finish fast. (speedBonus in step.js.)
+  speedShare: 0.5,
+  speedBest: 10,
+  speedPar: 60,
   wetSlow: 0.5, // speed multiplier on a wet floor tile
   slipChance: 0.35, // chance a dad slips when stepping onto a wet floor tile
   slipSecs: 1.5,
   slipDmg: 6,
   sampleSecs: 2.2, // how long a free sample stops a shopper
-  grabSecs: 1.5, // how long grabbing goods off a belt stops a shopper
-  // Chance per second that a browsing shopper next to goods grabs one. It was 0.35 while belts
-  // ran at 2 tiles a second; at 5.25 an item passes a shopper in 2.6 times less time, so the chance
-  // went up by as much (0.92) and a passing item is as likely to be stolen as before.
+  grabSecs: 1.5, // how long helping himself to a building's stock stops a shoplifter
+  // Shoplifting (0.4: stock, not goods; see grabBeside in step.js). Chance per second that a
+  // browsing shopper beside a stocked security building takes a unit of its stock (the number goods
+  // on belts were stolen at since 0.2.13, kept). He steals only from what he walks past: the detour
+  // thieves made toward belts (0.3.01 to 0.3.04) went with the goods.
   grabChance: 0.92,
   browseCooldown: 7, // seconds before the same shopper can be distracted again (after a free sample)
-  // Shoplifting (0.3.01: the owner found it far too rare). After grabbing something, or giving up
-  // on going for it, a shopper cannot be distracted again for grabCooldown seconds (it was
-  // browseCooldown, 7; free samples keep that). And a browsing shopper who is not beside any goods
-  // looks round every liftLook seconds for a floor tile beside a belt carrying something
-  // stealable, liftMin to liftMax tiles of walking away; with chance liftChance he goes out of his
-  // way to it, takes the first thing that comes along, and goes back to his route. He gives up
-  // after liftSecs (getting there and waiting both count). Never in a training game.
+  // After a theft a shoplifter cannot be distracted again for grabCooldown seconds (free samples
+  // keep browseCooldown).
   grabCooldown: 5,
-  liftLook: 0.5,
-  liftMin: 2,
-  liftMax: 5,
-  // (Each look is a fresh chance, so it adds up while he walks past a line. 0.06 made about 2.9
-  // times as many goods go missing as before on the ready-made demo layout, which is what the owner
-  // asked for; see PLAN.md, version 0.3.01.)
-  liftChance: 0.06,
-  liftSecs: 5,
   nagRange: 2.5, // towers this close to a Karen...
   nagRate: 0.5, // ...fire at this share of their speed
   leaveSecs: 0.8, // how long the storming-out animation lasts
@@ -747,14 +747,11 @@ export const TUNE = {
   releaseAt: 20,
   releaseSecs: 2,
   releaseCrowd: 0.85,
-  // Ripping packs (see SHOPPERS.trader): he goes out of his way for a Mystery Box up to ripMax
-  // tiles of walking (a shoplifter only TUNE.liftMax), with chance ripChance at each look; one he
-  // has taken he stands and opens for ripSecs, and every other Card Trader within ripLook tiles
-  // who is walking stops for ripWatch seconds to see what he pulled, then will not stop to watch
-  // again for ripCool seconds (so a mob slows down but never freezes). The ripper himself is not
-  // tempted again for ripSecs + grabCooldown.
-  ripMax: 8,
-  ripChance: 0.12,
+  // Ripping (see SHOPPERS.trader): passing a stocked building he rips out a unit of its best stock
+  // on the same roll as a shoplifter's grab (grabChance), then stands and gloats over it for
+  // ripSecs, and every other Card Trader within ripLook tiles who is walking stops for ripWatch
+  // seconds to see what he pulled, then will not stop to watch again for ripCool seconds (so a mob
+  // slows down but never freezes). The ripper himself is not tempted again for ripSecs + grabCooldown.
   ripSecs: 3,
   ripLook: 1.5,
   ripWatch: 1.5,
@@ -801,8 +798,8 @@ export const CARDS = {
   bde: { side: 'bad', hp: 1.2, size: 1.5 }, // bosses' patience, and how much larger they are drawn
   hardy: { side: 'bad', per: 'kind', hp: 1.25 }, // (1.3 before the playtest: on dads it cost too much)
   hurry: { side: 'bad', per: 'kind', speed: 1.2 },
-  clearance: { side: 'bad', sell: 0.85 }, // everything shipped sells for that
-  klepto: { side: 'bad', chance: 2, heal: 0.4 }, // shoplifters' chance to go for goods, times; the share of his full patience each theft gives back (reworked 2026-11-24, see DEALABLE: it was 3 tiles further)
+  clearance: { side: 'bad', pay: 0.85 }, // the event pay (and so the speed bonus), times (0.4; until then what goods sold for)
+  klepto: { side: 'bad', chance: 2, heal: 0.4 }, // shoplifters' chance to steal stock, times; the share of his full patience each theft gives back (reworked 2026-11-24, see DEALABLE: it was 3 tiles further)
   shrinkflation: { side: 'bad', cost: 1.08 }, // every building's price (not a rebuild's; 1.1 before the playtest)
   pissing: { side: 'bad', pee: 1.5 }, // how long a dog's pee switches security off, times
   doorbuster: { side: 'bad', crowd: 1.1 }, // the ordinary crowd (not the boss, not a Midnight Release mob)
@@ -810,9 +807,10 @@ export const CARDS = {
   dryjanuary: { side: 'bad', fall: 0.5 }, // a Day Drinker's chance to fall at a corner, times
   retreat: { side: 'bad', pep: 1.5 }, // what a boss's pep talk gives back, times
   // ---- Good for the players
-  lootbox: { side: 'good', item: 'box', sell: 3 },
-  asseenontv: { side: 'good', item: 'gadget', sell: 1.7 },
-  regifting: { side: 'good', item: 'giftset', sell: 1.5 },
+  // (lootbox, asseenontv and regifting made one kind of goods sell for more until 0.4.)
+  lootbox: { side: 'good', bin: 3 }, // what a Clearance Bin pays, times
+  asseenontv: { side: 'good', rebrand: 1.3 }, // Rebranders work that many times as fast
+  regifting: { side: 'good', units: 2 }, // units of each supply a Dumbwaiter holds, added
   offatruck: { side: 'good', drop: 1.2 }, // Returns Drops work that many times as fast (0.4; it gave the factory free upgrade levels)
   mallcop: { side: 'good', units: 2 }, // a security building bought new comes with that many units of Store Brand of every supply it takes but Razor Wire (0.4; it gave free upgrade levels)
   pulledout: { side: 'good', pops: 0.5 },
@@ -825,7 +823,7 @@ export const CARDS = {
   warranty: { side: 'good', chance: 0.06, sample: 50, salesMin: 100, salesMax: 400 },
   supportdog: { side: 'good', share: 0.4, range: 1.5, secs: 1.5 },
   staffdiscount: { side: 'good', cost: 0.9 },
-  overtime: { side: 'good', bonus: 1.5 }, // the end-of-event bonus, times
+  overtime: { side: 'good', pay: 1.5 }, // the event pay (and so the speed bonus), times
   mopmike: { side: 'good', slip: 1.4 },
   restocking: { side: 'good', fee: 2 }, // dollars every shopper who storms out pays (not babies)
   firecode: { side: 'good', targets: 5 }, // shoppers a Pepper Sprinkler reaches at once
@@ -834,14 +832,16 @@ export const CARDS = {
   convention: { side: 'odd', shield: 1.5, speed: 0.8, hp: 0.75 }, // a Cosplayer's shield reach (tiles), walking speed (tiles a second), patience
   bulkbuy: { side: 'odd', crowd: 0.75, hp: 1.15 }, // (hp 1.25 before the playtest: it was a bad card)
   flashmob: { side: 'odd', crowd: 1.25, hp: 0.75 }, // (hp 0.8 before the playtest: it was a bad card)
-  artisanal: { side: 'odd', sell: 1.2, work: 1.25 }, // everything sells for, and every machine's time for an item, times (sell 1.3 before the playtest: it was a good card)
+  artisanal: { side: 'odd', work: 1.25, uses: 1.25 }, // a machine's or Rebrander's time in The Back, and the uses in a unit of supply (rounded up), times (0.4; until then goods sold for 1.2 and the factory's machines took 1.25)
   premature: { side: 'odd', rate: 1.25, range: 0.85 }, // security's rate of fire and range, times
   fathersday: { side: 'odd', who: 'dad', crowd: 2, hp: 0.72 }, // that kind's groups, times; and patience (0.65 before the playtest)
-  payday: { side: 'odd', sell: 1.2, refund: 1.6 }, // (refund 1.4 before the playtest: it was a good card)
+  payday: { side: 'odd', pay: 1.2, refund: 1.6 }, // the event pay and every refund, times (refund 1.4 before the playtest: it was a good card; pay was goods' prices until 0.4)
   mallwalkers: { side: 'odd', speed: 1.15, hp: 0.85 }, // every shopper but the boss
   openbar: { side: 'odd', who: 'drinker', crowd: 2, hp: 0.7 },
-  rentacop: { side: 'odd', cost: { security: 0.8, factory: 1.2 } },
-  sweatshop: { side: 'odd', cost: { factory: 0.8, security: 1.2 } },
+  // Prices by group: security (Crate Stacks count as security here) and The Back's parts (0.4; the
+  // shop floor's old factory until then). See buildPrice in cards.js.
+  rentacop: { side: 'odd', cost: { security: 0.8, back: 1.2 } },
+  sweatshop: { side: 'odd', cost: { back: 0.8, security: 1.2 } },
 };
 
 /**

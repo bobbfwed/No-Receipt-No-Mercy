@@ -7,7 +7,7 @@ import { BUILD, SHOPPERS, TUNE, SETTINGS, ZONES, shareCount, difficultyOf, track
 import { HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/help.js';
 import {
   SHOPPER_ORDER, FACTORY_ORDER, SECURITY_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
-  tierRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText, edgeFacts,
+  tierRows, factoryFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST, paceText, edgeFacts, payText,
 } from '../content/facts.js';
 import { releaseWaves } from '../content/facts.js';
 import { trackName, SUPPLIES } from '../content/supplies.js';
@@ -134,7 +134,7 @@ function bossCard(ctx) {
     facts([
       ['Ranks', b.titles.map((t) => `${t.title} (from event ${t.from})`).join(' · ')],
       ['Patience', `grows every sales event like everyone's, and each rank above the first adds ${pct0(b.tierHp)} of his own`],
-      ['Slowed or stopped by', 'nothing: wet floors, messes, free samples, goods on belts, a fallen drunk, the TV Salesman and the exhibitionist all fail'],
+      ['Slowed or stopped by', 'nothing: wet floors, messes, free samples, a fallen drunk, the TV Salesman and the exhibitionist all fail, and he steals nothing'],
       ['Pep talk', `every ${fmt(b.pepEvery)} s: every other shopper within ${fmt(b.pepRange)} tiles gets ${pct0(b.pepHeal)} of his patience back (never above full)`],
       ['If he gets through', `counts as ${b.refunds} refunds at once, and takes ${money(b.refund)} times his rank`],
       ['If he storms out', `the store gets a bounty of ${money(TUNE.bossBounty)} times his rank${ctx.pay !== 1 ? ` (times ${ctx.name} pay)` : ''}, split like any income`],
@@ -208,6 +208,7 @@ export function handbook({ state = null, onClose }) {
     players: state ? shareCount(state) : 1,
     // (A training game's shoppers: see TUNE.trainingPatienceDivisor.)
     hp: state && state.training ? 1 / TUNE.trainingPatienceDivisor : diff.hp, pay: diff.pay, name: diff.name,
+    difficulty: state ? state.difficulty : SETTINGS.defaults.difficulty,
     // The game's holiday (0.3), if any: the boss is pictured in its outfit.
     holiday: state && Object.hasOwn(HOLIDAY_INFO, state.holiday || '') ? state.holiday : null,
   };
@@ -230,7 +231,8 @@ export function handbook({ state = null, onClose }) {
         + `${ctx.waves > 0 ? `The tables go up to sales event ${LONGEST}, the longest game, whatever the game's own length. ` : ''}Speed and refunds do not grow from event to event. ${paceText()} A super shopper takes a double refund. The boss is at the end, and his patience grows by event alone (and by the same surge after event ${TUNE.surgeFrom}).`;
       body.replaceChildren(...SHOPPER_ORDER.map((k) => shopperCard(k, ctx)), bossCard(ctx));
     } else if (id === 'factory') {
-      note.textContent = `Prices goods sell for are for ${game} (${ctx.name} difficulty). Every sale is split evenly between the players. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
+      // (0.4: how money is made now, on this game's difficulty, before the old factory's prices.)
+      note.textContent = `${payText(ctx.difficulty)} Prices goods sell for are for ${game} (${ctx.name} difficulty); every sale is split evenly between the players. Selling anything back returns ${pct(TUNE.sellBack)} of what was spent on it.`;
       body.replaceChildren(...FACTORY_ORDER.map((k) => factoryCard(k, ctx)));
     } else {
       note.textContent = `Security gets stronger only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range) and Duct Tape (soaks up gym bro hits). Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;

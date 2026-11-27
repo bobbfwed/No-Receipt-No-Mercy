@@ -992,8 +992,8 @@ btn(modBox, 'review 5 stars', () => fake.emit('review', { stars: 5, text: 'In an
 btn(modBox, 'report', () => fake.emit('report', { wave: 3 }));
 btn(modBox, 'players', () => fake.emit('players', { text: 'Kev has clocked in.' }));
 btn(modBox, 'wave start (dads)', () => fake.emit('fx', [{ e: 'waveStart', wave: 4, total: 20, dads: 5 }]));
-btn(modBox, 'wave end', () => fake.emit('fx', [{ e: 'waveEnd', wave: 4, bonus: 50 }]));
-btn(modBox, 'won', () => fake.emit('fx', [{ e: 'waveEnd', wave: 20, bonus: 50 }, { e: 'won' }]));
+btn(modBox, 'wave end', () => fake.emit('fx', [{ e: 'waveEnd', wave: 4, pay: 330, speed: 120, took: 24 }]));
+btn(modBox, 'won', () => fake.emit('fx', [{ e: 'waveEnd', wave: 20, pay: 1050, speed: 0, took: 75 }, { e: 'won' }]));
 btn(modBox, 'lost', () => fake.emit('fx', [{ e: 'escape', k: 'karen' }, { e: 'lost' }]));
 btn(modBox, 'teen / mom / guide dog / gym bro', () => {
   fake.emit('fx', [{ e: 'mess', i: 1 }]);

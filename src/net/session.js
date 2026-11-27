@@ -120,6 +120,10 @@ export function checksum(s) {
   if (s.dealT !== undefined) mix(s.dealT);
   // (Paused, and by whom. Only while it is: a game never paused sums as it always did.)
   if (s.pause) { mix(0x50415553); mix(s.pause.by); }
+  // (The speed bonus's clock, 0.4: only once a sales event's last shopper is in. The event's counts
+  // of stopped and refunded shoppers, which scale it, are summed too.)
+  if (s.lastIn !== undefined) { mix(0x4c415354); mix(s.lastIn); }
+  mix(s.ws ? s.ws.stopped : 0); mix(s.ws ? s.ws.escaped : 0);
   for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);

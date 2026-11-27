@@ -705,7 +705,7 @@ test('a busy Back survives a copy through JSON and plays on identically; the che
   for (const [k, f] of [['split', 'h'], ['split', 'r'], ['intern', 'h'], ['intern', 't'], ['drop', 't'], ['drop', 'lv']]) change(k, f);
 });
 
-test('step runs The Back in the build pause and in sales events, and opening early runs it ahead too', () => {
+test('step runs The Back in the build pause and in sales events; opening early does not run it ahead (0.4)', () => {
   const s = blank();
   s.phase = 'build';
   lay(s, 2, 5, 'drop', E);
@@ -717,14 +717,18 @@ test('step runs The Back in the build pause and in sales events, and opening ear
   applyCommand(s, 0, { c: 'place', k: 'conv', x: 3, y: 9, d: E, f: 1 });
   for (let t = 0; t < dropTicks(0); t++) step(s);
   assert.deepEqual(codes(s), [JUNK]);
-  // Opening the doors early plays the rest of the build pause through on The Back as well.
-  const left = s.phaseT - 1;
-  const twin = JSON.parse(JSON.stringify(s));
-  for (let t = 0; t < left; t++) stepBack(twin);
+  // Opening the doors early just opens them: The Back is exactly as it was (the time skipped is
+  // given up), and runs on from there in the sales event.
+  assert.ok(s.phaseT > 1);
+  const twin = JSON.parse(JSON.stringify(s.back));
   const ev = [];
   applyCommand(s, 0, { c: 'start' }, ev);
   assert.equal(s.phase, 'wave');
-  assert.deepEqual(s.back, twin.back);
+  assert.deepEqual(s.back, twin);
+  assert.ok(!ev.some((e) => e.e === 'early' || e.e === 'binned'));
+  const drop = at(s, 2, 5).t;
+  step(s);
+  assert.equal(at(s, 2, 5).t, drop - 1, 'and it runs during the event');
 });
 
 test('speed: the largest store with thousands of belt tiles full of items', () => {

@@ -213,8 +213,6 @@ export function createSound() {
         case 'caught': fire('caught', { carry: e.carry | 0 }); break;
         // The Barcode Laser fired (the building's key is still 'railgun', the event still 'rail').
         case 'rail': fire('rail', { n: e.n | 0 }); break;
-        // The doors opened early and the factory's takings for the skipped time arrived at once.
-        case 'early': if (e.sold > 0) fire('kerching'); break;
         case 'pee': fire('pee'); break;
         case 'flash': fire('flash', { n: e.n | 0 }); break;
         case 'fall': fire('fall'); break;

@@ -1,13 +1,17 @@
-// Tests for the rules added in version 0.3: every shopper walks at his own pace, some shoppers are
-// weak or tough against certain security, and browsing shoppers go out of their way to shoplift.
+// Tests for the rules added in version 0.3: every shopper walks at his own pace, and some shoppers
+// are weak or tough against certain security. Shoplifting (0.3.01) is here too, as 0.4 made it:
+// browsing shoppers steal a unit of stock from the security they walk past (no more detours to
+// goods on belts).
 // Run with: node --test
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  createGame, addPlayer, applyCommand, canPlace, step, queueTrainingWave, walkPace, babyPace, defOf, edgeMul,
+  createGame, addPlayer, applyCommand, step, queueTrainingWave, walkPace, babyPace, defOf, edgeMul,
+  addStock, itemCode, unitsIn, statsOf, levelIn, STOCK_TRACKS,
   SHOPPERS, SUPERS, BUILD, BOSS, BABY, TUNE, TICK_HZ, DT, ST,
 } from '../src/sim/index.js';
+import { stealStock } from '../src/sim/back.js';
 import { edgeFacts, edgeText, shopperTraits } from '../src/content/facts.js';
 import { EDGE_HELP } from '../src/content/help.js';
 
@@ -260,23 +264,26 @@ test('the handbook, the help and the README say what each kind is weak to and to
   for (const k of Object.keys(SHOPPERS)) if (edgeText(k)) assert.ok(readme.includes(edgeText(k)), `README has ${k}`);
 });
 
-// ---------------------------------------------------------------- out of his way to shoplift
+// ---------------------------------------------------------------- shoplifting stock (0.4)
 
 /**
- * An ordinary game on the small map with the doors open and nobody else coming. A single belt on
- * (10, 3), facing north into the wall, holds a gadget that goes nowhere. The route to the tills
- * runs east along rows 7 and 8.
+ * An ordinary game on the small map with the doors open and nobody else coming, and a forklift on
+ * (10, 6), switched off so it shoots nobody, stocked with these supplies ([type, tier], a unit
+ * each). The route to the tills runs east along rows 7 and 8, right past it.
  */
-function shop(t, { item = 'gadget', training = false, liftChance = 1 } = {}) {
-  tune(t, { liftChance });
-  const s = training ? stage(6) : game(6);
-  assert.ok(place(s, 'belt', 10, 3, 3).ok);
-  if (item) s.grid[3 * s.w + 10].it.push([item, 1]);
-  if (training) queueTrainingWave(s, [{ k: 'hunter', n: 1, gap: 1, at: 1000 }]);
+function shop(t, units = [[1, 1], [1, 1], [3, 2]], grabChance = 1e6) {
+  // (Put back to the real number after the test, however many shops it made.)
+  TUNE.grabChance = grabChance;
+  t.after(() => { TUNE.grabChance = GRAB; });
+  const s = game(6);
+  assert.ok(place(s, 'forklift', 10, 6).ok);
+  const b = s.grid[6 * s.w + 10];
+  for (const [type, tier] of units) addStock(b, itemCode(type, tier), s);
+  b.off = 1e9;
   assert.ok(applyCommand(s, 0, { c: 'start' }).ok);
   s.spawnQ = [];
   s.shoppers.length = 0;
-  return s;
+  return { s, b };
 }
 /** A shopper of kind k walking from (x, y), with patience to spare. */
 function walker(s, k, x, y) {
@@ -293,121 +300,119 @@ function run(s, seconds, until = () => false) {
   }
   return all;
 }
-/** Temporarily changes tuning numbers for one test. */
-function tune(t, changes, obj = TUNE) {
-  const old = {};
-  for (const k of Object.keys(changes)) { old[k] = obj[k]; obj[k] = changes[k]; }
-  t.after(() => Object.assign(obj, old));
-}
-const beltAt = (s) => s.grid[3 * s.w + 10];
+const SHOTS = BUILD.forklift.shots;
+const GRAB = TUNE.grabChance;
 
-test('a bargain hunter walks a few tiles out of his way to steal off a belt, then carries on to the tills', (t) => {
-  const s = shop(t);
-  const h = walker(s, 'hunter', 10.5, 7.5);
-  let target = -1;
-  const ev = run(s, 30, () => { if (h.lf !== undefined) target = h.lf; return !s.shoppers.includes(h); });
-  // He picked the floor beside the belt, three tiles' walk up from where he stood.
-  assert.equal(target, 4 * s.w + 10);
-  const grab = ev.find((e) => e.e === 'grab');
-  assert.ok(grab && grab.far === 1 && grab.kind === 'gadget', 'he went and took it');
-  assert.equal(beltAt(s).it.length, 0);
+test('a bargain hunter walking past takes one unit of the supply the building holds most of, then carries on to the tills', (t) => {
+  const { s, b } = shop(t);
+  const h = walker(s, 'hunter', 8.5, 7.5);
+  const ev = run(s, 30, () => !s.shoppers.includes(h));
+  const grabs = ev.filter((e) => e.e === 'grab');
+  assert.equal(grabs.length, 1, 'once: then he is not tempted for a while, and walks on');
+  assert.deepEqual([grabs[0].i, grabs[0].t, grabs[0].tier], [6 * s.w + 10, 'dmg', 1]);
+  assert.deepEqual(b.s, { dmg: [1, SHOTS], rng: [2, SHOTS] });
   assert.equal(s.ws.stolen, 1);
-  // And then he went on and took his refund like anyone else.
-  assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'hunter'));
-  assert.equal(h.lf, undefined);
-  assert.equal(h.lw, undefined);
-  assert.ok(TUNE.liftMin === 2 && TUNE.liftMax === 5);
+  assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'hunter'), 'and took his refund like anyone else');
+  // He stood there for TUNE.grabSecs and is not tempted again for TUNE.grabCooldown.
+  assert.ok(TUNE.grabSecs > 0 && TUNE.grabCooldown === 5);
 });
 
-test('goods further than five tiles\' walk away, Mystery Boxes and a training game tempt nobody', (t) => {
-  // Six tiles' walk (row 10 up to row 4), and further with every step he takes towards the tills.
-  let s = shop(t);
-  let h = walker(s, 'hunter', 10.5, 10.5);
-  let ev = run(s, 30, () => { assert.equal(h.lf, undefined); return !s.shoppers.includes(h); });
-  assert.ok(!ev.some((e) => e.e === 'grab'));
-  // A belt of Mystery Boxes.
-  s = shop(t, { item: 'box' });
-  h = walker(s, 'hunter', 10.5, 7.5);
-  ev = run(s, 30, () => { assert.equal(h.lf, undefined); return !s.shoppers.includes(h); });
-  assert.ok(!ev.some((e) => e.e === 'grab'));
-  // A training game.
-  s = shop(t, { training: true });
-  h = walker(s, 'hunter', 10.5, 7.5);
-  ev = run(s, 30, () => { assert.equal(h.lf, undefined); return !s.shoppers.includes(h); });
-  assert.ok(!ev.some((e) => e.e === 'grab'));
+test('he takes from the newest run, a whole unit or what is left of it; a tie goes to the first supply in STOCK_TRACKS', () => {
+  const s = game(6);
+  assert.ok(place(s, 'forklift', 10, 6).ok);
+  const i = 6 * s.w + 10, b = s.grid[i];
+  // Two units of Store Brand then one of Premium Spite, one of Name Brand Cola: Spite has more.
+  for (const c of [itemCode(1, 1), itemCode(1, 1), itemCode(1, 3), itemCode(2, 2)]) addStock(b, c, s);
+  b.s.dmg[3] = 2; // (the newest run, the Premium unit, is mostly used: 2 uses left in it)
+  const ev = [];
+  assert.deepEqual(stealStock(s, b, i, false, ev), { t: 'dmg', tier: 3 });
+  assert.deepEqual(b.s.dmg, [1, 2 * SHOTS], 'what was left of the newest run, and that run is gone');
+  assert.deepEqual(stealStock(s, b, i, false, ev), { t: 'dmg', tier: 1 }, 'still two units of Spite against one of Cola');
+  assert.deepEqual(b.s.dmg, [1, SHOTS], 'a whole unit\'s worth');
+  // One of each now: the tie goes to Spite, the first in STOCK_TRACKS.
+  assert.ok(STOCK_TRACKS.indexOf('dmg') < STOCK_TRACKS.indexOf('spd'));
+  assert.deepEqual(stealStock(s, b, i, false, ev), { t: 'dmg', tier: 1 });
+  assert.equal(b.s.dmg, undefined);
+  assert.deepEqual(ev, [{ e: 'stockOut', i, t: 'dmg' }], 'the Spite ran dry: the usual warning');
+  assert.deepEqual(stealStock(s, b, i, false, ev), { t: 'spd', tier: 2 });
+  assert.equal(b.s, undefined, 'nothing left at all');
+  assert.equal(stealStock(s, b, i, false, ev), null, 'and nothing to take');
+  assert.deepEqual(ev.map((e) => e.t), ['dmg', 'spd']);
 });
 
-test('dads, the boss and babies never go after goods (they do not browse)', (t) => {
-  const s = shop(t);
-  const dad = walker(s, 'dad', 10.5, 7.5), baby = walker(s, 'baby', 10.5, 8.5);
-  const boss = walker(s, 'boss', 9.5, 7.5);
+test('a Card Trader takes the highest tier in stock, from any supply and any run', () => {
+  const s = game(6);
+  assert.ok(place(s, 'forklift', 10, 6).ok);
+  const i = 6 * s.w + 10, b = s.grid[i];
+  // Spite: Store Brand, Platinum, Store Brand (the Platinum in the middle); Cola: Premium.
+  for (const c of [itemCode(1, 1), itemCode(1, 4), itemCode(1, 1), itemCode(2, 3), itemCode(2, 3)]) addStock(b, c, s);
+  assert.deepEqual(b.s.dmg, [1, SHOTS, 4, SHOTS, 1, SHOTS]);
+  const ev = [];
+  assert.deepEqual(stealStock(s, b, i, true, ev), { t: 'dmg', tier: 4 });
+  assert.deepEqual(b.s.dmg, [1, 2 * SHOTS], 'the runs either side are one run again');
+  assert.equal(levelIn(b, 'dmg'), 2);
+  assert.deepEqual(stealStock(s, b, i, true, ev), { t: 'spd', tier: 3 });
+  assert.deepEqual(b.s.spd, [3, SHOTS]);
+  assert.deepEqual(ev, []);
+});
+
+test('a theft that empties a supply sends stockOut, and the building works as built again', (t) => {
+  const { s, b } = shop(t, [[1, 4]]);
+  const plain = statsOf({ k: 'forklift' }, s).dmg;
+  assert.ok(statsOf(b, s).dmg > plain);
+  walker(s, 'clipper', 8.5, 7.5);
+  const ev = run(s, 20, () => !s.shoppers.length);
+  assert.ok(ev.some((e) => e.e === 'grab'));
+  assert.deepEqual(ev.filter((e) => e.e === 'stockOut'), [{ e: 'stockOut', i: 6 * s.w + 10, t: 'dmg' }]);
+  assert.equal(b.s, undefined);
+  assert.equal(statsOf(b, s).dmg, plain);
+});
+
+test('dads, the boss and babies never steal (they do not browse), and an empty building tempts nobody', (t) => {
+  let { s, b } = shop(t);
+  const dad = walker(s, 'dad', 8.5, 7.5), baby = walker(s, 'baby', 8.5, 8.5);
+  const boss = walker(s, 'boss', 7.5, 7.5);
   boss.tr = 1; boss.pp = 1e6;
-  const ev = run(s, 30, () => {
-    for (const m of [dad, baby, boss]) assert.equal(m.lf, undefined);
-    return !s.shoppers.length;
-  });
+  let ev = run(s, 40, () => !s.shoppers.length);
+  assert.ok(!ev.some((e) => e.e === 'grab' || e.e === 'rip'));
+  assert.equal(unitsIn(b, 'dmg', s), 2);
+  ({ s, b } = shop(t, []));
+  const h = walker(s, 'hunter', 8.5, 7.5);
+  ev = run(s, 30, () => !s.shoppers.includes(h));
   assert.ok(!ev.some((e) => e.e === 'grab'));
-  assert.equal(beltAt(s).it.length, 1);
+  assert.equal(h.cd, 0, 'never even stopped');
 });
 
-test('if the belt he is going for is taken away, he gives up and carries on; he never gets stuck', (t) => {
-  const s = shop(t);
-  const h = walker(s, 'hunter', 10.5, 7.5);
-  run(s, 5, () => h.lf !== undefined);
-  assert.notEqual(h.lf, undefined, 'he set off');
-  assert.ok(applyCommand(s, 0, { c: 'remove', x: 10, y: 3 }).ok);
-  step(s);
-  assert.equal(h.lf, undefined, 'gave up');
-  const ev = run(s, 30, () => !s.shoppers.includes(h));
-  assert.ok(ev.some((e) => e.e === 'escape'), 'and reached the tills');
-  assert.equal(s.ws.stolen, 0);
+test('a theft as he passes uses the old numbers: a roll of TUNE.grabChance a second beside stock', (t) => {
+  // At the real chance, about 1 - e^-chance of hunters standing beside stock for a second take some.
+  const chance = GRAB;
+  assert.equal(chance, 0.92, 'the number goods on belts were stolen at, kept');
+  let took = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const { s } = shop(t, [[1, 1]], chance);
+    s.rng = seed;
+    const h = walker(s, 'hunter', 10.5, 7.5);
+    // Held right under the forklift for a second.
+    let got = false;
+    for (let n = 0; n < TICK_HZ; n++) { h.x = 10.5; h.y = 7.5; if (step(s).some((e) => e.e === 'grab')) { got = true; break; } }
+    if (got) took++;
+  }
+  assert.ok(Math.abs(took / 60 - (1 - Math.exp(-chance))) < 0.2, `${took} of 60`);
 });
 
-test('if his way to the goods is walled off, he gives up and carries on; nobody can wall him in', (t) => {
-  const s = shop(t);
-  const h = walker(s, 'hunter', 10.5, 7.5);
-  run(s, 5, () => h.lf !== undefined);
-  assert.equal(h.lf, 4 * s.w + 10);
-  // Box in the tile beside the belt (it stays empty floor, but he cannot reach it).
-  for (const [x, y] of [[9, 4], [11, 4], [10, 5]]) assert.ok(place(s, 'crate', x, y).ok, `${x},${y}`);
-  step(s);
-  assert.equal(h.lf, undefined, 'gave up');
-  const ev = run(s, 30, () => !s.shoppers.includes(h));
-  assert.ok(ev.some((e) => e.e === 'escape'), 'and reached the tills');
-  // While one is on his way, the rule that nobody may be walled in still holds.
-  const s2 = shop(t);
-  const g = walker(s2, 'hunter', 10.5, 7.5);
-  beltAt(s2).it.length = 0; // nothing to take yet: he will wait beside the belt
-  beltAt(s2).it.push(['giftset', 1]);
-  run(s2, 5, () => g.lf !== undefined);
-  beltAt(s2).it.length = 0;
-  run(s2, 3, () => (g.y | 0) === 4);
-  assert.equal((g.y | 0) * s2.w + (g.x | 0), 4 * s2.w + 10, 'waiting beside the belt');
-  assert.ok(place(s2, 'crate', 9, 4).ok);
-  assert.ok(place(s2, 'crate', 11, 4).ok);
-  assert.equal(canPlace(s2, 'crate', 10, 5, 0), 'blocked');
-  // Something comes along: he takes it and goes. Nothing comes: he gives up in TUNE.liftSecs.
-  const ev2 = run(s2, TUNE.liftSecs + 1, () => g.lf === undefined);
-  assert.equal(g.lf, undefined);
-  assert.ok(!ev2.some((e) => e.e === 'grab'));
-  assert.ok(g.cd > 0, 'and is not tempted again straight away');
-});
-
-test('a shopper on his way to steal is an ordinary target, and a copy of the game made mid-detour plays on identically', (t) => {
-  const s = shop(t);
-  assert.ok(place(s, 'sprinkler', 9, 5).ok);
-  const h = walker(s, 'hunter', 10.5, 7.5);
-  run(s, 5, () => h.lf !== undefined);
-  const before = h.hp;
-  run(s, 1);
-  assert.ok(h.hp < before, 'the sprinkler sprays him on the way');
+test('a copy of the game made just after a theft plays on identically', (t) => {
+  const { s } = shop(t, [[1, 2], [3, 1], [4, 3]]);
+  assert.ok(place(s, 'sprinkler', 12, 6).ok);
+  for (const k of ['hunter', 'clipper', 'preggo']) walker(s, k, 7.5, 7.5);
+  run(s, 10, () => s.ws.stolen > 0);
+  assert.ok(s.ws.stolen > 0);
   const copy = JSON.parse(JSON.stringify(s));
-  for (let i = 0; i < 4 * TICK_HZ; i++) { step(s); step(copy); }
+  for (let i = 0; i < 6 * TICK_HZ; i++) { step(s); step(copy); }
   assert.deepEqual(JSON.parse(JSON.stringify(copy)), JSON.parse(JSON.stringify(s)));
 });
 
-test('shoplifting is more common than it was: after a grab a shopper is tempted again sooner, and free samples keep their wait', () => {
+test('shoplifting: after a theft a shopper is tempted again sooner than after a sample, and the detour is gone', () => {
   assert.ok(TUNE.grabCooldown < 7);
   assert.equal(TUNE.browseCooldown, 7);
-  assert.ok(TUNE.liftChance > 0 && TUNE.liftChance <= 1);
+  for (const k of ['liftLook', 'liftMin', 'liftMax', 'liftChance', 'liftSecs', 'ripMax', 'ripChance']) assert.equal(TUNE[k], undefined, k);
 });

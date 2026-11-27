@@ -313,7 +313,9 @@ test('mixed tiers are kept in the order they came and used in that order', () =>
   assert.deepEqual(ev, [{ e: 'stockOut', i, t: 'dmg' }], 'one warning, when the last run ran out');
 });
 
-test('a tower uses one use a shot, however many it hits, and is plain again when its stock runs out', () => {
+test('a tower uses one use a shot, however many it hits, and is plain again when its stock runs out', (t) => {
+  // (Nobody steals here: shoplifters take stock too since 0.4, and only use is being counted.)
+  tune(t, { grabChance: 0 });
   const s = stage(4);
   const f = placeOk(s, 'forklift', 10, 4);
   const sp = placeOk(s, 'sprinkler', 14, 6);
@@ -347,7 +349,8 @@ test('a tower uses one use a shot, however many it hits, and is plain again when
   if (sprays >= BUILD.sprinkler.shots) assert.ok(outs.some((e) => e.i === si && e.t === 'spd'));
 });
 
-test('Free Samples, the TV Salesman and the Wet Floor Sign use one use for each shopper they act on', () => {
+test('Free Samples, the TV Salesman and the Wet Floor Sign use one use for each shopper they act on', (t) => {
+  tune(t, { grabChance: 0 }); // (no thefts: only use is counted)
   // Samples: one use a stop.
   {
     const s = stage(6);

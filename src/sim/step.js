@@ -7,8 +7,8 @@ import { statsOf } from './upgrades.js';
 import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { stepRebuilds } from './commands.js';
-import { stepBack, useWork, useStock, usesIn, syncLifts } from './back.js';
-import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardSell, cardBonus, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardLiftChance, cardLiftHeal, cardFee,
+import { stepBack, useWork, useStock, usesIn, syncLifts, stealStock } from './back.js';
+import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardPay, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardGrabChance, cardGrabHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
 const secs = (s) => Math.max(1, Math.round(s * TICK_HZ));
@@ -237,44 +237,6 @@ export function setTrainingCash(state, cash) {
   if (state.training) for (const p of state.players) p.cash = Math.max(0, Math.floor(cash));
 }
 
-/**
- * The doors are being opened before the build timer ran out. Without this, opening early threw
- * away whatever the factory would have sold in the time that was left, so it was always the
- * wrong thing to do (the owner's complaint). So the time that was left is played through in one
- * go, exactly as it would have gone: belts move, machines work, chutes sell and pay, puddles dry.
- * Nothing else happens in a build phase (there are no shoppers), so the store ends up precisely
- * as if the players had waited. One 'early' event reports it instead of a sale event per item.
- * Call it just before beginWave().
- */
-export function skipBuild(state, ev) {
-  // (The tick on which the timer runs out is already the wave's first, so one fewer than is left.)
-  const left = state.phase === 'build' && state.phaseT > 1 ? state.phaseT - 1 : 0;
-  if (!left) return;
-  const only = [];
-  for (let i = 0; i < state.grid.length; i++) if (state.grid[i] && state.grid[i].part === undefined) only.push(i);
-  const fields = [getField(state, NORMAL), getField(state, HOP), getField(state, SMASH)];
-  const quiet = [];
-  let cash = 0, sold = 0;
-  // These sales are paid in one tick, not over the time they stand for, so they stay out of the
-  // running total of goods sold (state.sales), which the interface reads as income per minute.
-  const sales = state.sales;
-  for (let n = 0; n < left; n++) {
-    for (let k = state.messes.length - 1; k >= 0; k--) {
-      if (--state.messes[k][1] <= 0) state.messes.splice(k, 1);
-    }
-    // The Back (0.4) runs through the skipped time too, as it would have tick by tick. (A later stage
-    // of 0.4 stops running anything ahead here; until then the two floors stay in step.)
-    stepBack(state, quiet);
-    stepBuildings(state, fields, quiet, only);
-    for (const e of quiet) {
-      if (e.e === 'sale') { cash += e.v; sold++; } else if (e.e === 'binned') cash += e.v;
-    }
-    quiet.length = 0;
-  }
-  if (sales === undefined) delete state.sales; else state.sales = sales;
-  ev.push({ e: 'early', secs: Math.round(left / TICK_HZ), cash, sold });
-}
-
 /** Opens the doors for the next wave. */
 export function beginWave(state, ev) {
   // Training waves do not count up: shoppers keep their starting patience.
@@ -328,6 +290,8 @@ export function beginWave(state, ev) {
   }
   q.sort((a, b) => a[0] - b[0]);
   state.spawnQ = q;
+  // The speed bonus's clock starts when the last shopper is in (spawn); with nobody to come, now.
+  if (q.length) delete state.lastIn; else state.lastIn = state.tick;
   ev.push({
     e: 'waveStart', wave: state.wave, total: q.length, dads,
     kinds: [...new Set(groups.map((g) => g.k))], supers: [...supers], office: bought ? 1 : 0,
@@ -336,21 +300,63 @@ export function beginWave(state, ev) {
   });
 }
 
+/**
+ * What beating sales event n pays in this game (0.4): every store player sharing income gets the
+ * whole of it. TUNE.payBase + TUNE.payStep an event, times the difficulty's pay and the cards
+ * (cardPay: overtime, clearance, payday), in whole dollars.
+ */
+export const eventPay = (state, n) => Math.round((TUNE.payBase + TUNE.payStep * n) * difficultyOf(state).pay * cardPay(state));
+
+/** Seconds from the last shopper in to a clear floor at or past which sales event n pays no speed bonus. */
+export const speedPar = (n) => TUNE.speedPar * (bossTier(n) ? 2 : 1);
+
+/**
+ * The speed bonus (0.4) for sales event n, which pays `pay` (eventPay), looked at on tick `to`: the
+ * clock runs from `from` (state.lastIn: the tick the last shopper came in through a door) to `to`.
+ * `took` is those seconds; `share` is 1 at TUNE.speedBest or less, 0 at speedPar(n) or more, a
+ * straight line between;
+ * `clean` is the event's shoppers stopped over stopped plus refunded so far (state.ws), so letting
+ * them run to the tills earns nothing; `bonus` is round(pay * TUNE.speedShare * share * clean).
+ * Everything is in ticks, so game speed makes no difference. Before the last shopper is in (no
+ * `from`: still coming in, or between events) the clock has not started and `bonus` is `max`, the
+ * most it can pay. endWave pays exactly this, and the EVENT PAY panel shows it as it drains.
+ * @returns {{took: number, share: number, clean: number, bonus: number, max: number, running: boolean}}
+ */
+export function speedBonus(state, n, pay, to = state.tick, from = state.lastIn) {
+  const max = Math.round(pay * TUNE.speedShare);
+  const running = from !== undefined;
+  const took = running ? Math.max(0, to - from) / TICK_HZ : 0;
+  const par = speedPar(n), best = TUNE.speedBest;
+  const share = Math.max(0, Math.min(1, (par - took) / (par - best)));
+  // (Babies and puppies are in neither count, and the boss counts once like anyone: see giveUp, escape.)
+  const ws = state.ws || {}, stopped = ws.stopped | 0, through = ws.escaped | 0;
+  const clean = stopped + through > 0 ? stopped / (stopped + through) : 1;
+  return { took, share, clean, bonus: running ? Math.round(pay * TUNE.speedShare * share * clean) : max, max, running };
+}
+
 function endWave(state, ev) {
   // Gym bro damage only counts within a wave: every building is whole again for the next.
   for (const b of state.grid) if (b && b.hit) delete b.hit;
   state.carts = [];
   if (state.training) {
     // Back to an untimed build phase; the lesson decides what happens next.
+    delete state.lastIn;
     state.phase = 'build';
     state.phaseT = -1;
-    ev.push({ e: 'waveEnd', wave: state.wave, bonus: 0, training: true });
+    ev.push({ e: 'waveEnd', wave: state.wave, pay: 0, speed: 0, took: 0, training: true });
     return;
   }
-  // Every player gets the whole bonus. (The overtime card makes it bigger: cardBonus.)
-  const bonus = Math.round((TUNE.waveBonus + TUNE.waveBonusStep * state.wave) * difficultyOf(state).pay * cardBonus(state));
-  earn(state, bonus * shareCount(state));
-  ev.push({ e: 'waveEnd', wave: state.wave, bonus });
+  // Every player gets the whole of both. (Cards may change the pay, and the bonus follows: cardPay.)
+  const pay = eventPay(state, state.wave);
+  // (Without lastIn, only when the queue was emptied some other way than by shoppers walking in,
+  // the clock is taken as starting now.)
+  const sp = speedBonus(state, state.wave, pay, state.tick, state.lastIn ?? state.tick);
+  delete state.lastIn;
+  earn(state, (pay + sp.bonus) * shareCount(state));
+  state.ws.pay = pay;
+  state.ws.speed = sp.bonus;
+  state.ws.took = Math.round(sp.took * 10) / 10;
+  ev.push({ e: 'waveEnd', wave: state.wave, pay, speed: sp.bonus, took: state.ws.took });
   if (!isEndless(state) && state.wave >= state.waves) {
     state.phase = 'won';
     // (Money held for rebuilds that will now never happen goes back: the end screen counts cash.)
@@ -408,6 +414,8 @@ function spawn(state, ev) {
     // The first of a Midnight Release's mob: the rest are right behind him.
     if (mob) ev.push({ e: 'release', n: mob, door: at, x: s.x, y: s.y, wave: state.wave });
   }
+  // The last of the event's shoppers is in: the speed bonus's clock starts (speedBonus).
+  if (!q.length && state.phase === 'wave') state.lastIn = state.tick;
 }
 
 /** Index of the tile next to tile i in direction d, or -1 if off the map. */
@@ -446,12 +454,11 @@ function offer(state, ti, kind, d, ev) {
     return true;
   }
   if (b.k === 'chute') {
-    // Whole dollars, and never nothing, whatever the difficulty (or a card: cardSell) does to the price.
-    const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay * cardSell(state, kind)));
+    // Whole dollars, and never nothing, whatever the difficulty does to the price. (The old shop-floor
+    // factory, on its way out in 0.4: no card changes what goods sell for any more.)
+    const v = Math.max(1, Math.round(ITEMS[kind].value * difficultyOf(state).pay));
     bump(state, b.o, 'shipped');
     takings(state, v, b.o);
-    // The running total behind the income-per-minute panel (state.sales, 0.3.03).
-    state.sales = (state.sales || 0) + v;
     ev.push({ e: 'sale', i: ti, v, kind });
     return true;
   }
@@ -694,11 +701,7 @@ function strike(state, s, dmg, by, cosplayers, ev, from) {
  * Runs every building for one tick. Returns what the shoppers need to know about the security:
  * stands (free samples), salesmen (TV Salesmen) and posts (what a dog may pee on), all working.
  */
-/**
- * One tick of every building. `only`, if given, is the list of tile indexes to visit, in rising
- * order (skipBuild uses it so that a big, mostly empty map costs nothing to run forward).
- */
-function stepBuildings(state, fields, ev, only = null) {
+function stepBuildings(state, fields, ev) {
   const grid = state.grid, S = state.shoppers, W = state.w;
   const stands = [], salesmen = [], posts = [];
   const karens = [], cosplayers = [];
@@ -711,9 +714,7 @@ function stepBuildings(state, fields, ev, only = null) {
   const beltAdv = TUNE.beltSpeed * DT;
   const way = (s) => fields[routeOf(s, state)][((s.y | 0) * W) + (s.x | 0)];
 
-  const count = only ? only.length : grid.length;
-  for (let q = 0; q < count; q++) {
-    const i = only ? only[q] : q;
+  for (let i = 0; i < grid.length; i++) {
     const b = grid[i];
     // The other tiles of a big building only point at it; it works from its anchor tile.
     if (!b || b.part !== undefined) continue;
@@ -942,61 +943,34 @@ function walkToStand(state, s, def, i, ev) {
   return true;
 }
 
-const clearLift = (s) => { delete s.lf; delete s.lw; };
-
 /**
- * True if a shopper with definition `def` would steal this item (a kind of ITEMS): a Card Trader
- * (`rips`) only a Mystery Box, anyone else anything but one.
- */
-const wants = (def, item) => (def && def.rips ? item === 'box' : item !== 'box');
-
-/** True if building b is a belt carrying something a shopper with definition `def` may steal. */
-const stealable = (b, def) => b && b.k === 'belt' && b.it.some((item) => wants(def, item[0]));
-
-/** True if a belt next to tile t carries something worth stealing (to a shopper with definition `def`). */
-function goodsBeside(state, t, def) {
-  for (let d = 0; d < 4; d++) {
-    const ni = neighbour(state, t, d);
-    if (ni >= 0 && stealable(state.grid[ni], def)) return true;
-  }
-  return false;
-}
-
-/** True if there is a belt next to tile t at all (goods keep coming along a working line). */
-function beltBeside(state, t) {
-  for (let d = 0; d < 4; d++) {
-    const ni = neighbour(state, t, d);
-    const b = ni < 0 ? 0 : state.grid[ni];
-    if (b && b.k === 'belt') return true;
-  }
-  return false;
-}
-
-/**
- * A browsing shopper on tile i takes something off a belt beside him: on a roll of
- * TUNE.grabChance a second as he passes, or for certain (`sure`) once he has gone out of his way
- * to get there. Never a Mystery Box. He stands there for TUNE.grabSecs, and cannot be distracted
- * again for TUNE.grabCooldown.
+ * A shoplifter on tile i helps himself to the stock of a security building beside him (0.4; until
+ * then he took goods off a belt): for each tile next to his that belongs to a building holding any
+ * stock, a roll of TUNE.grabChance a second (times cardGrabChance: the klepto card). He takes one
+ * unit (stealStock in back.js: from the fullest track's newest run; a Card Trader rips out the best
+ * tier instead, see ripPack), stands there for TUNE.grabSecs, and cannot be distracted again for
+ * TUNE.grabCooldown. He steals only from what he walks past: the detour toward belts is gone.
  * @returns {boolean} true if he took something
  */
-function grabBeside(state, s, i, sure, ev, def = defOf(s)) {
+function grabBeside(state, s, i, ev, def = defOf(s)) {
+  const grid = state.grid;
   for (let d = 0; d < 4; d++) {
     const ni = neighbour(state, i, d);
-    const b = ni < 0 ? 0 : state.grid[ni];
-    if (!b || b.k !== 'belt') continue;
-    const j = b.it.findIndex((item) => wants(def, item[0]));
-    if (j < 0 || (!sure && rand(state) >= TUNE.grabChance * DT)) continue;
-    const kind = b.it.splice(j, 1)[0][0];
+    const g = ni < 0 ? 0 : grid[ni];
+    if (!g) continue;
+    const ai = g.part !== undefined ? g.part : ni, b = grid[ai];
+    if (!b || !b.s || rand(state) >= TUNE.grabChance * DT * cardGrabChance(state, def)) continue;
+    const got = stealStock(state, b, ai, !!def.rips, ev);
+    if (!got) continue;
     state.ws.stolen++;
-    if (def.rips) { ripPack(state, s, sure, ev); return true; }
+    if (def.rips) { ripPack(state, s, ai, got, ev); return true; }
     s.st = ST.BROWSE;
     s.t = secs(TUNE.grabSecs);
     s.cd = secs(TUNE.grabCooldown);
-    const e = { e: 'grab', x: s.x, y: s.y, kind };
-    if (sure) e.far = 1;
+    const e = { e: 'grab', x: s.x, y: s.y, i: ai, t: got.t, tier: got.tier };
     // The klepto card: the thrill of it gives him back a share of his full patience, never above it
     // (`heal` on the event is how much, rounded, when he had any to get back).
-    const heal = cardLiftHeal(state, def);
+    const heal = cardGrabHeal(state, def);
     if (heal > 0 && s.cr !== 1 && s.hp < s.mhp) {
       const back = Math.min(s.mhp - s.hp, s.mhp * heal);
       s.hp += back;
@@ -1009,13 +983,14 @@ function grabBeside(state, s, i, sure, ev, def = defOf(s)) {
 }
 
 /**
- * A Card Trader has taken a Mystery Box off a belt and rips it open where he stands (ST.BROWSE for
- * TUNE.ripSecs; not tempted again for ripSecs + TUNE.grabCooldown). Every other Card Trader within
- * TUNE.ripLook tiles who is walking, and has not stopped to watch one lately, stops for
- * TUNE.ripWatch seconds to see what he pulled (ST.WATCH; `ro` is the ticks before he will stop for
- * another, TUNE.ripCool). The 'rip' event says how many stopped.
+ * A Card Trader has ripped a unit of the best stock (`got`, from the building on anchor tile ai) out
+ * of a building and gloats over it where he stands (ST.BROWSE for TUNE.ripSecs; not tempted again
+ * for ripSecs + TUNE.grabCooldown). Every other Card Trader within TUNE.ripLook tiles who is
+ * walking, and has not stopped to watch one lately, stops for TUNE.ripWatch seconds to see what he
+ * pulled (ST.WATCH; `ro` is the ticks before he will stop for another, TUNE.ripCool). The 'rip'
+ * event says how many stopped, and what was taken from where.
  */
-function ripPack(state, s, far, ev) {
+function ripPack(state, s, ai, got, ev) {
   s.st = ST.BROWSE;
   s.t = secs(TUNE.ripSecs);
   s.cd = secs(TUNE.ripSecs + TUNE.grabCooldown);
@@ -1029,81 +1004,7 @@ function ripPack(state, s, far, ev) {
     o.ro = secs(TUNE.ripCool);
     n++;
   }
-  const e = { e: 'rip', x: s.x, y: s.y, sup: s.sup | 0, n };
-  if (far) e.far = 1;
-  ev.push(e);
-}
-
-/** Scratch lists for liftLook's search (it runs for one shopper at a time). */
-let FRONT = [], NEXT = [];
-
-/**
- * A browsing shopper on tile i, not beside any goods, looks round for some (the owner's request,
- * 0.3.01): a floor tile next to a belt carrying something stealable, between TUNE.liftMin and
- * TUNE.liftMax tiles of walking away (counted over tiles he can walk on, so a belt between him and
- * it means the long way round). The nearest is the one he considers; with chance TUNE.liftChance
- * he goes for it (`lf` is that tile, `lw` the ticks he will give it).
- */
-function liftLook(state, s, i, def = defOf(s)) {
-  if (goodsBeside(state, i, def)) return; // right beside some already: he grabs as he passes, or not
-  // (A Card Trader will go further, and is likelier to, for a Mystery Box: TUNE.ripMax, ripChance.)
-  // (The klepto card: ordinary shoplifters go for it more often, cardLiftChance.)
-  const reach = def.rips ? TUNE.ripMax : TUNE.liftMax;
-  const chance = def.rips ? TUNE.ripChance : TUNE.liftChance * cardLiftChance(state, def);
-  const seen = new Set([i]);
-  FRONT.length = 0;
-  FRONT.push(i);
-  for (let d = 1; d <= reach && FRONT.length; d++) {
-    NEXT.length = 0;
-    for (const t of FRONT) {
-      for (let k = 0; k < 4; k++) {
-        const n = neighbour(state, t, (k + s.id) & 3);
-        // (Never by way of a till: stepping on one is taking his refund.)
-        if (n < 0 || seen.has(n) || state.tiles[n] === 'T' || !walkable(state, n, NORMAL)) continue;
-        seen.add(n);
-        NEXT.push(n);
-      }
-    }
-    if (d >= TUNE.liftMin) {
-      for (const n of NEXT) {
-        if (!goodsBeside(state, n, def)) continue;
-        if (rand(state) < chance) {
-          s.lf = n;
-          s.lw = secs(TUNE.liftSecs);
-        }
-        return;
-      }
-    }
-    [FRONT, NEXT] = [NEXT, FRONT];
-  }
-}
-
-/**
- * One tick of a shopper going out of his way to steal (see liftLook). He walks to the tile `lf` by
- * the shortest way there; once on it he takes the first stealable thing that comes along a belt
- * beside him. He gives up, and is not tempted again for TUNE.grabCooldown, if it takes more than
- * TUNE.liftSecs, if the tile is built on or walled off, or if there is no belt beside it any more.
- * Then the ordinary path takes him on from wherever he is, as it does anyone. He is an ordinary
- * shopper all the while: security hits him, wet floors slow him.
- * @returns {boolean} true if this tick was spent on it
- */
-function liftWalk(state, s, i, speed, ev) {
-  const t = s.lf, W = state.w;
-  const field = walkable(state, t, NORMAL) && state.tiles[t] !== 'T' ? getFieldTo(state, t) : null;
-  if (!field || field[i] === UNREACHABLE || !beltBeside(state, t) || --s.lw <= 0) {
-    clearLift(s);
-    s.cd = secs(TUNE.grabCooldown);
-    return false;
-  }
-  if (i === t && grabBeside(state, s, i, true, ev, defOf(s))) { clearLift(s); return true; }
-  // On his way; or there, and waiting for something worth taking to come along.
-  const going = i === t ? moveTo(s.x, s.y, (t % W) + 0.5 + s.ox, ((t / W) | 0) + 0.5 + s.oy, speed)
-    : moveAlong(state, field, s.x, s.y, s.ox, s.oy, speed, s.id);
-  if (going) {
-    s.vx = MV.vx; s.vy = MV.vy;
-    s.x += MV.vx; s.y += MV.vy;
-  }
-  return true;
+  ev.push({ e: 'rip', x: s.x, y: s.y, sup: s.sup | 0, n, i: ai, t: got.t, tier: got.tier });
 }
 
 /**
@@ -1413,8 +1314,7 @@ function spillAround(state, i, ticks) {
  * table (owned by player `by`) that hands out booze. With boozeChance of the booze tables he has
  * stopped at before (`bq`) he turns into a Day Drinker where he stands: the same shopper (id,
  * place, super or not, what salesmen have pitched him), swaying from now on. What only a browsing
- * shopper uses goes: a detour to steal (`lf`, `lw`), a walk over to a salesman (`sa`, `sw`, `sl`)
- * and the booze count. Sends `drunk` {x,y,k,sup} (k: what he was).
+ * shopper uses goes: a walk over to a salesman (`sa`, `sw`, `sl`) and the booze count. Sends `drunk` {x,y,k,sup} (k: what he was).
  * Reworked on the owner's decision (2026-11-24), because the card is meant to help the players and
  * did not: he used to take a Day Drinker's patience at the share he had, which handed most kinds
  * patience. Now he never gains any (his patience and its maximum stay as they were, or drop to a
@@ -1435,7 +1335,6 @@ function boozeUp(state, s, by, ev) {
   s.sv = 1;
   delete s.dr;
   delete s.bq;
-  clearLift(s);
   clearStand(s);
   ev.push({ e: 'drunk', x: s.x, y: s.y, k: was, sup: s.sup | 0 });
   s.st = ST.STUN;
@@ -1566,8 +1465,6 @@ function stepShoppers(state, fields, sec, ev) {
       if (chasing || s.cr === 1) clearStand(s); // her child has run off: the television can wait
       else if (walkToStand(state, s, def, i, ev)) continue;
     }
-    // Her child has run off (or she is crawling to him): the goods she was after can wait too.
-    if (s.lf !== undefined && (chasing || s.cr === 1)) clearLift(s);
 
     // Each at his own pace (babies at theirs), so everything worked out from it below (a mom's
     // chase, a rush past a salesman, a bolting guide dog) keeps the same spread.
@@ -1717,7 +1614,6 @@ function stepShoppers(state, fields, sec, ev) {
           s.sa = m[4];
           s.sw = secs(st.secs);
           s.sl = secs(TUNE.pitchWalkSecs);
-          clearLift(s); // the television beats the goods he was off to steal
           ev.push({ e: 'pitch', x: s.x, y: s.y, k: s.k, r: 'stop', i: m[4] });
           continue;
         }
@@ -1729,7 +1625,7 @@ function stepShoppers(state, fields, sec, ev) {
       }
     }
 
-    // (A Card Trader steals too, only Mystery Boxes, and has no time for free samples.)
+    // (A Card Trader steals too, the best-branded stock, and has no time for free samples.)
     if ((def.browses || def.rips) && s.cd === 0 && !chasing) {
       let stopped = false;
       for (const st of def.browses ? stands : NO_STANDS) {
@@ -1748,17 +1644,8 @@ function stepShoppers(state, fields, sec, ev) {
           break;
         }
       }
-      // (On his way to goods he has his eye on, he does not stop for others on the way.)
-      if (!stopped && s.lf === undefined) stopped = grabBeside(state, s, i, false, ev, def);
-      if (stopped) { clearLift(s); continue; }
-      // Out of his way to steal: already on his way to the goods, or (now and then, never in a
-      // training game) looking round for some within a few tiles' walk.
-      if (s.lf !== undefined) {
-        if (liftWalk(state, s, i, speed, ev)) continue;
-      } else if (!state.training && s.cr !== 1 && (state.tick + s.id) % secs(TUNE.liftLook) === 0) {
-        liftLook(state, s, i, def);
-        if (s.lf !== undefined && liftWalk(state, s, i, speed, ev)) continue;
-      }
+      if (!stopped) stopped = grabBeside(state, s, i, ev, def);
+      if (stopped) continue;
     }
 
     // Walk toward whichever neighbouring tile is closest to the tills, on this shopper's own
@@ -1798,11 +1685,14 @@ function stepShoppers(state, fields, sec, ev) {
  *   left also has fee when the restocking card made him pay the store on his way out
  *   waveStart {wave,total,dads,kinds,supers,office,boss,release} (boss: the boss's tier if he comes
  *     this wave, else 0; release: how many Card Traders a Midnight Release brings, else 0)
- *   waveEnd {wave,bonus} · won (never in an endless game) · lost
+ *   waveEnd {wave,pay,speed,took} the event is over: every store player sharing income was paid `pay`
+ *     (eventPay) and `speed` (the speed bonus, speedBonus), the floor clear `took` seconds after
+ *     the last shopper came in · won (never in an endless game) · lost
  *   release {n,door,x,y,wave} the first of a Midnight Release's mob of n Card Traders walked in
  *     through entrance `door` at (x, y); the rest follow within TUNE.releaseSecs
- *   rip {x,y,sup,n,far?} a Card Trader took a Mystery Box off a belt and is ripping it open; n
- *     other Card Traders stopped to watch (far 1: he went out of his way for it). No 'grab' with it
+ *   rip {x,y,sup,n,i,t,tier} a Card Trader ripped a unit of tier `tier` out of track t of the
+ *     building on anchor tile i and is gloating over it; n other Card Traders stopped to watch.
+ *     No 'grab' with it
  *   escape {k,sup,x,y,refund,n,tier?} a shopper reached the tills; n is how many refunds it
  *     counted as (TUNE.bossRefunds for the boss, who also has tier; 0 for a baby, k 'baby')
  *   left {k,sup,x,y,by,why} one gave up; why is 'annoyed' (security wore him out), 'bored' (a dad
@@ -1814,8 +1704,9 @@ function stepShoppers(state, fields, sec, ev) {
  *   bossIn {tier,x,y} the boss walked in · bossOut {tier,x,y,bounty} he stormed off (after his
  *     'left' event) and the store was paid `bounty`, before it is split
  *   pep {x,y,n} the boss gave a pep talk; n shoppers near him got patience back (may be 0)
- *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y} · grab {x,y,kind,far?}
- *     (far 1: he went out of his way for it, see liftLook)
+ *   sale {i,v,kind} · spray {i} · shot {i,x,y} · slip {x,y} · sample {x,y}
+ *   grab {x,y,i,t,tier,heal?} a shoplifter took a unit of tier `tier` from track t of the building
+ *     on anchor tile i (heal: the klepto card gave him that much patience back)
  *   rail {i,d,len,n} the Barcode Laser on anchor tile i fired facing d, a beam len tiles long, hitting n
  *   mess {i} a teenager dropped a mess on tile i · kid {x,y} a child escaped
  *   caught {x,y,carry} a mom has her child back (carry 1: in her arms, as she has no cart)
@@ -1831,8 +1722,6 @@ function stepShoppers(state, fields, sec, ev) {
  *   shield {x,y} a cosplayer soaked up a shot meant for someone near him (at most once a second each)
  *   flash {x,y,n} an exhibitionist opened her bathrobe; n dads and teenagers stopped to stare
  *   fall {x,y} a day drinker fell over going round a corner
- *   early {secs,cash,sold} the doors were opened that many seconds early; the factory sold `sold`
- *     items for `cash` (the whole store's takings, before it is split) in the time skipped
  *   The cards that change how shoppers behave (0.3.01) add:
  *   kid also has back 1 when the child runs back toward the entrance (wrongway)
  *   pop, nopop also have pup 1 for a pregnant Stray Dog (spayed): n puppies (k 'pup'), which
@@ -1850,8 +1739,8 @@ function stepShoppers(state, fields, sec, ev) {
  *  that must wait, endless {by} a won game carries on as an endless one,
  *  pause {on,by} player `by` paused (on true) or resumed (on false) the game.)
  *  The Back (0.4, back.js): binned {i,v,by} a Clearance Bin on tile i was paid v for a supply.
- *  stockOut {i,t} the building on anchor tile i has just used the last of its stock in track t
- *  ('dmg', 'spd', 'rng', 'dur'; 'wire' in a later stage). smash has tape 1 when Duct Tape soaked
+ *  stockOut {i,t} the building on anchor tile i has just used, or had stolen, the last of its stock
+ *  in track t ('dmg', 'spd', 'rng', 'dur', 'wire'). smash has tape 1 when Duct Tape soaked
  *  the hit up (its `left` then counts the tape still on it). dropUp {x,y,lv,by,paid} (a command)
  *  a player bought the Returns Drop at (x, y) its cash level lv.
  */

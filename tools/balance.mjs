@@ -132,7 +132,7 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
   let fund = 0, lastCash = me.cash;
   let next = 0; // how far down the list it has got
   let bought = 0, rebuilt = 0, wrecked = 0, stolen = 0;
-  // Mystery Boxes Card Traders took off the belts and ripped open (0.3.01), in all and this wave.
+  // Units of stock Card Traders ripped out of security (0.4; Mystery Boxes off belts until then), in all and this wave.
   let ripped = 0, rippedNow = 0;
   const rows = [];
   let byKind = {};
@@ -246,7 +246,7 @@ function main() {
       const result = r.result === 'lost' ? 'LOST' : endless ? 'ALIVE' : r.result.toUpperCase();
       console.log(`== ${bot.padEnd(7)} ${result.padEnd(5)} wave ${String(r.wave).padStart(2)}, `
         + `${r.refunds}/${r.limit} refunds, cash left $${r.cash}, built ${r.bought}/${r.of}, `
-        + `${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.stolen} stolen (${r.ripped} boxes ripped), ${r.minutes} min`
+        + `${r.wrecked} wrecked (${r.rebuilt} rebuilt), ${r.stolen} units stolen (${r.ripped} ripped), ${r.minutes} min`
         + (cards ? `, cards ${r.hand.join(' ') || 'none'}` : ''));
       if (!verbose) continue;
       console.log('wave  escaped  stopped  wrecked  stolen  ripped  earned    cash  refunds   built  who got through');

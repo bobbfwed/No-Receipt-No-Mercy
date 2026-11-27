@@ -8,7 +8,7 @@ import {
 } from '../src/content/lines.js';
 import { HostSession, ClientSession } from '../src/net/session.js';
 import { memoryPair } from '../src/net/transports.js';
-import { createGame, addPlayer, setPlayerOnline, TICK_HZ, bossTier, bossTitle } from '../src/sim/index.js';
+import { createGame, addPlayer, setPlayerOnline, applyCommand, TICK_HZ, bossTier, bossTitle } from '../src/sim/index.js';
 
 /** A seeded random number generator, so every run of these tests sees the same numbers. */
 function seeded(seed = 1) {
@@ -37,7 +37,7 @@ const says = (out) => out.filter((m) => m.t === 'say').map((m) => m.text);
 
 /** The placeholders the director fills for each bank of LINES. */
 const VARS = {
-  waveStart: 'pw', dadLine: 'pn', manyEscapes: 'pn', grab: 'p', slip: 'p', kid: 'p', crawl: 'p',
+  waveStart: 'pw', dadLine: 'pn', manyEscapes: 'pn', grab: 'pks', slip: 'p', kid: 'p', crawl: 'p',
   caught: 'p', caughtCarry: 'p', smash: 'p', smashOther: 'pk', dented: 'pkn',
   gave: 'pqn', rebuilt: 'pn', officeTaken: 'p',
   officeLeft: 'p', officeWave: 'pn', officeNoPlan: 'p', officeWaiting: 'p', storeWaiting: 'p',
@@ -46,17 +46,17 @@ const VARS = {
   won: 'p', lost: 'p', nearLimit: 'pn', report: 'p', reportNoStops: 'p', reportNoShips: 'p',
   reportPerfect: 'p', pee: 'pk', flash: 'pn', fall: 'p', pitchStop: 'pk', pitchRush: 'pk',
   kidtv: 'p', rail: 'pn', shield: 'p', bossIn: 'pk', bossOut: 'pkn', bossOutBy: 'pkn', bossEscape: 'pknm',
-  pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw', early: 'pnm',
+  pep: 'pkn', endless: 'p', endlessMark: 'pw', foodCourt: 'pw', carPark: 'pw',
   pop: 'pn', nopop: 'p', rebuildHeld: 'pn',
-  releaseNext: 'pnw', releaseIn: 'pn', rip: 'pn',
+  releaseNext: 'pnw', releaseIn: 'pn', rip: 'pnks',
   // Version 0.3: the new store designs.
   backPassage: 'pw', stripMall: 'pw',
   // Version 0.3.01: the cards that change how shoppers behave.
   litter: 'pn', drunk: 'p', bought: 'pnk', trail: 'p', wrongway: 'p', pet: 'pn',
   // Version 0.3.02: pausing and resuming the game.
   paused: 'p', resumed: 'p',
-  // Version 0.4: a security building out of a supply.
-  stockOut: 'pk',
+  // Version 0.4: a security building out of a supply; the speed bonus, all of it or none.
+  stockOut: 'pk', speedFull: 'pnm', speedNone: 'pnm',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -68,9 +68,9 @@ const AT_LEAST = {
   joined: 6, quit: 6, won: 6, lost: 6, report: 21, reportNoStops: 3, reportNoShips: 3,
   reportPerfect: 3, dented: 9, caught: 6, caughtCarry: 6, sale: 9, nearLimit: 9,
   pee: 9, flash: 9, fall: 9, pitchStop: 6, pitchRush: 6, kidtv: 6, rail: 12, shield: 9,
-  // Version 0.2.06: the boss, endless games, the Food Court and opening early.
+  // Version 0.2.06: the boss, endless games and the Food Court (opening early lost its lines in 0.4).
   'bossIn.manager': 8, 'bossIn.director': 8, 'bossIn.vp': 8, 'bossIn.ceo': 10, bossOut: 8,
-  bossEscape: 12, pep: 12, endless: 8, endlessMark: 10, foodCourt: 12, early: 6,
+  bossEscape: 12, pep: 12, endless: 8, endlessMark: 10, foodCourt: 12,
   // Version 0.2.08: the Car Park.
   carPark: 12,
   // Version 0.2.09: the Pregnant Lady.
@@ -85,6 +85,8 @@ const AT_LEAST = {
   litter: 8, drunk: 8, bought: 8, trail: 8, wrongway: 7, pet: 8,
   // Version 0.3.02: pausing and resuming the game.
   paused: 8, resumed: 4,
+  // Version 0.4: the speed bonus, all of it or none.
+  speedFull: 5, speedNone: 5,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
@@ -162,7 +164,7 @@ test('no line is repeated, every placeholder gets filled, and nothing is too lon
       if (seen.has(text)) assert.fail(`"${text}" is in both ${seen.get(text)} and ${name}`);
       seen.set(text, name);
       for (const k of placeholders(text)) assert.ok(allowed.includes(k), `${name}: {${k}} is never filled in "${text}"`);
-      const vars = { p: 'Bartholomew', n: 12, m: 3, w: 14, k: 'Forklift Turret', q: 'Kev' };
+      const vars = { p: 'Bartholomew', n: 12, m: 3, w: 14, k: 'Forklift Turret', q: 'Kev', s: 'Platinum Extension Cord' };
       const filled = fill(text, vars);
       assert.ok(!/\{\w\}/.test(filled), `${name}: "${filled}"`);
       assert.ok(filled.length <= longest, `${name} is ${filled.length} characters (most ${longest}): "${filled}"`);
@@ -180,7 +182,7 @@ test('no line is repeated, every placeholder gets filled, and nothing is too lon
 test('banks whose number or name can be missing still have lines that need neither', () => {
   const optional = {
     smashOther: 'k', dented: 'kn', pee: 'k', flash: 'n', pitchStop: 'k', pitchRush: 'k', superArrive: 'k',
-    bossOut: 'n', bossEscape: 'nm', pep: 'kn', early: 'm', rip: 'n', litter: 'n', pet: 'n',
+    bossOut: 'n', bossEscape: 'nm', pep: 'kn', rip: 'nks', grab: 'ks', litter: 'n', pet: 'n',
   };
   for (const [key, ks] of Object.entries(optional)) {
     const without = LINES[key].filter((l) => !placeholders(textOf(l)).some((k) => ks.includes(k)));
@@ -192,7 +194,7 @@ test('banks whose number or name can be missing still have lines that need neith
 
 test('every bank has common, uncommon and rare lines, and the friends have lines for every situation', () => {
   for (const key of ['waveStart', 'dadLine', 'manyEscapes', 'report', 'removed', 'smashOther', 'bossOut', 'bossEscape',
-    'pep', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'early', 'rail', 'pop', 'nopop']) {
+    'pep', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'speedFull', 'speedNone', 'rail', 'pop', 'nopop']) {
     const ws = LINES[key].map(weightOf);
     assert.ok(ws.some((w) => w === 1) && ws.some((w) => w < 0.5 && w > 0.2) && ws.some((w) => w <= 0.15), key);
   }
@@ -472,7 +474,7 @@ function playGame(director, state, by = 1, waves = 20) {
       ], state)));
     }
     state.tick += 5 * TICK_HZ;
-    said.push(...director.handle([{ e: 'waveEnd', wave: w, bonus: 100 }], state).filter((m) => m.t === 'report').map((m) => m.deb));
+    said.push(...director.handle([{ e: 'waveEnd', wave: w, pay: 300, speed: 80, took: 30 }], state).filter((m) => m.t === 'report').map((m) => m.deb));
     state.phase = 'build';
     for (let s = 45; s > 0; s--) {
       state.phaseT = s * TICK_HZ;
@@ -594,7 +596,12 @@ test('the director handles every new event, with all its fields or none, and ign
     { e: 'pep', x: 1, y: 1, n: 3 },
     { e: 'pep', x: 1, y: 1, n: 0 },
     { e: 'endless', by: 1 },
-    { e: 'early', secs: 40, cash: 320, sold: 9 },
+    { e: 'grab', x: 1, y: 1, i: 4, t: 'dmg', tier: 2 },
+    { e: 'grab', x: 1, y: 1, i: 4, t: 'spd', tier: 1, heal: 3.2 },
+    { e: 'rip', x: 1, y: 1, sup: 0, n: 3, i: 4, t: 'rng', tier: 4 },
+    { e: 'rip', x: 1, y: 1, sup: 1, n: 0, i: 4, t: 'dmg', tier: 1 },
+    { e: 'waveEnd', wave: 3, pay: 285, speed: 143, took: 8.2 },
+    { e: 'waveEnd', wave: 3, pay: 285, speed: 0, took: 75 },
     { e: 'pop', x: 1, y: 1, n: 12, sup: 0 },
     { e: 'pop', x: 1, y: 1, n: 24, sup: 1 },
     { e: 'nopop', x: 1, y: 1, sup: 0 },
@@ -610,9 +617,10 @@ test('the director handles every new event, with all its fields or none, and ign
       assert.ok(!/\{\w\}/.test(text) && !/undefined|null|NaN/.test(text), `${e.e}: "${text}"`);
     }
   }
-  // A small barcode laser hit is not worth a word, and nor is a factory that earned next to nothing.
+  // A small barcode laser hit is not worth a word, and nor is a speed bonus between none and all of it
+  // (the report shows it).
   assert.deepEqual(createDirector(() => 0).handle([{ e: 'rail', n: 2 }], game('Dave')), []);
-  assert.deepEqual(createDirector(() => 0).handle([{ e: 'early', secs: 3, cash: 4, sold: 0 }], game('Dave')), []);
+  assert.deepEqual(says(createDirector(() => 0).handle([{ e: 'waveEnd', wave: 3, pay: 285, speed: 80, took: 30 }], game('Dave'))), []);
   // A shopper walking over to the TV Salesman's stand needs nothing said.
   assert.deepEqual(createDirector(() => 0).handle([{ e: 'watching', x: 1, y: 1, k: 'dad', i: 4 }], game('Dave')), []);
   // Destroyed and dented get different lines.
@@ -638,7 +646,7 @@ test('the director handles every new event, with all its fields or none, and ign
   // Every event with its fields missing, plus nonsense, and nothing breaks.
   const names = ['pee', 'flash', 'fall', 'pitch', 'kidtv', 'rail', 'shield', 'smash', 'rebuilt', 'caught',
     'waveStart', 'crawl', 'kid', 'begun', 'side', 'ready', 'gave', 'mess', 'bolt', 'escape', 'left', 'grab', 'slip', 'sale',
-    'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'bossIn', 'bossOut', 'pep', 'endless', 'early',
+    'placed', 'removed', 'waveEnd', 'won', 'lost', 'joined', 'quit', 'bossIn', 'bossOut', 'pep', 'endless', 'rip',
     'pop', 'nopop', 'rebuildHeld', 'watching', 'somethingNew', undefined];
   for (const random of [() => 0, () => 0.999, seeded(1)]) {
     const director = createDirector(random);
@@ -750,7 +758,7 @@ test('the pep talk, every 7 seconds, gets only a handful of remarks in a game', 
 test('an endless game never mentions a last event, and marks the round numbers', () => {
   const lastEvent = /last (one|sales event|event)|final (sales )?event|every sales event|\bof 0\b/i;
   // Nothing anywhere that DEB can say in an endless game names a last event...
-  const endlessBanks = ['waveStart', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'bossOut', 'bossEscape', 'pep', 'early', 'report', 'nearLimit', 'lost'];
+  const endlessBanks = ['waveStart', 'endless', 'endlessMark', 'foodCourt', 'carPark', 'bossOut', 'bossEscape', 'pep', 'speedFull', 'speedNone', 'report', 'nearLimit', 'lost'];
   for (const key of endlessBanks) for (const l of LINES[key]) assert.ok(!lastEvent.test(textOf(l)), `${key}: "${textOf(l)}"`);
   for (const l of Object.values(LINES.bossIn).flat()) assert.ok(!lastEvent.test(textOf(l)), textOf(l));
 
@@ -775,7 +783,7 @@ test('an endless game never mentions a last event, and marks the round numbers',
       state.tick += 30 * TICK_HZ;
       said.push(...says(director.handle([{ e: 'bossOut', tier: bossTier(wave), bounty: 600 }], state)));
     }
-    said.push(...director.handle([{ e: 'waveEnd', wave, bonus: 100 }], state).filter((m) => m.t === 'report').map((m) => m.deb));
+    said.push(...director.handle([{ e: 'waveEnd', wave, pay: 300, speed: 80, took: 30 }], state).filter((m) => m.t === 'report').map((m) => m.deb));
   }
   for (const t of said) assert.ok(!lastEvent.test(t), t);
   // Important, not must: the first always, about half of the later ones.
@@ -876,4 +884,19 @@ test('a quick removal is only joked about on the floor it was placed on (0.4: Th
   assert.equal(run(1, 1), true, 'placed and removed in The Back: the joke');
   assert.equal(run(1, 0), false, 'a Back part placed, a shop building removed above it: no joke');
   assert.equal(run(0, 1), false, 'a shop building placed, a Back part removed under it: no joke');
+});
+
+test('a theft names the supply and the building it came from; a rip names the brand too (0.4)', () => {
+  const state = game('Dave');
+  state.players[0].cash = 1e4;
+  assert.ok(applyCommand(state, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
+  const i = 5 * state.w + 5;
+  const grabbed = says(createDirector(() => 0).handle([{ e: 'grab', x: 1, y: 1, i, t: 'spd', tier: 2 }], state))[0];
+  assert.ok(LINES.grab.some((l) => fill(textOf(l), { p: 'Dave', k: 'Forklift Turret', s: 'Rage Cola' }) === grabbed), grabbed);
+  const ripped = says(createDirector(() => 0).handle([{ e: 'rip', x: 1, y: 1, sup: 0, n: 0, i, t: 'dmg', tier: 4 }], state))[0];
+  assert.ok(LINES.rip.some((l) => fill(textOf(l), { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Bottled Spite' }) === ripped), ripped);
+  // Lines that need the building or the supply are left out when the event does not say.
+  for (const e of [{ e: 'grab', x: 1, y: 1 }, { e: 'rip', x: 1, y: 1, n: 3 }, { e: 'grab', i: 9999, t: 'toString', tier: 9 }]) {
+    for (const t of says(createDirector(() => 0).handle([e], state))) assert.ok(!/\{\w\}|undefined/.test(t), t);
+  }
 });

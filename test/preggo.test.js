@@ -162,7 +162,7 @@ test('reaching a till she takes one refund, per head, and nothing pops (with sec
   assert.equal(esc[0].n, 1);
   assert.equal(esc[0].refund, SHOPPERS.preggo.refund * perHead());
   assert.equal(s.refunds, 1);
-  assert.equal(s.players[0].cash, cash - SHOPPERS.preggo.refund * perHead() + ev.find((e) => e.e === 'waveEnd').bonus);
+  assert.equal(s.players[0].cash, cash - SHOPPERS.preggo.refund * perHead() + (({ pay, speed }) => pay + speed)(ev.find((e) => e.e === 'waveEnd')));
   assert.ok(!ev.some((e) => e.e === 'pop' || e.e === 'nopop'));
   assert.ok(!ev.some((e) => e.e === 'escape' && e.k === 'baby'));
 });
@@ -196,7 +196,7 @@ test('a baby at a till costs cash but no refund, and the sales event is not over
   assert.equal(s.ws.escaped, 0);
   assert.equal(s.ws.refunded, 12 * BABY.refund);
   assert.ok(ended && ended.after === 12, 'the event ended only once the last baby was out');
-  assert.equal(s.players[0].cash, cash - 12 * BABY.refund + ended.e.bonus);
+  assert.equal(s.players[0].cash, cash - 12 * BABY.refund + ended.e.pay + ended.e.speed);
 });
 
 test('a baby that runs out of patience just leaves', () => {

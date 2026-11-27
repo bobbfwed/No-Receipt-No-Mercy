@@ -5,7 +5,7 @@
 //
 //   releaseSound  the mob piles in through one door: a stampede of trainers, a crowd of nasal men
 //                 babbling over each other, and a cheap eight-bit "level up" fanfare
-//   ripSound      a Card Trader rips open a Mystery Box he stole: a long crinkly foil tear, then an
+//   ripSound      a Card Trader rips the best stock out of a building: a long crinkly foil tear, then an
 //                 awed "ooooh", a gasp or a breathy "yesss" (opts.n: how many others stopped to
 //                 look; with any, a second voice joins in)
 // His own voice, storming out and at the tills, is in shoppers.js with everyone else's.

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, getField, idShare, patienceFor, difficultyOf, teamCash, kidBack, pupsOf,
   supportDog, trailsFlasher, cardKidRuns, boozeChance, drinks, stopsToPet,
-  CARDS, DEALABLE, SHOPPERS, SUPERS, PUP, BABY, TUNE, TICK_HZ, ST, NORMAL, HOP, GHOST, UNREACHABLE, walkable,
+  CARDS, DEALABLE, SHOPPERS, SUPERS, PUP, BABY, TUNE, TICK_HZ, ST, NORMAL, HOP, GHOST, UNREACHABLE, walkable, addStock, itemCode,
 } from '../src/sim/index.js';
 
 /** A game with these cards, one rich player, no losing. */
@@ -507,7 +507,7 @@ function sampleStop(cards, k, booze, more = {}) {
 
 test('eightyproof: an adult who stops at a booze table may become a Day Drinker, keeping his super, never gaining patience, and losing a share of it', (t) => {
   tune(t, { chance: 1 }, CARDS.eightyproof);
-  const { s, sh, ev } = sampleStop(['eightyproof'], 'clipper', true, { sup: 1, hp: 30, mhp: 120, lf: 99, lw: 30, pn: { 5: 1 } });
+  const { s, sh, ev } = sampleStop(['eightyproof'], 'clipper', true, { sup: 1, hp: 30, mhp: 120, pn: { 5: 1 } });
   assert.ok(ev.some((e) => e.e === 'sample'));
   const d = ev.find((e) => e.e === 'drunk');
   assert.deepEqual([d.k, d.sup], ['clipper', 1]);
@@ -520,7 +520,7 @@ test('eightyproof: an adult who stops at a booze table may become a Day Drinker,
   assert.ok(Math.abs(sh.hp - 30 * (1 - CARDS.eightyproof.hit)) < 1e-9, `${sh.hp}`);
   assert.equal(s.players[0].w.annoy, 30 * CARDS.eightyproof.hit, 'the table\'s owner did it');
   assert.equal(sh.sv, 1);
-  for (const f of ['lf', 'lw', 'bq', 'sa']) assert.equal(sh[f], undefined, f);
+  for (const f of ['bq', 'sa']) assert.equal(sh[f], undefined, f);
   assert.deepEqual(sh.pn, { 5: 1 }, 'what the salesmen have pitched him stays');
   // He hits the floor at once, exactly as a Day Drinker falls: lying there for his kind's fall time.
   const fall = ev.findIndex((e) => e.e === 'fall');
@@ -604,13 +604,13 @@ test('eightyproof: a copy made just after a shopper turned plays on identically'
 // (Reworked on the owner's decision, 2026-11-24: every theft gives the thief back a share of his
 // patience. Its "twice as often" is tested in cards.test.js.)
 
-/** A shopper of kind k beside a belt carrying `item`, who takes it (as he passes, or, with `lf`, at the end of a detour). */
-function theft(cards, k, more = {}, item = 'gadget') {
+/** A shopper of kind k beside a forklift stocked with Bottled Spite, who steals some as he passes (0.4: stock, not goods). */
+function theft(cards, k, more = {}) {
   const s = game(cards);
   openEmpty(s, 3);
-  assert.ok(applyCommand(s, 0, { c: 'place', k: 'crate', x: 21, y: 8 }).ok);
-  assert.ok(applyCommand(s, 0, { c: 'place', k: 'belt', x: 20, y: 8, d: 0 }).ok);
-  s.grid[8 * s.w + 20].it.push([item, 0.99]);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'forklift', x: 20, y: 8 }).ok);
+  addStock(s.grid[8 * s.w + 20], itemCode(1, 2), s);
+  s.grid[8 * s.w + 20].off = 1e6; // (switched off, so it does not shoot him first: a thief takes from it all the same)
   const sh = walker(s, k, 19.5, 8.5, more);
   const ev = run(s, 0.5, () => sh.st !== ST.WALK);
   return { s, sh, ev, grab: ev.find((e) => e.e === 'grab') };
@@ -631,23 +631,12 @@ test('klepto: every theft gives the shoplifter back a share of his full patience
     assert.ok(Math.abs(sh.hp - want) < 1e-9, `${cards} ${hp}: ${sh.hp}`);
     assert.equal(grab.heal, field === undefined ? undefined : Math.round(field * 10) / 10, `${cards} ${hp}`);
   }
-  // At the end of a detour (liftWalk's certain grab) as well.
-  const s = game(['klepto']);
-  openEmpty(s, 3);
-  applyCommand(s, 0, { c: 'place', k: 'crate', x: 21, y: 8 });
-  applyCommand(s, 0, { c: 'place', k: 'belt', x: 20, y: 8, d: 0 });
-  s.grid[8 * s.w + 20].it.push(['gadget', 0.99]);
-  const sh = walker(s, 'hunter', 19.5, 8.5, { hp: 10, mhp: 36, lf: 8 * s.w + 19, lw: 100 });
-  const ev = run(s, 0.5, () => sh.st !== ST.WALK);
-  const g = ev.find((e) => e.e === 'grab');
-  assert.ok(g && g.far === 1, 'the detour\'s grab');
-  assert.ok(Math.abs(sh.hp - (10 + 36 * heal)) < 1e-9);
 });
 
-test('klepto: a Card Trader ripping a Mystery Box gets no patience back', (t) => {
+test('klepto: a Card Trader ripping out stock gets no patience back', (t) => {
   tune(t, { grabChance: 1e6 });
-  const { s, sh, ev } = theft(['klepto'], 'trader', { hp: 10, mhp: 30 }, 'box');
-  assert.ok(ev.some((e) => e.e === 'rip'), 'he ripped a box');
+  const { s, sh, ev } = theft(['klepto'], 'trader', { hp: 10, mhp: 30 });
+  assert.ok(ev.some((e) => e.e === 'rip'), 'he ripped some out');
   assert.equal(s.ws.stolen, 1);
   assert.equal(sh.hp, 10);
 });

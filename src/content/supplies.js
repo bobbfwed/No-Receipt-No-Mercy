@@ -3,7 +3,7 @@
 // track is called and its numbers look like, and a Returns Drop's rate. Pure: no DOM, so the tests
 // and the README tool read it too. The numbers all come from the rules.
 import {
-  BUILD, BACK, TICK_HZ, SHOPPERS, STOCK_TRACKS, unitsIn, usesIn, stockLevel, dropTicks, dropUpCost,
+  BUILD, BACK, TICK_HZ, SHOPPERS, STOCK_TRACKS, unitsIn, usesIn, stockLevel, stockCap, dropTicks, dropUpCost,
 } from '../sim/index.js';
 
 /**
@@ -102,15 +102,17 @@ export function trackNumbers(k, track, st) {
 
 /**
  * One row per track a building takes, for its sheet: { track, name, color, tier, tierName, units,
- * cap, gives }. `units` counts a unit partly used as a whole one (unitsIn), against BACK.stockUnits.
+ * cap, gives }. `units` counts a unit partly used as a whole one (unitsIn), against the most it holds
+ * (stockCap). With `state`, the game's cards count (regifting holds more, artisanal fills a unit
+ * with more uses).
  */
-export function stockRows(b) {
+export function stockRows(b, state = null) {
   if (!b) return [];
   return stockTracks(b.k).map((track) => {
     const tier = tierIn(b, track);
     return {
       track, name: SUPPLIES[track].name, color: SUPPLIES[track].color, tier, tierName: TIER_NAMES[tier] || '',
-      units: unitsIn(b, track), cap: BACK.stockUnits, gives: stockGives(b, track),
+      units: unitsIn(b, track, state), cap: stockCap(state), gives: stockGives(b, track),
     };
   });
 }

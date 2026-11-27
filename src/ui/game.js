@@ -16,7 +16,7 @@ import { createTutorialPanel } from './tutorial.js';
 import { createLobby } from './lobby.js';
 import { createDeal } from './deal.js';
 import { createHandStrip, handPanel, handRow } from './hand.js';
-import { createIncomePanel } from './income.js';
+import { createPayPanel } from './eventpay.js';
 import { handOf, blockedRects, sidePlace } from './cardart.js';
 import { createChat } from './chat.js';
 import { openHandbook } from './handbook.js';
@@ -224,9 +224,10 @@ export function startGame(session, {
   const strip = createHandStrip({ onOpen: openCards });
   stage.append(strip.el);
   const deal = createDeal(session, { strip, playSound });
-  // Income per minute (0.3.03): under the strip of cards (or the players panel), placed with it.
-  const income = createIncomePanel(session);
-  stage.append(income.el);
+  // What the sales event pays, and the speed bonus (0.4; the INCOME panel of 0.3.03 had this place):
+  // under the strip of cards (or the players panel), placed with it.
+  const pay = createPayPanel(session);
+  stage.append(pay.el);
 
   // In training the lesson panel sits where the players list normally is.
   stage.append(training ? training.el : players.el, toasts.notices, toasts.reviews, deb.el, review.el, mapBox, touchUi.pad, touchUi.sheet, touchUi.aid);
@@ -266,14 +267,6 @@ export function startGame(session, {
     review.close();
     pendingReport = null;
     lastDeb = null;
-  });
-  // Doors opened early: say that the factory's takings for the skipped time were paid, so nobody
-  // wonders where the money came from (or thinks opening early costs him).
-  session.on('fx', (events) => {
-    const e = events.find((x) => x.e === 'early');
-    if (!e || !(e.cash > 0)) return;
-    const several = session.state.players.filter((p) => p.on && p.side !== 'office').length > 1;
-    toasts.notice(`Doors opened ${e.secs} seconds early. The factory was paid for that time: +$${Math.round(e.cash).toLocaleString('en-US')}${several ? ', split between you' : ''}.`);
   });
   // A won game carried on as an endless one: say who decided it.
   session.on('fx', (events) => {
@@ -353,7 +346,7 @@ export function startGame(session, {
   // ---- Drawing loop --------------------------------------------------------------------------------
   const touchWords = isTouch();
   let mapShown = false, mapDrawn = 0, office = false, wasLobby = false, marksSig = '', sheetUp = false, wasBoss = false;
-  let dealFilled = Infinity, wasHand = false, wasIncome = false;
+  let dealFilled = Infinity, wasHand = false, wasPay = false;
   let endEl = null; // the end screen, while it is up
   function frame(now) {
     if (dead) return;
@@ -407,8 +400,7 @@ export function startGame(session, {
     const handUp = strip.update(s, dealFilled);
     if (handUp !== wasHand) { wasHand = handUp; root.classList.toggle('has-hand', handUp); }
     dealFilled = deal.update(s);
-    const incomeUp = income.update(s);
-    if (incomeUp !== wasIncome) { wasIncome = incomeUp; root.classList.toggle('has-income', incomeUp); }
+    wasPay = pay.update(s);
     placeStrip(s);
     // In the lobby the floor is drawn to the right of the panel, whole, so the store can be seen.
     const inLobby = lobby.update(s);
@@ -538,10 +530,10 @@ export function startGame(session, {
   // that would cover an open entrance, a till, the boss bar or the small map, or run off the floor
   // (a tall panel in a big game), it goes beside the panel instead (sidePlace in cardart.js). On a
   // small screen it has a corner of its own, beside the players button (style.css).
-  // The INCOME panel (0.3.03) is the third in that column: under the strip (under the panel in a
-  // game without cards), as wide as the panel, or, when that would cover something, beside the one
-  // above it by the same rules (sidePlace). On a small screen it is a chip in the row at the top
-  // left, after the cards (placeChip).
+  // The EVENT PAY panel (0.4; the INCOME panel's place, 0.3.03) is the third in that column: under
+  // the strip (under the panel in a game without cards), as wide as the panel, or, when that would
+  // cover something, beside the one above it by the same rules (sidePlace). On a small screen it is
+  // a chip in the row at the top left, after the cards (placeChip).
   let stripKey = '', stripPlaced = false;
   /** An element's box in CSS pixels from the floor's top left, or null if it is not showing. */
   const boxIn = (el, at) => {
@@ -553,7 +545,7 @@ export function startGame(session, {
     const small = narrow();
     if ((!wasHand || small) && stripPlaced) { stripPlaced = false; strip.place(null); root.classList.remove('hand-mid'); }
     if (small) { stripKey = ''; placeChip(); return; }
-    if (!wasHand && !wasIncome) { if (stripKey) { stripKey = ''; income.place(null); } return; }
+    if (!wasHand && !wasPay) { if (stripKey) { stripKey = ''; pay.place(null); } return; }
     const cam = renderer.cam;
     const at = stage.getBoundingClientRect();
     const W = stage.clientWidth, H = stage.clientHeight;
@@ -563,13 +555,13 @@ export function startGame(session, {
       .map((el) => el && boxIn(el, at)).filter(Boolean);
     const sig = (b) => (b ? [b.x, b.y, b.w, b.h].map(Math.round).join(' ') : '-');
     const key = [cam.x, cam.y, cam.zoom, W, H, sig(panel), others.map(sig).join('|'), s.gridVer, s.w, s.open,
-      wasHand, wasIncome && income.el.offsetHeight].join();
+      wasHand, wasPay && pay.el.offsetHeight].join();
     if (key === stripKey) return;
     stripKey = key;
     // Only the entrances in use: a locked one is a wall until another player joins (s.open changes).
     const pad = (b) => [b.x - 4, b.y - 4, b.x + b.w + 4, b.y + b.h + 4];
     const rects = blockedRects(s, cam, W, H, 0, H, (s.doors || []).slice(0, s.open || 1)).concat(others.map(pad));
-    let above = panel; // what the income panel goes under
+    let above = panel; // what the EVENT PAY panel goes under
     if (wasHand) {
       // As wide as the panel; its height follows from that (the slots keep their shape).
       const w = panel ? panel.w : strip.el.offsetWidth;
@@ -583,33 +575,33 @@ export function startGame(session, {
       root.classList.toggle('hand-mid', !p.below && p.y < 90);
       above = { x: p.x, y: p.y, w, h };
     }
-    if (wasIncome) {
-      const w = panel ? panel.w : above ? above.w : income.el.offsetWidth;
-      income.place({ x: above ? above.x : 8, y: above ? above.y + above.h + 8 : 8, w });
-      const h = income.el.offsetHeight;
+    if (wasPay) {
+      const w = panel ? panel.w : above ? above.w : pay.el.offsetWidth;
+      pay.place({ x: above ? above.x : 8, y: above ? above.y + above.h + 8 : 8, w });
+      const h = pay.el.offsetHeight;
       // Nor over the players panel or the strip it follows.
       const q = sidePlace(above, { w, h }, { w: W, h: H }, rects.concat([panel, above].filter(Boolean).map(pad)));
-      income.place({ x: q.x, y: q.y, w });
+      pay.place({ x: q.x, y: q.y, w });
     }
   }
 
-  // On a small screen the income chip goes in the row at the top left, after the strip of cards
+  // On a small screen the EVENT PAY chip goes in the row at the top left, after the strip of cards
   // (after the players button without cards), or, if the row has no room for it, on a second row
   // under the players button.
   function placeChip() {
-    if (!wasIncome) return;
+    if (!wasPay) return;
     const at = stage.getBoundingClientRect(), W = stage.clientWidth, gap = 5;
     const pill = boxIn(players.el.querySelector('.players-pill'), at);
     const cards = wasHand ? boxIn(strip.el.querySelector('.hand-strip'), at) : null;
     const row = cards || pill;
-    if (!row) { income.place(null); return; }
-    const w = income.el.offsetWidth;
+    if (!row) { pay.place(null); return; }
+    const w = pay.el.offsetWidth;
     let x = row.x + row.w + gap, y = row.y;
     if (x + w > W - gap) {
       x = pill ? pill.x : row.x;
       y = Math.max(pill ? pill.y + pill.h : 0, cards ? cards.y + cards.h : 0) + gap;
     }
-    income.place({ x, y, h: row.h });
+    pay.place({ x, y, h: row.h });
   }
 
   /** The page options for the first frame (see main.js): which floor, and for screenshots a view and a held kind. */

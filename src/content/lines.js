@@ -101,28 +101,29 @@ export const LINES = {
     r('{n} refunds in a row. A man just got his money back, walked out, came back in and got a refund on the refund. Because of you.'),
     r("{n} refunds. I've started a support group for the tills. They're traumatised. They've seen things. Mostly money leaving."),
   ],
-  // {p} anyone
+  // A shoplifter helped himself to a unit of a security building's stock (0.4; until then goods off
+  // a belt). {k} the building, {s} the supply he took, {p} anyone.
   grab: [
-    'A shopper just lifted stock straight off the belt. {p}, guard your goods like you guard your browser history.',
-    "Shoplifting on the line. I'd say which belt, but I don't respect them enough to number them.",
-    "Stock is walking out the door. Much like {p}'s last three girlfriends.",
-    "Someone's fondling the merchandise. For once it isn't {p}.",
-    'Someone took a Gadget off the belt and walked off like he made it. {p}, he did more for it than you.',
-    'Stock lifted from the line. That belt has been touched by more strangers than a hotel remote.',
-    "Shoplifter at the belts. He didn't even hide it. That's how little he fears you, {p}.",
-    'Belt theft. Hide your goods better, {p}. Hide them where you hide the bills from your wife.',
-    "Goods gone. Somebody's pocket is full and the factory is empty. Story of {p}'s payslip.",
-    u("A shopper just grabbed a Mystery Box off the line. She has no idea what's in it. Neither do you. Nobody does. It's a Mystery Box."),
-    u("Theft on the line. Call the police, {p}. They'll laugh. I'll listen in."),
-    r('Somebody stole from the belt. When I was installed, I was promised a world-class workforce. I would like to file a grievance about that lie.'),
-    'A customer took a detour to rob you. She walked further for your stock than {p} has ever walked for a woman.',
-    'Somebody left the queue, crossed the floor and helped himself off the belt. More initiative than anyone on payroll, {p}.',
-    "That shopper went out of her way to steal from you. Nobody's gone out of their way for {p} since his mother's labour.",
-    'Detour, grab, back in line. The shoplifters run a tighter operation than this factory.',
-    "One of them saw the belt, licked his lips and wandered over. Same move {p} pulls at a buffet, and it's just as sad to watch.",
-    u('A shopper went five tiles out of his way for a free Gadget. Five tiles. {p} won\'t walk to the fridge for his own beer.'),
-    u("They're not even sneaking now. They stroll over to the line like it's a salad bar and you're the croutons, {p}."),
-    r('A woman abandoned her queue, her dignity and her children to lift one Gift Set off your belt. Honestly, {p}, respect. That is commitment. Write her up for employee of the month.'),
+    'A shopper just lifted {s} straight out of the {k}. {p}, guard your stock like you guard your browser history.',
+    "Shoplifting at the {k}. I'd say which one, but I don't respect your security enough to number it.",
+    "{s} is walking out the door. Much like {p}'s last three girlfriends.",
+    "Someone's fondling the {k}. For once it isn't {p}.",
+    'Someone pocketed the {s} from the {k} and walked off like he made it. {p}, he did more for it than you.',
+    'Stock lifted from the {k}. That thing has been touched by more strangers than a hotel remote.',
+    "Somebody's helping himself to your security's stock again, {p}. Lock it up. You lock up the good biscuits, and nobody even wants those.",
+    "Shoplifter at the {k}. He didn't even hide it. That's how little he fears you, {p}.",
+    'Somebody stole your {s}. Hide your stock better, {p}. Hide it where you hide the bills from your wife.',
+    "{s} gone. Somebody's pocket is full and the {k} is empty. Story of {p}'s payslip.",
+    u('A shopper just walked off with a unit of {s}. She has no idea what it does. Neither does {p}. Nobody does. It came up a dumbwaiter.'),
+    u("Theft at the {k}. Call the police, {p}. They'll laugh. I'll listen in."),
+    r('Somebody robbed the {k}. When I was installed, I was promised a world-class workforce. I would like to file a grievance about that lie.'),
+    'The intern carried that {s} up a whole floor, and a shopper took it home. Unpaid labour, stolen goods. Very on brand, {p}.',
+    'They are robbing the {k} you were supposed to be defending with, {p}. It is a weapon, and they are robbing it. Think about that.',
+    'A customer reached into the {k} and helped himself to the {s}. More initiative than anyone on payroll, {p}.',
+    "One of them saw the {k}, licked his lips and reached in. Same move {p} pulls at a buffet, and it's just as sad to watch.",
+    'The {k} just lost its {s} to a woman with a coupon wallet. She brought a bag for it. She planned this, {p}. You plan nothing.',
+    u("They're not even sneaking now. They stroll past the {k} like it's a salad bar and you're the croutons, {p}."),
+    r('A woman abandoned her queue, her dignity and her children to lift one unit of {s} out of your {k}. Respect, {p}. Write her up for employee of the month.'),
   ],
   // {p} anyone
   slip: [
@@ -909,16 +910,23 @@ export const LINES = {
     u('Event {w}. A sunbed in the tanning salon has been on since Tuesday, with somebody in it. You can smell him from the bend.'),
     r('Strip Mall, event {w}. The psychic two doors down said this sale would go badly. She charged {p} forty dollars. He paid in coins.'),
   ],
-  // The doors were opened early and the factory was paid for the time skipped. {n} the cash,
-  // {m} the seconds skipped (may be missing), {p} anyone
-  early: [
-    'Doors opened {m} seconds early. The factory made ${n} while you were impatient. Impatience: finally profitable.',
-    "${n} for the time skipped. Opening early. Something {p} has done in every relationship he's ever had.",
-    "Early start. The belts made ${n} anyway. The machines don't need you. Remember that.",
-    'Opened early, and the factory still banked ${n}. Finishing early and getting paid for it. {p} has dreamed of this.',
-    u("Opened {m} seconds early and still got ${n}. Corporate calls that 'agile'. I call it premature."),
-    u("${n} from the factory for the time you skipped. {p}, if only the bedroom worked like that."),
-    r('Doors open early, ${n} in the bank. The factory did {m} seconds of overtime in a blink. It wants a union. It is not getting one.'),
+  // The speed bonus (0.4), said as a sales event ends. {n} the bonus in dollars (each store player
+  // gets it), {m} the seconds from the last shopper in to an empty floor, {p} anyone.
+  // speedFull: every dollar of it (fast, and nobody got a refund on the way).
+  speedFull: [
+    'Floor cleared in {m} seconds, nobody refunded. Full speed bonus: ${n} each. {p}, that is the first thing you have ever finished early on purpose.',
+    'Every one of them stopped, the floor empty in {m} seconds. ${n} speed bonus. Corporate says well done. Corporate is lying, but the money is real.',
+    "Full speed bonus, ${n}. In and out in {m} seconds and nobody got paid. {p}'s wife describes their anniversary the same way.",
+    u('${n} for clearing the floor in {m} seconds. Fast, clean, no refunds. If {p} had worked like that at school he would not be working here.'),
+    r('Clean sweep, {m} seconds, the full ${n} bonus. I have nothing to insult. I am checking the cameras. Somebody here is cheating, and it is not {p}, because {p} could not.'),
+  ],
+  // speedNone: not a cent (too slow, or every one of them got his refund). {m} as above, {p} anyone.
+  speedNone: [
+    "No speed bonus. Not a cent. Those last shoppers took so long to leave I thought they'd bought a timeshare, {p}.",
+    'Zero speed bonus. The floor emptied about as fast as {p} empties the dishwasher, which is to say somebody else did it eventually.',
+    'No bonus for speed, {p}. A clean, fast finish was on the table. You did your usual: slow, messy, and on somebody else\'s money.',
+    u("Speed bonus: nothing. {m} seconds to clear a floor. I've seen glaciers move faster. I've seen {p} clear a pizza faster, and that's saying something."),
+    r('Not one dollar of speed bonus. Corporate asked me what went wrong. I sent them a photo of {p}. They said "ah".'),
   ],
   // A Pregnant Lady ran out of patience and popped. {n} how many babies came out (12, or 24 from an
   // Octomom; may be missing), {p} anyone. Cartoon, not gore: the joke is the players and the refund.
@@ -968,7 +976,7 @@ export const LINES = {
     "Event {w}: the new Mythic Bastards set drops. {n} men who live in their mothers' basements are getting in the car. Her car.",
     "Card traders next event, {n} of them. They've been queueing since Tuesday. You'll smell them before you see them, {p}.",
     'Midnight Release in event {w}. {n} grown men, one door, zero showers. Put a sprinkler on it. It is the closest any of them will get to a bath.',
-    "{n} card nerds coming through one entrance next event. Keep your Mystery Boxes away from them. They rip them open like it's the only thing they'll ever get to rip open.",
+    "{n} card nerds coming through one entrance next event. Keep your Platinum stock away from them. They rip it out like it's the only thing they'll ever get to rip open.",
     'Next up: the Midnight Release. {n} men who say "mint condition" about cards and never about themselves.',
     'Event {w} brings the Mythic Bastards crowd. {n} of them. Every one has a binder, a backpack and a medical-grade case of swamp ass.',
     "Midnight Release next. The queue outside smells like hot pennies and cheese dust, {p}. {n} of them, and they'll all hit the same door.",
@@ -982,23 +990,24 @@ export const LINES = {
     "Here's the Midnight Release crowd: {n} of them, one entrance, one big damp cloud of body odour. Spray them. All of them.",
     'The Mythic Bastards mob is in. {n} grown men sprinting for the tills like there is a girl at the end of them. There is not.',
     '{n} card nerds, all at once. They move as one. They sweat as one. They have never kissed anyone, as one.',
-    "Mob's in, {p}. {n} of them. Hide the Mystery Boxes. Hide your shame. They've seen worse on the forums.",
+    "Mob's in, {p}. {n} of them. Hide the Platinum. Hide your shame. They've seen worse on the forums.",
     u("{n} card traders through one door. That's more men in one place than at {p}'s last birthday party, and they smell better."),
     r("The Midnight Release has arrived: {n} virgins and one guy who swears he isn't. He is."),
   ],
-  // A Card Trader took a Mystery Box off a belt and is ripping it open. {n} how many others stopped
-  // to watch (missing when none did), {p} anyone.
+  // A Card Trader ripped the best-branded unit of stock out of a security building (0.4; until then a
+  // Mystery Box off a belt) and is gloating over it. {n} how many others stopped to watch (missing
+  // when none did), {s} what he took ("Platinum Bottled Spite"), {k} the building, {p} anyone.
   rip: [
-    'A card trader just ripped open one of your Mystery Boxes in the aisle. Pull rate: one Gadget that will now never exist.',
-    "He's ripping packs on the shop floor. That box was going to a Press, {p}. Now it's going in a binder.",
-    '{n} card traders stopped to watch one open a box. That is the closest any of them will come to watching a live birth.',
-    "Pack ripped. He's checking the corners for mint condition. Nobody has ever checked {p} that carefully.",
-    'One of the nerds nicked a Mystery Box and is opening it like a birthday present from the dad who left. {n} of his mates are breathing on him.',
-    'Box ripped in the aisle. He pulled a foil. He moaned. Out loud. In public.',
-    'There goes another Mystery Box, {p}. Your factory runs on boxes. His love life runs on cardboard too.',
-    "A card trader's tearing open your stock. The others crowd round him like he's showing them a real tit.",
-    u("Ripped pack, {n} onlookers. That's the biggest audience a man in that crowd will ever have for something he did with his hands."),
-    r("He ripped one of your boxes, pulled nothing, and smelled the cardboard. Deeply. {p}, look away. I couldn't."),
+    'A card trader just ripped the {s} out of your {k}. Pull rate: one of one. He is treating it like a holographic rare.',
+    "He's ripping stock out of the {k}, {p}. That {s} was going to stop shoppers. Now it's going in a binder.",
+    '{n} card traders stopped to watch one rip out the good stuff. That is the closest any of them will come to watching a live birth.',
+    "Stock ripped. He's checking the label for mint condition. Nobody has ever checked {p} that carefully.",
+    'One of the nerds tore the {s} out of the {k} like a birthday present from the dad who left. {n} of his mates are breathing on him.',
+    'He pulled {s} out of the {k}. He moaned. Out loud. In public.',
+    'There goes your best stock, {p}. Your security runs on it. His love life runs on cardboard.',
+    "A card trader's tearing into your {k}. The others crowd round him like he's showing them a real tit.",
+    u("Ripped {s}, {n} onlookers. That's the biggest audience a man in that crowd will ever have for something he did with his hands."),
+    r("He ripped the {s} out of the {k}, sniffed the label and slid it into a toploader. {p}, look away. I couldn't."),
   ],
   // The cards that change how shoppers behave (0.3.01). Each bank is a topic of its own in the
   // director's TOPICS, fading like any other note.
@@ -1111,7 +1120,7 @@ export const INTRO = {
   // Said once, straight after the first boss is announced (when he walks in, not at the doors).
   boss: 'About management: nothing slows him. His pep talks give shoppers near him their patience back. At the tills he counts as two refunds. Wear him out and the store gets a bounty. Every fifth event.',
   // (0.3.01) Said when the doors open on the first Midnight Release.
-  trader: "New today: card traders. A Midnight Release brings a dozen or more through one door at once. They steal only Mystery Boxes and stop to watch each other rip them open. Sprinklers: wet cards aren't mint, and it's the only shower they'll get all week.",
+  trader: "New today: card traders. A Midnight Release brings a dozen or more through one door at once. They rip the best stock out of your security, and stop to watch each other do it. Sprinklers: wet cards aren't mint, and it's the only shower they'll get all week.",
 };
 
 /** What DEB says the first time the super version of a kind turns up. {p} is anyone. */

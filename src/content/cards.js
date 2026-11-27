@@ -2,7 +2,7 @@
 // The rules themselves are in src/sim/cards.js and their numbers in CARDS (src/sim/constants.js);
 // every rule sentence here is built from those numbers, so what a card says can never disagree
 // with what it does. The names are the lead's (deck.md); the jokes are DEB's, aimed at the players.
-import { CARDS, SUPERS, TUNE, BUILD, cardParts } from '../sim/index.js';
+import { CARDS, SUPERS, TUNE, BUILD, BACK, cardParts } from '../sim/index.js';
 
 /** A number as people write it: at most two decimals, no trailing zeros. */
 const fmt = (x) => String(Math.round(x * 100) / 100);
@@ -98,13 +98,13 @@ const TEXT = {
   },
   clearance: {
     name: 'Everything Must Go',
-    rule: (c) => `Everything the factory ships sells for ${off(c.sell, 'more', 'less')}.`,
-    joke: 'Everything sells for less. Like you on the open market, only faster.',
+    rule: (c) => `Every sales event pays ${off(c.pay, 'more', 'less')}, and so does its speed bonus.`,
+    joke: 'Head Office is paying less per event. Like you on the open market, only faster.',
   },
   klepto: {
     name: 'Five-Finger Discount',
-    rule: (c) => `Shoplifters go for goods ${times(c.chance)} as often, and every theft gives the thief back ${pct(c.heal)} of his patience. Not Card Traders.`,
-    joke: 'Stealing gets the shoplifters off now. One quick grab and they are good to go again. Which is more than any of you can say.',
+    rule: (c) => `Shoplifters steal stock from security ${times(c.chance)} as often, and every theft gives the thief back ${pct(c.heal)} of his patience. Not Card Traders.`,
+    joke: 'Stealing gets the shoplifters off now. One quick grab at your stock and they are good to go again. Which is more than any of you can say.',
   },
   shrinkflation: {
     name: 'Shrinkflation',
@@ -139,18 +139,18 @@ const TEXT = {
   // ---- Good for the players
   lootbox: {
     name: 'Loot Box Addiction',
-    rule: (c) => `Mystery Boxes sell for ${times(c.sell)} as much.`,
-    joke: "Grown men paying triple for a box they can't see inside. There's hope for your dating profiles yet.",
+    rule: (c) => `A Clearance Bin pays ${times(c.bin)} as much for leftover supplies.`,
+    joke: "Grown men paying triple for leftovers out of a bin they can't see inside. There's hope for your dating profiles yet.",
   },
   asseenontv: {
     name: 'As Seen on TV',
-    rule: (c) => `Gadgets sell for ${times(c.sell)} as much.`,
-    joke: 'Nobody needs it, everybody wants it. The exact opposite of you, on both counts.',
+    rule: (c) => `Rebranders work ${off(c.rebrand, 'faster', 'slower')}.`,
+    joke: 'Same junk, shinier label, faster than ever. Nobody needs it, everybody wants it. The exact opposite of you, on both counts.',
   },
   regifting: {
     name: 'Regifting Season',
-    rule: (c) => `Gift Sets sell for ${times(c.sell)} as much.`,
-    joke: "Gift Sets are worth more. Somebody's re-gifting the one your wife gave you to a man she actually likes.",
+    rule: (c) => `Every Dumbwaiter holds ${fmt(c.units)} more units of each supply (${fmt(BACK.stockUnits + c.units)} instead of ${fmt(BACK.stockUnits)}).`,
+    joke: "The dumbwaiters hold more now. Somebody's re-gifting the stock your wife gave you to a man she actually likes.",
   },
   offatruck: {
     name: 'Fell Off the Back of a Truck',
@@ -214,8 +214,8 @@ const TEXT = {
   },
   overtime: {
     name: 'Unpaid Overtime',
-    rule: (c) => `The bonus at the end of each sales event is ${off(c.bonus, 'bigger', 'smaller')}.`,
-    joke: "A bigger bonus every event. Don't tell your wives. They'll only spend it on lawyers.",
+    rule: (c) => `Every sales event pays ${off(c.pay, 'more', 'less')}, and so does its speed bonus.`,
+    joke: "Bigger pay every event. Don't tell your wives. They'll only spend it on lawyers.",
   },
   mopmike: {
     name: 'Mop Bucket Mike',
@@ -255,8 +255,8 @@ const TEXT = {
   },
   artisanal: {
     name: 'Artisanal, Hand-Rubbed',
-    rule: (c) => `Everything sells for ${off(c.sell, 'more', 'less')}, and every machine takes ${off(c.work, 'longer', 'less time')} over an item.`,
-    joke: "Everything's hand-rubbed now. Slower, gentler, worth more. Ask your wives what that's like. They'll have to guess too.",
+    rule: (c) => `Machines and Rebranders in The Back take ${off(c.work, 'longer', 'less time')}, and every unit of supply lasts ${off(c.uses, 'longer', 'less long')}.`,
+    joke: "Everything in The Back is hand-rubbed now. Slower, gentler, lasts longer. Ask your wives what that's like. They'll have to guess too.",
   },
   premature: {
     name: 'Premature Discharge',
@@ -270,7 +270,7 @@ const TEXT = {
   },
   payday: {
     name: 'Payday Friday',
-    rule: (c) => `Everything sells for ${off(c.sell, 'more', 'less')}, and every refund costs ${off(c.refund, 'more', 'less')}.`,
+    rule: (c) => `Every sales event pays ${off(c.pay, 'more', 'less')} (its speed bonus too), and every refund costs ${off(c.refund, 'more', 'less')}.`,
     joke: 'Payday. The money comes in and goes straight back out again. Like your alimony.',
   },
   mallwalkers: {
@@ -285,13 +285,13 @@ const TEXT = {
   },
   rentacop: {
     name: 'Rent-a-Cop Rates',
-    rule: (c) => `Security buildings cost ${off(c.cost.security, 'more', 'less')} and factory buildings ${off(c.cost.factory, 'more', 'less')}. A rebuild costs half of what was paid.`,
+    rule: (c) => `Security buildings and Crate Stacks cost ${off(c.cost.security, 'more', 'less')}, parts for The Back ${off(c.cost.back, 'more', 'less')}. A rebuild costs half of what was paid.`,
     joke: 'Security is cheap this week. Rent-a-cops work for exposure. Like your podcast.',
   },
   sweatshop: {
     name: 'Sweatshop Pricing',
-    rule: (c) => `Factory buildings cost ${off(c.cost.factory, 'more', 'less')} and security buildings ${off(c.cost.security, 'more', 'less')}. A rebuild costs half of what was paid.`,
-    joke: 'The factory is dirt cheap. Ethically sourced? Absolutely not. Neither were you.',
+    rule: (c) => `Parts for The Back cost ${off(c.cost.back, 'more', 'less')}, security buildings and Crate Stacks ${off(c.cost.security, 'more', 'less')}. A rebuild costs half of what was paid.`,
+    joke: 'Everything in The Back is dirt cheap. Ethically sourced? Absolutely not. Neither were you.',
   },
 };
 

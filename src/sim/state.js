@@ -125,10 +125,6 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {number} [sw]  ...how many ticks he will watch for when he gets there
  * @property {number} [sl]  ...and how many ticks he has left to get there
  * @property {number} [ru]  ticks left hurrying away from a salesman (moves faster)
- * @property {number} [lf]  browsing shoppers: the floor tile beside a belt he has left his route to
- *                          steal from (see liftLook in step.js); absent when he is not doing it
- * @property {number} [lw]  ...and the ticks he will still give it, getting there and waiting
- *                          (absent with lf)
  * @property {number} [ro]  Card Trader: ticks before he will stop to watch another one rip a pack
  *                          (TUNE.ripCool); absent reads as 0
  * @property {number} [gz]  dads and teenagers: ticks before an exhibitionist can catch his eye again
@@ -170,6 +166,11 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {Object} w     statistics for this wave
  * @property {Object} all    statistics for the whole game
  */
+
+/** The per-event totals (state.ws) at the start of an event. */
+function blankWave() {
+  return { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0, pay: 0, speed: 0, took: 0 };
+}
 
 function blankStats() {
   return { spent: 0, built: 0, sold: 0, shipped: 0, earned: 0, stopped: 0, annoy: 0 };
@@ -291,16 +292,15 @@ export function createGame({ seed = 1, training = false, map = null, zones = !!m
     office: null,
     /** With a Head Office player: the store side has said the doors may open early. */
     storeReady: false,
-    /** Totals for the current wave, shown in the performance review. */
-    ws: { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0 },
-    /** (0.3.03) Dollars paid for goods reaching a Shipping Chute over the whole game, before they
-     *  are split: only `offer`'s sales as the game is played. Not the bonus at the end of a sales
-     *  event, a boss's bounty, a shopper buying at a stand (the warranty card), the restocking fee,
-     *  nor the factory's takings paid in one go when the doors open early (skipBuild leaves it as
-     *  it was). Never reset during a game; a new game starts at 0. Nothing in the rules reads it:
-     *  the interface turns it into the income-per-minute panel (src/ui/rate.js). Absent in a save
-     *  from before it existed, which reads as 0. */
-    sales: 0,
+    /** Totals for the current wave, shown in the performance review: shoppers refunded (each once,
+     *  babies and puppies not counted) and stopped, units of stock stolen (0.4), cash earned during
+     *  it, refunds paid out, buildings wrecked; and, once it is over (endWave, 0.4), what it paid:
+     *  `pay` (eventPay), `speed` (the speed bonus) and `took` (seconds from the last shopper in to
+     *  a clear floor, to one decimal), each 0 until then. */
+    ws: blankWave(),
+    // (state.lastIn, 0.4: the tick the sales event's last shopper came in through a door, which starts
+    // the speed bonus's clock (speedBonus in step.js). Absent between events and while shoppers are
+    // still to come.)
     /** @type {Player[]} */
     players: [],
     /** The player whose browser runs the game. Changes if the host leaves and another takes over. */
@@ -385,6 +385,12 @@ export function migrateSave(state) {
     state.backVer = 0;
     changed = true;
   }
+  // Any version (0.4, removal step 2): the running total of goods sold (`sales`, for the INCOME panel
+  // that is gone) and a shoplifter's detour toward a belt (`lf`, `lw`) are dropped. A save made
+  // mid-event after the last shopper came in starts the speed bonus's clock now.
+  if ('sales' in state) { delete state.sales; changed = true; }
+  for (const sh of state.shoppers || []) if ('lf' in sh || 'lw' in sh) { delete sh.lf; delete sh.lw; changed = true; }
+  if (state.phase === 'wave' && Array.isArray(state.spawnQ) && !state.spawnQ.length && state.lastIn === undefined) { state.lastIn = state.tick; changed = true; }
   // Any version (0.4, stage 3): every security building with `lift`, and the rubble of one, gets its
   // Dumbwaiters, as one placed now would.
   if (Array.isArray(state.grid) && state.grid.length === state.w * state.h && syncAllLifts(state)) changed = true;
@@ -667,5 +673,5 @@ export function bump(state, pid, key, amount = 1) {
 
 export function resetWaveStats(state) {
   for (const p of state.players) p.w = blankStats();
-  state.ws = { escaped: 0, stopped: 0, stolen: 0, earned: 0, refunded: 0, wrecked: 0 };
+  state.ws = blankWave();
 }

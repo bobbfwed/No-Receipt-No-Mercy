@@ -26,7 +26,7 @@
 //   --games                          also print every game (seed, event, hand)
 //   --set=doubledip.share=0.2        try other numbers for the cards (CARDS keys) without editing
 //                                    constants.js; several with commas, nested with dots
-//                                    (rentacop.cost.factory=1.1)
+//                                    (rentacop.cost.back=1.1)
 // Also printed per hand: how many games collapsed (lost by event 10), and the refunds taken by the
 // end of event 12 (CHECK below), which shows effects too small to move the event lost in.
 //
@@ -85,7 +85,7 @@ const SIDE_ORDER = ['bad', 'good', 'bad', 'good', 'odd'];
 const CHECK = 12;
 
 /**
- * --set=doubledip.share=0.2,rentacop.cost.factory=1.1: tries other numbers for the cards without
+ * --set=doubledip.share=0.2,rentacop.cost.back=1.1: tries other numbers for the cards without
  * editing constants.js (each worker changes its own copy of CARDS before its first game).
  */
 function applySets(sets) {

@@ -32,8 +32,9 @@
 //   TALK.holidayBoss of the time), and once each build pause DEB may tell a holiday joke (the
 //   'holiday' topic), which fades over the game like any other joke. With no holiday, none of it.
 import {
-  TICK_HZ, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle,
+  TICK_HZ, TUNE, BUILD, SUPERS, MAP_SIZES, teamCash, officePlayer, isEndless, bossTier, bossTitle,
 } from '../sim/index.js';
+import { SUPPLIES, TIER_NAMES } from './supplies.js';
 import { releaseNo, releaseSize, shareCount } from '../sim/index.js';
 import {
   LINES, INTRO, SUPER_INTRO, ESCAPE_REVIEWS, LEFT_REVIEWS, STAMPS, EMPLOYEES_OF_THE_WAVE, FRIENDS,
@@ -90,8 +91,6 @@ export const TALK = {
   /** In an endless game, every this-many-th sales event from endlessFrom on gets a remark. */
   endlessEvery: 10,
   endlessFrom: 20,
-  /** Least the factory must have earned while the doors were opened early to be worth a word. */
-  earlyCash: 50,
   // Version 0.2.14: the owner found DEB far too chatty late in a game. Notifications start at a
   // sure thing and fade each time one is said, so by event 30 only new or important things get a
   // word; jokes fade with every joke told, to about a quarter of what she told before.
@@ -192,7 +191,10 @@ export const TOPICS = {
   endless: { must: true },
   // Said at round-numbered events of an endless game, instead of the usual opening.
   endlessMark: { note: true, important: true, loud: true },
-  early: { joke: true, chance: 0.5, gap: 120 },
+  // The speed bonus (0.4) at the end of a sales event: all of it, or none at all. In between is the
+  // usual case and gets no word; the report shows the figure every time.
+  speedFull: { note: true, gap: 60 },
+  speedNone: { note: true, gap: 60 },
   // A Pregnant Lady popping is the thing to learn from, so it is said more than most.
   pop: { note: true, important: true, gap: 20 },
   nopop: { note: true, gap: 25 },
@@ -391,7 +393,7 @@ export function createDirector(random = Math.random) {
     if (own && random() < TALK.friendShare) deb = line(own, { p: name });
     if (deb === null) deb = line(bank, { p: name }) || '';
     out.push({
-      t: 'report', wave: e.wave, bonus: e.bonus, rows,
+      t: 'report', wave: e.wave, pay: e.pay, speed: e.speed, took: e.took, rows,
       employee: pick(EMPLOYEES_OF_THE_WAVE),
       deb,
       totals: { ...ws, cash: teamCash(state), refunds: state.refunds, refundLimit: state.refundLimit },
@@ -533,11 +535,6 @@ export function createDirector(random = Math.random) {
       case 'endless':
         say(out, state, 'endless', LINES.endless, {}, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
         break;
-      case 'early':
-        if (e.cash >= TALK.earlyCash) {
-          say(out, state, 'early', LINES.early, { n: Math.round(e.cash), m: e.secs > 0 ? Math.round(e.secs) : undefined }, { mood: 'smug' });
-        }
-        break;
       case 'crawl':
         say(out, state, 'crawl', LINES.crawl, {}, { mood: 'angry' });
         break;
@@ -640,9 +637,12 @@ export function createDirector(random = Math.random) {
         if (e.k === 'boss') review(out, state, LEFT_REVIEWS.boss, e.k, 0);
         else if (random() < 0.35) review(out, state, own(LEFT_REVIEWS, e.k), e.k, 6);
         break;
-      case 'grab':
-        say(out, state, 'grab', LINES.grab);
+      case 'grab': {
+        // What was taken, and from what (0.4: stock from a security building).
+        const b = Number.isInteger(e.i) ? state.grid[e.i] : null;
+        say(out, state, 'grab', LINES.grab, { k: b ? thing(b.k) : undefined, s: own(SUPPLIES, e.t)?.name }, { mood: 'smug' });
         break;
+      }
       case 'slip':
         say(out, state, 'slip', LINES.slip, {}, { mood: 'smug' });
         break;
@@ -704,7 +704,15 @@ export function createDirector(random = Math.random) {
         say(out, state, 'shield', LINES.shield, {}, { mood: 'angry' });
         break;
       case 'waveEnd':
-        if (!e.training) report(out, state, e);
+        if (e.training) break;
+        report(out, state, e);
+        // The speed bonus: a word when it was all of it, or nothing at all (speedBonus in the rules).
+        if (e.pay > 0) {
+          const full = Math.round(e.pay * TUNE.speedShare);
+          const vars = { n: Math.round(e.speed), m: Number.isFinite(e.took) ? Math.round(e.took) : undefined };
+          if (e.speed > 0 && e.speed >= full) say(out, state, 'speedFull', LINES.speedFull, vars, { mood: 'smug' });
+          else if (!(e.speed > 0)) say(out, state, 'speedNone', LINES.speedNone, vars, { mood: 'angry' });
+        }
         break;
       case 'won':
         say(out, state, 'won', LINES.won, {}, { mood: 'smug' });
@@ -716,10 +724,16 @@ export function createDirector(random = Math.random) {
         // A Midnight Release's mob has walked in.
         say(out, state, 'releaseIn', LINES.releaseIn, { n: e.n > 0 ? Math.round(e.n) : undefined }, { mood: 'angry' });
         break;
-      case 'rip':
-        // A head count reads badly for one, so it is only given for two or more.
-        say(out, state, 'rip', LINES.rip, { n: e.n >= 2 ? e.n : undefined }, { mood: 'smug' });
+      case 'rip': {
+        // A head count reads badly for one, so it is only given for two or more. {s} is what he
+        // ripped out ("Platinum Bottled Spite"), {k} the building it came from.
+        const b = Number.isInteger(e.i) ? state.grid[e.i] : null;
+        const sup = own(SUPPLIES, e.t), tier = own(TIER_NAMES, e.tier);
+        say(out, state, 'rip', LINES.rip, {
+          n: e.n >= 2 ? e.n : undefined, k: b ? thing(b.k) : undefined, s: sup && tier ? `${tier} ${sup.name}` : undefined,
+        }, { mood: 'smug' });
         break;
+      }
       case 'joined': {
         say(out, state, 'joined', LINES.joined, {}, { pid: e.by });
         // More players than the map was sized for: say so once per arrival.

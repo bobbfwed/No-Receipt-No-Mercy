@@ -9,11 +9,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, canPlace, setPlayerOnline, waveSpec, statsOf, spentOn,
-  rebuildDeal, buildPrice, dropTicks, itemCode, unitsIn, BACK, STOCK_TRACKS, DIRS, dealCards, cleanHand, hasCard, cardKind, cardKinds, cardParts, cardsShown,
+  rebuildDeal, buildPrice, dropTicks, itemCode, unitsIn, usesPer, addStock, takesSupply, stockCap, makeTicks, rebrandTicks, eventPay, give, stepBack, BACK, STOCK_TRACKS, DIRS, dealCards, cleanHand, hasCard, cardKind, cardKinds, cardParts, cardsShown,
   revealTick, dealLength, idShare, smashReady, patienceFor, bossPatience, CARDS, DEALABLE, CARDS_APART,
   CARD_SKIP_KINDS, DEAL_ORDER, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, ITEMS, BOSS, BABY, TUNE, TICK_HZ, ST, cleanSettings, cardsOn,
 } from '../src/sim/index.js';
-import { cardSlip, cardFall, cardLiftChance, cardLiftHeal, cardShield, cardPicks } from '../src/sim/cards.js';
+import { cardSlip, cardFall, cardGrabChance, cardGrabHeal, cardShield, cardPicks } from '../src/sim/cards.js';
 import { HostSession } from '../src/net/session.js';
 import { cardText, cardName, CARD_WORDS, PLURALS, cardsNote } from '../src/content/cards.js';
 import { NOPE } from '../src/content/lines.js';
@@ -393,46 +393,126 @@ test('doubledip: the shoppers it picks by id take twice the cash, still as one r
   assert.equal(s.refunds, 1);
 });
 
-test('payday: every refund costs 40% more (whole dollars) and everything sells for 20% more', () => {
+/** What the end of sales event n pays (the waveEnd event) in a game with these cards, nobody having come in. */
+function endOf(cards, n, more = {}) {
+  const s = game(cards, 5, more);
+  openEmpty(s, n);
+  return step(s).find((e) => e.e === 'waveEnd');
+}
+
+test('payday: every sales event pays 20% more, its speed bonus too, and every refund costs 60% more (whole dollars)', () => {
   for (const k of ['hunter', 'teen', 'dad']) {
     assert.equal(refundOf(['payday'], k, 7), Math.round(refundOf(null, k, 7) * CARDS.payday.refund), k);
   }
   assert.equal(refundOf(['payday'], 'baby', 7), Math.round(BABY.refund * CARDS.payday.refund));
-  for (const item of Object.keys(ITEMS)) assert.equal(saleOf(['payday'], item), Math.round(ITEMS[item].value * CARDS.payday.sell), item);
+  for (const n of [1, 4, 10]) {
+    const e = endOf(['payday'], n), plain = endOf(null, n);
+    assert.equal(e.pay, Math.round((TUNE.payBase + TUNE.payStep * n) * CARDS.payday.pay), `event ${n}`);
+    assert.equal(plain.pay, TUNE.payBase + TUNE.payStep * n);
+    assert.equal(e.speed, Math.round(e.pay * TUNE.speedShare), 'the bonus is worked out from the card\'s pay');
+  }
 });
 
-/** What one item sells for at a chute in a game with these cards. */
-function saleOf(cards, item) {
+test('clearance and overtime: the event pay, and the speed bonus from it; with payday they multiply', () => {
+  for (const [cards, m] of [[null, 1], [['clearance'], CARDS.clearance.pay], [['overtime'], CARDS.overtime.pay],
+    [['overtime', 'clearance', 'payday'], CARDS.overtime.pay * CARDS.clearance.pay * CARDS.payday.pay]]) {
+    for (const n of [1, 7]) {
+      const e = endOf(cards, n);
+      const pay = Math.round((TUNE.payBase + TUNE.payStep * n) * m);
+      assert.equal(e.pay, pay, `${cards} event ${n}`);
+      assert.equal(e.speed, Math.round(pay * TUNE.speedShare), `${cards} event ${n}`);
+      assert.equal(eventPay(game(cards), n), pay);
+    }
+  }
+  // On top of the difficulty's pay.
+  const hard = endOf(['overtime'], 3, { settings: { difficulty: 'hard' } });
+  assert.equal(hard.pay, Math.round((TUNE.payBase + TUNE.payStep * 3) * 0.85 * CARDS.overtime.pay));
+});
+
+/** A game with these cards and a Back belt (1, 2) east into a Clearance Bin (2, 2), owned by Dave. */
+function binGame(cards) {
   const s = game(cards);
-  openEmpty(s, 3);
-  applyCommand(s, 0, { c: 'place', k: 'chute', x: 12, y: 3 });
-  applyCommand(s, 0, { c: 'place', k: 'belt', x: 11, y: 3, d: 0 });
-  s.grid[3 * s.w + 11].it.push([item, 0.99]);
-  walker(s, 'hunter', 2.5, 13.5, { st: ST.STUN, t: 1e6 }); // keeps the wave going
-  return run(s, 2).find((e) => e.e === 'sale').v;
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'conv', x: 1, y: 2, d: 0, f: 1 }).ok);
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'bin', x: 2, y: 2, f: 1 }).ok);
+  return s;
 }
 
-test('clearance, lootbox, asseenontv, regifting, artisanal: what goods sell for', () => {
-  const base = (item, m = 1) => Math.max(1, Math.round(ITEMS[item].value * m));
-  for (const item of Object.keys(ITEMS)) {
-    assert.equal(saleOf(null, item), base(item), item);
-    assert.equal(saleOf(['clearance'], item), base(item, CARDS.clearance.sell), `clearance ${item}`);
-    assert.equal(saleOf(['artisanal'], item), base(item, CARDS.artisanal.sell), `artisanal ${item}`);
+test('lootbox: a Clearance Bin pays three times as much for leftover supplies; junk still nothing', () => {
+  for (const tier of [1, 2, 3, 4]) {
+    const got = {};
+    for (const cards of [null, ['lootbox']]) {
+      const s = binGame(cards);
+      const cash = s.players[0].cash, ev = [];
+      assert.ok(give(s, 2 * s.w + 2, itemCode(1, tier), 0));
+      give(s, 2 * s.w + 2, 1, 0);
+      stepBack(s, ev);
+      got[cards ? 'card' : 'plain'] = s.players[0].cash - cash;
+    }
+    assert.ok(Math.abs(got.plain - BACK.binPay[tier]) < 1e-9, `tier ${tier}`);
+    assert.ok(Math.abs(got.card - BACK.binPay[tier] * CARDS.lootbox.bin) < 1e-9, `tier ${tier} with the card`);
   }
-  assert.equal(saleOf(['lootbox'], 'box'), base('box', CARDS.lootbox.sell));
-  assert.equal(saleOf(['lootbox'], 'gadget'), base('gadget'));
-  assert.equal(saleOf(['asseenontv'], 'gadget'), base('gadget', CARDS.asseenontv.sell));
-  assert.equal(saleOf(['asseenontv'], 'giftset'), base('giftset'));
-  assert.equal(saleOf(['regifting'], 'giftset'), base('giftset', CARDS.regifting.sell));
-  assert.equal(saleOf(['regifting', 'clearance'], 'giftset'), base('giftset', CARDS.regifting.sell * CARDS.clearance.sell), 'two cards multiply');
 });
 
-test('artisanal and premature: machines take longer; security fires faster and reaches less far', () => {
-  const s = game(['artisanal', 'premature']), plain = game();
-  for (const b of [{ k: 'press' }, { k: 'packer' }]) {
-    near(statsOf(b, s).time, statsOf(b).time * CARDS.artisanal.work, b.k);
+test('asseenontv: Rebranders work 30% faster; artisanal: machines and Rebranders 25% slower', () => {
+  const ticks = (x) => Math.max(1, Math.round(x * TICK_HZ));
+  for (const tier of [1, 2, 3]) {
+    const base = BACK.rebrandSecs[tier];
+    assert.equal(rebrandTicks(game(), tier), ticks(base));
+    assert.equal(rebrandTicks(game(['asseenontv']), tier), ticks(base / CARDS.asseenontv.rebrand), `tier ${tier}`);
+    assert.equal(rebrandTicks(game(['artisanal']), tier), ticks(base * CARDS.artisanal.work), `tier ${tier}`);
+    assert.equal(rebrandTicks(game(['artisanal', 'asseenontv']), tier), ticks((base * CARDS.artisanal.work) / CARDS.asseenontv.rebrand));
   }
-  near(statsOf({ k: 'unpacker' }, s).period, statsOf({ k: 'unpacker' }).period * CARDS.artisanal.work, 'unpacker');
+  assert.equal(makeTicks(game()), ticks(BACK.makeSecs));
+  assert.equal(makeTicks(game(['artisanal'])), ticks(BACK.makeSecs * CARDS.artisanal.work));
+  assert.equal(makeTicks(game(['asseenontv'])), ticks(BACK.makeSecs), 'machines are not Rebranders');
+  // In play: a Spite Still fed junk starts its work at the card's time, and so does a Rebrander.
+  for (const [cards, k, code, want] of [[['artisanal'], 'still', 1, makeTicks(game(['artisanal']))],
+    [['asseenontv'], 'rebrand', itemCode(2, 1), rebrandTicks(game(['asseenontv']), 1)]]) {
+    const g = game(cards);
+    assert.ok(applyCommand(g, 0, { c: 'place', k, x: 5, y: 5, d: 0, f: 1 }).ok);
+    const i = 5 * g.w + 5;
+    assert.ok(give(g, i, code, 0));
+    stepBack(g, []);
+    assert.equal(g.back[i].t, want, `${k}`);
+  }
+});
+
+test('regifting: every Dumbwaiter holds two more units of each supply', () => {
+  const s = game(['regifting']), plain = game();
+  assert.equal(stockCap(plain), BACK.stockUnits);
+  assert.equal(stockCap(s), BACK.stockUnits + CARDS.regifting.units);
+  for (const [g, cap] of [[plain, BACK.stockUnits], [s, BACK.stockUnits + CARDS.regifting.units]]) {
+    assert.ok(applyCommand(g, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
+    const b = g.grid[5 * g.w + 5];
+    let n = 0;
+    while (takesSupply(b, itemCode(1, 1), g)) { addStock(b, itemCode(1, 1), g); n++; }
+    assert.equal(n, cap);
+    assert.equal(unitsIn(b, 'dmg', g), cap);
+    // Up its Dumbwaiter too: full is full.
+    assert.equal(give(g, 5 * g.w + 5, itemCode(1, 1), 0), false);
+  }
+});
+
+test('artisanal: every unit of supply lasts 25% longer (uses rounded up), counted as one unit', () => {
+  const s = game(['artisanal']);
+  for (const k of ['sprinkler', 'forklift', 'railgun', 'samples']) {
+    for (const t of ['dmg', 'dur', 'wire']) {
+      for (const tier of [1, 2, 3, 4]) {
+        assert.equal(usesPer(k, t, tier, s), Math.ceil(usesPer(k, t, tier) * CARDS.artisanal.uses), `${k} ${t} ${tier}`);
+        assert.equal(usesPer(k, t, tier, game()), usesPer(k, t, tier));
+      }
+    }
+  }
+  assert.ok(applyCommand(s, 0, { c: 'place', k: 'forklift', x: 5, y: 5 }).ok);
+  const b = s.grid[5 * s.w + 5];
+  addStock(b, itemCode(1, 2), s);
+  assert.deepEqual(b.s.dmg, [2, Math.ceil(BUILD.forklift.shots * CARDS.artisanal.uses)]);
+  assert.equal(unitsIn(b, 'dmg', s), 1, 'still one unit');
+});
+
+test('premature: security fires faster and reaches less far; the old factory\'s machines no longer slow for artisanal', () => {
+  const s = game(['artisanal', 'premature']), plain = game();
+  for (const b of [{ k: 'press' }, { k: 'packer' }, { k: 'unpacker' }]) assert.deepEqual(statsOf(b, s), statsOf(b), b.k);
   for (const k of ['sprinkler', 'forklift', 'railgun']) {
     near(statsOf({ k }, s).cd, statsOf({ k }).cd / CARDS.premature.rate, k);
     near(statsOf({ k }, s).range, statsOf({ k }).range * CARDS.premature.range, k);
@@ -447,15 +527,6 @@ test('artisanal and premature: machines take longer; security fires faster and r
   const ev = step(g);
   assert.ok(ev.some((e) => e.e === 'shot'));
   assert.equal(g.grid[8 * g.w + 10].cd, secs(BUILD.forklift.cd / CARDS.premature.rate));
-  // An Unpacker in play waits the card's time between boxes.
-  const m = game(['artisanal']);
-  openEmpty(m, 3);
-  applyCommand(m, 0, { c: 'place', k: 'unpacker', x: 10, y: 3, d: 0 });
-  applyCommand(m, 0, { c: 'place', k: 'belt', x: 11, y: 3, d: 0 });
-  walker(m, 'hunter', 2.5, 13.5, { st: ST.STUN, t: 1e6 });
-  m.grid[3 * m.w + 10].t = 0;
-  step(m);
-  assert.equal(m.grid[3 * m.w + 10].t, secs(BUILD.unpacker.period * CARDS.artisanal.work));
 });
 
 test('preworkout: the gym bros it picks by id land twice as many hits, the Roid Rager too', () => {
@@ -595,38 +666,29 @@ test('convention: a Cosplayer walks at 0.8 tiles a second, has 25% less patience
   }
 });
 
-test('klepto: ordinary shoplifters go out of their way for goods twice as often, from no further; not Card Traders', (t) => {
+test('klepto: ordinary shoplifters steal stock twice as often as they pass; not Card Traders', (t) => {
   const s = game(['klepto']);
-  assert.equal(cardLiftChance(s, SHOPPERS.hunter), CARDS.klepto.chance);
-  assert.equal(cardLiftHeal(s, SHOPPERS.hunter), CARDS.klepto.heal);
-  assert.equal(cardLiftChance(s, SHOPPERS.trader), 1);
-  assert.equal(cardLiftHeal(s, SHOPPERS.trader), 0);
-  assert.equal(cardLiftChance(game(), SHOPPERS.hunter), 1);
-  assert.equal(cardLiftHeal(game(), SHOPPERS.hunter), 0);
-  // In play: one look, at goods `x` tiles of walking away; returns whether he goes for them.
-  tune(t, { liftChance: 1, liftLook: 1000 });
-  const goes = (cards, x, seed = 5) => {
+  assert.equal(cardGrabChance(s, SHOPPERS.hunter), CARDS.klepto.chance);
+  assert.equal(cardGrabHeal(s, SHOPPERS.hunter), CARDS.klepto.heal);
+  assert.equal(cardGrabChance(s, SHOPPERS.trader), 1);
+  assert.equal(cardGrabHeal(s, SHOPPERS.trader), 0);
+  assert.equal(cardGrabChance(game(), SHOPPERS.hunter), 1);
+  assert.equal(cardGrabHeal(game(), SHOPPERS.hunter), 0);
+  // In play: one tick beside a stocked forklift; returns whether he took a unit.
+  const takes = (cards, seed) => {
     const g = game(cards, seed);
     openEmpty(g, 3);
-    applyCommand(g, 0, { c: 'place', k: 'crate', x: 21, y: 8 });
-    applyCommand(g, 0, { c: 'place', k: 'belt', x: 20, y: 8, d: 0 });
-    g.grid[8 * g.w + 20].it.push(['gadget', 0.99]);
-    const sh = walker(g, 'hunter', 19.5 - x, 8.5);
-    // His one look comes on the next tick.
-    sh.id = secs(1000) - ((g.tick + 1) % secs(1000));
-    step(g);
-    if (sh.lf !== undefined) assert.equal(sh.lf, 8 * g.w + 19);
-    return sh.lf !== undefined;
+    applyCommand(g, 0, { c: 'place', k: 'forklift', x: 20, y: 8 });
+    addStock(g.grid[8 * g.w + 20], itemCode(1, 1), g);
+    walker(g, 'hunter', 19.5, 8.5);
+    return step(g).some((e) => e.e === 'grab');
   };
-  // Goods 7 tiles away, beyond TUNE.liftMax: never, card or not (the card's old 3 tiles further is gone).
-  for (const cards of [null, ['klepto']]) assert.equal(goes(cards, 7), false, `${cards}`);
-  assert.equal(goes(['klepto'], 4), true);
-  // Twice as often: at half the usual chance, the card makes it certain.
-  TUNE.liftChance = 0.5;
+  // Twice as often: at half a tick's worth of chance, the card makes it certain.
+  tune(t, { grabChance: TICK_HZ / CARDS.klepto.chance });
   let plain = 0;
   for (let seed = 1; seed <= 40; seed++) {
-    assert.equal(goes(['klepto'], 4, seed), true, `seed ${seed}`);
-    if (goes(null, 4, seed)) plain++;
+    assert.equal(takes(['klepto'], seed), true, `seed ${seed}`);
+    if (takes(null, seed)) plain++;
   }
   assert.ok(plain > 8 && plain < 32, `${plain} of 40 without the card`);
 });
@@ -638,9 +700,18 @@ test('shrinkflation, staffdiscount, rentacop, sweatshop: what a building costs, 
     assert.equal(price(['shrinkflation'], k), Math.round(BUILD[k].cost * CARDS.shrinkflation.cost), k);
     assert.equal(price(['staffdiscount'], k), Math.round(BUILD[k].cost * CARDS.staffdiscount.cost), k);
     for (const card of ['rentacop', 'sweatshop']) {
-      assert.equal(price([card], k), Math.round(BUILD[k].cost * CARDS[card].cost[BUILD[k].group]), `${card} ${k}`);
+      // (Crate Stacks count as security for these two; the old factory is in neither group.)
+      const m = k === 'crate' ? CARDS[card].cost.security : CARDS[card].cost[BUILD[k].group] ?? 1;
+      assert.equal(price([card], k), m === 1 ? BUILD[k].cost : Math.round(BUILD[k].cost * m), `${card} ${k}`);
     }
   }
+  // The Back's parts: the back group (0.4), never under a dollar.
+  for (const k of Object.keys(BUILD).filter((kind) => BUILD[kind].back && !BUILD[kind].fixed)) {
+    assert.equal(price(['sweatshop'], k), Math.max(1, Math.round(BUILD[k].cost * CARDS.sweatshop.cost.back)), k);
+    assert.equal(price(['rentacop'], k), Math.max(1, Math.round(BUILD[k].cost * CARDS.rentacop.cost.back)), k);
+  }
+  assert.equal(price(['sweatshop'], 'crate'), Math.round(BUILD.crate.cost * CARDS.sweatshop.cost.security));
+  assert.equal(price(['sweatshop'], 'press'), BUILD.press.cost, 'the old factory is in neither group');
   // Paid, sold back at the usual share of what was paid, and rebuilt for half of what was paid.
   const s = game(['shrinkflation']);
   const cash = s.players[0].cash;
@@ -803,15 +874,6 @@ test('dryjanuary and happyhour: Day Drinkers fall half as often, twice as often'
   assert.equal(falls(['happyhour']), 20);
 });
 
-test('overtime: the end-of-event bonus is half as big again', () => {
-  for (const [cards, m] of [[null, 1], [['overtime'], CARDS.overtime.bonus]]) {
-    const s = game(cards);
-    openEmpty(s, 4);
-    const e = step(s).find((x) => x.e === 'waveEnd');
-    assert.equal(e.bonus, Math.round((TUNE.waveBonus + TUNE.waveBonusStep * 4) * m));
-  }
-});
-
 test('restocking: a shopper who storms out pays the store $2 on his way; a baby does not', () => {
   for (const [k, pays] of [['dad', true], ['baby', false]]) {
     const s = game(['restocking']);
@@ -889,9 +951,15 @@ test('every card has a name, a rule built from its numbers and a joke; a per-kin
   assert.match(cardText('litter').rule, /twice as many babies/);
   assert.match(cardText('pulledout').rule, /half as many babies/);
   assert.match(cardText('doubledip').rule, /^One in 5 shoppers takes twice the cash/);
-  assert.match(cardText('lootbox').rule, /3 times as much/);
-  assert.match(cardText('clearance').rule, /15% less/);
-  assert.match(cardText('rentacop').rule, /Security buildings cost 20% less and factory buildings 20% more/);
+  assert.match(cardText('lootbox').rule, /Clearance Bin pays 3 times as much/);
+  assert.match(cardText('clearance').rule, /^Every sales event pays 15% less/);
+  assert.match(cardText('overtime').rule, /^Every sales event pays 50% more/);
+  assert.match(cardText('asseenontv').rule, /Rebranders work 30% faster/);
+  assert.match(cardText('regifting').rule, /2 more units of each supply \(8 instead of 6\)/);
+  assert.match(cardText('artisanal').rule, /take 25% longer, and every unit of supply lasts 25% longer/);
+  assert.match(cardText('payday').rule, /pays 20% more .* every refund costs 60% more/);
+  assert.match(cardText('rentacop').rule, /Security buildings and Crate Stacks cost 20% less, parts for The Back 20% more/);
+  assert.match(cardText('sweatshop').rule, /^Parts for The Back cost 20% less, security buildings and Crate Stacks 20% more/);
   assert.match(cardText('firecode').rule, /5 shoppers at once instead of 4/);
   assert.match(cardText('fathersday').rule, /^Twice as many Dads, each with 28% less patience/);
   assert.match(cardText('preworkout').rule, /\(4; a Roid Rager 6\)/);

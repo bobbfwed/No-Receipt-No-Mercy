@@ -8,9 +8,9 @@
 // 0.3.01, the tutorial, the URL test options, the tests). Cards never apply in a training game.
 //
 // The rules ask the helpers at the bottom of this file at the one place each number is worked out
-// (patienceFor, the speed line in stepShoppers, offer, escape, statsOf, the price check in
-// commands.js, where beginWave turns waveSpec() into the arrival queue), so each rule site stays one
-// readable line. Every helper gives exactly 1 (or 0 for an amount added) in a game without the card,
+// (patienceFor, the speed line in stepShoppers, eventPay, escape, statsOf, the price check in
+// commands.js, where beginWave turns waveSpec() into the arrival queue, The Back's machines, bins
+// and Dumbwaiters in back.js), so each rule site stays one readable line. Every helper gives exactly 1 (or 0 for an amount added) in a game without the card,
 // so such a game plays tick for tick as it did before the cards existed.
 import { CARDS, DEALABLE, CARDS_APART, CARD_SKIP_KINDS, SHOPPERS, BUILD, TUNE, TICK_HZ } from './constants.js';
 import { rand } from './state.js';
@@ -286,25 +286,24 @@ export function cardRefund(state, s, def) {
   return m * mul(state, 'payday', 'refund');
 }
 
-/** The cards' multiplier on what an item (a key of ITEMS) sells for at a chute. */
-export function cardSell(state, item) {
-  if (!inForce(state)) return 1;
-  let m = 1;
-  for (const [c] of parsed(state)) {
-    const card = CARDS[c];
-    if (c === 'clearance' || c === 'artisanal' || c === 'payday') m *= card.sell;
-    else if (card && card.item === item && card.sell) m *= card.sell;
-  }
-  return m;
-}
+/**
+ * The cards' multiplier on the event pay (eventPay in step.js), and so on the speed bonus worked
+ * out from it: overtime, clearance, payday. (Until 0.4 clearance and payday changed what goods
+ * sold for instead.)
+ */
+export const cardPay = (state) => mul(state, 'overtime', 'pay') * mul(state, 'clearance', 'pay') * mul(state, 'payday', 'pay');
 
-/** The end-of-event bonus multiplier (overtime). */
-export const cardBonus = (state) => mul(state, 'overtime', 'bonus');
+/**
+ * The group a building's price is in for rentacop and sweatshop: 'security' (Crate Stacks count:
+ * they are the security side's wall), 'back' (The Back's parts), or the kind's own group (the old
+ * shop-floor factory, which neither card touches any more).
+ */
+const priceGroup = (k, def) => (k === 'crate' ? 'security' : def.group);
 
 /**
  * What a building of kind k costs to put down in this game (not to rebuild):
- * shrinkflation and staffdiscount every building, rentacop and sweatshop by its group. Whole
- * dollars, never under one.
+ * shrinkflation and staffdiscount every building, rentacop and sweatshop by its group (priceGroup).
+ * Whole dollars, never under one.
  */
 export function buildPrice(state, k) {
   const def = BUILD[k];
@@ -314,10 +313,28 @@ export function buildPrice(state, k) {
   for (const [c] of parsed(state)) {
     const card = CARDS[c];
     if (c === 'shrinkflation' || c === 'staffdiscount') m *= card.cost;
-    else if (c === 'rentacop' || c === 'sweatshop') m *= card.cost[def.group] ?? 1;
+    else if (c === 'rentacop' || c === 'sweatshop') m *= card.cost[priceGroup(k, def)] ?? 1;
   }
   return m === 1 ? def.cost : Math.max(1, Math.round(def.cost * m));
 }
+
+// ---- The Back (0.4): the cards that were about goods prices or the old factory -------------------
+// Each is 1 (or 0 for an amount added) without its card.
+
+/** What a Clearance Bin pays for a supply, times (lootbox). */
+export const cardBin = (state) => mul(state, 'lootbox', 'bin');
+
+/** How many times as fast a Rebrander works (asseenontv; artisanal slows it, see cardWork). */
+export const cardRebrand = (state) => mul(state, 'asseenontv', 'rebrand');
+
+/** Units of each supply a Dumbwaiter holds on top of BACK.stockUnits (regifting). */
+export const cardUnits = (state) => (hasCard(state, 'regifting') ? CARDS.regifting.units : 0);
+
+/** A machine's or Rebrander's time in The Back, times (artisanal). */
+export const cardWork = (state) => mul(state, 'artisanal', 'work');
+
+/** The uses one unit of supply gives, times (artisanal; usesPer rounds the result up). */
+export const cardUses = (state) => mul(state, 'artisanal', 'uses');
 
 /**
  * mallcop (0.4; until then it gave free upgrade levels): how many units of Store Brand of each
@@ -334,19 +351,14 @@ export const cardDrop = (state) => (hasCard(state, 'offatruck') ? CARDS.offatruc
 
 /**
  * The cards' changes to a building's working numbers (statsOf with the state): premature (towers
- * fire faster and reach less far), artisanal (every machine takes longer for an item).
+ * fire faster and reach less far).
  * @returns {Object} st, changed in place
  */
 export function cardStats(state, b, st) {
   if (!inForce(state)) return st;
-  const def = BUILD[b.k];
-  if (def.tower && hasCard(state, 'premature')) {
+  if (BUILD[b.k].tower && hasCard(state, 'premature')) {
     st.cd /= CARDS.premature.rate;
     st.range *= CARDS.premature.range;
-  }
-  if ((st.period || st.time) && hasCard(state, 'artisanal')) {
-    st.period *= CARDS.artisanal.work;
-    st.time *= CARDS.artisanal.work;
   }
   return st;
 }
@@ -373,13 +385,14 @@ export const cardPep = (state) => mul(state, 'retreat', 'pep');
 export const cardShield = (state, def) => (def.shields && hasCard(state, 'convention') ? CARDS.convention.shield - TUNE.shield : 0);
 
 /**
- * The klepto card (not a Card Trader, whose Mystery Boxes it never touched): a shoplifter's chance
- * to go out of his way for goods, times; and the share of his full patience every theft gives him
- * back (the thrill of it), 0 without the card. Reworked on the owner's decision (2026-11-24): it
- * used to send him from further away too, but a longer detour only kept him in reach of security.
+ * The klepto card (ordinary shoplifters, never a Card Trader): a shoplifter's chance to steal a
+ * unit of stock as he passes, times; and the share of his full patience every theft gives him back
+ * (the thrill of it), 0 without the card. Reworked on the owner's decision (2026-11-24): it used
+ * to send him from further away too, but a longer detour only kept him in reach of security. (Until
+ * 0.4 the chance was his chance to go out of his way for goods on a belt; that detour is gone.)
  */
-export const cardLiftChance = (state, def) => (def.rips ? 1 : mul(state, 'klepto', 'chance'));
-export const cardLiftHeal = (state, def) => (!def.rips && hasCard(state, 'klepto') ? CARDS.klepto.heal : 0);
+export const cardGrabChance = (state, def) => (def.rips ? 1 : mul(state, 'klepto', 'chance'));
+export const cardGrabHeal = (state, def) => (!def.rips && hasCard(state, 'klepto') ? CARDS.klepto.heal : 0);
 
 /** What a shopper who storms out pays the store on his way (restocking; not babies or puppies). */
 export const cardFee = (state, s) => (s.k !== 'baby' && s.k !== 'pup' && hasCard(state, 'restocking') ? CARDS.restocking.fee : 0);

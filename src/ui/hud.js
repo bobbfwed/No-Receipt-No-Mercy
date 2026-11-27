@@ -432,8 +432,8 @@ export function createPlayersPanel(session, { playSound = () => {} } = {}) {
     const online = s.players.filter((p) => p.on).length;
     setText(pillCount, String(online));
     setText(foot, online === 1 ? '1 player online. Says a lot.'
-      : boss ? `${online} players online · income is split between the store players`
-        : `${online} players online · income is split evenly`);
+      : boss ? `${online} players online · event pay to each store player, other income split between them`
+        : `${online} players online · event pay to each, other income split evenly`);
   }
 
   function sideButton(s, p) {

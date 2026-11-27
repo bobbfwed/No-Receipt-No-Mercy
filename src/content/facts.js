@@ -4,7 +4,7 @@
 import {
   SHOPPERS, SUPERS, BUILD, ITEMS, ZONES, TUNE, SETTINGS, waveSpec, statsOf, priceOf,
   tracksOf, usesPer, BACK, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
-  patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize,
+  patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize, eventPay, speedPar,
 } from '../sim/index.js';
 import { EDGE_HELP } from './help.js';
 import { TIER_NAMES } from './supplies.js';
@@ -122,6 +122,34 @@ export function bossFacts({ hpMul = 1, pay = 1, waves = SETTINGS.defaults.waves 
 }
 
 /**
+ * What beating sales events pays (0.4), from the rules: `difficulty` is a key of SETTINGS.difficulty.
+ *   base, step: TUNE.payBase and payStep; pay(n): what event n pays each store player on that
+ *   difficulty (eventPay, cards left out); share, best, par, bossPar: the speed bonus's numbers
+ */
+export function payFacts(difficulty = SETTINGS.defaults.difficulty) {
+  // (eventPay reads only the difficulty and the cards from a game; a game without cards pays these.)
+  const game = { difficulty };
+  return {
+    base: TUNE.payBase, step: TUNE.payStep, pay: (n) => eventPay(game, n),
+    share: TUNE.speedShare, best: TUNE.speedBest, par: speedPar(1), bossPar: speedPar(TUNE.bossEvery),
+  };
+}
+
+/**
+ * How money is made (0.4), in two or three sentences for the handbook, the help screen and the
+ * training shift's last words: the event pay with examples on that difficulty, and the speed bonus.
+ */
+export function payText(difficulty = SETTINGS.defaults.difficulty) {
+  const p = payFacts(difficulty);
+  return `Money comes from beating sales events: each one pays every store player the whole amount, not a share (${money(p.pay(1))} for the first, ${money(p.pay(10))} for the tenth, ${money(p.pay(20))} for the twentieth). `
+    + `On top comes a speed bonus of up to ${pct(p.share)} of that: its clock starts when the event's last shopper has come in, and clearing the floor within ${p.best} seconds earns all of it, draining to nothing at ${p.par} seconds (${p.bossPar} in a boss event). `
+    + `It is scaled by the share of that event's shoppers stopped rather than refunded. Opening the doors early just opens them: The Back does nothing in the time skipped.`;
+}
+
+/** Whole dollars as players read them: "$1,050". */
+const money = (v) => `$${Math.round(v).toLocaleString('en-US')}`;
+
+/**
  * The one sentence about every shopper walking at his own pace (TUNE.paceSpread), for wherever a
  * shopper's speed is shown: the speed shown is his kind's, and each one is a little off it.
  */
@@ -199,12 +227,14 @@ export function shopperTraits(k, sup = 0) {
   const d = sup ? SUPERS[k] : SHOPPERS[k];
   const v = (key) => d[key] ?? TUNE[key];
   const out = [];
+  // (Thieves, 0.4: stock from the security they walk past, never out of their way.)
+  const roll = `about ${pct(1 - Math.exp(-TUNE.grabChance))} a second beside a stocked building`;
   if (d.rips) {
-    out.push(['Free samples and goods on belts', `ignores free samples and every kind of goods but one: steals Mystery Boxes off belts (nobody else does), and walks up to ${TUNE.ripMax} tiles out of his way for one`]);
-    out.push(['Ripping a pack', `stands and opens the box for ${fmt(TUNE.ripSecs)} s; every other Card Trader within ${fmt(TUNE.ripLook)} tiles stops ${fmt(TUNE.ripWatch)} s to see what he pulled (and not again for ${fmt(TUNE.ripCool)} s)`]);
+    out.push(['Free samples and stock', `ignores free samples; rips one unit of the best-branded stock out of any security building he walks past (${roll})`]);
+    out.push(['Ripping', `stands and gloats over it for ${fmt(TUNE.ripSecs)} s; every other Card Trader within ${fmt(TUNE.ripLook)} tiles stops ${fmt(TUNE.ripWatch)} s to see what he pulled (and not again for ${fmt(TUNE.ripCool)} s)`]);
     out.push(['When', releaseText()]);
-  } else if (d.browses) out.push(['Free samples and goods on belts', `stops for them; now and then walks ${TUNE.liftMin} to ${TUNE.liftMax} tiles out of the way to steal off a belt (never a Mystery Box), then gets back in line`]);
-  else out.push(['Free samples and goods on belts', 'ignores them']);
+  } else if (d.browses) out.push(['Free samples and stock', `stops for them; steals one unit of stock from security he walks past (${roll}, from whichever supply it holds most of), then waits ${fmt(TUNE.grabCooldown)} s before he can be tempted again`]);
+  else out.push(['Free samples and stock', 'ignores them']);
   if (d.steady) out.push(['Wet floors and messes', 'not affected']);
   else if (d.ignoresSigns) out.push(['Wet floors and messes', `not slowed; ${pct(TUNE.slipChance)} chance to slip (stunned ${fmt(TUNE.slipSecs)} s)`]);
   else out.push(['Wet floors and messes', `slowed to ${pct(TUNE.wetSlow)} speed`]);

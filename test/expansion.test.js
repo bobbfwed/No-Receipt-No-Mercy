@@ -212,7 +212,7 @@ test('each player has his own money and pays for his own buildings', () => {
   assert.equal(s.players[1].cash, 3 + Math.floor(BUILD.forklift.cost * TUNE.sellBack));
 });
 
-test('sales, wave bonuses and refunds are split evenly between the players', () => {
+test('sales and refunds are split evenly between the players, and each gets the whole event pay', () => {
   const s = createGame({ seed: 3 });
   for (const n of ['Dave', 'Steve', 'Gaz']) addPlayer(s, n);
   // Dave alone builds a line; everyone earns from it.
@@ -227,7 +227,8 @@ test('sales, wave bonuses and refunds are split evenly between the players', () 
   const share = paid / 3;
   for (const p of s.players) assert.ok(Math.abs(p.cash - before[p.id] - share) < 0.01, `${p.name} got a third`);
 
-  // A wave with no defence: every refund is split three ways, and the bonus is paid to each.
+  // A wave with no defence: every refund is split three ways, and the event pay (with its speed
+  // bonus, none here: they were all refunded) is paid to each in full.
   applyCommand(s, 0, { c: 'start' });
   const mid = s.players.map((p) => p.cash);
   let refunded = 0, earned = 0, bonus = 0;
@@ -236,7 +237,7 @@ test('sales, wave bonuses and refunds are split evenly between the players', () 
     for (const e of ev) {
       if (e.e === 'escape') refunded += e.refund;
       if (e.e === 'sale') earned += e.v;
-      if (e.e === 'waveEnd') bonus = e.bonus;
+      if (e.e === 'waveEnd') bonus = e.pay + e.speed;
     }
     if (bonus) break;
   }

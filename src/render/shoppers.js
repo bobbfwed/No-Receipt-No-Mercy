@@ -12,7 +12,8 @@
 // A mom's runaway child is a separate little figure (drawKid); so is a cart a mom left behind
 // (drawCart, for each entry in state.carts).
 // The Card Trader (0.3.01) comes with a backpack, binder, lanyard and deck box, and rips a foil
-// pack open when he steals a Mystery Box; his super, the Scalper, pushes a hand truck of boxes.
+// pack open as he gloats over the stock he ripped out of security (0.4; a Mystery Box off a belt
+// until then); his super, the Scalper, pushes a hand truck of boxes.
 //
 // A big wave has well over a hundred shoppers, so each figure is drawn once per pose into a small
 // offscreen canvas (a sprite) and then stamped with one drawImage. A pose is: kind, colour
@@ -3488,7 +3489,7 @@ export function drawShopper(ctx, s, sx, sy, face, F, sprites, how = NO_HOW) {
     const every = (defOf(s).pepEvery || 7) * TICK_HZ;
     alt = leaving ? BOSS_STORM : s.pp > every - 30 ? BOSS_PEP : 0;
   } else if (s.k === 'trader') {
-    if (s.st === ST.BROWSE) alt = TRADER_RIP; // ripping open a pack he took off a belt
+    if (s.st === ST.BROWSE) alt = TRADER_RIP; // gloating over the stock he ripped out (the foil pack is the look)
   } else if (s.k === 'preggo') {
     // Nearly out of patience: she is about to pop, and shows it (the warning the players need).
     if (!leaving && s.mhp > 0 && s.hp / s.mhp < PREG_WARN) alt = PREG_STRAIN;

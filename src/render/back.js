@@ -13,6 +13,7 @@
 // big Back costs a few drawImage calls a tile.
 import {
   BACK, TICK_HZ, beltShape as backShape, overpassDirs, feedsInto, takesFrom, itemType, itemTier, unitsIn,
+  stockCap, makeTicks, rebrandTicks,
 } from '../sim/index.js';
 import { SUPPLIES, stockTracks } from '../content/supplies.js';
 import { TILE, INK, C, rr, paint, box, circle, line, label, text, hazard, makeSprite } from './paint.js';
@@ -527,7 +528,6 @@ export function createBackArt() {
     [REBRAND]: (g, d, on) => paintRebrand(g, d, on === 1), [LIFT]: (g, d, on) => paintLift(g, on === 1),
   };
   for (const [k, id] of Object.entries(MACHINE_ID)) PAINT[id] = (g, d, on) => paintMachine(g, k, d, on === 1);
-  const MAKE_TICKS = Math.max(1, Math.round(BACK.makeSecs * TICK_HZ));
   function part(kind, d = 0, step = 0) {
     const key = kind * 64 + d * 8 + step;
     let sp = parts.get(key);
@@ -664,10 +664,10 @@ export function createBackArt() {
             drawLift(ctx, s, p, i, cx, cy);
             break;
           case 'rebrand':
-            drawMaker(ctx, p, REBRAND, cx, cy, F, p.t > 0 && p.q.length ? Math.round(BACK.rebrandSecs[itemTier(p.q[0])] * TICK_HZ) : 0);
+            drawMaker(ctx, p, REBRAND, cx, cy, F, p.t > 0 && p.q.length ? rebrandTicks(s, itemTier(p.q[0])) : 0);
             break;
           default:
-            if (MACHINE_ID[p.k]) drawMaker(ctx, p, MACHINE_ID[p.k], cx, cy, F, MAKE_TICKS);
+            if (MACHINE_ID[p.k]) drawMaker(ctx, p, MACHINE_ID[p.k], cx, cy, F, makeTicks(s));
         }
       }
     }
@@ -717,7 +717,7 @@ export function createBackArt() {
   /**
    * A Dumbwaiter, and on its building's anchor tile the gauges: one bar for each supply the
    * building above takes, in that supply's colour, filled to the units it holds out of
-   * BACK.stockUnits (red Spite, green Cola, orange Cord, silver Tape, purple Wire).
+   * the most it holds in this game, stockCap (red Spite, green Cola, orange Cord, silver Tape, purple Wire).
    */
   function drawLift(ctx, s, p, i, cx, cy) {
     const b = s.grid[p.a];
@@ -731,7 +731,7 @@ export function createBackArt() {
       const bx = x0 + k * (bw + 0.5);
       ctx.fillStyle = '#0d1014';
       ctx.fillRect(bx, top, bw, h);
-      const f = Math.min(1, unitsIn(b, tracks[k]) / BACK.stockUnits);
+      const f = Math.min(1, unitsIn(b, tracks[k], s) / stockCap(s));
       if (f > 0) {
         ctx.fillStyle = SUPPLIES[tracks[k]].color;
         ctx.fillRect(bx, top + h * (1 - f), bw, h * f);

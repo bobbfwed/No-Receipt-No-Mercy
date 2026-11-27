@@ -562,7 +562,7 @@ export const STEPS = [
     last: true,
     text: [
       'Do this: press Play a real game when you are ready, or stay here and practise for as long as you like. Pick any button in the build bar to see what it does and how to use it.',
-      'That is every building. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
+      'That is every building. In a real game, cash is limited, each player has his own (every sales event he survives pays him, more if the floor is cleared fast; refunds are split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
       'The real store has many more kinds of shopper than these three, each with its own trick, and the Employee Handbook lists them all: press ? at the top right, then 📖 Employee Handbook.',
       'A real store is bigger than this one. Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. With friends, each of you gets your own entrance to look after.',
       'P, or the pause button beside the speed buttons at the top, stops the store for everyone; 1x to 5x set how fast it runs.',
@@ -570,7 +570,7 @@ export const STEPS = [
     ],
     touch: [
       'Do this: tap Play a real game when you are ready, or stay here and practise for as long as you like. Hold your finger on any button in the build bar to see what it does and how to use it.',
-      'That is every building. In a real game, cash is limited, each player has his own (income is split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
+      'That is every building. In a real game, cash is limited, each player has his own (every sales event he survives pays him, more if the floor is cleared fast; refunds are split evenly), the store is bigger, there are 20 sales events with a short build break between them, and shoppers get more patient every event.',
       'The real store has many more kinds of shopper than these three, each with its own trick, and the Employee Handbook lists them all: tap ? at the top right (under ☰ on a phone), then 📖 Employee Handbook.',
       'A real store is bigger than this one. Drag the floor with nothing picked to move the view, pinch with two fingers to zoom, tap MAP to see the whole floor and HOME to go back to your entrance. With friends, each of you gets your own entrance to look after.',
       'The pause button beside the speed buttons (under ☰ on a phone) stops the store for everyone; 1x to 5x set how fast it runs.',

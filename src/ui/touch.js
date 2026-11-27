@@ -160,7 +160,7 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     // factory have only that).
     const nums = [...tracksOf(b.k).filter((tr) => tr !== 'dur'), 'dur'].map((tr) =>
       [trackName(b.k, tr), trackNumbers(b.k, tr, st).map(([label, v]) => `${label} ${v}`).join(', ')]);
-    const stock = stockRows(b);
+    const stock = stockRows(b, s);
     const lv = levelOf(b);
     const sig = JSON.stringify([t.x, t.y, b.k, b.d, hit, b.off > 0, back, nums, owner ? owner.name : '', s.players.length,
       stock.map((r) => [r.tier, r.units, r.gives])]);
