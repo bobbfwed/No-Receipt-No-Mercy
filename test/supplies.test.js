@@ -83,7 +83,7 @@ test('the numbers are the work package\'s', () => {
   assert.deepEqual(BACK.wireTurns, [0, 3, 6, 10, 15]);
   assert.deepEqual([BACK.dropUpCost, BACK.dropUpGrow, BACK.dropUpMax, BACK.dropMul], [150, 1.6, 5, 0.85]);
   for (const k of Object.keys(MACHINES)) assert.deepEqual([BUILD[k].cost, BUILD[k].back, BUILD[k].supply], [40, true, MACHINES[k]], k);
-  assert.equal(BUILD.rebrand.cost, 50);
+  assert.equal(BUILD.rebrand.cost, 15, 'a Rebrander (0.4 stage 7: was 50)');
   assert.ok(BUILD.lift.back && BUILD.lift.fixed, 'nobody buys or removes a Dumbwaiter');
   const shots = { sprinkler: 20, forklift: 6, railgun: 2, wetfloor: 10, samples: 8, salesman: 8 };
   for (const k of Object.keys(BUILD)) assert.equal(!!BUILD[k].lift, k in shots, `${k} has Dumbwaiters`);

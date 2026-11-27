@@ -49,9 +49,10 @@ function finish(s, n, after, { stopped = 1, escaped = 0 } = {}) {
 }
 const payOf = (n, m = 1) => Math.round((TUNE.payBase + TUNE.payStep * n) * m);
 
-test('event pay is 150 + 45 an event, times the difficulty\'s pay, to the whole dollar', () => {
-  assert.equal(TUNE.payBase, 150);
-  assert.equal(TUNE.payStep, 45);
+test('event pay is 160 + 40 an event, times the difficulty\'s pay, to the whole dollar', () => {
+  // (150 + 45 until 0.4's stage 7, which moved money toward the start of the game.)
+  assert.equal(TUNE.payBase, 160);
+  assert.equal(TUNE.payStep, 40);
   for (const [key, d] of Object.entries(SETTINGS.difficulty)) {
     for (const n of [1, 5, 12, 20]) {
       const s = game(1, { settings: { difficulty: key } });
@@ -60,8 +61,8 @@ test('event pay is 150 + 45 an event, times the difficulty\'s pay, to the whole 
       assert.equal(e.pay, payOf(n, d.pay), `${key} event ${n}, paid`);
     }
   }
-  assert.equal(eventPay(game(), 1), 195);
-  assert.equal(eventPay(game(), 20), 1050);
+  assert.equal(eventPay(game(), 1), 200);
+  assert.equal(eventPay(game(), 20), 960);
 });
 
 test('the speed bonus: all of it within 10 seconds, nothing at par (60), a straight line between', () => {
@@ -218,7 +219,7 @@ test('the handbook\'s money sentence comes from the rules', () => {
   assert.equal(p.pay(20), eventPay(game(), 20));
   assert.equal(payFacts('hard').pay(10), eventPay(game(1, { settings: { difficulty: 'hard' } }), 10));
   const text = payText();
-  for (const bit of ['$195', '$600', '$1,050', '50%', '10 seconds', '60 seconds', '120 in a boss event']) assert.ok(text.includes(bit), bit);
+  for (const bit of ['$200', '$560', '$960', '50%', '10 seconds', '60 seconds', '120 in a boss event']) assert.ok(text.includes(bit), bit);
 });
 
 test('DEB has a line for all of the speed bonus and for none of it, and nothing in between', () => {

@@ -119,9 +119,10 @@ test('the director announces to everyone and the report lists every player', () 
     host.on(type, (m) => seen.host.push(m));
     client.on(type, (m) => seen.client.push(m));
   }
-  host.state.wave = 1; // next wave is 2, which has a dad line
+  host.state.wave = TUNE.dadFrom - 1; // the next wave is the first with a dad line
+  host.state.refundLimit = 999; // (an empty store must not lose that wave before its report)
   host.send({ c: 'start' });
-  host.fastForward(120 * TICK_HZ);
+  host.fastForward(240 * TICK_HZ);
   client.update(0); // the client skips to the copy sent after the fast forward
   assert.deepEqual(seen.client, seen.host, 'clients receive exactly what the host shows');
   const says = seen.host.filter((m) => m.t === 'say');
@@ -131,7 +132,7 @@ test('the director announces to everyone and the report lists every player', () 
   assert.ok(seen.host.some((m) => m.t === 'review' && m.stars === 5 && m.kind === 'dad'), 'a dad who got through leaves 5 stars');
   const report = seen.host.find((m) => m.t === 'report');
   assert.ok(report);
-  assert.equal(report.wave, 2);
+  assert.equal(report.wave, TUNE.dadFrom);
   assert.deepEqual(report.rows.map((r) => r.name), ['Dave', 'Steve']);
   assert.ok(report.rows.every((r) => r.stamp && r.color));
   assert.ok(report.employee && report.deb);

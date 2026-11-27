@@ -127,10 +127,10 @@ test('dads walk straight through a snake of crates that makes everyone else walk
       if (s.tiles[at(x, y)] === '.') place(s, 'crate', x, y);
     }
   }
-  s.wave = 1; // next wave is 2, the first with a dad line
+  s.wave = TUNE.dadFrom - 1; // the next wave is the first with a dad line
   applyCommand(s, 0, { c: 'start' });
   const ev = run(s, 150);
-  const dads = waveSpec(2).filter((g) => g.k === 'dad').reduce((n, g) => n + g.n, 0);
+  const dads = waveSpec(TUNE.dadFrom).filter((g) => g.k === 'dad').reduce((n, g) => n + g.n, 0);
   assert.ok(dads > 0);
   assert.equal(ev.filter((e) => e.e === 'escape' && e.k === 'dad').length, dads, 'every dad walks through and takes his refund');
   assert.equal(ev.filter((e) => e.e === 'left' && e.k === 'dad').length, 0);
@@ -150,7 +150,7 @@ test('dads walk by their own map, through every building; others walk round (0.4
   assert.ok(dad[at(0, 7)] < normal[at(0, 7)], 'his way is shorter');
   // In play dads walk over the wall and nobody else does; a dad does not stop anything being built
   // on his tile (he walks through buildings), anyone else does.
-  s.wave = 1; // next wave is 2, the first with a dad line
+  s.wave = TUNE.dadFrom - 1; // the next wave is the first with a dad line
   applyCommand(s, 0, { c: 'start' });
   let dadOnWall = false, checked = false, checkedOther = false;
   for (let i = 0; i < 60 * TICK_HZ; i++) {

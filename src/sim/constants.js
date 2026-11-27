@@ -171,7 +171,11 @@ export const BUILD = {
     desc: 'Twists junk into Razor Wire, for the dads.',
   },
   rebrand: {
-    name: 'Rebrander', cost: 50, group: 'back', back: true, rot: true,
+    // $15 (was 50, 0.4 stage 7): a tier is worth two levels of every shot the supply goes into, and
+    // a Rebrander's time already limits how much of it there is; at $50 the scripted player who
+    // rebrands did no better than the one who does not, because the money was better spent on
+    // security.
+    name: 'Rebrander', cost: 15, group: 'back', back: true, rot: true,
     desc: 'Slaps a better label on any supply: one tier up a pass, slower each tier.',
   },
   // Under every tile of a building with `lift`; it comes and goes with the building (back.js,
@@ -513,6 +517,24 @@ export const TUNE = {
     [[2, 1], [10, 0.92], [20, 0.8], [30, 0.75]],
   ],
   crowdTrim: { 5: 0.93 },
+  // The dads' line (0.4, stage 7): from event dadFrom on, (1 + n) dads (before the scaling above)
+  // times dadEarly[n] where an event has one, otherwise times dadCurve read at n (a list of [event,
+  // times] points joined by straight lines, like crowdCurves). (The second line, from event 10, is
+  // not changed.) Until 0.4 dads came from event 2, (1 + n) of them. Since dads walk through every
+  // building and only Razor Wire stops them, they are what the factory is for:
+  //   dadFrom 4: a player needs his first Barb Bender, Returns Drop line and fence post before dads
+  //     come; from event 2, as before, they got through before any wire could be live.
+  //   dadEarly {4: 1}: the first line is the old size (5 before scaling, 2 or 3 in a solo game),
+  //     a taste of them while the wire is new.
+  //   x3.5 from event 5 to 20: the scripted player who ignores the factory (tools/balance.mjs,
+  //     "floor") loses to dads alone, and its result hardly moves with money; at x1 it lasted as
+  //     long as the one who built supply lines. At 3.5 it loses in event 8 against 10 and 12 for
+  //     the players who do (PLAN.md, 0.4 stage 7, has the table).
+  //   easing to x1.75 by event 30, so that no event up to 30 sends more than TUNE.maxCrowd (the cap
+  //     would otherwise shrink every other group as well). An endless game keeps x1.75.
+  dadFrom: 4,
+  dadEarly: { 4: 1 },
+  dadCurve: [[5, 3.5], [20, 3.5], [30, 1.75]],
   // From wave lateFrom on, every group grows by lateGrowth of its size per wave.
   lateFrom: 8,
   lateGrowth: 0.08,
@@ -560,9 +582,12 @@ export const TUNE = {
   // Event pay (0.4, the owner's decision: the factory no longer makes money, so beating a sales
   // event is where the money comes from). Every store player sharing income gets the whole of
   // round((payBase + payStep * event) * the difficulty's pay * the cards). It was 88 + 16.5 an
-  // event while goods paid the bills. (eventPay in step.js.)
-  payBase: 150,
-  payStep: 45,
+  // event while goods paid the bills. (eventPay in step.js.) 150 + 45 until 0.4's stage 7, which
+  // moved money toward the start: early money decides whether supply lines and Rebranders are up
+  // before the bigger crowds, and late money had piled up unspent (the scripted players ended with
+  // $13,000 to $15,000). $200 for the first event, $560 for the tenth, $960 for the twentieth.
+  payBase: 160,
+  payStep: 40,
   // The speed bonus, paid with the event pay. Its clock starts when the event's last shopper has
   // come in through a door and stops when the floor is clear: done within speedBest seconds pays
   // speedShare of the event pay, at speedPar seconds or later nothing, in between a straight line.
@@ -867,7 +892,7 @@ export const OFFICE = {
   patiencePerDollar: 9,
   kinds: {
     hunter: { from: 1, weight: 1, gap: 0.6 },
-    dad: { from: 2, weight: 1.5, gap: 0.3 },
+    dad: { from: TUNE.dadFrom, weight: 1.5, gap: 0.3 }, // (the event the automatic waves first send dads)
     clipper: { from: 3, weight: 1, gap: 0.35 },
     mom: { from: 3, weight: 1.3, gap: 2 },
     teen: { from: 4, weight: 1.2, gap: 2 },

@@ -745,7 +745,8 @@ test('the four new shoppers: supers twice as strong, Head Office prices, a pitch
   // time, so its gaps are longer.
   const old = (n) => {
     const g = [{ k: 'hunter', n: 6 + 2 * n, gap: 0.9, at: 0 }];
-    if (n >= 2) g.push({ k: 'dad', n: 1 + n, gap: 0.3, at: 10 });
+    // (Dads came from wave 2 until 0.4's stage 7; now from TUNE.dadFrom, the first line its old size.)
+    if (n >= TUNE.dadFrom) g.push({ k: 'dad', n: (1 + n) * TUNE.dadEarly[n], gap: 0.3, at: 10 });
     if (n >= 3) g.push({ k: 'clipper', n: 3 * (n - 1), gap: 0.35, at: 5 });
     if (n >= 3) g.push({ k: 'mom', n: 1 + Math.floor(n / 3), gap: 3, at: 6 });
     if (n >= 4) g.push({ k: 'teen', n: Math.floor(n / 2), gap: 2.5, at: 3 });

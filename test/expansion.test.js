@@ -386,13 +386,19 @@ test('the crowd follows the owner’s two curves multiplied together, and wave 5
   // Wave 5 alone sends 7% fewer again.
   near(crowdShiftAt(5), (1.25 - 0.3 * 4 / 9) * (1 - 0.08 * 3 / 8) * 0.93, 'wave 5');
   // What a wave sends follows it. Take the curves away and the old crowd comes back.
+  // (With the dads' line as it was before 0.4's stage 7, which changed only that line: TUNE.dadFrom.)
+  const dads = [TUNE.dadFrom, TUNE.dadEarly, TUNE.dadCurve];
+  const oldDads = () => { TUNE.dadFrom = 2; TUNE.dadEarly = {}; TUNE.dadCurve = [[0, 1]]; };
   const heads = (n) => waveSpec(n).reduce((sum, g) => sum + (g.k === 'boss' ? 0 : g.n), 0);
   const at = [1, 10, 20, 29, 30];
-  const now = at.map(heads);
+  let now;
+  oldDads();
+  try { now = at.map(heads); } finally { [TUNE.dadFrom, TUNE.dadEarly, TUNE.dadCurve] = dads; }
   const keep = [TUNE.crowdCurves, TUNE.crowdTrim];
   TUNE.crowdCurves = []; TUNE.crowdTrim = {};
+  oldDads();
   let old;
-  try { old = at.map(heads); } finally { [TUNE.crowdCurves, TUNE.crowdTrim] = keep; }
+  try { old = at.map(heads); } finally { [TUNE.crowdCurves, TUNE.crowdTrim] = keep; [TUNE.dadFrom, TUNE.dadEarly, TUNE.dadCurve] = dads; }
   assert.deepEqual(old, [4, 37, 149, 500, 320], 'the crowd before 0.2.11 (waves 10, 20 and 30 are boss waves: smaller crowds)');
   assert.equal(now[0], 5, 'wave 1: 25% more');
   for (const [i, share] of [[1, 0.874], [2, 0.6], [3, 0.4975], [4, 0.4875]]) {

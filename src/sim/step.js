@@ -155,7 +155,8 @@ export function patienceFor(state, def, k = null) {
  */
 export function waveSpec(n, players = 1) {
   const g = [{ k: 'hunter', n: 6 + 2 * n, gap: 0.9, at: 0 }];
-  if (n >= 2) g.push({ k: 'dad', n: 1 + n, gap: 0.3, at: 10 });
+  // (The dads' first event and the size of their line are TUNE.dadFrom, dadEarly and dadCurve, 0.4.)
+  if (n >= TUNE.dadFrom) g.push({ k: 'dad', n: (1 + n) * (TUNE.dadEarly[n] ?? curveAt(TUNE.dadCurve, n)), gap: 0.3, at: 10 });
   if (n >= 3) g.push({ k: 'clipper', n: 3 * (n - 1), gap: 0.35, at: 5 });
   if (n >= 5) g.push({ k: 'karen', n: Math.floor(n / 3), gap: 4, at: 8 });
   if (n >= 7) g.push({ k: 'scooter', n: Math.floor((n - 5) / 2) + 1, gap: 3, at: 15 });
