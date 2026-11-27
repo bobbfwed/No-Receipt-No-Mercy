@@ -5,12 +5,12 @@ A browser game the owner and his friends play together, each from his own house.
 - **No permanent server.** One player acts as a temporary host for the session; the others join him from their browsers.
 - **Players:** must work well for 1 to 7. Most sessions will be 1 to 3, so balance for that first.
 - **Name:** "No Receipt, No Mercy", tagline "The customer is always a prick." (chosen by the owner). It is set in a store's returns department, and older files and comments call the game "Returns Department".
-- **The game:** a tower defense where players run a factory (belts and machines that make goods) while security stops waves of shoppers reaching the tills. The factory is the maze the shoppers walk through.
-- **Money:** each player has his own cash and pays for what he builds. Everything the store earns or loses is split evenly between the connected players.
+- **The game (from 0.4):** a tower defense on two floors that share one tile grid. On the shop floor, security buildings and Crate Stacks stop waves of shoppers reaching the tills. Underneath, in "The Back" (Tab switches floors, the other floor shows through faintly), a factory of belts and machines turns returned junk into supplies and delivers them to a Dumbwaiter under each security building. A stocked building is stronger; stock is used up as it works, and an empty building is plain again. The rules are in `docs/architecture.md`, section "The Back".
+- **Money:** each player has his own cash and pays for what he builds. Everything the store earns or loses is split evenly between the connected players. The factory makes no money: money comes from beating a sales event (more for beating it quickly), boss bounties and pennies from the Clearance Bin.
 - **Maps:** the store comes in several designs and sizes (`src/sim/maps.js`), with a recommended size per player count. Each player gets his own shopper entrance. Players move the view with WASD.
-- **Late game:** every building can be upgraded along separate tracks (damage, speed, range, durability; each level costs more than the last) and every shopper kind has a tougher "super" version, so there is always something to spend on and something to fear.
+- **Late game:** nothing is upgraded with cash except Crate Stacks (reinforcing) and Returns Drops (more junk). Supplies come in four brand tiers, Store Brand to Platinum, made by Rebranders that are slower at each tier, and every shopper kind has a tougher "super" version, so there is always something to build and something to fear.
 - **Roles:** each area (factory, security) must be deep enough that a player has to learn its layout and becomes the "expert" for it. A solo player switches back and forth between areas; a group splits them up.
-- **Dads:** a shopper type the owner asked for. Men who just want to get through the line: single file, fast, ignore distractions, step over conveyor belts. Keep them prominent.
+- **Dads:** a shopper type the owner asked for. Men who just want to get through the line: single file, fast, ignore distractions, and from 0.4 walk straight through every building. Only walls and live Razor Wire stop them: a building can be given a wire direction, and the wire works while that building holds Razor Wire from The Back. Keep them prominent.
 
 ## Tone
 For adults only. The players are men aged 37 to 41 who grew up on South Park and Family Guy and do not get offended.
@@ -69,5 +69,5 @@ You are the owner and long-term maintainer of this codebase, and its design is u
 - New rules need a test in `test/`. After changing numbers in `constants.js`, run `node tools/balance.mjs` and compare with the results noted in `PLAN.md`.
 - Comments explain why, in plain words. Commit messages say what changed for a reader who has not seen the work.
 
-## TO-DO, left over from v0.3
-- A card left out of the first deck on the owner's instruction: "Factory buildings are 4x as big (2x2) but make 4x as much money." It needs its own design: how machines of that size are placed on the marked floor, fed and drawn, and what "4x the money" means for their price.
+## TO-DO
+- Nothing left over. (The "2x2 factory buildings" card idea from 0.3 was dropped with the old factory in 0.4.) Open points from 0.4 are listed in `PLAN.md`, "Version 0.4".
