@@ -10,7 +10,7 @@ const cap = (t) => t[0].toUpperCase() + t.slice(1);
 const ROID = SUPERS.gymbro;
 /** A time in seconds, as words: "2 seconds". */
 const secs = (n) => `${n} second${n === 1 ? '' : 's'}`;
-/** Reinforcing a Crate Stack (0.4): its levels and the first one's price, from the rules. */
+/** Reinforcing a Crate Stack (0.4; security too from 0.4.01): its levels and the first one's price, from the rules. */
 const RF = BUILD.crate.reinforce;
 
 /** Per building: `does` = what it is for, `use` = how to place it so it works. */
@@ -60,20 +60,20 @@ export const HOW = {
  */
 export const BACK_HOW = {
   drop: {
-    does: 'Where everything the customers dumped on the returns desk comes down: one piece of junk at a time, onto the tile in front of it. It waits while that tile has no room. The store puts them where it likes and you cannot move one, so plan round them.',
-    use: 'Run a belt away from the side with the arrow. It turns like anything else in The Back, and anyone may turn it. MORE JUNK on its card makes it faster, for a price, a few times over.',
+    does: 'Where everything the customers dumped on the returns desk comes down: one piece of junk at a time, shared out in turn between every side that takes it (a belt leading away or running past, a machine), passing over a side that is backed up. With nothing taking it, it waits. The store puts them where it likes and you cannot move or turn one, so plan round them.',
+    use: 'Run a belt away from any side, or put a machine right against it: one line or four, it feeds them all, so more lines means less junk on each. MORE JUNK on its card makes it faster, for a price, a few times over.',
   },
   conv: {
     does: `Carries whatever is put on it, in the direction of its arrows: ${word((BACK.step * TICK_HZ) / BACK.sub)} tiles a second, ${word(Math.floor(BACK.sub / BACK.gap))} items to a tile. Returned junk comes down the Returns Drops onto belts.`,
-    use: 'Drag to lay a line: the belts follow your drag and go round corners by themselves. Items wait at the end of a belt that has nowhere to go. Turning a belt is free: drag belt over it again in the new direction, or point at it and press R.',
+    use: 'Press on the first tile, drag to the last, let go: a whole line goes down the shortest way, with as few turns as it can, and goes round corners by itself. A plain belt it crosses becomes an Overpass, and the line stops where your money does. Items wait at the end of a belt that has nowhere to go. Turning a belt is free: lay belt over it again in the new direction, or point at it and press R. Q puts the tool down.',
   },
   split: {
     does: 'Takes items from the belt behind it and deals them out in turn to the front, the left and the right, skipping any way that is full or has nothing to take them.',
-    use: 'Run a belt into its back and lay belts away from any of its three other sides. One line in, up to three out, shared evenly. Press R before placing to turn it.',
+    use: 'Put it straight on a belt in a line (it replaces the belt) and lay belts away from any of its three other sides. One line in, up to three out, shared evenly. Press R before placing to turn it.',
   },
   over: {
     does: 'Two belts crossing without mixing: one runs east-west underneath, the other north-south over the top.',
-    use: 'Put it where two lines must cross and run belts into and out of it on both lines. Each lane goes the way the belt feeding it goes.',
+    use: 'Easiest of all: drag a belt line across another one and the crossing becomes an Overpass by itself. Or put one where two lines must cross (straight on a belt, if you like: it replaces it). Each lane goes the way the belt feeding it goes.',
   },
   intern: {
     does: 'Stands between two tiles. Picks the first item off the belt behind him that the tile in front of him will take, and hands it over. He is not paid, and it shows.',
@@ -81,12 +81,12 @@ export const BACK_HOW = {
   },
   bin: {
     does: 'Takes anything from any side and gets rid of it. Junk pays nothing; leftover supplies pay pennies.',
-    use: 'Put one at the end of a line, so the line keeps moving instead of jamming up when nothing downstream wants what is on it.',
+    use: 'Put one at the end of a line (straight on the last belt, if you like: it replaces it), so the line keeps moving instead of jamming up when nothing downstream wants what is on it.',
   },
   // The machines (0.4, stage 3). Each takes junk and makes one supply at Store Brand.
   still: {
     does: `Takes returned junk and boils it down into Bottled Spite, one every ${secs(BACK.makeSecs)}. Security stocked with Spite hits harder: Store Brand works like ${BACK.tierLevel[1]} levels of damage, and each tier up from a Rebrander adds ${BACK.tierLevel[2] - BACK.tierLevel[1]} more.`,
-    use: 'Feed junk into its back or either side; the Spite comes out of the side with the arrow. Run a belt from there into a Dumbwaiter, the hatch under every security building, or past an Unpaid Intern standing beside one. Press R before placing to turn it.',
+    use: 'Feed junk into its back or either side; the Spite comes out of the side with the arrow. Run a belt from there into a Dumbwaiter, the hatch under every security building, or past an Unpaid Intern standing beside one. Put it down on a belt and it takes the belt\'s place. Press R before placing to turn it.',
   },
   cannery: {
     does: `Takes returned junk and cans it as Rage Cola, one every ${secs(BACK.makeSecs)}. Security on Cola fires faster: Store Brand works like ${BACK.tierLevel[1]} levels of speed.`,
@@ -96,21 +96,17 @@ export const BACK_HOW = {
     does: `Takes returned junk and winds it into Extension Cord, one every ${secs(BACK.makeSecs)}. Security plugged into Cord reaches further: Store Brand works like ${BACK.tierLevel[1]} levels of range.`,
     use: 'Junk in at the back or the sides, Cord out of the side with the arrow, and on to a Dumbwaiter. Press R before placing to turn it.',
   },
-  winder: {
-    does: `Takes returned junk and rolls it into Duct Tape, one every ${secs(BACK.makeSecs)}. A building with tape in it shrugs off gym bro hits: a roll of Store Brand soaks up ${BACK.tapeHits[1]}, Platinum ${BACK.tapeHits[4]}.`,
-    use: 'Junk in at the back or the sides, Tape out of the side with the arrow. Send it to whatever the gym bros keep smashing. Press R before placing to turn it.',
-  },
   bender: {
-    does: `Takes returned junk and twists it into Razor Wire, one every ${secs(BACK.makeSecs)}. It is the one thing that stops a dad: a security building given a wire direction keeps dads off its own tiles and the ${BACK.wireReach} beyond it that way while it holds Razor Wire, and each dad it turns away uses some up.`,
-    use: 'Junk in at the back or the sides, Wire out of the side with the arrow. Press R before placing to turn it.',
+    does: `Takes returned junk and twists it into Razor Wire, one every ${secs(BACK.makeSecs)}. It is the one thing that stops a dad: a security building given a wire direction keeps everyone off its own tiles and the ${BACK.wireReach} beyond it that way while it holds Razor Wire. Ordinary shoppers walk round it for free; each dad it turns away uses some up.`,
+    use: 'Junk in at the back or the sides, Wire out of the side with the arrow. A Dumbwaiter blinking a red lamp belongs to a building with a wire direction and no wire: send it there. Press R before placing to turn it.',
   },
   rebrand: {
     does: `Takes any supply below Platinum and puts the same thing out one tier up, with a better label: Store Brand to Name Brand in ${secs(BACK.rebrandSecs[1])}, Name Brand to Premium in ${secs(BACK.rebrandSecs[2])}, Premium to Platinum in ${secs(BACK.rebrandSecs[3])}. It never takes junk.`,
-    use: 'Put it in a supply line after a machine. Two in a row make Premium, three Platinum, but each pass is slower than the last. In at the back or the sides, out of the side with the arrow. Press R before placing to turn it.',
+    use: 'Put it in a supply line after a machine, straight on a belt (it replaces it). Two in a row make Premium, three Platinum, but each pass is slower than the last. In at the back or the sides, out of the side with the arrow. Press R before placing to turn it.',
   },
   lift: {
     does: 'The hatch under every tile of a security building (not a Crate Stack). It takes the supplies that building uses, from any side, and sends them up to it, until it is full. It comes and goes with the building, and so does whatever is in it.',
-    use: 'Nothing to buy: build security upstairs and its Dumbwaiters appear down here. Point a belt, a machine or an Unpaid Intern at one. It only takes what its building can use, so send the rest on past it.',
+    use: 'Nothing to buy: build security upstairs and its Dumbwaiters appear down here. Point a belt, a machine or an Unpaid Intern at one. It only takes what its building can use, so send the rest on past it. A blinking red lamp on it: the building has a wire direction and no Razor Wire, so it wants some.',
   },
 };
 
@@ -129,7 +125,7 @@ export const SHOPPER_HELP = {
   scooter: { trick: 'Cannot be slowed by anything.', beat: 'Raw damage over a long route.' },
   gymbro: {
     trick: `Walks straight through crate stacks, wrecking any in his way and any he passes, and now and then something else beside him: a sprinkler, a sample table, a forklift. But he only has ${word(TUNE.smashMax)} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else.`,
-    beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts, even one that Duct Tape from The Back soaks up (the damage is forgotten every sales event), so a taped-up building where he first meets your maze takes a hit off him for nothing. A crate stack goes down in one hit, unless you have paid to reinforce it: one more hit for each level. Press B to rebuild what he wrecked for half of what you paid.',
+    beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts (the damage is forgotten every sales event), so a reinforced wall where he first meets your maze takes hits off him for little. A crate stack goes down in one hit, unless you have paid to reinforce it: one more hit for each level, and the same goes for security. Press B to rebuild what he wrecked for half of what you paid.',
   },
   drinker: { trick: 'Weaves along at a speed that keeps changing. At corners of the route he may fall over and lie there for 4 seconds, and everyone else has to squeeze past him at a third of their speed.', beat: 'Corners near your security: when he goes down, the queue behind him stands in the spray.' },
   dog: { trick: 'Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.', beat: 'Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.' },
@@ -217,15 +213,18 @@ export const HOW_REBUILD = {
 
 /** What the Wire tool does (0.4, stage 4b): Razor Wire's direction, for the same info card. */
 export const HOW_WIRE = {
-  does: `Lays Razor Wire from a security building: over the building and the ${word(BACK.wireReach)} tiles beyond it one way: north, east, south or west on the floor, whichever way the building itself faces. While the building holds Razor Wire from The Back, no dad sets foot on those tiles; empty, the wire is only planned and stops nobody. Free, and anyone can change anyone's, any time.`,
-  use: 'Click a security building to step its wire north, east, south, west, then off, or press on it and drag the way the wire should run. Right-click takes it off. Lay it across the blue DADS line; the faint DADS, IF WIRED line shows where they will walk once every planned wire is stocked. A wire that would cut the dads off from the tills is refused.',
+  does: `Lays Razor Wire from a security building: over the building and the ${word(BACK.wireReach)} tiles beyond it one way: north, east, south or west on the floor, whichever way the building itself faces. While the building holds Razor Wire from The Back, nobody sets foot on those tiles: ordinary shoppers walk round it like a wall, and dads walk into it and are turned away. Empty, the wire is only planned and stops nobody, and the building's Dumbwaiter blinks red for wire. Free, and anyone can change anyone's, any time.`,
+  use: 'Click a security building to step its wire north, east, south, west, then off, or press on it and drag the way the wire should run. Right-click takes it off, and Q puts the tool down. Lay it across the blue DADS line; the faint DADS, IF WIRED line shows where they will walk once every planned wire is stocked. A wire that would cut anyone off from the tills is refused.',
   maze: '',
 };
 
-/** What the Reinforce tool does (0.4, stage 4b): a Crate Stack's levels, for the same info card. */
+/**
+ * What the Reinforce tool does (0.4, stage 4b; 0.4.01 for security too): a building's levels, for
+ * the same info card.
+ */
 export const HOW_REINFORCE = {
-  does: `Makes a Crate Stack take one more gym bro hit every sales event, for cash: up to ${word(RF.max)} levels, from $${RF.cost}, each dearer than the last. The money counts as paid for the crate: 75% back if it is sold, half to rebuild it, levels and all. Anyone can reinforce anyone's crate; whoever does it pays.`,
-  use: 'Click a crate for one level, or drag across a wall of them for one level each, until the money runs out. Put the levels where the gym bros meet your maze first.',
+  does: `Makes a Crate Stack or a security building take one more gym bro hit every sales event, for cash: up to ${word(RF.max)} levels, each dearer than the last (from $${RF.cost} for a crate's first, more for a dearer building). The money counts as paid for the building: 75% back if it is sold, half to rebuild it, levels and all. Anyone can reinforce anyone's; whoever does it pays.`,
+  use: 'Click a building for one level, or drag across a wall of them for one level each, until the money runs out; REINFORCE on a building\'s card does the same. Q puts the tool down. Put the levels where the gym bros meet your maze first.',
   maze: '',
 };
 

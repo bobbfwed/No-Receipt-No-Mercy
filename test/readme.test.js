@@ -107,9 +107,10 @@ test('the patience the handbook quotes is the patience shoppers really walk in w
 test('the supply tables match what each tier of stock really does, track by track', () => {
   let tables = 0;
   for (const k of [...SECURITY_ORDER, ...WALL_ORDER]) {
+    // (0.4.01: durability is no supply any more, so it has no table: reinforced for cash.)
     for (const t of ['dmg', 'spd', 'rng', 'dur']) {
       const rows = tierRows(k, t);
-      if (!tracksOf(k).includes(t)) { assert.deepEqual(rows, []); continue; }
+      if (!tracksOf(k).includes(t) || !Object.hasOwn(SUPPLIES, t)) { assert.deepEqual(rows, []); continue; }
       tables++;
       assert.deepEqual(rows.map((r) => r.tier), [0, 1, 2, 3, 4], `${k} ${t}: as built, then every tier`);
       const s = createGame({ training: true });
@@ -129,11 +130,11 @@ test('the supply tables match what each tier of stock really does, track by trac
         // The numbers in the row are the building's real numbers.
         const st = statsOf(b);
         for (const [key, v] of Object.entries(row)) if (key in st) assert.ok(Math.abs(st[key] - v) < 1e-9, `${k} ${t} tier ${row.tier}: ${key}`);
-        if (t !== 'dur') assert.equal(levelIn(b, t), row.level, `${k} ${t} tier ${row.tier}: the levels it counts as`);
+        assert.equal(levelIn(b, t), row.level, `${k} ${t} tier ${row.tier}: the levels it counts as`);
       }
     }
   }
-  assert.ok(tables >= 18);
+  assert.ok(tables >= 12);
   // An unstocked forklift takes exactly its "Hit" as built off a shopper, and one on Store Brand
   // Bottled Spite exactly that tier's.
   for (const tier of [0, 1]) {
@@ -157,7 +158,7 @@ test("The Back's numbers in the handbook are the rules' own (0.4)", () => {
   assert.ok(find('conv', 'Carries').startsWith(`${(BACK.step * TICK_HZ) / BACK.sub} tiles a second, ${Math.floor(BACK.sub / BACK.gap)} items`));
   // A machine's time, the Rebrander's for each tier, and the Returns Drop's rate and prices.
   const t = makeTicks(plain) / TICK_HZ;
-  for (const k of ['still', 'cannery', 'spooler', 'winder', 'bender']) assert.ok(find(k, 'Makes').includes(`every ${t} s`), k);
+  for (const k of ['still', 'cannery', 'spooler', 'bender']) assert.ok(find(k, 'Makes').includes(`every ${t} s`), k);
   for (const tier of [1, 2, 3]) assert.ok(find('rebrand', 'Raises').includes(`in ${rebrandTicks(plain, tier) / TICK_HZ} s`), `tier ${tier}`);
   assert.ok(find('drop', 'Junk').startsWith(String(junkPerMinute(0))));
   for (let lv = 0; lv < BACK.dropUpMax; lv++) assert.ok(find('drop', 'MORE JUNK').includes(`$${dropUpCost(lv).toLocaleString('en-US')} (${junkPerMinute(lv + 1)} a minute)`), `level ${lv + 1}`);
@@ -181,10 +182,16 @@ test("The Back's numbers in the handbook are the rules' own (0.4)", () => {
   // So does reinforcing a Crate Stack (0.4): every price, from the rules.
   const rt = reinforceText();
   for (let r = 0; r < BUILD.crate.reinforce.max; r++) assert.ok(rt.includes(`${reinforceCost({ k: 'crate', r })}`), rt);
-  // The tiers: the levels, the tape and wire uses, the bin's pay.
+  // And, from 0.4.01, every security building: each one's prices are its own.
+  for (const k of SECURITY_ORDER) {
+    const rf = BUILD[k].reinforce;
+    assert.ok(rf, `${k} can be reinforced`);
+    const text = reinforceText(k);
+    for (let r = 0; r < rf.max; r++) assert.ok(text.includes(`$${reinforceCost({ k, r }).toLocaleString('en-US')}`), `${k} level ${r + 1}: ${text}`);
+  }
+  // The tiers: the levels, the wire uses, the bin's pay (doubled in 0.4.01).
   const tiers = tierFacts();
   assert.deepEqual(tiers.map((r) => r.level), BACK.tierLevel.slice(1));
-  assert.deepEqual(tiers.map((r) => r.tape), BACK.tapeHits.slice(1));
   assert.deepEqual(tiers.map((r) => r.wire), BACK.wireTurns.slice(1));
   assert.deepEqual(tiers.map((r) => r.bin), BACK.binPay.slice(1));
   assert.deepEqual(unitFacts().map((u) => u.uses), SECURITY_ORDER.map((k) => BUILD[k].shots));

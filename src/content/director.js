@@ -33,7 +33,7 @@
 //   'holiday' topic), which fades over the game like any other joke. With no holiday, none of it.
 import {
   TICK_HZ, TUNE, BUILD, BACK, DIRS, SUPERS, MAP_SIZES, JUNK, SUPPLY_TRACKS, teamCash, officePlayer, isEndless, bossTier, bossTitle,
-  wireMap, itemType, itemTier,
+  wireMap, itemType, itemTier, takesFrom,
 } from '../sim/index.js';
 import { SUPPLIES, TIER_NAMES, stockTracks } from './supplies.js';
 import { releaseNo, releaseSize, shareCount } from '../sim/index.js';
@@ -245,6 +245,9 @@ export const TOPICS = {
   wireRush: { note: true, important: true, gap: 30 },
   dadUnwired: { note: true, gap: 60 },
   crateTop: { joke: true, gap: 30 },
+  // (0.4.01) Security reinforced for cash, and a Returns Drop feeding three or more sides (once).
+  secReinforce: { joke: true, gap: 60 },
+  dropShare: { note: true },
   speedStreak: { note: true, important: true },
   moreJunk: { joke: true, gap: 20 },
 };
@@ -361,8 +364,10 @@ export function createDirector(random = Math.random) {
 
   /** A "first" topic, said at the first chance DEB gets (once a game; never in training). */
   function first(out, state, topic, bank, vars, o) {
-    if (state.training || firsts.has(topic)) return;
-    if (say(out, state, topic, bank, vars, o)) firsts.add(topic);
+    if (state.training || firsts.has(topic)) return false;
+    if (!say(out, state, topic, bank, vars, o)) return false;
+    firsts.add(topic);
+    return true;
   }
 
   /**
@@ -406,8 +411,17 @@ export function createDirector(random = Math.random) {
       for (let i = 0; i < state.back.length; i++) {
         const q = state.back[i];
         if (!q || q.k !== 'drop') continue;
-        const j = ahead(state, i, q.d);
-        if (j >= 0 && state.tiles[j] !== '#' && !state.back[j]) { say(out, state, 'dropIdle', LINES.dropIdle, {}, {}); return; }
+        // (0.4.01: a drop shares its junk with every side that takes it.) Idle: no side takes it,
+        // and there is room on one to build something that would.
+        let takers = 0, room = false;
+        for (let d = 0; d < 4; d++) {
+          const j = ahead(state, i, d);
+          if (j < 0) continue;
+          if (takesFrom(state, j, d)) takers++;
+          else if (state.tiles[j] !== '#' && !state.back[j]) room = true;
+        }
+        if (!takers && room) { say(out, state, 'dropIdle', LINES.dropIdle, {}, {}); return; }
+        if (takers >= 3 && first(out, state, 'dropShare', LINES.dropShare, {}, {})) return;
       }
     }
   }
@@ -891,9 +905,17 @@ export function createDirector(random = Math.random) {
       case 'binned':
         bins++;
         break;
-      case 'reinforce':
-        if (!state.training && e.r >= BUILD.crate.reinforce.max) say(out, state, 'crateTop', LINES.crateTop, {}, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
+      case 'reinforce': {
+        if (state.training) break;
+        // (0.4.01: security is reinforced for cash too.) A crate at its top level, or security
+        // being armour-plated, which DEB has opinions about.
+        const b = Number.isInteger(e.x) && Number.isInteger(e.y) && state.grid ? state.grid[e.y * state.w + e.x] : null;
+        const at = b && b.part !== undefined ? state.grid[b.part] : b;
+        const pid = state.players[e.by] ? e.by : undefined;
+        if (at && at.k !== 'crate' && BUILD[at.k]) say(out, state, 'secReinforce', LINES.secReinforce, { k: thing(at.k) }, { pid, mood: 'smug' });
+        else if (e.r >= BUILD.crate.reinforce.max) say(out, state, 'crateTop', LINES.crateTop, {}, { pid, mood: 'smug' });
         break;
+      }
       case 'dropUp':
         if (!state.training) say(out, state, 'moreJunk', LINES.moreJunk, { n: e.lv > 0 ? e.lv : undefined }, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
         break;

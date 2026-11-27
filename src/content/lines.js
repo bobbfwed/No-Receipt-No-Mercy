@@ -532,13 +532,6 @@ export const LINES = {
       u("The {k} lost its Extension Cord, {p}. It can't reach the shoppers. It can't reach its potential. Sound familiar?"),
       'Out of cord on the {k}. Short range only now, {p}. Short and disappointing. Your specialty.',
     ],
-    dur: [
-      'The {k} is out of Duct Tape, {p}. The next gym bro is going to fold it like a lawn chair.',
-      "No tape left on the {k}. It's held together by prayer and your bad decisions, {p}.",
-      "{p}, the {k} ran out of Duct Tape. Every dad in this store knows that's an emergency.",
-      u('Out of Duct Tape. The {k} is one protein shake away from scrap, {p}.'),
-      'The {k} has no tape left. Gym bros can smell weakness, {p}. They can smell you from the car park.',
-    ],
     wire: [
       'The {k} is out of Razor Wire, {p}. The dads are free. God help us all.',
       'No more wire on the {k}, {p}. Somewhere a dad just loosened his belt a notch to celebrate.',
@@ -1128,13 +1121,13 @@ export const LINES = {
     u("{p}, your line's stuck. The junk at the front wants to leave. I know the feeling. I've wanted to leave since you were hired."),
     r("One of {p}'s belts has been stuck so long the junk on it has applied for a pension. End it in a bin, {p}. Let it go. Let something go, for once."),
   ],
-  // A Returns Drop with nothing in front of it, everybody having built something in The Back
-  // (junk going nowhere). {p} anyone.
+  // A Returns Drop with nothing touching it that takes junk, everybody having built something in
+  // The Back (junk going nowhere; 0.4.01: a drop feeds every side). {p} anyone.
   dropIdle: [
-    'There is a Returns Drop down there with nothing under it, {p}. Junk is piling up in the ceiling. One more piece and it comes through.',
-    "One of the Returns Drops has nowhere to put its junk, {p}. It's a free supply line and you're ignoring it. Like your doctor.",
+    'There is a Returns Drop down there with nothing touching it, {p}. Junk is piling up in the ceiling. One more piece and it comes through.',
+    "One of the Returns Drops has nowhere to put its junk, {p}. Four sides and not one belt. It's a free supply line and you're ignoring it. Like your doctor.",
     "{p}, a Returns Drop is going to waste. Free junk, no belt. You're leaving money on the table, which is the only place you ever leave anything.",
-    "Somebody put a belt in front of that Returns Drop before the ceiling clogs. Nobody likes clogged, {p}. Ask your plumber.",
+    "Somebody stick a belt on any side of that Returns Drop before the ceiling clogs. Nobody likes clogged, {p}. Ask your plumber.",
     u("A whole Returns Drop is backing up, {p}. Junk is free. You won't take free junk. Your ex would be amazed you've got standards now."),
     u("{p}, there's a drop down there doing nothing. Like you at a family barbecue."),
   ],
@@ -1217,6 +1210,24 @@ export const LINES = {
     'Top-level crate from {p}. Riveted, bolted, braced. Built like a brick shithouse, by a man who has never been in one.',
     "{p} maxed out a crate. It can take more hits than his self-esteem. Which is a low bar, but it's a crate.",
     u("{p} has put more steel in a cardboard box than in his spine. Fully reinforced, {p}. The crate thanks you. Nobody else does."),
+  ],
+  // (0.4.01) A security building reinforced for cash. {k} the building, {p} who paid.
+  secReinforce: [
+    "{p} just paid to bolt armour onto the {k}. Steel plates on a store fixture. Somewhere a gym bro felt a disturbance in the Force.",
+    'The {k} is reinforced, {p}. It can now take more punishment than your liver, and that is saying something.',
+    "{p} reinforced the {k}. Spending money on protection. First time for everything, {p}. Ask your kids.",
+    'More steel in the {k}, courtesy of {p}. The gym bros will have to actually try now. Gym bros hate trying. That is why they lift instead of read.',
+    u("{p} has armour-plated the {k}. Overcompensating with hardware. We've all seen your car, {p}."),
+    r("{p} paid to make the {k} harder. It's the most money he has ever spent making anything harder, and the only time it has worked."),
+  ],
+  // (0.4.01) A Returns Drop feeding three or more sides at once, said once a game. {p} anyone.
+  dropShare: [
+    'Somebody has a Returns Drop feeding three ways at once. It shares its junk out evenly, {p}. More lines, less on each. Socialism, but with garbage.',
+    "A Returns Drop down there is spraying junk out of every side like a busted fire hydrant, {p}. Each line gets its fair share. Don't get used to fair.",
+    "{p}, that Returns Drop is feeding every belt that touches it, turn and turn about. It's the most even-handed thing in this store. It's the only even-handed thing in this store.",
+    u('A Returns Drop with belts on three sides. It shares the junk evenly, {p}. Like a buffet where everyone gets the same shit.'),
+    u("Multiple belts on one Returns Drop, {p}. Every line gets a slice and none of them gets enough. Welcome to having kids."),
+    r("{p} has plugged that Returns Drop into so many belts it looks like an octopus doing a stocktake. The junk goes round them all, one at a time. Like your sister at prom."),
   ],
   // A full speed bonus for the third sales event in a row (or more). {n} the bonus, {m} how many in a row, {p} anyone.
   speedStreak: [
@@ -1707,13 +1718,13 @@ export const NOPE = {
     u('The host picks the store, {p}. You pick your nose. Everyone has a role.'),
   ],
   // The Back (0.4): somebody tried to remove a Returns Drop, which the store put there and nobody
-  // can take out (it can only be turned).
+  // can take out (or, from 0.4.01, turn: it feeds every side).
   fixed: [
-    "That's the Returns Drop, {p}. It's bolted into the building. You can turn it. You can't take it out. Like your wife's mother.",
+    "That's the Returns Drop, {p}. It's bolted into the building. You can't move it, you can't turn it, you can't take it out. Like your wife's mother.",
     "You can't remove the Returns Drop, {p}. The returns keep coming whether you like it or not. That's what returns are.",
     "Leave the chute alone, {p}. It's where the junk comes from. Pulling it out won't stop the junk. It'll just land on you.",
     'The Returns Drop stays, {p}. Head Office bolted it in. Head Office bolts in everything it wants to keep. Not you, notably.',
-    u("Nice try, {p}. That hole has been spewing returns since 1987. It'll be spewing them at your funeral. Point it somewhere useful."),
+    u("Nice try, {p}. That hole has been spewing returns since 1987. It'll be spewing them at your funeral. Put belts round it and make it useful."),
     r("{p} is trying to remove the Returns Drop. That's like trying to remove the shit end of the pipe, {p}. It's the whole point of the pipe."),
   ],
   // The Back (0.4): a security building over a part in The Back, where its Dumbwaiters must go.
@@ -1770,12 +1781,13 @@ export const NOPE = {
     "That door's shut, {p}. Pick an open one. They're the ones with people coming through.",
     u("Closed entrance, {p}. It's not a door if nobody uses it. It's a wall with ambitions."),
   ],
-  // Razor Wire (0.4): a wire that would leave the dads no way to the tills, counting every planned
-  // wire as stocked (the `wire` command's 'blocked'; nopeKey picks this bank).
+  // Razor Wire (0.4): a wire that would leave the dads (0.4.01: or anyone else, since live wire
+  // walls off every shopper) no way to the tills, counting every planned wire as stocked (the
+  // `wire` command's 'blocked'; nopeKey picks this bank).
   wireBlocked: [
-    "No. That wire cuts the dads off from the tills, {p}. Make them walk the long way, fine. You can't lock them in. That's a different kind of store.",
+    "No. That wire cuts the shoppers off from the tills, {p}. Make them walk the long way, fine. You can't lock them in. That's a different kind of store.",
     "Razor wire across the only way through, {p}? That's not loss prevention. That's a war crime with a returns policy.",
-    "The dads still need SOME way to the tills, {p}. Make it long. Make it humiliating. Don't make it impossible. Legal was very clear.",
+    "The customers still need SOME way to the tills, {p}. Make it long. Make it humiliating. Don't make it impossible. Legal was very clear.",
     "You've wired them in, {p}. Even a dad can't get through that, and dads get through everything. Marriages. Colonoscopies. Leave a gap.",
     u("Refused. If those men can't reach a till they'll just stand there sighing until the building falls down. Give them a way round, {p}."),
     r("{p} wants to cage the dads in with razor wire. Corporate says no. Corporate's lawyer says HELL no. Their wives asked if they can borrow some."),
@@ -1788,17 +1800,18 @@ export const NOPE = {
     "No Dumbwaiter, no wire, {p}. You can't stock what can't be stocked. Same reason nobody stocks you.",
     u("Wiring a crate, {p}? It's cardboard. Put a security building there and wire THAT, Picasso."),
   ],
-  // Reinforcing something that is not a Crate Stack (the `reinforce` command's 'kind').
+  // Reinforcing something that cannot be reinforced (the `reinforce` command's 'kind'; from 0.4.01
+  // crates and every security building can be).
   crateKind: [
-    'Reinforce is for Crate Stacks, {p}. Security toughens up on Duct Tape from The Back. Read something.',
-    "That's not a crate, {p}. You can't bolt plates onto a sprinkler and call it armour.",
-    "Crates only, {p}. Security wants Duct Tape, not your money. Shocking, I know: something that doesn't want your money.",
-    u("You're reinforcing something that isn't a crate, {p}. Like fixing your marriage with a second marriage."),
+    'You can only reinforce crates and security, {p}. Not that. Read something.',
+    "That doesn't take armour, {p}. You can't bolt steel plates onto thin air and call it a strategy.",
+    "Crates and security only, {p}. Everything else is not for sale. Shocking, I know: something that doesn't want your money.",
+    u("You're reinforcing something that can't be reinforced, {p}. Like fixing your marriage with a second marriage."),
   ],
-  // A Crate Stack already at its top level (the `reinforce` command's 'max').
+  // Something already at its top level (the `reinforce` command's 'max').
   crateMax: [
-    "That crate's at the top level, {p}. It's more steel than wood now. Stop polishing it.",
-    'Maxed out, {p}. Any more and it counts as a bunker. Pick another crate.',
+    "That's at the top level, {p}. It's more steel than store now. Stop polishing it.",
+    'Maxed out, {p}. Any more and it counts as a bunker. Pick another one.',
     u("It can't get any harder, {p}. Unlike some people, it doesn't need the help."),
   ],
   // A Returns Drop already at its top cash level (the dropUp command, 0.4): no more junk for money.

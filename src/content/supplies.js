@@ -8,14 +8,13 @@ import {
 } from '../sim/index.js';
 
 /**
- * One entry per stock track: the supply's name, the word on its "OUT OF ..." warning, its colour
+ * One entry per stock track (0.4.01: four; Duct Tape is gone): the supply's name, the word on its "OUT OF ..." warning, its colour
  * (the items', the gauges' and the pips'), and what it gives a building.
  */
 export const SUPPLIES = {
   dmg: { type: 1, name: 'Bottled Spite', word: 'SPITE', color: '#e0402f', gives: 'damage' },
   spd: { type: 2, name: 'Rage Cola', word: 'COLA', color: '#3fae49', gives: 'speed' },
   rng: { type: 3, name: 'Extension Cord', word: 'CORD', color: '#ff8c1a', gives: 'range' },
-  dur: { type: 4, name: 'Duct Tape', word: 'TAPE', color: '#c9ced4', gives: 'durability' },
   wire: { type: 5, name: 'Razor Wire', word: 'WIRE', color: '#a855f7', gives: 'dads' },
 };
 
@@ -30,14 +29,14 @@ export const outOfText = (track) => `OUT OF ${SUPPLIES[track] ? SUPPLIES[track].
 const tracksCache = new Map();
 /**
  * The tracks a building of kind k takes supplies for, in STOCK_TRACKS order: the tracks it has
- * (BUILD[k].up), and Razor Wire for every kind with Dumbwaiters (`lift`). Empty for anything else. The same
+ * (BUILD[k].up) that are supplies (not durability: reinforced for cash), and Razor Wire for every kind with Dumbwaiters (`lift`). Empty for anything else. The same
  * list every time for a kind (the renderer asks every frame).
  */
 export function stockTracks(k) {
   let out = tracksCache.get(k);
   if (!out) {
     const def = Object.hasOwn(BUILD, k) ? BUILD[k] : null;
-    out = def && def.lift ? STOCK_TRACKS.filter((t) => t === 'wire' || (def.up && def.up[t])) : [];
+    out = def && def.lift ? STOCK_TRACKS.filter((t) => Object.hasOwn(SUPPLIES, t) && (t === 'wire' || (def.up && def.up[t]))) : [];
     tracksCache.set(k, out);
   }
   return out;
@@ -53,12 +52,11 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * What one track of a building's stock is doing for it right now, in a few words: "+2 levels of
- * damage", "soaks up 3 gym bro hits", or "EMPTY".
+ * damage", or "EMPTY".
  */
 export function stockGives(b, track) {
   if (track === 'wire') return wireStatus(b);
   if (!usesIn(b, track)) return 'EMPTY';
-  if (track === 'dur') return `soaks up ${plural(usesIn(b, track), 'gym bro hit')}`;
   return `+${plural(stockLevel(b, track), 'level')} of ${SUPPLIES[track].gives}`;
 }
 
@@ -74,7 +72,7 @@ export function wireStatus(b) {
 
 /** Why the wire picker cannot lay a direction, in the game's words, by the rules' reason (canWire). */
 export const WIRE_WHY = {
-  blocked: 'Would cut the dads off from the tills',
+  blocked: 'Would cut shoppers or dads off from the tills',
   paused: 'The game is paused',
   over: 'The store is closed',
   lobby: 'Not open yet',
@@ -84,18 +82,22 @@ export const WIRE_WHY = {
 export const wireWhyText = (why) => (why ? (Object.hasOwn(WIRE_WHY, why) ? WIRE_WHY[why] : 'Not allowed') : '');
 
 /**
- * What a Crate Stack's sheet says about reinforcing it (0.4): { r (its level), max, hits (gym bro
- * hits it takes a sales event), cost (of the next level, 0 at the top), why ('' when the REINFORCE
- * button works, else why not) }. With `state` the game's cards count, as in the rules.
+ * What a building's sheet says about reinforcing it (0.4 for Crate Stacks; 0.4.01 every security
+ * building too): { r (its level), max, hits (gym bro hits it takes a sales event), cost (of the next
+ * level, 0 at the top), why ('' when the REINFORCE button works, else why not) }, or null for a
+ * kind that cannot be reinforced. With `state` the game's cards count, as in the rules.
  */
-export function crateInfo(b, cash, state = null) {
-  const rf = BUILD.crate.reinforce;
-  const r = (b && b.r) | 0, cost = reinforceCost(b, state);
+export function reinforceInfo(b, cash, state = null) {
+  const rf = b && Object.hasOwn(BUILD, b.k) ? BUILD[b.k].reinforce : null;
+  if (!rf) return null;
+  const r = b.r | 0, cost = reinforceCost(b, state);
   let why = '';
   if (r >= rf.max) why = 'Top level';
   else if (cash < cost) why = `$${Math.ceil(cost - cash).toLocaleString('en-US')} short`;
   return { r, max: rf.max, hits: statsOf(b, state).hits, cost, why };
 }
+/** The name it had while only Crate Stacks could be reinforced. */
+export const crateInfo = reinforceInfo;
 
 const one = (n) => (Math.round(n * 10) / 10).toString();
 const pct = (n) => `${Math.round(n * 100)}%`;

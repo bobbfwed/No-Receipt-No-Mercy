@@ -88,7 +88,7 @@ test('the Wire tool knows what can carry wire, and a click skips what the rules 
   assert.equal(wire(s, 1, 7, E).ok, true);
   assert.equal(clickWireDir(s, 0, 1, 7), -1, 'south and west skipped: next is off');
   assert.equal(wirePicker(s, 0, 10, 10), null);
-  assert.equal(wireWhyText('blocked'), 'Would cut the dads off from the tills');
+  assert.equal(wireWhyText('blocked'), 'Would cut shoppers or dads off from the tills');
   assert.equal(wireWhyText(null), '');
   assert.equal(wireWhyText('toString'), 'Not allowed');
 });
@@ -105,13 +105,15 @@ test('the Reinforce drag: the first tile always, then one level a crate while th
     const c = r.at(s, 0, x, y);
     if (c) { sent.push(`${c.x},${c.y}`); assert.equal(applyCommand(s, 0, c).ok, true); }
   }
-  assert.deepEqual(sent, ['3,3', '4,3'], 'each crate once, the sprinkler skipped, then it stops');
+  // (0.4.01: the sprinkler can be reinforced too; there is no money left for it, so it stops there.)
+  assert.deepEqual(sent, ['3,3', '4,3'], 'each crate once, then the money runs out at the sprinkler');
   assert.ok(r.stopped);
   assert.equal(r.at(s, 0, 7, 3), null, 'stays stopped');
   // The first tile goes even when it will be refused, so DEB can say why.
   const r2 = startReinforce(0);
   assert.deepEqual(r2.at(s, 0, 9, 3), { c: 'reinforce', x: 9, y: 3 });
-  assert.equal(applyCommand(s, 0, { c: 'reinforce', x: 9, y: 3 }).why, 'kind');
+  s.players[0].cash = 0;
+  assert.equal(applyCommand(s, 0, { c: 'reinforce', x: 9, y: 3 }).why, 'cash');
   assert.equal(r2.at(s, 0, 8, 3), null, 'no money: quietly nothing');
   // A crate at the top level is passed over quietly.
   const top = s.grid[at(s, 8, 3)];

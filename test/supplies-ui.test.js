@@ -20,10 +20,12 @@ test('every stock track has a supply with a name, a warning word and a colour', 
   for (const t of STOCK_TRACKS) {
     assert.ok(SUPPLIES[t]?.name && SUPPLIES[t].word && /^#[0-9a-f]{6}$/.test(SUPPLIES[t].color), t);
   }
+  // (0.4.01, the owner: Duct Tape is gone; security is reinforced for cash.) Four supplies.
+  assert.deepEqual(Object.keys(SUPPLIES), ['dmg', 'spd', 'rng', 'wire']);
   assert.equal(outOfText('dmg'), 'OUT OF SPITE');
   assert.equal(outOfText('spd'), 'OUT OF COLA');
   assert.equal(outOfText('rng'), 'OUT OF CORD');
-  assert.equal(outOfText('dur'), 'OUT OF TAPE');
+  assert.equal(outOfText('dur'), 'OUT OF STOCK');
   assert.equal(outOfText('wire'), 'OUT OF WIRE');
   assert.equal(outOfText('nonsense'), 'OUT OF STOCK');
   assert.deepEqual(TIER_NAMES.slice(1), ['Store Brand', 'Name Brand', 'Premium', 'Platinum']);
@@ -32,8 +34,8 @@ test('every stock track has a supply with a name, a warning word and a colour', 
 });
 
 test('the tracks a building takes: its tracks and wire, only for kinds with Dumbwaiters', () => {
-  assert.deepEqual(stockTracks('sprinkler'), ['dmg', 'spd', 'rng', 'dur', 'wire']);
-  assert.deepEqual(stockTracks('wetfloor'), ['dmg', 'dur', 'wire']);
+  assert.deepEqual(stockTracks('sprinkler'), ['dmg', 'spd', 'rng', 'wire']);
+  assert.deepEqual(stockTracks('wetfloor'), ['dmg', 'wire']);
   assert.deepEqual(stockTracks('crate'), []);
   assert.deepEqual(stockTracks('conv'), []);
   assert.deepEqual(stockTracks('__proto__'), []);
@@ -45,10 +47,8 @@ test('a sheet row says what the stock gives now, or EMPTY', () => {
   // (Razor Wire's row says what the wire is doing instead, 0.4 stage 4b: see the wire test below.)
   assert.ok(stockRows(b).every((r) => r.gives === (r.track === 'wire' ? 'No direction set' : 'EMPTY') && r.units === 0 && r.cap === BACK.stockUnits && r.tierName === ''));
   addStock(b, 12); // Name Brand Spite
-  addStock(b, 41); // Store Brand Tape
   assert.equal(tierIn(b, 'dmg'), 2);
   assert.equal(stockGives(b, 'dmg'), `+${BACK.tierLevel[2]} levels of damage`);
-  assert.equal(stockGives(b, 'dur'), `soaks up ${BACK.tapeHits[1]} gym bro hit${BACK.tapeHits[1] === 1 ? '' : 's'}`);
   const dmg = stockRows(b).find((r) => r.track === 'dmg');
   assert.equal(dmg.tierName, 'Name Brand');
   assert.equal(dmg.units, 1);
@@ -87,12 +87,12 @@ test('a Returns Drop sheet: junk a minute, the next level, and why MORE JUNK can
 test("The Back's build bar: two groups, every part a player can buy once, keys like the shop bar's", () => {
   assert.deepEqual(BACK_GROUPS.map((g) => g.label), ['BELTS', 'MACHINES']);
   assert.deepEqual(BACK_GROUPS[0].keys, ['conv', 'split', 'over', 'intern', 'bin']);
-  assert.deepEqual(BACK_GROUPS[1].keys, ['still', 'cannery', 'spooler', 'winder', 'bender', 'rebrand']);
+  assert.deepEqual(BACK_GROUPS[1].keys, ['still', 'cannery', 'spooler', 'bender', 'rebrand']);
   const buyable = Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed);
   assert.deepEqual([...BACK_KEYS].sort(), [...buyable].sort());
-  assert.deepEqual(BACK_HOTKEYS, ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-']);
+  assert.deepEqual(BACK_HOTKEYS, ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
   assert.equal(new Set(BACK_HOTKEYS).size, BACK_HOTKEYS.length, 'no key twice');
-  assert.equal(hotkeyOf('rebrand'), '-');
+  assert.equal(hotkeyOf('rebrand'), '0');
   assert.equal(hotkeyOf('still'), '6');
   // The shop floor's own keys (0.4, with the old factory gone): 1 Crates, then security, in the
   // order of its bar.

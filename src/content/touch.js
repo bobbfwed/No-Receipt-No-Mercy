@@ -19,7 +19,13 @@ const RULES = [
   [/press B \(or the Rebuild button in the build bar\)/g, 'tap the Rebuild button in the bar'],
   [/press R before placing to turn it\./g, 'use the rotate button at the end of the bar before placing to turn it.'],
   [/Press R before placing to turn it\./g, 'Use the rotate button at the end of the bar before placing to turn it.'],
-  [/drag belt over it again in the new direction, or point at it and press R\./g, 'drag belt over it again in the new direction, or tap it and choose Rotate.'],
+  [/(drag|lay) belt over it again in the new direction, or point at it and press R\./g, '$1 belt over it again in the new direction.'],
+  // Q puts down whatever is held (0.4.01); a finger has DROP at the end of the bar.
+  [/ Right-click takes it off, and Q puts the tool down\./g, ' Tapping on round to off takes it off, or tap the building with nothing picked and use its card. ✋ DROP at the end of the bar puts the tool down.'],
+  [/ Q puts the tool down\./g, ' ✋ DROP at the end of the bar puts the tool down.'],
+  [/ Q puts down whatever you are holding\./g, ' ✋ DROP at the end of the bar puts down whatever you are holding.'],
+  // Belt lines (0.4.01): press, drag, release.
+  [/([Pp])ress on the first tile, drag to the last, let go/g, '$1ress a finger on the first tile, drag to the last, lift'],
   // (A big building in the wrong place or lying the wrong way: the training shift's hint, 0.3.03.)
   [/press R until the arrow on the preview points (\w+)/g, 'tap the rotate button at the end of the bar until its arrow points $1'],
   [/Press it \(or B\) once\./g, 'Tap it once.'],

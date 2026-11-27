@@ -387,7 +387,7 @@ export const SOUNDS = {
   },
 
   smash: {
-    about: 'A gym bro wrecks something. Crates: wood cracking and planks clattering. Sprinklers: a clank and a gush of water. Forklift: a heavy crash and its horn dying. Wet floor sign: plastic clattering flat. Samples: the table and the plates. A building that takes the hit and still stands (or Duct Tape soaking it up): one clang and a bolt bouncing away.',
+    about: 'A gym bro wrecks something. Crates: wood cracking and planks clattering. Sprinklers: a clank and a gush of water. Forklift: a heavy crash and its horn dying. Wet floor sign: plastic clattering flat. Samples: the table and the plates. A building that takes the hit and still stands (a reinforced one, say): one clang and a bolt bouncing away.',
     max: 0.9,
     shapes: 3,
     variants: [

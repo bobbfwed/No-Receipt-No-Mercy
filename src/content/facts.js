@@ -24,7 +24,7 @@ export const SECURITY_ORDER = ['sprinkler', 'forklift', 'railgun', 'wetfloor', '
  * The Back's parts (0.4), in the order the junk meets them: the Returns Drop, what carries it, the
  * machines and the Rebrander, and the Dumbwaiter that takes the supplies up.
  */
-export const BACK_ORDER = ['drop', 'conv', 'split', 'over', 'intern', 'bin', 'still', 'cannery', 'spooler', 'winder', 'bender', 'rebrand', 'lift'];
+export const BACK_ORDER = ['drop', 'conv', 'split', 'over', 'intern', 'bin', 'still', 'cannery', 'spooler', 'bender', 'rebrand', 'lift'];
 
 /** How much more patient shoppers are in wave n than in wave 1, by growth alone (the simulation's own). */
 export { patienceGrowth };
@@ -271,7 +271,7 @@ export function shopperTraits(k, sup = 0) {
   if (d.bolts) out.push(['Dog bolts when sprayed', `${fmt(v('boltSecs'))} s at ${fmt(d.speed * v('boltSpeed'))} tiles a second${d.boltsOnAny ? ' (forklift and barcode laser hits too)' : ''}`]);
   if (d.smashes) {
     const max = v('smashMax');
-    out.push(['Hits', `${max === 1 ? 'one' : `up to ${max}`} a visit, at least ${fmt(v('smashWait'))} s apart; one that Duct Tape soaks up still counts`]);
+    out.push(['Hits', `${max === 1 ? 'one' : `up to ${max}`} a visit, at least ${fmt(v('smashWait'))} s apart; one that a reinforced building shrugs off still counts`]);
     out.push(['Wrecking', `with a hit ready, stops to hit any crate stack in his way, and any crate stack beside him; every ${fmt(v('smashEvery'))} s a ${pct(v('smashOther'))} chance of hitting something else. Resting after a hit, or spent, walks round crates like anyone else`]);
   }
   if (d.sways) {
@@ -318,7 +318,7 @@ export function shopperFacts(k) {
  * One row per brand tier of the supply one track of a security building takes, from 0 (unstocked:
  * as built) to 4 (Platinum), worked out from the rules (statsOf with that tier in stock):
  * { tier, name ('as built' or the tier's name), uses (what one unit of it lasts: shots or shoppers
- * acted on, usesPer; for Duct Tape the gym bro hits one roll soaks up; 0 as built), ...numbers }.
+ * acted on, usesPer; 0 as built), ...numbers }.
  * Numbers by track (with the other tracks unstocked):
  *   dmg  level (the levels the tier counts as) · towers: dmg, dps, most · wet floor sign: slow,
  *        slip, slipDmg · samples: secs · salesman: secs, stopLeft, rushMul (see statsOf) · dps is
@@ -326,12 +326,12 @@ export function shopperFacts(k) {
  *        times how many it can hit at once
  *   spd  level · cd, perSec (shots a second), dps, most
  *   rng  level · range
- *   dur  nothing more: Duct Tape is never counted as levels, its uses soak up gym bro hits
- * Empty if the kind lacks the track.
+ * Empty if the kind lacks the track, or the track is no supply (durability: 0.4.01, reinforced for
+ * cash, Duct Tape gone).
  */
 export function tierRows(k, track) {
   const def = BUILD[k], rows = [];
-  if (!tracksOf(k).includes(track)) return rows;
+  if (!tracksOf(k).includes(track) || !Object.hasOwn(SUPPLIES, track)) return rows;
   for (let tier = 0; tier < TIER_NAMES.length; tier++) {
     const st = statsOf(tier ? { k, s: { [track]: [tier, 1] } } : { k });
     const row = { tier, name: tier ? TIER_NAMES[tier] : 'as built', uses: tier ? usesPer(k, track, tier) : 0 };
@@ -339,7 +339,7 @@ export function tierRows(k, track) {
       row.dps = st.cd ? st.dmg / st.cd : 0;
       row.most = row.dps * (def.targets || 1);
     };
-    if (track !== 'dur') row.level = BACK.tierLevel[tier];
+    row.level = BACK.tierLevel[tier];
     if (track === 'dmg') {
       if (def.tower) { row.dmg = st.dmg; dps(); }
       else if (k === 'wetfloor') { row.slow = st.slow; row.slip = st.slip; row.slipDmg = st.slipDmg; }
@@ -363,15 +363,38 @@ export function crateFacts() {
   ];
 }
 
-/**
- * Reinforcing a Crate Stack (0.4), in words from the rules: what a level does, what each costs
- * (BUILD.crate.reinforce, for a game without cards) and what happens to the money.
- */
-export function reinforceText() {
-  const rf = BUILD.crate.reinforce, prices = [];
-  for (let r = 0; r < rf.max; r++) prices.push(money(reinforceCost({ k: 'crate', r })));
-  return `pay for up to ${rf.max} levels, each one more gym bro hit it takes in a sales event: ${prices.join(', ')}. The money counts as paid for the crate: selling it gives back ${pct(TUNE.sellBack)} of it, and a rebuild costs ${pct(TUNE.rebuildShare)} of it, levels and all`;
+/** The kinds that can be reinforced for cash (0.4: Crate Stacks; 0.4.01: every security building too). */
+export const reinforceable = () => [...WALL_ORDER, ...SECURITY_ORDER].filter((k) => BUILD[k].reinforce);
+
+/** What each level of reinforcing kind k costs, in a game without cards: [$10, $16, ...]. */
+export function reinforcePrices(k = 'crate') {
+  const rf = BUILD[k].reinforce, prices = [];
+  if (rf) for (let r = 0; r < rf.max; r++) prices.push(reinforceCost({ k, r }));
+  return prices;
 }
+
+/**
+ * Reinforcing a building of kind k (0.4 for Crate Stacks; 0.4.01 for security too), in words from
+ * the rules: what a level does, what each costs (BUILD[k].reinforce, for a game without cards) and
+ * what happens to the money. '' for a kind that cannot be reinforced.
+ */
+export function reinforceText(k = 'crate') {
+  const rf = BUILD[k].reinforce;
+  if (!rf) return '';
+  const what = k === 'crate' ? 'the crate' : 'the building';
+  return `pay for up to ${rf.max} levels, each one more gym bro hit it takes in a sales event: ${reinforcePrices(k).map(money).join(', ')}. The money counts as paid for ${what}: selling it gives back ${pct(TUNE.sellBack)} of it, and a rebuild costs ${pct(TUNE.rebuildShare)} of it, levels and all`;
+}
+
+/**
+ * The Reinforce tool's rule for the handbook (0.4.01): what a level does, and the first level's
+ * price for each kind that can be reinforced, from the rules.
+ */
+export function reinforceToolText() {
+  const kinds = reinforceable();
+  const rf = BUILD.crate.reinforce;
+  return `every level is one more gym bro hit the building takes in a sales event, up to ${rf.max} levels, each dearer than the last (x${fmt(rf.grow)}). The first level costs ${kinds.map((k) => `${money(reinforceCost({ k, r: 0 }))} on ${an(BUILD[k].name)}`).join(', ')}. The money counts as paid for the building: selling it gives back ${pct(TUNE.sellBack)} of it, and a rebuild costs ${pct(TUNE.rebuildShare)} of it, levels and all`;
+}
+const an = (name) => (/^[AEIOU]/.test(name) ? `an ${name}` : `a ${name}`);
 
 /**
  * Razor Wire's rule (0.4) in words, from the rules: where a building's wire runs, when it works and
@@ -379,7 +402,7 @@ export function reinforceText() {
  */
 export function wireText() {
   const turns = BACK.wireTurns.slice(1);
-  return `Give a security building a wire direction and, while it holds Razor Wire, no dad can step on its tiles or the ${BACK.wireReach} tiles beyond it that way (a wall cuts the wire short), open floor included: dads walk round it. Empty, the wire is only planned and stops nobody. Each dad it turns away uses one: a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads, by brand. Nobody but dads notices it. A wire that would cut an entrance off from the tills, stocked or not, is refused`;
+  return `Give a security building a wire direction and, while it holds Razor Wire, nobody can step on its tiles or the ${BACK.wireReach} tiles beyond it that way (a wall cuts the wire short), open floor included. Ordinary shoppers see it and walk round it like a wall, for free; a dad walks straight into it, is turned away and goes round, and each dad turned away uses one: a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads, by brand. Empty, the wire is only planned and stops nobody. A wire that would cut an entrance off from the tills, for dads or anyone else, stocked or not, is refused, and so is a building that would do it with every planned wire counted as stocked`;
 }
 
 // ---- The Back (0.4) ---------------------------------------------------------------------------
@@ -411,10 +434,12 @@ export function backFacts(k) {
     const ups = [];
     for (let lv = 0; lv < BACK.dropUpMax; lv++) ups.push(`${money(dropUpCost(lv))} (${fmt(junkPerMinute(lv + 1))} a minute)`);
     out.push(['MORE JUNK', `any player can pay to speed it up, ${BACK.dropUpMax} times at most: ${ups.join(', ')}. Nobody gives that money back`]);
-    out.push(['Where', 'put down by the store; nobody buys, moves or removes one, and anyone can turn it']);
+    out.push(['Hands out', 'to every side something takes junk from: a belt leading away or running past, a machine. Shared out in turn, passing over a side that is backed up']);
+    out.push(['Where', 'put down by the store; nobody buys, moves, turns or removes one']);
   } else if (k === 'conv') {
     out.push(['Carries', lane]);
     out.push(['Takes from', 'behind and both sides, never head-on']);
+    out.push(['Laying', 'press on the first tile, drag to the last, let go: a line of belts the shortest way, with as few turns as it can. A plain belt it crosses becomes an Overpass, and the line stops where your money does']);
   } else if (k === 'split') {
     out.push(['Holds', 'one item at a time']);
     out.push(['Deals out', 'to the front, the left and the right in turn, skipping a way that will not take it']);
@@ -441,11 +466,13 @@ export function backFacts(k) {
     out.push(['Takes from', 'any side']);
     out.push(['Lost', 'everything in it when the building above is wrecked or removed']);
   }
+  // (0.4.01, the owner) Put down on a plain belt, a part takes its place: no removing it first.
+  if (!def.fixed && k !== 'conv') out.push(['On a belt', `put it straight on a plain belt and it replaces it, for its price less the belt's (${money(def.cost - BUILD.conv.cost)})`]);
   return out;
 }
 
 /**
- * The five supplies, from the rules: [{ track, name, color, gives, maker (the machine's name),
+ * The four supplies (0.4.01: Duct Tape is gone), from the rules: [{ track, name, color, gives, maker (the machine's name),
  * takers (the security buildings that take it, by name) }], in STOCK_TRACKS order. (Until 0.4's
  * dads stage it also had `works`, false for Razor Wire, which was only stored.)
  */
@@ -458,8 +485,8 @@ export function supplyFacts() {
 
 /**
  * One row per brand tier, from Store Brand to Platinum: { tier, name, level (the levels it counts
- * as for Bottled Spite, Rage Cola and Extension Cord), tape (gym bro hits a roll of Duct Tape soaks
- * up), wire (dads a unit of Razor Wire turns away), bin (what a Clearance Bin pays for it),
+ * as for Bottled Spite, Rage Cola and Extension Cord), wire (dads a unit of Razor Wire turns away),
+ * bin (what a Clearance Bin pays for it),
  * secs (the Rebrander's time to make it from the tier below; 0 for Store Brand, which the machines
  * make) }.
  */
@@ -468,7 +495,7 @@ export function tierFacts() {
   for (let tier = 1; tier < TIER_NAMES.length; tier++) {
     out.push({
       tier, name: TIER_NAMES[tier], level: BACK.tierLevel[tier],
-      tape: usesPer(null, 'dur', tier), wire: usesPer(null, 'wire', tier), bin: BACK.binPay[tier],
+      wire: usesPer(null, 'wire', tier), bin: BACK.binPay[tier],
       secs: tier > 1 ? secs(rebrandTicks(PLAIN, tier - 1)) : 0,
     });
   }
@@ -509,23 +536,23 @@ export function howItWorks(difficulty = SETTINGS.defaults.difficulty) {
     },
     {
       id: 'back', title: 'The Back: the factory under the shop',
-      text: `Tab (or the floor switch) takes you down. Same grid, same walls, and nothing down there gets in a shopper's way. Returns Drops, put down by the store, cough up returned junk (${fmt(junkPerMinute(0))} pieces a minute each). Belts carry anything, ${fmt(laneSpeed())} tiles a second, the way their arrows point. A machine turns a piece of junk into a unit of supply every ${fmt(secs(makeTicks(PLAIN)))} seconds and puts it out of its front. A belt that runs into a Dumbwaiter sends what it carries up to the building above, which holds up to ${stockCap(null)} units of each supply it takes. An Unpaid Intern lifts what the tile in front of him wants off a passing belt, a Splitter shares one line between up to three, an Overpass lets two lines cross, and a Clearance Bin at the end of a line takes the leftovers for pennies so nothing jams.`,
+      text: `Tab (or the floor switch) takes you down. Same grid, same walls, and nothing down there gets in a shopper's way. Returns Drops, put down by the store, cough up returned junk (${fmt(junkPerMinute(0))} pieces a minute each) and share it out between every belt or machine touching them. Belts carry anything, ${fmt(laneSpeed())} tiles a second, the way their arrows point: with Belt (press on the first tile, drag to the last, let go) you lay a whole line, a plain belt it crosses becomes an Overpass, and the line stops where your money does. A machine turns a piece of junk into a unit of supply every ${fmt(secs(makeTicks(PLAIN)))} seconds and puts it out of its front. A belt that runs into a Dumbwaiter sends what it carries up to the building above, which holds up to ${stockCap(null)} units of each supply it takes. An Unpaid Intern lifts what the tile in front of him wants off a passing belt, a Splitter shares one line between up to three, an Overpass lets two lines cross, and a Clearance Bin at the end of a line takes the leftovers for pennies so nothing jams. Any of them put down on a plain belt replaces it, for its price less the belt's. Q puts down whatever you are holding.`,
     },
     {
       id: 'supplies', title: 'Supplies and brands',
-      text: `Bottled Spite (Spite Still) makes security hit harder, Rage Cola (Cola Cannery) fire faster, Extension Cord (Cord Spooler) reach further; Duct Tape (Tape Winder) soaks up gym bro hits, and Razor Wire (Barb Bender) stops dads. The machines make ${tiers[0].name}. A Rebrander puts any supply up a brand, slower each time: ${tiers.slice(1).map((t) => `${t.name} in ${fmt(t.secs)} s`).join(', ')}. For Spite, Cola and Cord the brands count as ${tiers.map((t) => `+${t.level}`).join(', ')} levels; a ring round the pip shows the brand (bronze, silver, gold).`,
+      text: `Bottled Spite (Spite Still) makes security hit harder, Rage Cola (Cola Cannery) fire faster, Extension Cord (Cord Spooler) reach further, and Razor Wire (Barb Bender) stops dads and walls off shoppers. The machines make ${tiers[0].name}. A Rebrander puts any supply up a brand, slower each time: ${tiers.slice(1).map((t) => `${t.name} in ${fmt(t.secs)} s`).join(', ')}. For Spite, Cola and Cord the brands count as ${tiers.map((t) => `+${t.level}`).join(', ')} levels; a ring round the pip shows the brand (bronze, silver, gold).`,
     },
     {
       id: 'stock', title: 'Stock, and running dry',
-      text: `Stock is used up as a building works: a unit of Spite, Cola or Cord lasts ${units.map((u) => `${u.name} ${u.uses} ${u.per}`).join(', ')}, whatever its brand. A building that is not working keeps what it has, so a fed one refills between shoppers and between events. When a supply runs out a red OUT OF ... bubble pops up over it and it is back to as built. The pips over a building show what it holds; zoomed out, a green disc means everything it takes is stocked, amber some, a red ring none. A building wrecked or removed loses its stock.`,
+      text: `Stock is used up as a building works: a unit of Spite, Cola or Cord lasts ${units.map((u) => `${u.name} ${u.uses} ${u.per}`).join(', ')}, whatever its brand. A building that is not working keeps what it has, so a fed one refills between shoppers and between events. When a supply runs out a red OUT OF ... bubble pops up over it and it is back to as built. The pips over a building show what it holds; zoomed out, a green disc means everything it takes is stocked, amber some, a red ring none. A blinking red lamp on a Dumbwaiter (and on the mark, zoomed out) means its building has a wire direction and no Razor Wire: it is asking for some. A building wrecked or removed loses its stock.`,
     },
     {
       id: 'dads', title: 'Dads and Razor Wire',
-      text: `Dads walk straight through every building; only the store's walls and live Razor Wire stop them. Pick up Wire (Z) and click a security building to give it a wire direction: it then covers its own tiles and the ${BACK.wireReach} beyond them that way. While it holds Razor Wire the wire is live, and a dad walks into it, is turned away and goes round; each wire charges a dad once, and a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads by brand. With no wire in stock it is only planned (dashed) and stops nobody${takesSupply({ k: 'forklift' }, itemCode(5, 1)) ? '' : '; a building takes Razor Wire only once it has a direction'}. The floor shows two blue routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with every planned wire stocked. A wire that would wall the dads in is refused.`,
+      text: `Dads walk straight through every building; only the store's walls and live Razor Wire stop them. Pick up Wire (Z) and click a security building to give it a wire direction: it then covers its own tiles and the ${BACK.wireReach} beyond them that way. While it holds Razor Wire the wire is live: ordinary shoppers see it and walk round it like a wall, for nothing, but a dad walks into it, is turned away and goes round; each wire charges a dad once, and a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads by brand. With no wire in stock it is only planned (dashed) and stops nobody${takesSupply({ k: 'forklift' }, itemCode(5, 1)) ? '' : '; a building takes Razor Wire only once it has a direction, and its Dumbwaiter blinks red until some comes'}. The floor shows two blue routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with every planned wire stocked. A wire that would wall anyone in is refused, and so is a building that would, counting every planned wire as stocked.`,
     },
     {
-      id: 'gym', title: 'Gym bros, crates and rebuilding',
-      text: `A gym bro smashes through Crate Stacks and now and then something else he passes: ${TUNE.smashMax} hits a visit, with ${TUNE.smashWait} seconds' rest after each, while he walks round like anyone else. Reinforce (U) a crate for one more hit a sales event per level, up to ${rf.max} levels (${money(reinforceCost({ k: 'crate', r: 0 }))} for the first). Security soaks hits with Duct Tape instead (${tiers.map((t) => t.tape).join(', ')} hits a roll, by brand). Rebuild (B) puts a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it; the money goes at once and the building as soon as nothing is in the way.`,
+      id: 'gym', title: 'Gym bros, reinforcing and rebuilding',
+      text: `A gym bro smashes through Crate Stacks and now and then something else he passes: ${TUNE.smashMax} hits a visit, with ${TUNE.smashWait} seconds' rest after each, while he walks round like anyone else. Reinforce (U, or REINFORCE on a building's card) a crate or a security building for one more hit a sales event per level, up to ${rf.max} levels, each dearer than the last: the first is ${reinforceable().map((k) => `${money(reinforceCost({ k, r: 0 }))} on ${an(BUILD[k].name)}`).join(', ')}. Rebuild (B) puts a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it; the money goes at once and the building as soon as nothing is in the way.`,
     },
     {
       id: 'thieves', title: 'Thieves',
@@ -537,7 +564,7 @@ export function howItWorks(difficulty = SETTINGS.defaults.difficulty) {
     },
     {
       id: 'cards', title: 'The cards',
-      text: 'A game from the menu is dealt five cards before the first build break: two that screw you, two that help, one just weird. They change the rules for the whole game (prices, pay, how shoppers behave, how The Back works); the HAND panel shows them. The numbers in this handbook are for a game without cards.',
+      text: 'A game from the menu is dealt five cards before the first build break: two that screw you, two that help, one just weird. Click the card on show to ask for the next one: it comes once every player has clicked (or when its time is up). They change the rules for the whole game (prices, pay, how shoppers behave, how The Back works); the HAND panel shows them. The numbers in this handbook are for a game without cards.',
     },
   ];
 }

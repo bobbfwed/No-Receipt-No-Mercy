@@ -63,6 +63,8 @@ const VARS = {
   firstBelt: 'p', firstMachine: 'pk', firstStocked: 'pks', firstRebrand: 'p', firstPlatinum: 'ps',
   jam: 'p', dropIdle: 'p', noBack: 'pw', binning: 'p', backHide: 'p', starved: 'pks', platStolen: 'pks',
   wireRush: 'pk', dadUnwired: 'p', crateTop: 'p', speedStreak: 'pnm', moreJunk: 'pn',
+  // Version 0.4.01.
+  secReinforce: 'pk', dropShare: 'p',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -99,6 +101,8 @@ const AT_LEAST = {
   firstBelt: 6, firstMachine: 6, firstStocked: 6, firstRebrand: 6, firstPlatinum: 6, jam: 6, dropIdle: 6,
   noBack: 6, binning: 6, backHide: 6, starved: 6, platStolen: 6, wireRush: 6, dadUnwired: 6, crateTop: 6,
   speedStreak: 6, moreJunk: 6,
+  // Version 0.4.01.
+  secReinforce: 6, dropShare: 6,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
@@ -1094,6 +1098,8 @@ test('The Back: crates at the top level, MORE JUNK, a stolen Platinum unit and a
   state.tick += 60 * TICK_HZ;
   assert.equal(one({ e: 'reinforce', x: 1, y: 1, r: 3, by: 0, paid: 26 }).length, 0, 'not at level 3');
   assert.ok(holds(one({ e: 'reinforce', x: 1, y: 1, r: 8, by: 0, paid: 268 }), LINES.crateTop, { p: 'Dave' }));
+  // (0.4.01) Security reinforced for cash has its own lines, at any level.
+  assert.ok(holds(one({ e: 'reinforce', x: 12, y: 5, r: 1, by: 0, paid: 25 }), LINES.secReinforce, { p: 'Dave', k: 'Forklift Turret' }));
   assert.ok(holds(one({ e: 'dropUp', x: 1, y: 1, lv: 2, by: 1, paid: 240 }), LINES.moreJunk, { p: 'Steve', n: 2 }));
   assert.ok(holds(one({ e: 'grab', x: 1, y: 1, i, t: 'dmg', tier: 4 }), LINES.platStolen, { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Bottled Spite' }));
   assert.ok(holds(one({ e: 'rip', x: 1, y: 1, n: 0, i, t: 'spd', tier: 4 }), LINES.platStolen, { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Rage Cola' }));

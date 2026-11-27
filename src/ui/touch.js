@@ -12,7 +12,7 @@
 // The pad, the bar buttons and the placing aid are only shown on a touch screen (CSS:
 // `(pointer: coarse)`); the sheet is for everyone.
 import { BUILD, TUNE, levelOf, spentOn, statsOf, tracksOf, carriesWire } from '../sim/index.js';
-import { stockRows, dropInfo, trackName, trackNumbers, crateInfo, wireWhyText } from '../content/supplies.js';
+import { stockRows, dropInfo, trackName, trackNumbers, reinforceInfo, wireWhyText } from '../content/supplies.js';
 import { h, setText, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { WIRE_CYCLE, wireArrow, wireName, wirePicker } from './wiretool.js';
@@ -224,17 +224,18 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     const owner = s.players[b.o];
     const st = statsOf(b, s);
     const hits = st.hits, hit = b.hit | 0;
-    // Each track's numbers as it works now ("Damage: hit 9.4"), durability last (crates and the old
-    // factory have only that).
+    // Each track's numbers as it works now ("Damage: hit 9.4"), durability last: the gym bro hits
+    // it survives, which reinforcing raises (a Crate Stack has only that).
     const nums = [...tracksOf(b.k).filter((tr) => tr !== 'dur'), 'dur'].map((tr) =>
       [trackName(b.k, tr), trackNumbers(b.k, tr, st).map(([label, v]) => `${label} ${v}`).join(', ')]);
     const stock = stockRows(b, s);
     const lv = levelOf(b);
-    // A Crate Stack's reinforcement (0.4): its level and the next one's price, for this player's cash.
+    // Reinforcement (0.4 for Crate Stacks, 0.4.01 for every security building too): its level and
+    // the next one's price, for this player's cash. Null for a kind the rules cannot reinforce.
     const mine = s.players[session.me];
-    const crate = def.reinforce ? crateInfo(b, Math.floor(mine ? mine.cash : 0), s) : null;
+    const rf = reinforceInfo(b, Math.floor(mine ? mine.cash : 0), s);
     const sig = JSON.stringify([t.x, t.y, b.k, b.d, hit, b.off > 0, back, nums, owner ? owner.name : '', s.players.length,
-      stock.map((r) => [r.tier, r.units, r.gives]), crate]);
+      stock.map((r) => [r.tier, r.units, r.gives]), rf]);
     if (sig === sheetSig) return;
     sheetSig = sig;
     // (replaceChildren would write a null out as the word "null")
@@ -242,7 +243,8 @@ export function createTouchControls({ input, session, renderer, playSound = () =
       h('span', { class: 'ts-icon', html: buildingIcon(b.k) }),
       h('b', null, def.name),
       lv > 1 ? h('span', { class: 'ts-lv' }, `level ${lv}`) : null,
-      crate && crate.r > 0 ? h('span', { class: 'ts-lv' }, `level ${crate.r} of ${crate.max}`) : null,
+      // (Not "level": that is the stock's on a security building.)
+      rf && rf.r > 0 ? h('span', { class: 'ts-lv ts-rf', title: `Reinforced ${rf.r} of ${rf.max} levels` }, `reinforced ${rf.r}/${rf.max}`) : null,
       owner && s.players.length > 1 ? h('span', { class: 'ts-owner' }, `${owner.name}'s`) : null,
       // On a phone (0.4): the stock in one line of dots, the rows themselves behind DETAILS.
       stockSummary(stock),
@@ -252,13 +254,13 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     sheetNums.replaceChildren(...nums.map(([name, v]) => h('span', null, h('b', null, `${name}: `), v)));
     setClass(sheetNums, 'hidden', false);
     const btns = [];
-    if (crate) {
+    if (rf) {
       // One more gym bro hit a sales event, for cash (the `reinforce` command; anyone may, and pays).
       btns.push(h('button', {
-        type: 'button', class: `ts-btn ts-more${crate.why ? ' poor' : ''}`, disabled: !!crate.why,
-        title: `Takes ${crate.hits} gym bro hit${crate.hits === 1 ? '' : 's'} a sales event now; one more for each level.`,
+        type: 'button', class: `ts-btn ts-more${rf.why ? ' poor' : ''}`, disabled: !!rf.why,
+        title: `Takes ${rf.hits} gym bro hit${rf.hits === 1 ? '' : 's'} a sales event now; one more for each level.`,
         onclick: () => act({ c: 'reinforce', x: t.x, y: t.y }, 'place'),
-      }, h('b', null, 'REINFORCE'), h('small', { class: 'ts-cost' }, crate.why || `${money(crate.cost)} · level ${crate.r + 1}`)));
+      }, h('b', null, 'REINFORCE'), h('small', { class: 'ts-cost' }, rf.why || `${money(rf.cost)} · level ${rf.r + 1}`)));
     }
     if (def.rot) {
       btns.push(h('button', { type: 'button', class: 'ts-btn', onclick: () => act({ c: 'rotate', x: t.x, y: t.y }, 'rotate') },
