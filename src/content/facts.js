@@ -5,7 +5,7 @@ import {
   SHOPPERS, SUPERS, BUILD, TUNE, SETTINGS, TICK_HZ, waveSpec, statsOf, priceOf,
   tracksOf, usesPer, BACK, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
   patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize, eventPay, speedPar,
-  makeTicks, rebrandTicks, stockCap, dropUpCost, SUPPLY_TRACKS, reinforceCost, takesSupply, itemCode,
+  makeTicks, rebrandTicks, stockCap, dropUpCost, SUPPLY_TRACKS, reinforceCost, upgradeCost, takesSupply, itemCode,
 } from '../sim/index.js';
 import { EDGE_HELP } from './help.js';
 import { TIER_NAMES, SUPPLIES, stockTracks, junkPerMinute } from './supplies.js';
@@ -331,7 +331,8 @@ export function shopperFacts(k) {
  */
 export function tierRows(k, track) {
   const def = BUILD[k], rows = [];
-  if (!tracksOf(k).includes(track) || !Object.hasOwn(SUPPLIES, track)) return rows;
+  // (0.4.01: a kind with no Dumbwaiter, the Wet Floor Sign, takes no supplies: see upgradeRows.)
+  if (!def.lift || !tracksOf(k).includes(track) || !Object.hasOwn(SUPPLIES, track)) return rows;
   for (let tier = 0; tier < TIER_NAMES.length; tier++) {
     const st = statsOf(tier ? { k, s: { [track]: [tier, 1] } } : { k });
     const row = { tier, name: tier ? TIER_NAMES[tier] : 'as built', uses: tier ? usesPer(k, track, tier) : 0 };
@@ -350,6 +351,34 @@ export function tierRows(k, track) {
     rows.push(row);
   }
   return rows;
+}
+
+/**
+ * A kind upgraded with cash (0.4.01: the Wet Floor Sign), one row per level from 0 (as built) to the
+ * top, from the rules: { u, cost (what that level cost to buy, 0 as built; a game without cards),
+ * level (the stat level it works at), ...numbers (statsOf at that level: a sign's slow, slip and
+ * slipDmg) }. Empty for any other kind.
+ */
+export function upgradeRows(k) {
+  const up = BUILD[k].upgrade, rows = [];
+  if (!up) return rows;
+  for (let u = 0; u <= up.max; u++) {
+    const st = statsOf({ k, u });
+    const row = { u, cost: u ? upgradeCost({ k, u: u - 1 }) : 0, level: up.level[u] };
+    if (k === 'wetfloor') { row.slow = st.slow; row.slip = st.slip; row.slipDmg = st.slipDmg; }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Upgrading a kind with cash (0.4.01), in words from the rules: what each level costs and does. */
+export function upgradeText(k = 'wetfloor') {
+  const up = BUILD[k].upgrade;
+  if (!up) return '';
+  const rows = upgradeRows(k).slice(1);
+  const top = BACK.tierLevel.indexOf(up.level[up.max]);
+  const like = top > 0 ? ` The top level works as well as ${TIER_NAMES[top]} supplies would.` : '';
+  return `pay for up to ${up.max} levels, each for good (it never runs out): ${rows.map((r) => money(r.cost)).join(', ')}.${like} The money counts as paid for the sign: selling it gives back ${pct(TUNE.sellBack)} of it`;
 }
 
 /** Plain facts about the Crate Stack, the shop floor's one plain wall, as [label, value] pairs. */
@@ -413,6 +442,8 @@ const PLAIN = {};
 const secs = (t) => t / TICK_HZ;
 /** Dollars and cents: "$0.25", "$1.00". */
 const cents = (v) => `$${v.toFixed(2)}`;
+/** The security buildings with no Dumbwaiter (0.4.01: the Wet Floor Sign, upgraded with cash instead). */
+export const unfed = () => SECURITY_ORDER.filter((k) => !BUILD[k].lift);
 /** Every security building that takes this supply (its track, or Razor Wire), by name. */
 const takers = (track) => SECURITY_ORDER.filter((k) => stockTracks(k).includes(track)).map((k) => BUILD[k].name);
 /** The machine that makes a supply (BUILD[k].supply is its type). */
@@ -461,7 +492,7 @@ export function backFacts(k) {
     out.push(['Raises', [1, 2, 3].map((t) => `${TIER_NAMES[t]} to ${TIER_NAMES[t + 1]} in ${fmt(secs(rebrandTicks(PLAIN, t)))} s`).join(', ')]);
     out.push(['Takes', `any supply below ${TIER_NAMES[TIER_NAMES.length - 1]}, never junk, at the back and both sides; out of the front one tier up`]);
   } else if (k === 'lift') {
-    out.push(['Where', 'under every tile of every security building, put there and taken away with it; none under a Crate Stack']);
+    out.push(['Where', `under every tile of every security building, put there and taken away with it; none under a Crate Stack${unfed().length ? ` or ${unfed().map((k) => an(BUILD[k].name)).join(' or ')}` : ''}`]);
     out.push(['Holds', `up to ${stockCap(null)} units of each supply its building takes; it takes the next only once a whole unit is used up`]);
     out.push(['Takes from', 'any side']);
     out.push(['Lost', 'everything in it when the building above is wrecked or removed']);
@@ -508,7 +539,8 @@ export function tierFacts() {
  * acts on. Whatever the tier; the tier sets how much it does.
  */
 export function unitFacts() {
-  return SECURITY_ORDER.map((k) => ({ k, name: BUILD[k].name, uses: usesPer(k, 'dmg', 1), per: BUILD[k].tower ? 'shots' : 'shoppers' }));
+  // (Not the Wet Floor Sign from 0.4.01: it takes no supplies.)
+  return SECURITY_ORDER.filter((k) => BUILD[k].lift).map((k) => ({ k, name: BUILD[k].name, uses: usesPer(k, 'dmg', 1), per: BUILD[k].tower ? 'shots' : 'shoppers' }));
 }
 
 /**
@@ -532,7 +564,7 @@ export function howItWorks(difficulty = SETTINGS.defaults.difficulty) {
     },
     {
       id: 'floor', title: 'The shop floor: the maze',
-      text: `Crate Stacks (${money(BUILD.crate.cost)}) and security block shoppers, so whatever you build is the route they walk: make it long and make it hurt. You can never block it completely. Security wears down patience until shoppers storm out empty-handed; Wet Floor Signs, Free Samples and the TV Salesman hold them in reach for longer. Each security building has a Dumbwaiter under it, which is how The Back stocks it.`,
+      text: `Crate Stacks (${money(BUILD.crate.cost)}) and security block shoppers, so whatever you build is the route they walk: make it long and make it hurt. You can never block it completely. Security wears down patience until shoppers storm out empty-handed; Wet Floor Signs, Free Samples and the TV Salesman hold them in reach for longer. Each security building but the Wet Floor Sign has a Dumbwaiter under it, which is how The Back stocks it; a new one starts empty. The sign takes no supplies: UPGRADE on its card makes it better with cash, for good (${upgradeRows('wetfloor').slice(1).map((r) => money(r.cost)).join(', ')}), and it can stand over anything in The Back.`,
     },
     {
       id: 'back', title: 'The Back: the factory under the shop',
@@ -548,7 +580,7 @@ export function howItWorks(difficulty = SETTINGS.defaults.difficulty) {
     },
     {
       id: 'dads', title: 'Dads and Razor Wire',
-      text: `Dads walk straight through every building; only the store's walls and live Razor Wire stop them. Pick up Wire (Z) and click a security building to give it a wire direction: it then covers its own tiles and the ${BACK.wireReach} beyond them that way. While it holds Razor Wire the wire is live: ordinary shoppers see it and walk round it like a wall, for nothing, but a dad walks into it, is turned away and goes round; each wire charges a dad once, and a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads by brand. With no wire in stock it is only planned (dashed) and stops nobody${takesSupply({ k: 'forklift' }, itemCode(5, 1)) ? '' : '; a building takes Razor Wire only once it has a direction, and its Dumbwaiter blinks red until some comes'}. The floor shows two blue routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with every planned wire stocked. A wire that would wall anyone in is refused, and so is a building that would, counting every planned wire as stocked.`,
+      text: `Dads walk straight through every building; only the store's walls and live Razor Wire stop them. Pick up Wire (Z) and click a security building (any but a Wet Floor Sign, which has no Dumbwaiter) to give it a wire direction: it then covers its own tiles and the ${BACK.wireReach} beyond them that way. While it holds Razor Wire the wire is live: ordinary shoppers see it and walk round it like a wall, for nothing, but a dad walks into it, is turned away and goes round; each wire charges a dad once, and a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads by brand. With no wire in stock it is only planned (dashed) and stops nobody${takesSupply({ k: 'forklift' }, itemCode(5, 1)) ? '' : '; a building takes Razor Wire only once it has a direction, and its Dumbwaiter blinks red until some comes'}. The floor shows two blue routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with every planned wire stocked. A wire that would wall anyone in is refused, and so is a building that would, counting every planned wire as stocked.`,
     },
     {
       id: 'gym', title: 'Gym bros, reinforcing and rebuilding',

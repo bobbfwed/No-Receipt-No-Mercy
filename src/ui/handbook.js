@@ -9,7 +9,7 @@ import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP, HOW_WIRE, HOW_REINF
 import {
   SHOPPER_ORDER, WALL_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
   tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST,
-  paceText, edgeFacts, payText, wireText, reinforceText, reinforceToolText, howItWorks,
+  paceText, edgeFacts, payText, wireText, reinforceText, reinforceToolText, howItWorks, upgradeRows, upgradeText,
 } from '../content/facts.js';
 import { releaseWaves } from '../content/facts.js';
 import { trackName, SUPPLIES } from '../content/supplies.js';
@@ -55,6 +55,7 @@ function supplyTables(k) {
   const def = BUILD[k];
   // What a unit of stock is used up by: a tower's shots, or the shoppers anything else acts on.
   const per = def.tower ? 'shots' : 'shoppers';
+  if (!def.lift) return []; // (no Dumbwaiter, no supplies: the Wet Floor Sign, 0.4.01)
   return tracksOf(k).filter((track) => Object.hasOwn(SUPPLIES, track)).flatMap((track) => {
     const rows = tierRows(k, track);
     const head = h('h4', null, `${SUPPLIES[track].name}: ${trackName(k, track)}`);
@@ -190,7 +191,7 @@ function toolCard(k, name, key, how, rule) {
 /** One of The Back's parts: what it does, how to use it, and its numbers. */
 function backCard(k) {
   const def = BUILD[k];
-  const where = k === 'drop' ? 'The Back: put down by the store' : k === 'lift' ? 'The Back: under every security building'
+  const where = k === 'drop' ? 'The Back: put down by the store' : k === 'lift' ? 'The Back: under every security building but the Wet Floor Sign'
     : def.supply ? `The Back: makes ${SUPPLIES[SUPPLY_TRACKS[def.supply]].name}` : 'The Back';
   return h('article', { class: 'hb-card' }, buildingHead(k, where),
     h('p', null, worded(BACK_HOW[k].does)),
@@ -241,6 +242,9 @@ function securityCard(k) {
   extra.push(['Gym bro hits it survives', `${st.hits} a sales event, as built`]);
   // (0.4.01, the owner: every security building is reinforced for cash, as crates are.)
   if (def.reinforce) extra.push(['Reinforce', `${reinforceText(k)}.`]);
+  // (0.4.01: the Wet Floor Sign takes no supplies, and is upgraded with cash instead.)
+  if (def.upgrade) extra.push(['Upgrade', `${upgradeText(k)}.`]);
+  else if (!def.lift) extra.push(['Supplies', 'none: no Dumbwaiter under it']);
   // Who it works better or worse on (the shoppers' `weak` and `tough`), with the reasons under
   // Known offenders.
   for (const side of ['weak', 'tough']) {
@@ -253,7 +257,18 @@ function securityCard(k) {
     h('p', null, worded(HOW[k].does)),
     h('p', null, h('b', null, 'How: '), worded(HOW[k].use)),
     facts(extra),
-    ...supplyTables(k));
+    ...supplyTables(k),
+    ...upgradeTable(k));
+}
+
+/** A kind upgraded with cash (0.4.01, the Wet Floor Sign): what each level costs and does. */
+function upgradeTable(k) {
+  const rows = upgradeRows(k);
+  if (!rows.length) return [];
+  const keys = ['slow', 'slip', 'slipDmg'].filter((c) => rows[0][c] !== undefined);
+  return [h('h4', null, 'UPGRADE: levels bought with cash, for good'),
+    table('hb-levels', ['Level', 'Costs', ...keys.map((c) => COLS[c][0])],
+      rows.map((r) => [r.u ? `Level ${r.u}` : 'as built', r.cost ? money(r.cost) : '–', ...keys.map((c) => COLS[c][1](r[c]))]))];
 }
 
 /**
@@ -301,7 +316,7 @@ export function handbook({ state = null, onClose }) {
       note.textContent = `The Back is the floor under the shop: Tab, or the floor switch at the bottom right, takes you down. Nothing down here is in a shopper's way. Returns Drops put out junk; belts carry it to the machines, which make supplies; more belts carry those to the Dumbwaiters under your security, which send them up. Security works as built until it is stocked, and better while it is. The Back makes no money, bar a Clearance Bin's pennies. ${payText(ctx.difficulty)} Selling a part back returns ${pct(TUNE.sellBack)} of what was spent on it. The numbers here are for a game without cards.`;
       body.replaceChildren(suppliesCard(), ...BACK_ORDER.map((k) => backCard(k)));
     } else {
-      note.textContent = `Crate Stacks and security are the maze: shoppers walk round them, and only gym bros and dads go through (a dad walks through anything but a wall or live Razor Wire: see The Back's Supplies). Security hits harder only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range), and Razor Wire for its wire. Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. Cash buys toughness: Reinforce (U, or REINFORCE on its card) makes a crate or a security building take one more gym bro hit a sales event per level. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
+      note.textContent = `Crate Stacks and security are the maze: shoppers walk round them, and only gym bros and dads go through (a dad walks through anything but a wall or live Razor Wire: see The Back's Supplies). Security hits harder only on supplies from The Back, sent up its Dumbwaiter (a new building starts empty; the Wet Floor Sign has no Dumbwaiter and is upgraded with cash instead, UPGRADE on its card): Bottled Spite (damage), Rage Cola (speed), Extension Cord (range), and Razor Wire for its wire. Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. Cash buys toughness: Reinforce (U, or REINFORCE on its card) makes a crate or a security building take one more gym bro hit a sales event per level. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
       body.replaceChildren(...WALL_ORDER.map((k) => crateCard(k)), ...SECURITY_ORDER.map((k) => securityCard(k)),
         toolCard('wire', 'Wire', 'Z', HOW_WIRE, wireText()), toolCard('reinforce', 'Reinforce', 'U', HOW_REINFORCE, reinforceToolText()));
     }

@@ -231,6 +231,8 @@ export function createSound() {
         case 'turned': fire('wireSnag', { free: e.free ? 1 : 0 }); break;
         case 'wire': if (!mine(e.by)) fire('wireLay', {}, { gain: OTHERS }); break;
         case 'reinforce': if (!mine(e.by)) fire('reinforce', { r: e.r | 0 }, { gain: OTHERS }); break;
+        // (0.4.01) A Wet Floor Sign upgraded for cash: the reinforce clunk, a step higher a level.
+        case 'upgrade': if (!mine(e.by)) fire('reinforce', { r: (e.u | 0) * 2 }, { gain: OTHERS }); break;
         // The Back (0.4, stage 6). A unit finished and a unit sent up are only heard while The Back
         // is on screen (they happen all the time); running dry is heard from either floor.
         case 'made': if (backView()) fire('made', { tier: e.c % 10 }); break;

@@ -32,7 +32,7 @@ export const HOW = {
   },
   wetfloor: {
     does: 'Shoppers crossing it walk at half speed. Dads ignore the sign and have a 1 in 3 chance of slipping and lying stunned.',
-    use: 'It does not block the way, so it can sit right in a gap, next to a sprinkler. Mobility scooters are not affected. Bottled Spite from The Back makes it slower to cross and slippier.',
+    use: 'It does not block the way, so it can sit right in a gap, next to a sprinkler. Mobility scooters are not affected. It takes nothing from The Back and has no Dumbwaiter, so it can stand over belts and machines: UPGRADE on its card makes it slower to cross and slippier, with cash, for good.',
     maze: 'Does not block anyone.',
   },
   samples: {
@@ -105,7 +105,7 @@ export const BACK_HOW = {
     use: 'Put it in a supply line after a machine, straight on a belt (it replaces it). Two in a row make Premium, three Platinum, but each pass is slower than the last. In at the back or the sides, out of the side with the arrow. Press R before placing to turn it.',
   },
   lift: {
-    does: 'The hatch under every tile of a security building (not a Crate Stack). It takes the supplies that building uses, from any side, and sends them up to it, until it is full. It comes and goes with the building, and so does whatever is in it.',
+    does: 'The hatch under every tile of a security building (not a Crate Stack or a Wet Floor Sign). A new building starts with nothing in it. It takes the supplies that building uses, from any side, and sends them up to it, until it is full. It comes and goes with the building, and so does whatever is in it.',
     use: 'Nothing to buy: build security upstairs and its Dumbwaiters appear down here. Point a belt, a machine or an Unpaid Intern at one. It only takes what its building can use, so send the rest on past it. A blinking red lamp on it: the building has a wire direction and no Razor Wire, so it wants some.',
   },
 };

@@ -1220,6 +1220,15 @@ export const LINES = {
     u("{p} has armour-plated the {k}. Overcompensating with hardware. We've all seen your car, {p}."),
     r("{p} paid to make the {k} harder. It's the most money he has ever spent making anything harder, and the only time it has worked."),
   ],
+  // (0.4.01) A Wet Floor Sign upgraded for cash. {n} its new level, {p} who paid.
+  wetUpgrade: [
+    "{p} paid to make the floor wetter. Level {n}. Most men spend money trying to make things less wet. Not {p}.",
+    'Wet Floor Sign, level {n}, courtesy of {p}. More mop water, more misery, same yellow plastic. Peak retail.',
+    "{p} upgraded a puddle. Let that sink in. A grown man with a mortgage just bought a better puddle.",
+    'Level {n} slip hazard, {p}. The dads will go down like your credit score.',
+    u("{p} has upgraded the Wet Floor Sign to level {n}. It's slipperier than his excuses, and those are world class."),
+    r("Level {n} wet floor. {p}, that's not cleaning, that's entrapment. Legal says keep going, the lawsuits are cheaper than the refunds."),
+  ],
   // (0.4.01) A Returns Drop feeding three or more sides at once, said once a game. {p} anyone.
   dropShare: [
     'Somebody has a Returns Drop feeding three ways at once. It shares its junk out evenly, {p}. More lines, less on each. Socialism, but with garbage.',

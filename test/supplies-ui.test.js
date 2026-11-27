@@ -35,7 +35,9 @@ test('every stock track has a supply with a name, a warning word and a colour', 
 
 test('the tracks a building takes: its tracks and wire, only for kinds with Dumbwaiters', () => {
   assert.deepEqual(stockTracks('sprinkler'), ['dmg', 'spd', 'rng', 'wire']);
-  assert.deepEqual(stockTracks('wetfloor'), ['dmg', 'wire']);
+  // (0.4.01: the Wet Floor Sign has no Dumbwaiter; it is upgraded with cash.)
+  assert.deepEqual(stockTracks('wetfloor'), []);
+  assert.deepEqual(stockTracks('samples'), ['dmg', 'rng', 'wire']);
   assert.deepEqual(stockTracks('crate'), []);
   assert.deepEqual(stockTracks('conv'), []);
   assert.deepEqual(stockTracks('__proto__'), []);
@@ -146,4 +148,16 @@ test('the demo store has a working supply chain that stocks its security, and a 
   assert.ok(unitsIn(at(12, 3), 'dmg') > 0 && unitsIn(at(14, 3), 'dmg') > 0, 'the interns stock both sprinklers with Spite');
   assert.equal(tierIn(at(9, 8), 'spd'), 3, 'the forklift gets Premium Rage Cola, twice rebranded');
   assert.ok(outs.length > 0, 'something runs dry');
+});
+
+test("a Wet Floor Sign's sheet: UPGRADE with its price and level, or why not; nothing else has it (0.4.01)", async () => {
+  const { upgradeInfo } = await import('../src/content/supplies.js');
+  const up = BUILD.wetfloor.upgrade;
+  assert.ok(up, 'the sign is upgraded with cash');
+  assert.deepEqual(upgradeInfo({ k: 'wetfloor' }, 1000), { u: 0, max: up.max, cost: up.cost, why: '' });
+  assert.equal(upgradeInfo({ k: 'wetfloor' }, up.cost - 7).why, '$7 short');
+  assert.equal(upgradeInfo({ k: 'wetfloor', u: up.max }, 1e9).why, 'Top level');
+  assert.equal(upgradeInfo({ k: 'wetfloor', u: up.max }, 1e9).cost, 0);
+  for (const k of ['crate', 'sprinkler', 'forklift', 'salesman']) assert.equal(upgradeInfo({ k }, 1e9), null, k);
+  assert.equal(upgradeInfo(null, 1), null);
 });

@@ -12,7 +12,7 @@
 // The pad, the bar buttons and the placing aid are only shown on a touch screen (CSS:
 // `(pointer: coarse)`); the sheet is for everyone.
 import { BUILD, TUNE, levelOf, spentOn, statsOf, tracksOf, carriesWire } from '../sim/index.js';
-import { stockRows, dropInfo, trackName, trackNumbers, reinforceInfo, wireWhyText } from '../content/supplies.js';
+import { stockRows, dropInfo, trackName, trackNumbers, reinforceInfo, upgradeInfo, wireWhyText } from '../content/supplies.js';
 import { h, setText, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
 import { WIRE_CYCLE, wireArrow, wireName, wirePicker } from './wiretool.js';
@@ -234,15 +234,18 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     // the next one's price, for this player's cash. Null for a kind the rules cannot reinforce.
     const mine = s.players[session.me];
     const rf = reinforceInfo(b, Math.floor(mine ? mine.cash : 0), s);
+    // (0.4.01) The Wet Floor Sign takes no supplies: it is upgraded with cash, levels that never run out.
+    const upg = upgradeInfo(b, Math.floor(mine ? mine.cash : 0), s);
     const sig = JSON.stringify([t.x, t.y, b.k, b.d, hit, b.off > 0, back, nums, owner ? owner.name : '', s.players.length,
-      stock.map((r) => [r.tier, r.units, r.gives]), rf]);
+      stock.map((r) => [r.tier, r.units, r.gives]), rf, upg]);
     if (sig === sheetSig) return;
     sheetSig = sig;
     // (replaceChildren would write a null out as the word "null")
     sheetHead.replaceChildren(...[
       h('span', { class: 'ts-icon', html: buildingIcon(b.k) }),
       h('b', null, def.name),
-      lv > 1 ? h('span', { class: 'ts-lv' }, `level ${lv}`) : null,
+      upg ? (upg.u > 0 ? h('span', { class: 'ts-lv', title: `Upgraded ${upg.u} of ${upg.max} levels` }, `upgraded ${upg.u}/${upg.max}`) : null)
+        : lv > 1 ? h('span', { class: 'ts-lv' }, `level ${lv}`) : null,
       // (Not "level": that is the stock's on a security building.)
       rf && rf.r > 0 ? h('span', { class: 'ts-lv ts-rf', title: `Reinforced ${rf.r} of ${rf.max} levels` }, `reinforced ${rf.r}/${rf.max}`) : null,
       owner && s.players.length > 1 ? h('span', { class: 'ts-owner' }, `${owner.name}'s`) : null,
@@ -254,6 +257,14 @@ export function createTouchControls({ input, session, renderer, playSound = () =
     sheetNums.replaceChildren(...nums.map(([name, v]) => h('span', null, h('b', null, `${name}: `), v)));
     setClass(sheetNums, 'hidden', false);
     const btns = [];
+    if (upg) {
+      // Better for good, for cash (the `upgrade` command; anyone may, and pays).
+      btns.push(h('button', {
+        type: 'button', class: `ts-btn ts-more${upg.why ? ' poor' : ''}`, disabled: !!upg.why,
+        title: 'Slows shoppers more and trips more dads, for good: it never runs out.',
+        onclick: () => act({ c: 'upgrade', x: t.x, y: t.y }, 'place'),
+      }, h('b', null, 'UPGRADE'), h('small', { class: 'ts-cost' }, upg.why || `${money(upg.cost)} · level ${upg.u + 1}`)));
+    }
     if (rf) {
       // One more gym bro hit a sales event, for cash (the `reinforce` command; anyone may, and pays).
       btns.push(h('button', {

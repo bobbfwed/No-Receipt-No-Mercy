@@ -8,11 +8,12 @@ import { fill, generated, pictures } from '../tools/readme.mjs';
 import { versionText } from '../src/version.js';
 import {
   createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, levelIn, itemCode, addStock, takesSupply, usesIn, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, TUNE, MAP_DESIGNS, SETTINGS, BOSS,
-  BACK, TICK_HZ, makeTicks, rebrandTicks, dropUpCost, reinforceCost,
+  BACK, TICK_HZ, makeTicks, rebrandTicks, dropUpCost, reinforceCost, upgradeCost,
 } from '../src/sim/index.js';
 import {
   SHOPPER_ORDER, WALL_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, shopperTraits, patienceAt, firstWave, countIn,
   sampleWaves, bossWaves, LONGEST, tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts, wireText, reinforceText,
+  upgradeRows, upgradeText,
 } from '../src/content/facts.js';
 import { SUPPLIES, junkPerMinute } from '../src/content/supplies.js';
 import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP } from '../src/content/help.js';
@@ -110,7 +111,8 @@ test('the supply tables match what each tier of stock really does, track by trac
     // (0.4.01: durability is no supply any more, so it has no table: reinforced for cash.)
     for (const t of ['dmg', 'spd', 'rng', 'dur']) {
       const rows = tierRows(k, t);
-      if (!tracksOf(k).includes(t) || !Object.hasOwn(SUPPLIES, t)) { assert.deepEqual(rows, []); continue; }
+      // (0.4.01: and the Wet Floor Sign, with no Dumbwaiter, takes none: it has upgradeRows instead.)
+      if (!tracksOf(k).includes(t) || !Object.hasOwn(SUPPLIES, t) || !BUILD[k].lift) { assert.deepEqual(rows, []); continue; }
       tables++;
       assert.deepEqual(rows.map((r) => r.tier), [0, 1, 2, 3, 4], `${k} ${t}: as built, then every tier`);
       const s = createGame({ training: true });
@@ -134,7 +136,7 @@ test('the supply tables match what each tier of stock really does, track by trac
       }
     }
   }
-  assert.ok(tables >= 12);
+  assert.ok(tables >= 10);
   // An unstocked forklift takes exactly its "Hit" as built off a shopper, and one on Store Brand
   // Bottled Spite exactly that tier's.
   for (const tier of [0, 1]) {
@@ -194,5 +196,18 @@ test("The Back's numbers in the handbook are the rules' own (0.4)", () => {
   assert.deepEqual(tiers.map((r) => r.level), BACK.tierLevel.slice(1));
   assert.deepEqual(tiers.map((r) => r.wire), BACK.wireTurns.slice(1));
   assert.deepEqual(tiers.map((r) => r.bin), BACK.binPay.slice(1));
-  assert.deepEqual(unitFacts().map((u) => u.uses), SECURITY_ORDER.map((k) => BUILD[k].shots));
+  assert.deepEqual(unitFacts().map((u) => u.uses), SECURITY_ORDER.filter((k) => BUILD[k].lift).map((k) => BUILD[k].shots));
+  // (0.4.01) The Wet Floor Sign's cash upgrades: every price and level from the rules, and the
+  // numbers in each row are the sign's own at that level.
+  const up = BUILD.wetfloor.upgrade;
+  const rows = upgradeRows('wetfloor');
+  assert.deepEqual(rows.map((r) => r.u), [0, 1, 2, 3, 4].slice(0, up.max + 1));
+  for (const r of rows) {
+    assert.equal(r.cost, r.u ? upgradeCost({ k: 'wetfloor', u: r.u - 1 }) : 0);
+    assert.equal(r.level, up.level[r.u]);
+    const st = statsOf({ k: 'wetfloor', u: r.u });
+    for (const key of ['slow', 'slip', 'slipDmg']) assert.equal(r[key], st[key], `level ${r.u} ${key}`);
+  }
+  const ut = upgradeText('wetfloor');
+  for (const r of rows.slice(1)) assert.ok(ut.includes(`$${r.cost}`), ut);
 });

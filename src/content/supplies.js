@@ -4,7 +4,7 @@
 // and the README tool read it too. The numbers all come from the rules.
 import {
   BUILD, BACK, TICK_HZ, SHOPPERS, STOCK_TRACKS, unitsIn, usesIn, stockLevel, stockCap, dropTicks, dropUpCost,
-  reinforceCost, statsOf,
+  reinforceCost, upgradeCost, statsOf,
 } from '../sim/index.js';
 
 /**
@@ -96,6 +96,21 @@ export function reinforceInfo(b, cash, state = null) {
   else if (cash < cost) why = `$${Math.ceil(cost - cash).toLocaleString('en-US')} short`;
   return { r, max: rf.max, hits: statsOf(b, state).hits, cost, why };
 }
+/**
+ * What a building's sheet says about upgrading it with cash (0.4.01: the Wet Floor Sign, which takes
+ * no supplies): { u (its level), max, cost (of the next level, 0 at the top), why ('' when the
+ * UPGRADE button works, else why not) }, or null for a kind that is not upgraded with cash.
+ */
+export function upgradeInfo(b, cash, state = null) {
+  const up = b && Object.hasOwn(BUILD, b.k) ? BUILD[b.k].upgrade : null;
+  if (!up) return null;
+  const u = Math.min(up.max, b.u | 0), cost = upgradeCost(b, state);
+  let why = '';
+  if (u >= up.max) why = 'Top level';
+  else if (cash < cost) why = `$${Math.ceil(cost - cash).toLocaleString('en-US')} short`;
+  return { u, max: up.max, cost, why };
+}
+
 /** The name it had while only Crate Stacks could be reinforced. */
 export const crateInfo = reinforceInfo;
 

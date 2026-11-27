@@ -569,12 +569,12 @@ export const STEPS = [
     text: [
       'Do this: press Tab (or CHECK IN THE BACK, bottom right of the floor) to go down to The Back, the floor under the shop.',
       `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, shared out in turn between every belt or machine touching it, on any side.`,
-      'The dashed boxes are the Dumbwaiters under your security. Down here belts and machines turn junk into supplies and send them up. Tab takes you back up.',
+      'The dashed boxes are the Dumbwaiters under your security (not the Wet Floor Sign: it takes nothing from down here, and is upgraded with cash). Down here belts and machines turn junk into supplies and send them up. Tab takes you back up.',
     ],
     touch: [
       'Do this: tap CHECK IN THE BACK (bottom right of the floor) to go down to The Back, the floor under the shop.',
       `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, shared out in turn between every belt or machine touching it, on any side.`,
-      'The dashed boxes are the Dumbwaiters under your security. Down here belts and machines turn junk into supplies and send them up. The same button takes you back up.',
+      'The dashed boxes are the Dumbwaiters under your security (not the Wet Floor Sign: it takes nothing from down here, and is upgraded with cash). Down here belts and machines turn junk into supplies and send them up. The same button takes you back up.',
     ],
     quip: 'Down to The Back, where the junk goes.',
     marks: (s, f) => (f.floor === 1 ? [] : [{ x: DROP[0], y: DROP[1], f: 1, label: 'Returns Drop' }]),

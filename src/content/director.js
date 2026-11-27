@@ -247,6 +247,7 @@ export const TOPICS = {
   crateTop: { joke: true, gap: 30 },
   // (0.4.01) Security reinforced for cash, and a Returns Drop feeding three or more sides (once).
   secReinforce: { joke: true, gap: 60 },
+  wetUpgrade: { joke: true, gap: 45 },
   dropShare: { note: true },
   speedStreak: { note: true, important: true },
   moreJunk: { joke: true, gap: 20 },
@@ -916,6 +917,10 @@ export function createDirector(random = Math.random) {
         else if (e.r >= BUILD.crate.reinforce.max) say(out, state, 'crateTop', LINES.crateTop, {}, { pid, mood: 'smug' });
         break;
       }
+      case 'upgrade':
+        // (0.4.01) A Wet Floor Sign upgraded for cash.
+        if (!state.training) say(out, state, 'wetUpgrade', LINES.wetUpgrade, { n: e.u > 0 ? e.u : undefined }, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
+        break;
       case 'dropUp':
         if (!state.training) say(out, state, 'moreJunk', LINES.moreJunk, { n: e.lv > 0 ? e.lv : undefined }, { pid: state.players[e.by] ? e.by : undefined, mood: 'smug' });
         break;

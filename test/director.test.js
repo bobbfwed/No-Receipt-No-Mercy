@@ -64,7 +64,7 @@ const VARS = {
   jam: 'p', dropIdle: 'p', noBack: 'pw', binning: 'p', backHide: 'p', starved: 'pks', platStolen: 'pks',
   wireRush: 'pk', dadUnwired: 'p', crateTop: 'p', speedStreak: 'pnm', moreJunk: 'pn',
   // Version 0.4.01.
-  secReinforce: 'pk', dropShare: 'p',
+  secReinforce: 'pk', dropShare: 'p', wetUpgrade: 'pn',
 };
 
 /** At least this many lines per bank: three times what each had before, and plenty for new ones. */
@@ -102,7 +102,7 @@ const AT_LEAST = {
   noBack: 6, binning: 6, backHide: 6, starved: 6, platStolen: 6, wireRush: 6, dadUnwired: 6, crateTop: 6,
   speedStreak: 6, moreJunk: 6,
   // Version 0.4.01.
-  secReinforce: 6, dropShare: 6,
+  secReinforce: 6, dropShare: 6, wetUpgrade: 6,
 };
 const OLD_ESCAPES = { hunter: 5, clipper: 3, dad: 6, karen: 3, scooter: 2, teen: 3, mom: 3, blind: 3, gymbro: 2 };
 const OLD_LEFT = { hunter: 3, clipper: 2, dad: 5, karen: 1, scooter: 1, teen: 2, mom: 2, blind: 1, gymbro: 2 };
@@ -1100,6 +1100,8 @@ test('The Back: crates at the top level, MORE JUNK, a stolen Platinum unit and a
   assert.ok(holds(one({ e: 'reinforce', x: 1, y: 1, r: 8, by: 0, paid: 268 }), LINES.crateTop, { p: 'Dave' }));
   // (0.4.01) Security reinforced for cash has its own lines, at any level.
   assert.ok(holds(one({ e: 'reinforce', x: 12, y: 5, r: 1, by: 0, paid: 25 }), LINES.secReinforce, { p: 'Dave', k: 'Forklift Turret' }));
+  // So does a Wet Floor Sign upgraded for cash.
+  assert.ok(holds(one({ e: 'upgrade', i: 0, k: 'wetfloor', u: 2, by: 0, paid: 60 }), LINES.wetUpgrade, { p: 'Dave', n: 2 }));
   assert.ok(holds(one({ e: 'dropUp', x: 1, y: 1, lv: 2, by: 1, paid: 240 }), LINES.moreJunk, { p: 'Steve', n: 2 }));
   assert.ok(holds(one({ e: 'grab', x: 1, y: 1, i, t: 'dmg', tier: 4 }), LINES.platStolen, { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Bottled Spite' }));
   assert.ok(holds(one({ e: 'rip', x: 1, y: 1, n: 0, i, t: 'spd', tier: 4 }), LINES.platStolen, { p: 'Dave', k: 'Forklift Turret', s: 'Platinum Rage Cola' }));
