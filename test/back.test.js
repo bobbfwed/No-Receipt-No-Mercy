@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   createGame, addPlayer, applyCommand, step, migrateSave, makeDrops, overpassDirs,
   BACK, BUILD, TUNE, TICK_HZ, MAP_DESIGNS, MAP_SIZES, JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, canPlace,
+  beltShape,
 } from '../src/sim/index.js';
 import { checksum } from '../src/net/session.js';
 
@@ -61,7 +62,10 @@ function checkGaps(s) {
     if (p.k === 'conv' && p.it.length) {
       const x = (i % s.w) + [1, 0, -1, 0][p.d], y = ((i / s.w) | 0) + [0, 1, 0, -1][p.d];
       const q = s.back[y * s.w + x];
-      if (q && q.k === 'conv' && q.d === p.d && q.it.length) {
+      // (Straight on, or round a corner belt fed from this side: both join as if from behind.)
+      const sh = q && q.k === 'conv' ? beltShape(s, y * s.w + x) : 0;
+      const joins = q && q.k === 'conv' && (q.d === p.d || (sh === 1 && p.d === ((q.d + 3) & 3)) || (sh === -1 && p.d === ((q.d + 1) & 3)));
+      if (joins && q.it.length) {
         const across = SUB - p.it[1] + q.it[q.it.length - 1];
         assert.ok(across >= GAP, `gap ${across} across the join after tile ${i}`);
       }
@@ -213,11 +217,60 @@ test('a held-up line backs up to three items a tile and starts again all togethe
   for (let x = 3; x <= 9; x++) assert.deepEqual(at(s, x, 5).it, [11, END + STEP, 11, END - GAP + STEP, 11, END - 2 * GAP + STEP], `tile ${x}`);
 });
 
+test('a corner is not a side-load: an item goes round it with no jump, and a line keeps its spacing and rate', () => {
+  const s = blank();
+  row(s, 2, 8, 5, E);
+  col(s, 9, 5, 10, S); // (9, 5) faces south, fed only from its west side: a corner
+  lay(s, 9, 11, 'bin');
+  const i = 5 * s.w + 9;
+  // Fed from the west while facing south: from its right (the right of south is west).
+  assert.equal(beltShape(s, i), 1);
+  assert.equal(beltShape(s, 5 * s.w + 5), 0, 'a straight belt');
+  // A lone item: every tick it moves exactly one step, and leaving one tile at overshoot x it
+  // arrives on the next at x, round the corner too.
+  at(s, 2, 5).it = [11, 0];
+  let was = { i: 5 * s.w + 2, pos: 0 }, corner = false;
+  for (let t = 0; t < 8 * TICK_HZ && codes(s).length; t++) {
+    run(s, 1);
+    const j = s.back.findIndex((p) => p && p.it && p.it.length);
+    if (j < 0) break;
+    const pos = s.back[j].it[1];
+    if (j === was.i) assert.equal(pos, was.pos + STEP, `tick ${t}`);
+    else { assert.equal(pos, was.pos + STEP - SUB, `tick ${t}: onto tile ${j}`); if (j === i) corner = true; }
+    was = { i: j, pos };
+  }
+  assert.ok(corner, 'it went round the corner');
+  // A full line round the corner: six a second, never closer than the gap.
+  feed(s, 2, 5, E, 14, 10 * TICK_HZ, [], true);
+  const late = feed(s, 2, 5, E, 14, 20 * TICK_HZ, [], true);
+  assert.equal(late.length, 20 * 6);
+  // Both turns: a corner fed from the left is -1.
+  const t = blank();
+  row(t, 2, 8, 5, E);
+  lay(t, 9, 5, 'conv', N);
+  assert.equal(beltShape(t, 5 * t.w + 9), -1);
+  // A feeder from behind as well, or one at each side, makes it a merge: straight, sides at the middle.
+  lay(t, 9, 6, 'conv', N);
+  assert.equal(beltShape(t, 5 * t.w + 9), 0);
+  lay(t, 9, 6, 'conv', E);
+  lay(t, 10, 5, 'conv', W);
+  assert.equal(beltShape(t, 5 * t.w + 9), 0, 'one feeder at each side');
+  // A Returns Drop, a Splitter's way or an Overpass lane feeding from one side also makes a corner;
+  // an Unpaid Intern does not.
+  for (const [k, d, want] of [['drop', E, 1], ['split', E, 1], ['over', 0, 1], ['intern', E, 0]]) {
+    const u = blank();
+    lay(u, 5, 5, k, d);
+    lay(u, 6, 5, 'conv', S);
+    assert.equal(beltShape(u, 5 * u.w + 6), want, k);
+  }
+});
+
 test('side-loading lands in the middle of a belt; belts facing each other hand nothing over', () => {
   const s = blank();
   row(s, 3, 10, 5, E);
   lay(s, 11, 5, 'bin');
-  lay(s, 6, 4, 'conv', S); // feeds the line from the north side
+  lay(s, 6, 4, 'conv', S); // feeds the line from the north side: a T-junction, as (6, 5) is fed from behind too
+  assert.equal(beltShape(s, 5 * s.w + 6), 0);
   at(s, 6, 4).it = [22, END];
   run(s, 1);
   assert.deepEqual(at(s, 6, 4).it, []);
@@ -417,8 +470,8 @@ test('a ring of belts keeps circulating without losing or making items', () => {
   // It went round several times (20 tiles round, two tiles a second: 12 laps in 120 s, less for
   // the corners and the break in the ring).
   assert.ok(path.length > 20 * 6, `${path.length} tiles visited`);
-  // One item alone moves exactly one step a tick everywhere, the ring's break included: on a new
-  // tile it is at its overshoot (straight on) or the middle (round a corner), never a step further.
+  // One item alone moves exactly one step a tick everywhere, corners and the ring's break included:
+  // on a new tile it is at its overshoot, never a step further and never jumping to the middle.
   for (const p of s.back) if (p && p.it) p.it.length = 0;
   at(s, 6, 3).it = [101, 0];
   let was = null;
@@ -426,8 +479,8 @@ test('a ring of belts keeps circulating without losing or making items', () => {
     stepBack(s);
     const i = s.back.findIndex((p) => p && p.it && p.it.length);
     const pos = s.back[i].it[1];
-    if (was && was.i === i) assert.ok(pos === was.pos + STEP || pos === END, `tick ${t}: ${was.pos} to ${pos}`);
-    else if (was) assert.ok(pos < STEP || pos === SUB / 2, `tick ${t}: onto tile ${i} at ${pos}`);
+    if (was && was.i === i) assert.equal(pos, was.pos + STEP, `tick ${t}`);
+    else if (was) assert.equal(pos, was.pos + STEP - SUB, `tick ${t}: onto tile ${i}`);
     was = { i, pos };
   }
 });

@@ -111,6 +111,61 @@ function overpassLanes(back, W, H) {
 }
 
 /**
+ * Whether the part on tile j puts items out in direction dir into the next tile, for working out a
+ * belt's shape: a belt, a Returns Drop, a Splitter's three ways, an Overpass lane. Not an Unpaid
+ * Intern: he puts things down where there is room and does not make a belt a corner.
+ */
+function feeds(back, od, j, dir) {
+  const p = back[j];
+  if (!p) return false;
+  if (p.k === 'conv' || p.k === 'drop') return p.d === dir;
+  if (p.k === 'split') return dir !== ((p.d + 2) & 3);
+  if (p.k === 'over') return od[j * 2 + (dir & 1)] === dir;
+  return false;
+}
+
+/**
+ * Every belt's shape, by tile: 0 straight, 1 a corner fed from its right, -1 a corner fed from its
+ * left (the shop floor's belts use the same numbers, beltShape in src/render/buildings.js). A belt
+ * with nothing feeding it from behind and exactly one feeder at one side is a corner: what comes in
+ * from that side comes in as if from behind, so a line goes round it without a jump. With a feeder
+ * behind as well, or one at each side, it is a merge, and the sides drop items in at the middle.
+ */
+function beltShapes(back, W, H, od) {
+  const shape = new Int8Array(back.length);
+  for (let i = 0; i < back.length; i++) {
+    const p = back[i];
+    if (!p || p.k !== 'conv') continue;
+    const d = p.d, behind = nb(W, H, i, (d + 2) & 3);
+    if (behind >= 0 && feeds(back, od, behind, d)) continue;
+    const r = nb(W, H, i, (d + 1) & 3), l = nb(W, H, i, (d + 3) & 3);
+    const fromR = r >= 0 && feeds(back, od, r, (d + 3) & 3), fromL = l >= 0 && feeds(back, od, l, (d + 1) & 3);
+    if (fromR !== fromL) shape[i] = fromR ? 1 : -1;
+  }
+  return shape;
+}
+
+/**
+ * The shape of the belt on tile i: 0 straight (or a merge), 1 a corner fed from its right, -1 a
+ * corner fed from its left; 0 for anything that is not a belt. For drawing.
+ */
+export function beltShape(state, i) {
+  const p = state.back && state.back[i];
+  if (!p || p.k !== 'conv') return 0;
+  return cacheOf(state).shape[i];
+}
+
+/**
+ * True if an item travelling in direction dir comes onto the belt p on tile i as if from behind:
+ * straight along it, or round it when it is a corner fed from that side.
+ */
+function fromBehind(c, i, p, dir) {
+  if (dir === p.d) return true;
+  const s = c.shape[i];
+  return s === 1 ? dir === ((p.d + 3) & 3) : s === -1 && dir === ((p.d + 1) & 3);
+}
+
+/**
  * Works out the order every lane and part is stepped in: downstream first. The parts and what each
  * hands to form a graph; its strongly connected groups (Tarjan's method) come out with every group
  * after the groups it hands to. Inside a group (a ring), the order is a depth-first walk from its
@@ -120,6 +175,7 @@ function overpassLanes(back, W, H) {
 function build(state) {
   const back = state.back, W = state.w, H = state.h, N = back.length;
   const od = overpassLanes(back, W, H);
+  const shape = beltShapes(back, W, H, od);
   const nodeAt = new Int32Array(N * 2).fill(-1);
   const kinds = [], tiles = [], dirs = [];
   const add = (kind, i, d, slot) => { nodeAt[i * 2 + slot] = kinds.length; kinds.push(kind); tiles.push(i); dirs.push(d); };
@@ -205,7 +261,7 @@ function build(state) {
   return {
     ver: state.backVer, back, w: W,
     kinds: Uint8Array.from(kinds), tiles: Int32Array.from(tiles), dirs: Int8Array.from(dirs),
-    nodeAt, to, from, od, order: Int32Array.from(order),
+    nodeAt, to, from, od, shape, order: Int32Array.from(order),
     // Scratch for one stepBack (see give): the pass number, the pass each lane was last stepped in,
     // and the positions (-1 for none) of up to two items handed into a lane before its turn in this
     // pass (only at the break of a ring), which must not move again in the same tick.
@@ -253,8 +309,9 @@ function roomAt(it, at) {
  * Would tile i take item `code`, arriving travelling in direction `dir`, right now? `over` is how
  * far past the tile's edge the item already is (a belt handing straight on passes its overshoot; 0
  * for everything else). No side effects.
- *   belt: from behind, if the last item is at least GAP ahead of where it would land; from either
- *         side, at the middle (MID), if no item is within GAP of it; never head-on
+ *   belt: from behind (or, on a corner, from the side that feeds it: see beltShapes), if the last
+ *         item is at least GAP ahead of where it would land; from a side otherwise, at the middle
+ *         (MID), if no item is within GAP of it; never head-on
  *   Overpass: on the lane running the way it travels, from behind, as a belt
  *   Splitter: from behind, when its hand is empty
  *   Clearance Bin: anything, from any side
@@ -264,7 +321,7 @@ export function wants(state, i, code, dir, over = 0) {
   if (!p) return false;
   switch (p.k) {
     case 'conv':
-      if (dir === p.d) return roomBehind(p.it, over);
+      if (fromBehind(cacheOf(state), i, p, dir)) return roomBehind(p.it, over);
       if (dir === ((p.d + 2) & 3)) return false;
       return roomAt(p.it, MID);
     case 'over': {
@@ -307,7 +364,7 @@ export function give(state, i, code, dir, over = 0) {
     case 'conv':
     case 'over': {
       const lane = p.k === 'conv' ? p.it : dir & 1 ? p.b : p.a;
-      const side = p.k === 'conv' && dir !== p.d, pos = side ? MID : over;
+      const side = p.k === 'conv' && !fromBehind(cacheOf(state), i, p, dir), pos = side ? MID : over;
       if (side) insert(lane, code, pos); else lane.push(code, pos);
       // Only at the break of a ring: the lane it joins has not had its turn yet this tick, and the
       // item has already moved; it is marked so that it is not moved twice.
@@ -348,7 +405,8 @@ export function give(state, i, code, dir, over = 0) {
  * tile `to` (-1 off the map), and hands the front one on when it gets there. Written over a single lane array so a
  * belt can be given a second lane later. Items at positions f1 and f2 (-1 for none) were handed
  * into it earlier this tick, before its turn (only at the break of a ring), and stay put.
- *   Heading straight into another belt (or an Overpass lane running the same way), the front item
+ *   Heading straight into another belt (or round a corner belt fed from this side, or into an
+ *   Overpass lane running the same way), the front item
  *   may go as far as SUB + (that lane's last item - GAP), which keeps the gap across the join; past
  *   SUB it is handed over with the overshoot as its new position.
  *   Heading into anything else, it goes as far as END and is offered there every tick.
@@ -357,10 +415,11 @@ export function give(state, i, code, dir, over = 0) {
 function stepLane(state, c, it, dir, to, f1, f2) {
   if (!it.length) return;
   const back = state.back;
-  // The lane it joins straight on, if any (a belt, or an Overpass lane, running the same way).
+  // The lane it joins as if from behind, if any (a belt straight on or round a corner, or an
+  // Overpass lane running the same way).
   let next = null;
   const q = to >= 0 ? back[to] : 0;
-  if (q && q.k === 'conv' && q.d === dir) next = q.it;
+  if (q && q.k === 'conv' && fromBehind(c, to, q, dir)) next = q.it;
   else if (q && q.k === 'over' && c.od[to * 2 + (dir & 1)] === dir) next = dir & 1 ? q.b : q.a;
   // The front item first, so that when it is handed over the one behind it moves up the same tick:
   // a line that was held up starts again all together. (Two items are never at one position, so a

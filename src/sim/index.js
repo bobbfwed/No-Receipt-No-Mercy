@@ -19,6 +19,6 @@ export {
 } from './cards.js';
 export { getBackField } from './path.js';
 // The Back (0.4): the floor under the shop and its belt engine.
-export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, overpassDirs } from './back.js';
+export { JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, overpassDirs, beltShape } from './back.js';
 export { makeDrops } from './maps.js';
 export { freeWorth } from './upgrades.js';
