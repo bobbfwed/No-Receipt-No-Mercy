@@ -14,8 +14,13 @@
 //   - A full copy ('snap') is sent only when the stream cannot say what happened (a player joined,
 //     left or came back; fastForward), when a client reports a checksum that does not match
 //     (different browsers can differ in the last digit of some maths, so copies can drift), when
-//     a client has fallen far behind, and every ten seconds as a safety net. A copy fits into the
-//     stream at the step it was taken, so a routine one causes no jump on screen.
+//     a client has fallen far behind, and once a minute as a safety net (every ten seconds until
+//     0.4; see FULL_EVERY_SECS). A copy fits into the stream at the step it was taken, so a routine
+//     one causes no jump on screen.
+//   - How far behind a client runs adapts to its link (0.4): close behind on a steady link, further
+//     back after the stream has run dry and stopped the picture (see BUFFER below).
+//   - A host whose page is hidden says so ('away'), since a browser then runs its timer only about
+//     once a second and everyone else's game moves in jerks until it comes back.
 //
 // Both kinds of session offer the same interface to the user interface:
 //   session.state        the current game state (null on a client until it has joined)
@@ -40,6 +45,8 @@
 //   'cursor'  {pid, x, y}              where another player is pointing, in tiles
 //   'chat'    {pid, name, color, text} a chat line
 //   'closed'  {why}                    client only: lost the host
+//   'away'    {on}                     the host's page was hidden (on: true) or is back (false);
+//                                      the host gets it too, about itself (see watchVisibility)
 //   'fx'      [event, ...]             the simulation events of one tick or one command (see
 //                                      step() in src/sim/step.js), for sound and the tutorial. The
 //                                      handler receives the array itself, not an object.
@@ -50,6 +57,8 @@
 //   client -> host  hello {name} · cmd {c} · chat {text} · cursor {x, y} · sync {} (send me a copy)
 //   host -> client  welcome {me, n, s} · adv {n, h, c: [[n, pid, cmd], ...]} · snap {n, s}
 //                   at {n, m} (a message to show at step n) · nope · cursor · chat · players · closed
+//                   away {on} (the host's page is hidden, or back: sent when it changes, and to a
+//                   player who joins while it is hidden)
 //                   lobby {me, n, s} (the game is over and a fresh one starts in the lobby: s is
 //                   its state, me the client's id in it, n the step it starts at; anything the
 //                   host sent about an earlier step is from the old game and is dropped)
@@ -59,11 +68,28 @@ const TICK_MS = 1000 / TICK_HZ;
 /** Steps between advance messages at normal speed: one every step, thirty a second. They are
  *  tiny, and sending them this often is what lets clients run close behind the host. */
 const ADV_EVERY = 1;
-/** Client: how many steps behind the host to aim for at normal speed (about 100 ms). Enough to
- *  ride out a message that arrives a little late without the picture stopping. */
-const WANT_BEHIND = 3;
-/** Seconds between routine full copies, the safety net for drift the checksum cannot see. */
-const FULL_EVERY_SECS = 10;
+/**
+ * Client: how many steps behind the host to aim for, at normal speed (0.4: it adapts to the link).
+ * It starts at `min` (3 steps, about 100 ms), enough to ride out a message that arrives a little
+ * late on a steady link. Each time the stream runs dry for longer than `dryMs` (nothing to play
+ * while a step is due: the picture stops) the aim moves `grow` steps further back, up to `max`;
+ * after `calmSecs` of play without such a stop it comes one step closer again, down to `min`.
+ * A change of aim is never a jump: the client runs a little slower or faster (the rate in
+ * update()) until the gap matches. Stops while the game is paused or the host has said its page is
+ * hidden ('away') do not count. The numbers come from the link model in tools/perf/netbench.mjs
+ * (report: .claude/reports/2026-11-26-stutter-investigation.md): a fixed 3 steps stopped a phone's
+ * picture about 15 times a minute on a typical mobile link; 9 steps removed every stop there and
+ * nearly all on a poor signal, at most 0.3 s more delay, and only on a link that needs it.
+ */
+export const BUFFER = { min: 3, max: 9, grow: 2, dryMs: TICK_MS * 1.5, calmSecs: 45 };
+/**
+ * Seconds between routine full copies, the safety net for drift the checksum cannot see. It was
+ * 10 until 0.4. In whole two-player games the checksum never disagreed once, and on a slow uplink
+ * each routine copy (40-55 KB in a busy event, cut into several parts) held up the stream behind
+ * it long enough to stop the joined player's picture. Drift the checksum does see is repaired
+ * within a second (a client asks, SYNC_GAP), so this only covers what it cannot see.
+ */
+const FULL_EVERY_SECS = 60;
 /** Host: the fewest steps between two copies sent because one client asked. */
 const SYNC_GAP = TICK_HZ;
 /**
@@ -124,12 +150,21 @@ export function checksum(s) {
   // of stopped and refunded shoppers, which scale it, are summed too.)
   if (s.lastIn !== undefined) { mix(0x4c415354); mix(s.lastIn); }
   mix(s.ws ? s.ws.stopped : 0); mix(s.ws ? s.ws.escaped : 0);
+  // (How many times wire has been laid differently, 0.4: only once it has, as above.)
+  if (s.wireGen !== undefined) { mix(0x5747454e); mix(s.wireGen); }
   for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);
     mix(sh.kn); mix(sh.cd); mix(sh.pc); mix(sh.ru); dec(sh.sv); mix(sh.pp);
-    // (A dad's last wire, 0.4: only once one has turned him, so nobody else sums any differently.)
-    if (sh.rw !== undefined) { mix(0x5257); mix(sh.rw); }
+    // (A dad and the wire, 0.4: the wires that have charged him, in order (a list since 0.4.00's
+    // second wire rule; one number before), whether he is going round one, and the wire generation
+    // he last saw. Each only where there is one, so nobody else sums any differently.)
+    if (sh.rw !== undefined) {
+      mix(0x5257);
+      if (Array.isArray(sh.rw)) { mix(sh.rw.length); for (let k = 0; k < sh.rw.length; k++) mix(sh.rw[k]); } else mix(sh.rw);
+    }
+    if (sh.dm !== undefined) { mix(0x444d); mix(sh.dm); }
+    if (sh.wg !== undefined) { mix(0x5747); mix(sh.wg); }
   }
   const g = s.grid;
   for (let i = 0; i < g.length; i++) {
@@ -258,8 +293,12 @@ export class HostSession extends Session {
    *   from the date). Ignored with `state`, which keeps its own.
    * @param {boolean|string[]} [o.cards] a new game's cards (see createGame): true deals a hand
    *   (games from the menu), a list forces one (test options). Ignored with `state`.
+   * @param {Object} [o.visibility] where to learn whether this page is hidden: anything with a
+   *   `hidden` property and `addEventListener('visibilitychange', fn)`, such as the page's
+   *   `document` (passed in by the page; see watchVisibility). Left out, the host never says it
+   *   is away.
    */
-  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false, resume = false, settings = null, holiday = null, cards = null }) {
+  constructor({ name, seed = (Date.now() & 0x7fffffff) || 1, director = null, state = null, map = null, lobby = false, takeOver = false, resume = false, settings = null, holiday = null, cards = null, visibility = null }) {
     super();
     this.isHost = true;
     this.state = state || createGame({ seed, map, lobby, settings, holiday, cards });
@@ -298,6 +337,37 @@ export class HostSession extends Session {
     this._asked = new Set();
     /** @type {Map<number, number[]>} player id -> when his recent chat lines were sent */
     this._chatTimes = new Map();
+    /** True while this host's page is hidden (see watchVisibility). */
+    this.away = false;
+    this._unwatch = visibility ? this.watchVisibility(visibility) : null;
+  }
+
+  /**
+   * Follows whether this page is hidden and tells everyone when that changes: a browser runs a
+   * hidden page's timers about once a second, so while the host's page is hidden every other
+   * player's game moves in jerks, standing still between them. The session never looks at the page
+   * itself: it is handed something that knows (the page's `document`, or a stand-in in tests).
+   * @param {{hidden: boolean, addEventListener: Function, removeEventListener?: Function}} source
+   * @returns {() => void} stops following it
+   */
+  watchVisibility(source) {
+    const look = () => this.setAway(!!source.hidden);
+    source.addEventListener('visibilitychange', look);
+    look();
+    return () => { if (source.removeEventListener) source.removeEventListener('visibilitychange', look); };
+  }
+
+  /**
+   * Says whether the host's page is hidden: 'away' {on} to every client and on this session, when
+   * it changes (nothing when it does not). watchVisibility calls it; tests may call it directly.
+   */
+  setAway(on) {
+    on = !!on;
+    if (on === this.away) return;
+    this.away = on;
+    const msg = { t: 'away', on };
+    this.emit('away', msg);
+    this._broadcast(msg);
   }
 
   /**
@@ -494,6 +564,7 @@ export class HostSession extends Session {
       const others = [...this.conns.keys()];
       this.conns.set(conn, pid);
       conn.send({ t: 'welcome', me: pid, n: this._n, s: this.state });
+      if (this.away) conn.send({ t: 'away', on: true });
       this._copyN.set(conn, this._n);
       if (others.length) this._copy(others);
       this._announce({ t: 'players', text: `${this.state.players[pid].name} has clocked in.` });
@@ -592,8 +663,16 @@ export class ClientSession extends Session {
     /** The step the current game began at (after a return to the lobby). Anything the host sent
      *  about an earlier step belongs to the game before and is ignored. */
     this._floor = 0;
-    /** Counters, for tests and for anyone curious. */
-    this.stats = { checks: 0, mismatches: 0, copies: 0, jumps: 0 };
+    /** Counters, for tests and for anyone curious. `stops`: times the stream ran dry long enough
+     *  to stop the picture (BUFFER.dryMs); `want`: the steps behind the host it aims for now, at 1x. */
+    this.stats = { checks: 0, mismatches: 0, copies: 0, jumps: 0, stops: 0, want: BUFFER.min };
+    /** How many steps behind the host to aim for at 1x (it adapts: see BUFFER). */
+    this._want = BUFFER.min;
+    /** Milliseconds the stream has been dry for (a step due and nothing to play), and of play since the last stop. */
+    this._dryMs = 0;
+    this._calmMs = 0;
+    /** True while the host has said its page is hidden ('away'). */
+    this.hostAway = false;
     conn.onmessage = (m) => this._onMessage(m);
     conn.onclose = () => {
       // Everything the host managed to send is real: play it all, so that a player who takes
@@ -621,32 +700,64 @@ export class ClientSession extends Session {
     const dt = this._elapsed(now);
     if (!this.state) return;
     const speed = this.state.speed || 1;
-    // Stay a few steps behind the host (WANT_BEHIND): enough to ride out a late message
-    // without stopping. Run a little slower when closer than that and faster when further, so
-    // the gap settles there by itself without visible jumps.
+    // Stay a few steps behind the host (this._want, which adapts: BUFFER): enough to ride out a
+    // late message without stopping. Run a little slower when closer than that and faster when
+    // further, so the gap settles there by itself without visible jumps, also when the aim moves.
     const behind = this._top - this._n;
-    const want = WANT_BEHIND * speed;
+    const want = this._want * speed;
     this._lag += (behind - this._lag) * 0.05;
     const rate = 1 + Math.max(-0.15, Math.min(1, (this._lag - want) / (3 * want)));
     if (behind > FAR_BEHIND_SECS * TICK_HZ * speed) this._ask();
     // Copies and commands due at this very step take effect now; only steps wait for the clock.
     this._stepOnce(false);
     this._acc += dt * speed * rate;
-    let steps = 0;
+    let steps = 0, dry = false;
     while (this._acc >= TICK_MS) {
       if (steps >= MAX_STEPS) { this._acc = Math.min(this._acc, TICK_MS * 2); break; }
       if (!this._stepOnce()) {
         // Nothing more from the host yet: hold the picture at the end of this tick.
         this._acc = Math.min(this._acc, TICK_MS);
+        dry = true;
         break;
       }
       this._acc -= TICK_MS;
       steps++;
     }
+    this._buffer(dry, dt);
     if (this._askedAt >= 0 && this._n - this._askedAt > 10 * TICK_HZ * speed) {
       this._askedAt = -1; // no answer: ask again
       this._ask();
     }
+  }
+
+  /**
+   * Adapts how far behind the host this copy aims to run (BUFFER). `dry`: this update had a step
+   * due and nothing to play. A stop counts once a dry spell outlasts BUFFER.dryMs (a shorter one is
+   * not seen); each stop aims further back, and a long calm spell one step closer.
+   */
+  _buffer(dry, dt) {
+    if (dry && !this.hostAway && !this.state.pause) {
+      const was = this._dryMs;
+      this._dryMs += dt;
+      if (was <= BUFFER.dryMs && this._dryMs > BUFFER.dryMs) {
+        this.stats.stops++;
+        this._want = Math.min(BUFFER.max, this._want + BUFFER.grow);
+        this._calmMs = 0;
+      }
+    } else {
+      if (!dry) this._dryMs = 0;
+      this._calmMs += dt;
+      if (this._calmMs >= BUFFER.calmSecs * 1000 && this._want > BUFFER.min) {
+        this._want--;
+        this._calmMs = 0;
+      }
+    }
+    this.stats.want = this._want;
+  }
+
+  /** Milliseconds of play this copy aims to run behind the host right now (for display and tests). */
+  get buffer() {
+    return this._want * TICK_MS;
   }
 
   /**
@@ -775,6 +886,12 @@ export class ClientSession extends Session {
         break;
       case 'closed':
         this.emit('closed', { why: m.why });
+        break;
+      case 'away':
+        // The host's page was hidden, or is back. Stops meanwhile are its timer's, not the link's.
+        this.hostAway = !!m.on;
+        this._dryMs = 0;
+        this.emit('away', { on: this.hostAway });
         break;
       default:
         this.emit(m.t, m);

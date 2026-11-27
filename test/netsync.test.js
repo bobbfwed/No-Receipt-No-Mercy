@@ -173,15 +173,19 @@ test('a client whose copy drifts is noticed at once and given a fresh copy; the 
   assert.ok(same(gaz, host));
 });
 
-test('drift the checksum cannot see is repaired by the routine copy within ten seconds', () => {
+test('drift the checksum cannot see is repaired by the routine copy, now once a minute (0.4)', () => {
   const { host, clients } = game({ prepare: demo });
   const [steve] = clients;
   host.send({ c: 'start' });
   let now = run(host, clients, 2);
-  steve.state.ws.stolen = 999; // a statistic for the end-of-wave review: not in the checksum
-  now = run(host, clients, 11, now);
+  // A player's job title: kept for good, and not in the checksum. (Until 0.4 the routine copy came
+  // every ten seconds; it now comes once a minute, since the checksum catches real drift at once.)
+  steve.state.players[0].role = 'Drifted';
+  now = run(host, clients, 30, now);
+  assert.equal(steve.state.players[0].role, 'Drifted', 'no routine copy within half a minute');
+  now = run(host, clients, 30, now);
   assert.equal(steve.stats.mismatches, 0);
-  assert.notEqual(steve.state.ws.stolen, 999);
+  assert.notEqual(steve.state.players[0].role, 'Drifted');
   settle(host, clients, now);
   assert.ok(same(steve, host));
   assert.equal(steve.stats.jumps, 0, 'the routine copy fitted in without a jump');
@@ -388,6 +392,39 @@ test('the checksum notices small changes and ignores nothing that matters', () =
     assert.notEqual(checksum(c), base, String(t));
   }
   assert.equal(checksum(JSON.parse(JSON.stringify(s))), base, 'a copy has the same checksum');
+});
+
+test('the checksum covers a dad and the wire: every wire that charged him in order, going round, the wire generation', () => {
+  const s = createGame({ seed: 3 });
+  addPlayer(s, 'Dave');
+  const dad = { id: 9, k: 'dad', st: 0, x: 4.5, y: 5.5, hp: 10, mhp: 10, vx: 0, vy: 0 };
+  s.shoppers.push(dad);
+  const plain = checksum(s);
+  // A game with none of these sums as it did before they existed.
+  dad.rw = [40, 71];
+  const two = checksum(s);
+  assert.notEqual(two, plain);
+  const variants = [
+    (x) => { x.shoppers[0].rw = [71, 40]; }, // the same wires in the other order
+    (x) => { x.shoppers[0].rw = [40, 72]; },
+    (x) => { x.shoppers[0].rw = [40]; },
+    (x) => { x.shoppers[0].rw = [40, 71, 102]; },
+    (x) => { x.shoppers[0].dm = 1; },
+    (x) => { x.shoppers[0].wg = 2; },
+    (x) => { x.wireGen = 1; },
+  ];
+  const seen = new Set([two]);
+  for (const v of variants) {
+    const c = JSON.parse(JSON.stringify(s));
+    v(c);
+    const h = checksum(c);
+    assert.ok(!seen.has(h), String(v));
+    seen.add(h);
+  }
+  // (A save from before the list kept one number: it still sums.)
+  const old = JSON.parse(JSON.stringify(s));
+  old.shoppers[0].rw = 40;
+  assert.equal(typeof checksum(old), 'number');
 });
 
 // ---------------------------------------------------------------- big messages
