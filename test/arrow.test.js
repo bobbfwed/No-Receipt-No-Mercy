@@ -200,8 +200,11 @@ test('every lesson has something to point at, in every state it goes through, on
   assert.ok(seen['Spite up the Dumbwaiter'].touch.includes('swipe:10,5:10,13'), 'a finger lays a line of belts by dragging too');
   assert.ok(seen['Spite up the Dumbwaiter'].desk.includes('control:floor'), 'then back up');
   assert.ok(seen['An Unpaid Intern'].desk.includes('control:floor'), 'down again first');
-  assert.ok(seen['Share a line: the Splitter'].desk.includes('tile:10,12'), 'the belt to take out');
-  assert.ok(seen['Share a line: the Splitter'].touch.includes('button:remove'), 'a finger takes it out with the Remove tool');
+  // (0.4.01: a part goes straight on a plain belt, so nothing is taken out first.)
+  assert.ok(seen['Share a line: the Splitter'].desk.includes('button:split'), 'the Splitter, for the belt it goes on');
+  assert.ok(seen['Share a line: the Splitter'].desk.includes('tile:10,12'), 'then the belt it replaces');
+  assert.ok(!seen['Share a line: the Splitter'].touch.includes('button:remove'), 'a finger takes nothing out either');
+  assert.ok(!seen['A better label: the Rebrander'].touch.includes('button:remove'), 'nor for the Rebrander');
   assert.ok(seen['Running dry'].desk.includes('control:doors'));
   assert.ok(seen['Razor Wire: pick a direction'].desk.includes('button:wire'));
   assert.ok(seen['Reinforce the crates'].desk.includes('button:reinforce'));
