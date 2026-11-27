@@ -420,8 +420,8 @@ the final numbers below.
 Final numbers of the hunt (`node tools/perf/desync.mjs --games=16 --seed=101 --waves=14`, then 6 games
 of the Car Park at size l, then 6 of the Back Passage at size s with 80 ms delay and 150 ms jitter):
 **28 games, 224 minutes of play, 44,913 commands, 174 players joining and leaving mid-game, 495,337
-full state comparisons, 0 differences, 0 checksum mismatches.** Razor Wire was laid or turned
-4,500 times or so, charged dads 41 times and ran out 22 times during events. (Two earlier rounds
+full state comparisons, 0 differences, 0 checksum mismatches.** Razor Wire was laid, turned or cleared
+4,510 times, charged dads 41 times and ran out 22 times during events. (Two earlier rounds
 reported differences that turned out to be the hunt's own bookkeeping: commands applied at a step
 after its advance message go out in a second advance message for the same step, so the host's
 states are now kept by step and checksum.) So nothing in `src/net` or `src/sim` needed fixing, and
