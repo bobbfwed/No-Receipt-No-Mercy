@@ -24,6 +24,7 @@ const RULES = [
   [/press B \(or the Rebuild button in the build bar\)/g, 'tap the Rebuild button in the bar'],
   [/Click a building and choose what to upgrade\./g, 'Tap a building and choose what to upgrade.'],
   [/press R before placing to turn it\./g, 'use the rotate button at the end of the bar before placing to turn it.'],
+  [/Press R before placing to turn it\./g, 'Use the rotate button at the end of the bar before placing to turn it.'],
   [/drag belt over it again in the new direction, or point at it and press R\./g, 'drag belt over it again in the new direction, or tap it and choose Rotate.'],
   [/Press the mouse button on the first highlighted tile, drag straight down to the last one, and let go\./g, 'Put your finger on the first highlighted tile, drag straight down to the last one, and lift it.'],
   [/Press R until the arrow on the preview points DOWN\./g, 'Tap the rotate button at the end of the bar until its arrow points DOWN.'],

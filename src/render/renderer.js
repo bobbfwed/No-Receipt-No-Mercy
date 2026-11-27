@@ -32,13 +32,18 @@
 //                 (state.carts)
 //   effects.js    floating cash, speech blips, shots, beams, sprays, wreckage, upgrade sparkles
 //   guides.js     route guides and tutorial marks
+//   back.js       The Back (0.4), the floor under the shop: its belts, items and parts
 //   minimap.js    the whole map small, for the interface's corner (a separate canvas)
+// Which floor is drawn is view.floor (0 the shop, 1 The Back): the screen's own choice, never in
+// the game state. The floor not being looked at shows through faintly: drawn into an offscreen
+// layer of its own and laid over at low opacity, so overlapping parts do not add up into darker
+// patches and drawing code that resets globalAlpha cannot undo the faintness.
 // Buildings bigger than a tile are drawn once, from their anchor, when the loop reaches the
 // bottom-left tile of their footprint (so what stands in front of them is drawn after them);
 // their other tiles (`part`) are skipped everywhere.
 import {
   BUILD, ZONES, TUNE, TICK_HZ, ST, DIRS, SHOPPERS, defOf, canPlace, canUpgrade, statsOf, levelOf,
-  levelIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint, hasCard, supportDog, CARDS,
+  levelIn, maxIn, tracksOf, defaultTrack, upgradeCost, sizeOf, footprint, hasCard, supportDog, CARDS, canPlaceBack,
 } from '../sim/index.js';
 import { TILE, INK, rr, paint, label, font } from './paint.js';
 import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.js';
@@ -55,6 +60,7 @@ import { createMessSprites, drawMesses } from './messes.js';
 import { createEffects } from './effects.js';
 import { drawRoutes, drawMarks } from './guides.js';
 import { selectedReach, drawnBySelection } from './reach.js';
+import { createBackArt } from './back.js';
 
 const T = TILE;
 /** Closest zoom, in CSS pixels per tile. */
@@ -83,7 +89,9 @@ const stepScale = (step) => 2 ** ((step - 16) / 2);
  * @param {Object} session a HostSession or ClientSession
  */
 export function createRenderer(canvas, session) {
-  const ctx = canvas.getContext('2d');
+  const main = canvas.getContext('2d');
+  // Where everything is drawn: the canvas, or for a moment the faint layer (see beginLayer).
+  let ctx = main;
   // Canvas size in CSS pixels, and device pixels per CSS pixel.
   let cssW = 1, cssH = 1, dpr = 1;
   let seenW = -1, seenH = -1, seenDpr = 0;
@@ -100,6 +108,11 @@ export function createRenderer(canvas, session) {
   const buildingSprites = createBuildingSprites();
   const shopperSprites = createShopperSprites();
   const messSprites = createMessSprites();
+  const backArt = createBackArt();
+  // The faint floor's layer (see beginLayer), and whether it holds anything from the last frame.
+  const layer = document.createElement('canvas');
+  const lctx = layer.getContext('2d');
+  let layerUsed = false;
   const fx = createEffects();
   const floor = createFloorCache();
   let info = null;
@@ -265,6 +278,51 @@ export function createRenderer(canvas, session) {
     buildingSprites.setScale(r);
     shopperSprites.setScale(r);
     messSprites.setScale(r);
+    backArt.setScale(r);
+  }
+
+  /**
+   * Sends everything drawn from now until endLayer() into the faint layer, with the world transform
+   * and the map's clip, emptied first if it was used last frame.
+   */
+  function beginLayer(s) {
+    if (layer.width !== canvas.width || layer.height !== canvas.height) {
+      layer.width = canvas.width;
+      layer.height = canvas.height;
+    } else if (layerUsed) {
+      lctx.setTransform(1, 0, 0, 1, 0, 0);
+      lctx.clearRect(0, 0, layer.width, layer.height);
+    }
+    layerUsed = true;
+    lctx.setTransform(scale, 0, 0, scale, ox, oy);
+    lctx.save();
+    lctx.beginPath();
+    lctx.rect(0, 0, s.w * T, s.h * T);
+    lctx.clip();
+    ctx = lctx;
+  }
+
+  /**
+   * Lays the faint layer over the canvas at `alpha`, darkened first by `darken` (0 to 1) if given.
+   * `used` false: nothing was drawn into it, so nothing is laid over (and it need not be emptied).
+   */
+  function endLayer(alpha, darken = 0, used = true) {
+    lctx.restore();
+    ctx = main;
+    layerUsed = used;
+    if (!used) return;
+    if (darken) {
+      lctx.setTransform(1, 0, 0, 1, 0, 0);
+      lctx.globalCompositeOperation = 'source-atop';
+      lctx.fillStyle = `rgba(12,14,18,${darken})`;
+      lctx.fillRect(0, 0, layer.width, layer.height);
+      lctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(layer, 0, 0);
+    ctx.restore();
   }
 
   function draw(view = {}) {
@@ -297,6 +355,8 @@ export function createRenderer(canvas, session) {
     F.esa = hasCard(s, 'supportdog');
     F.bde = hasCard(s, 'bde');
     fx.handle(events, now, s);
+    backArt.handle(events, now);
+    const floorNo = view.floor === 1 ? 1 : 0;
 
     // While the game is paused (0.3.02) the host's clock still runs its empty steps, so the fraction
     // between ticks keeps cycling; held at its last value, shoppers stand still instead of jogging
@@ -328,27 +388,10 @@ export function createRenderer(canvas, session) {
     // Doors slide open while a wave is on.
     doorOpen += ((s.phase === 'wave' ? 1 : 0) - doorOpen) * Math.min(1, dt * 4);
     drawDynamic(ctx, info, doorOpen, fx.timers.tillAt, now);
-    // Holding a machine: light up the marked floor it may go on.
-    const zch = view.tool && BUILD[view.tool] && BUILD[view.tool].zone;
-    if (zch && info.patches.length) drawZoneGlow(zch, now);
-    // Teenagers' slushie spills and wrecked buildings, on the floor under everything else.
-    if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites, s.w);
-    if (s.rubble && s.rubble.length) drawWreckage(s);
-
-    drawBuildings(s, now);
-
-    if (view.route) drawRoutes(ctx, s, now / 1000);
-    const bossGrow = F.bde ? CARDS.bde.size : 1;
-    fx.draw(ctx, now, 0, sprites, cam.zoom, bossGrow);
-    drawShoppers(s, alpha);
-    fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
+    if (floorNo === 1) drawBackView(s, view, now, alpha);
+    else drawShopView(s, view, now, alpha);
     if (view.aim) drawAim(s, view.hover);
     if (view.lift) drawLift(s, view);
-    // The building whose sheet is open: its reach, and the reach after a Range upgrade while that
-    // button is pointed at (see reach.js). The hover preview then leaves that building's reach out.
-    const sel = selectedReach(s, view);
-    if (sel) drawSelected(s, sel);
-    drawPreview(s, view, sel);
     if (view.marks && view.marks.length) drawMarks(ctx, view.marks, now, s.w, s.h);
     ctx.restore();
 
@@ -360,6 +403,134 @@ export function createRenderer(canvas, session) {
     // A boss got his refund: the edges of the screen throb red for a moment, wherever you are looking.
     const esc = now - fx.timers.bossEscAt;
     if (esc >= 0 && esc < 1800) bossAlarm(esc / 1800);
+  }
+
+  /**
+   * The shop floor (view.floor 0): as it has always been, with The Back showing through faintly
+   * (darkened, about a quarter strength) on the floor and under the buildings, and the shopper
+   * routes, which are always drawn (the owner, 0.4), a little fainter while shoppers are about.
+   */
+  function drawShopView(s, view, now, alpha) {
+    // Holding a machine: light up the marked floor it may go on.
+    const zch = view.tool && BUILD[view.tool] && BUILD[view.tool].zone;
+    if (zch && info.patches.length) drawZoneGlow(zch, now);
+    // Teenagers' slushie spills and wrecked buildings, on the floor under everything else.
+    if (s.messes && s.messes.length) drawMesses(ctx, s.messes, alpha, messSprites, s.w);
+    if (s.rubble && s.rubble.length) drawWreckage(s);
+    if (s.back) {
+      beginLayer(s);
+      const n = backArt.draw(ctx, s, vis, F, base, beltSprites, now);
+      endLayer(0.27, 0.45, n > 0);
+    }
+
+    drawBuildings(s, now);
+
+    if (view.route) drawRoutes(ctx, s, now / 1000, view.routeFaint ? 0.6 : 1);
+    const bossGrow = F.bde ? CARDS.bde.size : 1;
+    fx.draw(ctx, now, 0, sprites, cam.zoom, bossGrow);
+    drawShoppers(s, alpha);
+    fx.draw(ctx, now, 1, sprites, cam.zoom, bossGrow);
+    // The building whose sheet is open: its reach, and the reach after a Range upgrade while that
+    // button is pointed at (see reach.js). The hover preview then leaves that building's reach out.
+    const sel = selectedReach(s, view);
+    if (sel) drawSelected(s, sel);
+    drawPreview(s, view, sel);
+  }
+
+  /**
+   * The Back (view.floor 1): the store's floor darkened (its walls and shelves go all the way down,
+   * so they must still read), The Back's parts at full strength, and the shop above faintly, so the
+   * fight can be followed from below: the routes, then the buildings and shoppers at about 30%, and
+   * a dashed outline round each security building. The shop's effects and floating money are left
+   * out: from down here they are noise.
+   */
+  function drawBackView(s, view, now, alpha) {
+    ctx.fillStyle = 'rgba(10,12,18,0.52)';
+    ctx.fillRect(0, 0, s.w * T, s.h * T);
+    backArt.draw(ctx, s, vis, F, base, beltSprites, now, true);
+    if (view.route) drawRoutes(ctx, s, now / 1000, 0.45, false);
+    beginLayer(s);
+    drawBuildings(s, now);
+    drawShoppers(s, alpha);
+    // (Darkened a little first, so the old shop belts' bright chevrons do not compete with The Back's.)
+    endLayer(0.3, 0.25);
+    drawFootprints(s);
+    drawBackPreview(s, view);
+  }
+
+  /** A dashed white outline round every security building on screen, for the view from The Back. */
+  function drawFootprints(s) {
+    const grid = s.grid, w = s.w;
+    const { y0, x1, y1 } = vis, x0 = Math.max(0, vis.x0 - 2);
+    ctx.beginPath();
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0, i = y * w + x0; x < x1; x++, i++) {
+        const b = grid[i];
+        if (!b || b.part !== undefined || BUILD[b.k]?.group !== 'security') continue;
+        const r = rectOf(b, i, w);
+        ctx.rect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
+      }
+    }
+    ctx.setLineDash(RANGE_DASH);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.stroke();
+    ctx.setLineDash(NO_DASH);
+  }
+
+  /**
+   * The placement preview in The Back: the held part's ghost, green or red as canPlaceBack says
+   * (with its out arrow when it turns), or the Remove tool's red cross (none on a Returns Drop,
+   * which nobody can remove), or a plain outline round the tile under the mouse.
+   */
+  function drawBackPreview(s, view) {
+    const h = view.hover;
+    if (!h || !(h.x >= 0 && h.y >= 0 && h.x < s.w && h.y < s.h)) return;
+    const i = h.y * s.w + h.x;
+    const px = h.x * T, py = h.y * T;
+    const here = s.back ? s.back[i] : 0;
+    const tool = view.tool;
+    if (tool === 'remove') {
+      const can = !!here && !BUILD[here.k].fixed;
+      rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+      ctx.fillStyle = can ? 'rgba(239,68,68,0.45)' : 'rgba(239,68,68,0.12)';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ef4444';
+      ctx.stroke();
+      if (can) {
+        const cx = px + T / 2, cy = py + T / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 9, cy - 9); ctx.lineTo(cx + 9, cy + 9);
+        ctx.moveTo(cx + 9, cy - 9); ctx.lineTo(cx - 9, cy + 9);
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = INK; ctx.lineWidth = 7; ctx.stroke();
+        ctx.strokeStyle = '#ff4b3a'; ctx.lineWidth = 4; ctx.stroke();
+        ctx.lineCap = 'butt';
+      }
+      return;
+    }
+    const def = tool ? BUILD[tool] : null;
+    if (!def || !def.back) { tileOutline(px, py, 'rgba(255,255,255,0.7)', 2); return; }
+    const d = def.rot ? (view.dir | 0) & 3 : 0;
+    const ok = canPlaceBack(s, tool, h.x, h.y, session.me, d) === null;
+    rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+    ctx.fillStyle = ok ? 'rgba(74,222,128,0.35)' : 'rgba(239,68,68,0.4)';
+    ctx.fill();
+    ctx.globalAlpha = 0.75;
+    backArt.drawGhost(ctx, s, tool, h.x, h.y, d, F, base, beltSprites);
+    ctx.globalAlpha = 1;
+    rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+    ctx.fillStyle = ok ? 'rgba(74,222,128,0.18)' : 'rgba(239,68,68,0.3)';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = ok ? '#22c55e' : '#ef4444';
+    ctx.stroke();
+    // Which way it puts things out, at full strength, before it is built.
+    if (def.rot) {
+      ghost.k = tool; ghost.d = d;
+      drawFlow(ctx, ghost, i, F, buildingSprites, 'belt');
+    }
   }
 
   /** The red alarm round the edges of the screen after a boss reaches a till (k 0..1). */

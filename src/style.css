@@ -3197,3 +3197,66 @@ html, body { overscroll-behavior: none; }
   .inc-chip { display: block; white-space: nowrap; font: 900 0.8rem var(--font-heavy); color: var(--green-2); }
   .inc-tip { font-size: max(13px, 0.82rem); }
 }
+
+/* ---------------------------------------------------------------- The Back (0.4) */
+
+/* The floor switch: bottom right of the floor, a dark plate with a hazard stripe, as in the
+   owner's concept picture. DEB's bubble stands on top of it on a big screen. */
+.floor-switch {
+  position: absolute;
+  z-index: 9;
+  right: calc(0.7rem + env(safe-area-inset-right));
+  bottom: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.7rem;
+  padding: 0.3rem 0.45rem 0.3rem 0.4rem;
+  background: #2d343c;
+  color: var(--yellow);
+  border: 0.18rem solid var(--line);
+  border-radius: 0.55rem;
+  box-shadow: 0 0.25rem 0 rgba(0, 0, 0, 0.45);
+  font: 900 0.95rem var(--font-heavy);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.floor-switch:hover { background: #38414b; }
+.floor-switch:active { transform: translateY(0.1rem); box-shadow: 0 0.12rem 0 rgba(0, 0, 0, 0.45); }
+.fs-stripes {
+  align-self: stretch;
+  width: 0.65rem;
+  border: 0.12rem solid var(--line);
+  border-radius: 0.15rem;
+  background: repeating-linear-gradient(-45deg, var(--yellow) 0 0.3rem, #222 0.3rem 0.6rem);
+}
+.fs-key {
+  padding: 0.05rem 0.45rem;
+  background: #fbfbf4;
+  color: var(--ink);
+  border: 0.12rem solid var(--line);
+  border-bottom-width: 0.25rem;
+  border-radius: 0.3rem;
+  font: 900 0.75rem var(--font-heavy);
+}
+/* In The Back it is a lighter plate, so it is plain at a glance which floor you are on. */
+.floor-switch.is-back { background: var(--yellow); color: var(--ink); }
+.floor-switch.is-back:hover { background: #fde047; }
+.floor-switch.is-back .fs-stripes { background: repeating-linear-gradient(-45deg, #2d343c 0 0.3rem, var(--yellow) 0.3rem 0.6rem); }
+@media (min-width: 1100px) and (min-height: 560px) {
+  .game .deb { bottom: 4.2rem; }
+}
+/* A touch screen has no Tab key, and the camera pad stands in the corner: the switch goes beside it. */
+@media (pointer: coarse) {
+  .fs-key { display: none; }
+  .floor-switch { right: calc(0.5rem + 56px + env(safe-area-inset-right)); bottom: 0.5rem; min-height: 44px; }
+}
+@media (max-width: 1099px), (max-height: 559px) {
+  .floor-switch { font-size: 0.8rem; min-height: 40px; gap: 0.4rem; }
+  .game.is-training .deb { bottom: calc(0.8rem + 44px); }
+}
+.game.ended .floor-switch, .game.in-lobby .floor-switch, .game.is-office .bb-back { display: none; }
+
+/* The Back's group in the build bar. */
+.bb-back { border-color: #a3a9b0; }
+.bb-back .bb-label { color: #e5e7eb; }

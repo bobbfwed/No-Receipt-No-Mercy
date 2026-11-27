@@ -412,6 +412,8 @@ test('on a touch screen no lesson or help text mentions a key or the mouse', asy
   }
   assert.ok(ownWords >= 10, 'the lessons that place buildings have touch wording of their own');
   for (const v of Object.values(help.HOW)) texts.push(v.does, v.use);
+  // (The Back's parts, 0.4, on their own build bar.)
+  for (const v of Object.values(help.BACK_HOW)) texts.push(v.does, v.use);
   for (const v of [help.HOW_REMOVE, help.HOW_UPGRADE, help.HOW_REBUILD]) texts.push(v.does, v.use);
   // The live hints too, at the moments a player is most likely to see them.
   const session = trainingSession();

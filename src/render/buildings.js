@@ -105,6 +105,16 @@ export function drawBelt(ctx, s, x, y, d, shape, phase, sprites, base) {
     const frontOpen = accepts(s, x + DIRS[d][0], y + DIRS[d][1], d);
     type = (backOpen ? 0 : 1) | (frontOpen ? 0 : 2);
   }
+  drawBeltTile(ctx, x, y, d, shape, type, phase, sprites, base);
+}
+
+/**
+ * Draws one belt tile of a look already worked out: `type` as createBeltSprites' get (0-3 straight
+ * with end rollers, 4 a corner; a corner shape always draws the corner). The Back's belts (0.4,
+ * src/render/back.js) work out their own ends and use this, so both floors' belts look the same.
+ */
+export function drawBeltTile(ctx, x, y, d, shape, type, phase, sprites, base) {
+  if (shape !== 0) type = 4;
   const step = Math.min(PHASES - 1, ((phase / SP) * PHASES) | 0);
   const img = sprites.get(type, step);
   const k = base.s, m = shape === -1 ? -1 : 1;

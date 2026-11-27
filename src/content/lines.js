@@ -1590,6 +1590,24 @@ export const NOPE = {
     u("That's not its floor, {p}. Machines are fussy about where they go. Like your wife about where you sleep."),
     r("Wrong floor again, {p}. I've had the floor repainted in bigger letters. Next comes a picture. Then, if needed, a puppet show."),
   ],
+  // The Back (0.4): somebody tried to remove a Returns Drop, which the store put there and nobody
+  // can take out (it can only be turned).
+  fixed: [
+    "That's the Returns Drop, {p}. It's bolted into the building. You can turn it. You can't take it out. Like your wife's mother.",
+    "You can't remove the Returns Drop, {p}. The returns keep coming whether you like it or not. That's what returns are.",
+    "Leave the chute alone, {p}. It's where the junk comes from. Pulling it out won't stop the junk. It'll just land on you.",
+    'The Returns Drop stays, {p}. Head Office bolted it in. Head Office bolts in everything it wants to keep. Not you, notably.',
+    u("Nice try, {p}. That hole has been spewing returns since 1987. It'll be spewing them at your funeral. Point it somewhere useful."),
+    r("{p} is trying to remove the Returns Drop. That's like trying to remove the shit end of the pipe, {p}. It's the whole point of the pipe."),
+  ],
+  // The Back (0.4): a shop building in The Back, or a Back part on the shop floor. (The interface
+  // only offers the right floor's kinds, so this is for a joined player whose screen lagged.)
+  kind: [
+    "That doesn't go on this floor, {p}. Belts live downstairs now. Security lives upstairs. Like your marriage.",
+    'Wrong floor, {p}. Press Tab and look where you are. Then look where that goes.',
+    "You can't build that here, {p}. Upstairs things go upstairs. Downstairs things go downstairs. It's a store, not a mind map.",
+    u("Wrong floor, {p}. You've done the drunk thing where you walk into the wrong house, but with a conveyor belt."),
+  ],
   // A big building does not fit there.
   fit: [
     "It doesn't fit there, {p}. Big things need room. You'd know, if you'd ever had anything big.",

@@ -50,10 +50,12 @@ const narrow = () => innerWidth < 1100 || innerHeight < 560;
  *   this one, or rejects if that could not be done, and then the usual "host has left" shows.
  * @param {() => void} [o.onLobby] host of a multiplayer game only: the end screen's button takes
  *   everyone back to the lobby with this (see HostSession.backToLobby) instead of reloading
+ * @param {Object} [o.look] how the first frame is looked at (page options, see main.js): floor (1
+ *   The Back), and for screenshots cam ('x,y,zoom'), hold (a kind to hold), dir, hover ('x,y')
  */
 export function startGame(session, {
   roomCode = null, roomKind = null, prepare = null, ff = 0, autostart = false, mount,
-  tutorial = false, tutorialStep = 0, onExit = () => {}, sound = null, onHostLost = null, onLobby = null,
+  tutorial = false, tutorialStep = 0, onExit = () => {}, sound = null, onHostLost = null, onLobby = null, look = null,
 }) {
   const canvas = h('canvas', { class: 'world', 'aria-label': 'The warehouse floor. Use the mouse to build.' });
   const stage = h('main', { class: 'stage' }, canvas);
@@ -192,6 +194,26 @@ export function startGame(session, {
   const rebuildPop = createRebuildPop(session, { rebuild: () => input.rebuild() });
   stage.append(rebuildPop.el);
 
+  // The floor switch (0.4): the bottom right of the floor, over DEB's corner (style.css lifts her
+  // above it). It says where it takes you; Tab does the same. On a touch screen it is the only way.
+  const floorWord = h('span', { class: 'fs-word' });
+  const floorKey = h('kbd', { class: 'fs-key' }, 'Tab');
+  const floorBtn = h('button', {
+    type: 'button', class: 'floor-switch',
+    onclick: () => input.setFloor(input.floor ? 0 : 1),
+  }, h('span', { class: 'fs-stripes', 'aria-hidden': 'true' }), floorWord, floorKey);
+  stage.append(floorBtn);
+  let shownFloor = -1;
+  function updateFloorBtn() {
+    if (input.floor === shownFloor) return;
+    shownFloor = input.floor;
+    const back = shownFloor === 1;
+    setText(floorWord, back ? 'BACK TO THE FLOOR' : 'CHECK IN THE BACK');
+    floorBtn.setAttribute('aria-label', back ? 'Back to the shop floor (Tab)' : 'Check in The Back, the floor under the shop (Tab)');
+    floorBtn.classList.toggle('is-back', back);
+    root.classList.toggle('on-back', back);
+  }
+
   // Before the game starts: pick the store and press Ready. It sits where the players list goes.
   const lobby = createLobby(session, { renderer, playSound });
   stage.append(lobby.el);
@@ -324,6 +346,7 @@ export function startGame(session, {
   watcher.observe(stage);
   // On a map too big for the screen, start by looking at this player's own entrance.
   input.goHome();
+  if (look) applyLook(look);
   session.start();
 
   // ---- Drawing loop --------------------------------------------------------------------------------
@@ -349,6 +372,7 @@ export function startGame(session, {
     }
     top.update(s);
     updatePause(s);
+    updateFloorBtn();
     players.update(s);
     bar.update(s);
     planner.update(s);
@@ -359,6 +383,14 @@ export function startGame(session, {
       const card = !office && !bar.info.classList.contains('hidden') ? bar.info.offsetHeight : 0;
       const lift = card ? `${card + 16}px` : '';
       if (rebuildPop.el.style.bottom !== lift) rebuildPop.el.style.bottom = lift;
+    }
+    // The floor switch stands on the held tool's card too, where the card reaches across under it
+    // (a phone, where the card is as wide as the floor).
+    {
+      const card = !office && !bar.info.classList.contains('hidden') ? bar.info.getBoundingClientRect() : null;
+      const me = card ? floorBtn.getBoundingClientRect() : null;
+      const lift = card && card.right > me.left && card.left < me.right ? `${card.height + 16}px` : '';
+      if (floorBtn.style.bottom !== lift) floorBtn.style.bottom = lift;
     }
     // A sheet over the bottom of the floor (the held tool's card, or a tapped building's actions):
     // on a phone DEB's bubble makes room for it.
@@ -384,7 +416,7 @@ export function startGame(session, {
       root.classList.toggle('in-lobby', inLobby);
       renderer.resize();
       if (inLobby) renderer.fit(); else input.goHome();
-      if (inLobby) input.setTool(null);
+      if (inLobby) { input.setTool(null); input.setFloor(0); }
     }
     // The small map only earns its space when the whole store does not fit on screen.
     const r = renderer.viewRect();
@@ -426,11 +458,12 @@ export function startGame(session, {
     const bossUp = bossBar.update(s);
     if (bossUp !== wasBoss) { wasBoss = bossUp; root.classList.toggle('boss-up', bossUp); }
     const view = input.view();
-    // Show where shoppers will walk whenever the player is planning: between waves, while
-    // holding something to build, and all through training. Head Office always sees them: the
-    // routes are what he is planning against.
+    // Where shoppers will walk is always shown (the owner, 0.4). While they are on the floor it is a
+    // little fainter, unless the player is planning: holding something to build, in training, or
+    // Head Office, for whom the routes are what he is planning against.
     // (view.tool is also a building being dragged out of the bar.)
-    view.route = office || !!training || s.phase === 'build' || s.phase === 'lobby' || !!view.tool;
+    view.route = true;
+    view.routeFaint = s.phase === 'wave' && !office && !training && !view.tool;
     // Nor does he get the tile outline under the mouse that says "you could build here".
     if (office) view.hover = null;
     // The building whose sheet is open, and the upgrade pointed at in it: the floor shows its reach,
@@ -577,6 +610,24 @@ export function startGame(session, {
       y = Math.max(pill ? pill.y + pill.h : 0, cards ? cards.y + cards.h : 0) + gap;
     }
     income.place({ x, y, h: row.h });
+  }
+
+  /** The page options for the first frame (see main.js): which floor, and for screenshots a view and a held kind. */
+  function applyLook(o) {
+    if (o.floor) input.setFloor(1);
+    if (o.cam) {
+      const [cx, cy, cz] = String(o.cam).split(',').map((v) => (v === '' ? NaN : Number(v)));
+      if (cz > 0) renderer.zoomBy(cz / renderer.cam.zoom);
+      renderer.centerOn(Number.isFinite(cx) ? cx : renderer.cam.x, Number.isFinite(cy) ? cy : renderer.cam.y);
+    }
+    if (o.hold) {
+      input.setTool(o.hold);
+      for (let n = 0; n < ((o.dir | 0) & 3); n++) input.rotate();
+    }
+    if (o.hover) {
+      const [x, y] = String(o.hover).split(',').map(Number);
+      if (Number.isInteger(x) && Number.isInteger(y)) input.setHover({ x, y });
+    }
   }
 
   // For the test pages in tools/, which drive the game with made-up mouse and key events and

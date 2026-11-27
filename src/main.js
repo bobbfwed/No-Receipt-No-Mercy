@@ -23,6 +23,11 @@
 //                                 where the menu would deal them (&lobby=1)
 //   &cards=litter,hardy:karen     test only: exactly that hand (ids of CARDS, a per-kind card with
 //                                 its kind), with no deal phase
+//   &back=1                       start looking at The Back (0.4), the floor under the shop
+//   &cam=x,y,zoom                 test only: centre the view on tile x,y at zoom CSS pixels a tile
+//   &hold=conv&dir=1&hover=12,5   test only: hold a building or part (dir its facing) with the mouse
+//                                 on that tile, so a screenshot shows the build bar's card and the
+//                                 placement preview
 import { showError } from './ui/errors.js';
 import { holidayFor } from './content/holidays.js';
 import { HostSession, ClientSession } from './net/session.js';
@@ -52,6 +57,14 @@ const opts = {
   autostart: flag('autostart'),
 };
 if (opts.name) saveName(opts.name);
+/** How the first frame is looked at (see startGame's `look`): the page options above. */
+const look = {
+  floor: flag('back') ? 1 : 0,
+  cam: q.get('cam'),
+  hold: q.get('hold'),
+  dir: num('dir'),
+  hover: q.get('hover'),
+};
 const defaultName = () => opts.name || loadName() || 'New Guy';
 
 /** The store a new game is played in unless the player picks another: sized for one player. */
@@ -130,7 +143,7 @@ function show(session, options) {
   const onLobby = session.isHost && options.roomKind
     ? () => session.backToLobby({ seed: opts.seed, director: createDirector(), holiday: holidayNow(), cards: urlCards() })
     : null;
-  game = startGame(session, { mount: app, sound, onLobby, ...options });
+  game = startGame(session, { mount: app, sound, onLobby, look, ...options });
   // Whoever hosts keeps the game saved in his browser, so it can be carried on another day.
   // (Not the training shift, and not the test options that fast-forward or build by themselves.)
   const real = session.isHost && !options.tutorial && !options.prepare && !options.ff && !options.autostart;

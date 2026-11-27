@@ -47,7 +47,8 @@ const keyOf = (t) => `${t.x},${t.y}`;
  */
 export function startDrag({ mode, kind, start, dir, hasBuilding = () => false }) {
   const done = new Set();
-  const belt = mode === 'build' && kind === 'belt';
+  // (The Back's belt, 'conv', is laid the same way as the shop floor's, 0.4.)
+  const belt = mode === 'build' && (kind === 'belt' || kind === 'conv');
   const startKey = keyOf(start);
   let last = start;
   let pending = null;

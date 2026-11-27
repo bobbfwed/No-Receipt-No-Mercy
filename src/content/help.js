@@ -74,6 +74,34 @@ export const HOW = {
 };
 
 /**
+ * The Back's parts (0.4), for the same info card when one is picked on The Back's build bar. Nothing
+ * in The Back blocks shoppers, so they have no `maze` line. If BACK in constants.js changes (belt
+ * speed, items to a tile), update the numbers here.
+ */
+export const BACK_HOW = {
+  conv: {
+    does: 'Carries whatever is put on it, in the direction of its arrows: two tiles a second, three items to a tile. Returned junk comes down the Returns Drops onto belts.',
+    use: 'Drag to lay a line: the belts follow your drag and go round corners by themselves. Items wait at the end of a belt that has nowhere to go. Turning a belt is free: drag belt over it again in the new direction, or point at it and press R.',
+  },
+  split: {
+    does: 'Takes items from the belt behind it and deals them out in turn to the front, the left and the right, skipping any way that is full or has nothing to take them.',
+    use: 'Run a belt into its back and lay belts away from any of its three other sides. One line in, up to three out, shared evenly. Press R before placing to turn it.',
+  },
+  over: {
+    does: 'Two belts crossing without mixing: one runs east-west underneath, the other north-south over the top.',
+    use: 'Put it where two lines must cross and run belts into and out of it on both lines. Each lane goes the way the belt feeding it goes.',
+  },
+  intern: {
+    does: 'Stands between two tiles. Picks the first item off the belt behind him that the tile in front of him will take, and hands it over. He is not paid, and it shows.',
+    use: 'Put him beside a belt, facing away from it, with what you want fed in front of him: another belt, a Splitter, a Clearance Bin. Press R before placing to turn it.',
+  },
+  bin: {
+    does: 'Takes anything from any side and gets rid of it. Junk pays nothing; leftover supplies pay pennies.',
+    use: 'Put one at the end of a line, so the line keeps moving instead of jamming up when nothing downstream wants what is on it.',
+  },
+};
+
+/**
  * The shoppers: `trick` = what makes this one different, `beat` = what works against it.
  * Shown in the in-game help, in the order they first appear.
  */

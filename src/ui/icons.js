@@ -53,6 +53,28 @@ const BUILDING = {
     <rect x="3" y="20" width="34" height="7" rx="1.5" fill="#f472b6" ${S}/>
     <path d="M9 20l4-9h7l-3 9z" fill="#fde047" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/>
     <path d="M26 20l2-11" stroke="#6b3f17" stroke-width="1.6"/><circle cx="28.3" cy="8" r="3.3" fill="#fb923c" stroke="#111" stroke-width="1.4"/>`,
+  // The Back's parts (0.4).
+  conv: `<rect x="2" y="9" width="36" height="22" rx="3" fill="#2b2f36" ${S}/>
+    <path d="M8 14l5 6-5 6M17 14l5 6-5 6M26 14l5 6-5 6" fill="none" stroke="#facc15" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="M30 5l3-3 3 3-3 3z" fill="#c8915a" stroke="#111" stroke-width="1.2"/>`,
+  split: `<path d="M2 15h14q6 0 10-6l4-6M16 25q6 0 10 6l4 6M2 15v10h36" fill="none" stroke="#2b2f36" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M10 20l11-4 7-10 5 3-6 11 6 11-5 3-7-10z" fill="#d4d8dc" stroke="#111" stroke-width="2" stroke-linejoin="round"/>`,
+  over: `<rect x="13" y="2" width="14" height="36" fill="#2b2f36" ${S}/>
+    <rect x="2" y="13" width="36" height="14" fill="#2b2f36" ${S}/>
+    <rect x="10" y="10" width="20" height="20" fill="#facc15" ${S}/>
+    <path d="M10 14l4-4M10 22l12-12M10 30l20-20M18 30l12-12M26 30l4-4" stroke="#111" stroke-width="2.4"/>
+    <rect x="15" y="10" width="10" height="20" fill="#2b2f36" stroke="#111" stroke-width="1.5"/>
+    <path d="M17 22l3-4 3 4" fill="none" stroke="#facc15" stroke-width="2"/>`,
+  intern: `<circle cx="20" cy="9" r="6.5" fill="#f2c9a0" ${S}/>
+    <path d="M13.5 8q1-7 6.5-7t6.5 7q-3-3-6.5-3t-6.5 3z" fill="#6b4423" stroke="#111" stroke-width="1.5"/>
+    <path d="M11 36v-14q0-7 9-7t9 7v14z" fill="#ff8c1a" ${S}/>
+    <path d="M12 25h16M12 30h16" stroke="#f7f3b0" stroke-width="2"/>
+    <path d="M28 20l8-3" stroke="#ff8c1a" stroke-width="3.5" stroke-linecap="round"/>`,
+  bin: `<rect x="4" y="5" width="32" height="30" rx="4" fill="#9aa1a9" ${S}/>
+    <rect x="8" y="9" width="24" height="18" fill="#2f3439"/>
+    <path d="M8 13l14 14M8 21l6 6M14 9l18 18M22 9l10 10M8 27l18-18M8 19l10-10M18 27l14-14M26 27l6-6" stroke="#cfd4d8" stroke-width="1"/>
+    <rect x="3" y="25" width="34" height="10" rx="2" fill="#d9372b" ${S}/>
+    <path d="M9 30h22" stroke="#fff" stroke-width="2.5" stroke-dasharray="3 1.5"/>`,
   upgrade: `<circle cx="20" cy="20" r="15" fill="#16a34a" ${S}/>
     <path d="M12 21l8-9 8 9M12 29l8-9 8 9" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`,
   rebuild: `<circle cx="20" cy="20" r="15" fill="#2563eb" ${S}/>

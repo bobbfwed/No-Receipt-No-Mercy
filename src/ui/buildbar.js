@@ -1,12 +1,12 @@
 // The build bar: one button per building, grouped Factory and Security, plus the Upgrade and
-// Remove tools.
+// Remove tools. In The Back (0.4) the same bar shows The Back's parts instead, with Remove.
 import { BUILD, TUNE, ZONES, anchorOf, levelOf, rebuildDeal, buildPrice } from '../sim/index.js';
 import { tracksInfo } from './upgradetext.js';
 import { h, setClass, money } from './dom.js';
 import { buildingIcon } from './icons.js';
-import { BUILD_KEYS, HOTKEYS } from './input.js';
+import { BUILD_KEYS, BACK_KEYS, hotkeyOf } from './input.js';
 import { longPress, touchedLast } from './touch.js';
-import { HOW, HOW_REMOVE, HOW_UPGRADE, HOW_REBUILD } from '../content/help.js';
+import { HOW, BACK_HOW, HOW_REMOVE, HOW_UPGRADE, HOW_REBUILD } from '../content/help.js';
 import { worded, isTouch, PLACE_BY_TOUCH } from '../content/touch.js';
 
 // On a phone the info card is a sheet over the floor; the player can fold it down to one line,
@@ -20,7 +20,7 @@ try { const v = localStorage.getItem(FOLD_KEY); if (v !== null) folded = v === '
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
 /** Names short enough for a button; the tooltip has the full one. */
-const SHORT = { chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
+const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', chute: 'Chute', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
@@ -29,6 +29,9 @@ const TOOLS = {
   rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true },
   remove: { name: 'Remove', key: 'X', price: `${Math.round(TUNE.sellBack * 100)}% back`, how: HOW_REMOVE, keys: 'key X or Delete' },
 };
+
+/** What a building or part does and how to use it, for the tooltip and the card. */
+const howOf = (k) => HOW[k] || BACK_HOW[k];
 
 const one = (n) => (Math.round(n * 10) / 10).toString();
 
@@ -50,7 +53,7 @@ export function createBuildBar(input, session) {
     const def = BUILD[k];
     const lines = [];
     if (def) {
-      const how = HOW[k];
+      const how = howOf(k);
       lines.push(h('div', { class: 'tip-head' }, h('b', null, def.name), h('span', { class: 'tip-cost' }, `${priceOf(k)}`)));
       if (priceNote(k)) lines.push(h('small', null, `${priceOf(k)}${priceNote(k)}`));
       lines.push(h('p', null, how ? worded(how.does) : def.desc));
@@ -58,9 +61,10 @@ export function createBuildBar(input, session) {
       const facts = [];
       if (how && how.maze) facts.push(how.maze.replace(/\.$/, ''));
       if (def.zone) facts.push(`${ZONES[def.zone].name} floor only`);
+      if (def.back) facts.push('The Back: shoppers never touch it');
       if (def.rot) facts.push('R rotates');
       if (def.size) facts.push(`${def.size[0]} x ${def.size[1]} tiles`);
-      lines.push(h('small', null, `${facts.join(' · ')} · key ${HOTKEYS[BUILD_KEYS.indexOf(k)]}`));
+      lines.push(h('small', null, `${facts.join(' · ')} · key ${hotkeyOf(k)}`));
     } else {
       const t = TOOLS[k];
       lines.push(h('div', { class: 'tip-head' }, h('b', null, t.name)));
@@ -80,7 +84,7 @@ export function createBuildBar(input, session) {
 
   function makeButton(k, i) {
     const def = BUILD[k], t = TOOLS[k];
-    const key = t ? t.key : HOTKEYS[i];
+    const key = t ? t.key : hotkeyOf(k);
     const btn = h('button', {
       type: 'button', class: `bb-btn grp-${def ? def.group : 'tool'} tool-${k}`, 'aria-pressed': 'false',
       'aria-describedby': 'build-tip', 'data-k': k,
@@ -108,6 +112,10 @@ export function createBuildBar(input, session) {
   const groups = ['factory', 'security'].map((g) => h('div', { class: `bb-group bb-${g}`, role: 'group', 'aria-label': g },
     h('span', { class: 'bb-label' }, g.toUpperCase()),
     h('div', { class: 'bb-btns' }, BUILD_KEYS.map((k, i) => (BUILD[k].group === g ? makeButton(k, i) : null)))));
+  // The Back's parts (0.4): shown instead of the two groups above while The Back is looked at.
+  const backGroup = h('div', { class: 'bb-group bb-back hidden', role: 'group', 'aria-label': 'The Back' },
+    h('span', { class: 'bb-label' }, 'THE BACK'),
+    h('div', { class: 'bb-btns' }, BACK_KEYS.map((k, i) => makeButton(k, i))));
   const tools = h('div', { class: 'bb-group bb-tools', role: 'group', 'aria-label': 'tools' },
     h('span', { class: 'bb-label' }, 'TOOLS'), h('div', { class: 'bb-btns' }, makeButton('upgrade', -1), makeButton('rebuild', -1), makeButton('remove', -1)));
 
@@ -123,7 +131,7 @@ export function createBuildBar(input, session) {
   const info = h('aside', { class: `bb-info hidden${folded ? ' folded' : ''}`, 'aria-live': 'polite' });
   // The buttons scroll sideways on a narrow screen. On a wide one this wrapper is invisible to
   // the layout (display: contents), so the bar is laid out as it always was.
-  const scroller = h('div', { class: 'bb-scroll' }, groups, tools);
+  const scroller = h('div', { class: 'bb-scroll' }, groups, backGroup, tools);
   const el = h('footer', { class: 'buildbar' }, scroller, info, hint);
   // A finger (or pen) can drag a building up out of its button onto the floor (0.3.03, input.js);
   // a sideways swipe still scrolls the bar (touch-action: pan-x in style.css).
@@ -148,7 +156,7 @@ export function createBuildBar(input, session) {
 
   function showInfo(k) {
     const def = BUILD[k];
-    const how = def ? HOW[k] : TOOLS[k] ? TOOLS[k].how : null;
+    const how = def ? howOf(k) : TOOLS[k] ? TOOLS[k].how : null;
     setClass(info, 'hidden', !how);
     setClass(hint, 'hidden', !!how);
     if (!how) return;
@@ -157,14 +165,14 @@ export function createBuildBar(input, session) {
         h('span', { class: 'bbi-icon', html: buildingIcon(k) }),
         h('b', null, def ? def.name : TOOLS[k].name),
         // What it means for the maze, in two words.
-        def ? h('span', { class: 'bbi-maze' }, !def.blocks ? 'Walkable' : k === 'belt' ? 'Blocks all but dads' : 'Blocks everyone') : null,
+        def ? h('span', { class: 'bbi-maze' }, def.back ? 'The Back' : !def.blocks ? 'Walkable' : k === 'belt' ? 'Blocks all but dads' : 'Blocks everyone') : null,
         def && def.zone ? h('span', { class: 'bbi-maze bbi-zone', style: { background: ZONES[def.zone].color } }, `${ZONES[def.zone].name} only`) : null,
         def ? h('span', { class: 'bbi-cost' }, `${priceOf(k)}`) : null,
         foldBtn()),
       h('p', null, worded(how.does)),
       h('p', null, h('b', null, 'How: '), worded(how.use)));
     // On a touch screen: how a finger places it (0.3.03). (The belt's "How" already says drag.)
-    if (def && k !== 'belt' && isTouch()) info.append(h('p', { class: 'bbi-touch' }, PLACE_BY_TOUCH));
+    if (def && k !== 'belt' && k !== 'conv' && isTouch()) info.append(h('p', { class: 'bbi-touch' }, PLACE_BY_TOUCH));
   }
 
   /** With the upgrade tool held: what the building under the mouse has and what more it could have. */
@@ -219,13 +227,25 @@ export function createBuildBar(input, session) {
       tag.textContent = `${p}`;
       setClass(tag, 'cheaper', p < def.cost);
       setClass(tag, 'dearer', p > def.cost);
-      btn.setAttribute('aria-label', `${def.name}, ${p}${priceNote(k)}, key ${HOTKEYS[BUILD_KEYS.indexOf(k)]}`);
+      btn.setAttribute('aria-label', `${def.name}, ${p}${priceNote(k)}, key ${hotkeyOf(k)}`);
     }
     if (input.tool && BUILD[input.tool]) showInfo(input.tool);
   }
 
+  let lastFloor = 0;
   function update(s) {
     updatePrices(s);
+    // The floor being looked at (0.4): The Back's parts, or the shop's buildings and the Upgrade
+    // and Rebuild tools, which belong to the shop floor. (B still rebuilds from either floor.)
+    if (input.floor !== lastFloor) {
+      lastFloor = input.floor;
+      const back = lastFloor === 1;
+      for (const g of groups) setClass(g, 'hidden', back);
+      setClass(backGroup, 'hidden', !back);
+      setClass(buttons.get('upgrade'), 'hidden', back);
+      setClass(rebuildBtn, 'hidden', back);
+      setClass(el, 'on-back', back);
+    }
     const cash = Math.floor(s.players[session.me]?.cash ?? 0);
     if (cash !== lastCash) {
       lastCash = cash;

@@ -32,12 +32,19 @@ import { startDrag } from './drag.js';
 import { liftFraction, createPress, liftedSpot, edgeVelocity, barGesture, EDGE } from './lift.js';
 import { rebuildStatus } from './rebuild.js';
 
-// (The shop floor's kinds only: The Back's parts, 0.4, get their own bar in a later stage.)
+// The shop floor's kinds. The Back's parts (0.4) have their own bar and keys: BACK_KEYS below.
 export const BUILD_KEYS = SHOP_KINDS;
 /** Hotkeys 1-9 then 0, in the order of BUILD. */
 // (The first ten keep the keys they have always had; the two newer buildings follow on the same row.)
 const KEY_OF = { belt: '1', unpacker: '2', press: '3', packer: '4', chute: '5', crate: '6', sprinkler: '7', forklift: '8', wetfloor: '9', samples: '0', railgun: '-', salesman: '=' };
 export const HOTKEYS = BUILD_KEYS.map((k) => KEY_OF[k] || '');
+/** The parts a player can build in The Back (0.4; not the map's Returns Drops), keys 1 to 5 there. */
+export const BACK_KEYS = Object.keys(BUILD).filter((k) => BUILD[k].back && !BUILD[k].fixed);
+export const BACK_HOTKEYS = BACK_KEYS.map((k, i) => String(i + 1));
+/** A buildable kind's hotkey on its own floor, or ''. */
+export const hotkeyOf = (k) => (BUILD[k]?.back ? BACK_HOTKEYS[BACK_KEYS.indexOf(k)] : HOTKEYS[BUILD_KEYS.indexOf(k)]) || '';
+/** The kinds laid in lines by dragging: the shop floor's belt and The Back's. */
+const isLine = (k) => k === 'belt' || k === 'conv';
 /** Tools that are not buildings. */
 const TOOLS = ['remove', 'upgrade'];
 
@@ -71,24 +78,38 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   let lastCursorSent = 0;
   let lastTick = 0;
   let selected = null; // the building a finger tapped with nothing held: { x, y }
+  // Which floor this player is looking at and building on (0.4): 0 the shop, 1 The Back. His
+  // screen's own business: it is never in the game state and never goes over the network (only
+  // the f: 1 on his commands says where they are meant).
+  let floor = 0;
   const held = new Set(); // view-moving keys that are down
   const cursors = new Map(); // player id -> { x, y, t }
 
-  const grid = () => session.state?.grid;
+  /** What is built on the floor being looked at: the shop's grid or The Back. */
+  const grid = () => (floor ? session.state?.back : session.state?.grid);
   const at = (t) => grid()?.[t.y * session.state.w + t.x];
   const hasBuilding = (t) => !!at(t);
   /** The top-left tile of the building on a tile (a big building is selected as a whole). */
   function anchorTile(t) {
     const s = session.state;
-    if (!t || !s || !at(t)) return null;
+    // (The Back's parts have no sheet: nothing to select there.)
+    if (!t || !s || floor || !at(t)) return null;
     const i = anchorOf(s, t.y * s.w + t.x);
     return { x: i % s.w, y: (i / s.w) | 0 };
   }
   // Head Office cannot touch the store: no tools, no building, no removing. He keeps the camera.
   const isOffice = () => session.state?.players[session.me]?.side === 'office';
 
+  /** Whether kind or tool k can be held on the floor being looked at. */
+  function fits(k) {
+    if (k === 'remove') return true;
+    if (k === 'upgrade') return !floor; // (the shop's buildings only; The Back has no upgrades)
+    const def = BUILD[k];
+    return !!def && (floor ? !!def.back && !def.fixed : !def.back);
+  }
+
   function setTool(k) {
-    const next = k && !isOffice() && (BUILD[k] || TOOLS.includes(k)) ? k : null;
+    const next = k && !isOffice() && fits(k) ? k : null;
     if (next === tool) return;
     tool = next;
     if (tool && tool !== 'upgrade') selected = null;
@@ -100,6 +121,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   function send(cmds) {
     let did = null, last = null;
     for (const c of cmds) {
+      // In The Back, building, selling and turning say so (0.4).
+      if (floor && (c.c === 'place' || c.c === 'remove' || c.c === 'rotate')) c.f = 1;
       // The host answers at once. A client hears nothing back unless it is refused, so assume yes.
       const r = session.send(c);
       if (!r || r.ok) { did = c.c; last = r; }
@@ -135,9 +158,35 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   /** Upgrades the building on a tile, if there is one that can be. */
   function upgrade(t, track) {
-    const b = t && at(t);
+    const b = !floor && t && at(t);
     if (!b) return;
     send([track ? { c: 'upgrade', x: t.x, y: t.y, t: track } : { c: 'upgrade', x: t.x, y: t.y }]);
+  }
+
+  /** Turns the building or part on tile t a quarter turn clockwise, on the floor being looked at. */
+  function turn(t) {
+    send([{ c: 'rotate', x: t.x, y: t.y }]);
+    playSound('rotate');
+  }
+
+  /**
+   * Looks at the other floor (0.4): 0 the shop, 1 The Back. Whatever was held is put down (the
+   * Back's parts cannot go in the shop and the other way round), and a line being laid, a building
+   * dragged from the bar and an open building sheet are dropped. Fingers on the floor carry on
+   * moving the view only.
+   */
+  function setFloor(f) {
+    const next = f === 1 ? 1 : 0;
+    if (next === floor) return;
+    floor = next;
+    drag = null;
+    tdrag = null;
+    dropCarry(true);
+    if (gesture && gesture.kind === 'one') gesture.mode = 'pan';
+    selected = null;
+    setTool(null);
+    playSound('click');
+    onChange();
   }
 
   // ---- The view ----------------------------------------------------------------------------------
@@ -216,7 +265,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (mode === 'build' && BUILD[tool].size) { send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
     try { canvas.setPointerCapture(e.pointerId); } catch { /* not supported: drag still works inside */ }
     // Dragging belt over belts that are already there turns them, so those tiles are not skipped.
-    const taken = mode === 'build' && tool === 'belt' ? (tile) => { const b = at(tile); return !!b && b.k !== 'belt'; } : hasBuilding;
+    const taken = mode === 'build' && isLine(tool) ? (tile) => { const b = at(tile); return !!b && b.k !== tool; } : hasBuilding;
     const planner = startDrag({ mode, kind: tool, start: t, dir, hasBuilding: taken });
     drag = { planner, button: e.button, id: e.pointerId };
     send(planner.first);
@@ -260,7 +309,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   const builds = () => !isOffice() && (tool === 'remove' || !!BUILD[tool]);
   /** What is held acts once, where the finger lifts (everything but the belt; see the top). */
-  const placesOne = () => !isOffice() && !!tool && tool !== 'belt' && (builds() || tool === 'upgrade');
+  const placesOne = () => !isOffice() && !!tool && !isLine(tool) && (builds() || tool === 'upgrade');
   /** The building being placed: one dragged from the bar, or else what is held. */
   const placeKind = () => (carry && carry.picked ? carry.kind : tool);
 
@@ -327,8 +376,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** A belt line under one finger (the only thing a finger drags to build). */
   function startTouchBuild(t) {
     // As with the mouse: dragging belt over belts turns them, so those tiles are not skipped.
-    const taken = (tile) => { const b = at(tile); return !!b && b.k !== 'belt'; };
-    tdrag = startDrag({ mode: 'build', kind: 'belt', start: t, dir, hasBuilding: taken });
+    const kind = tool;
+    const taken = (tile) => { const b = at(tile); return !!b && b.k !== kind; };
+    tdrag = startDrag({ mode: 'build', kind, start: t, dir, hasBuilding: taken });
     send(tdrag.first);
   }
 
@@ -342,7 +392,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   /** One finger tapped a tile without moving, with nothing held or the belt. */
   function touchTap(t) {
     if (!t || !session.state || isOffice()) { selected = null; return; }
-    if (tool === 'belt') { hover = t; startTouchBuild(t); endTouchBuild(); return; }
+    if (isLine(tool)) { hover = t; startTouchBuild(t); endTouchBuild(); return; }
     // Nothing held: select the building there (touch.js offers what can be done with it).
     selected = anchorTile(t);
     hover = selected;
@@ -376,7 +426,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       // A second finger on the floor cancels what the first was placing (belts a drag has already
       // laid stay; the one still under the finger is not laid), and the two move the view.
       const g = gesture;
-      const placing = g && g.kind === 'one' && (g.mode === 'place' || (g.mode !== 'pan' && tool === 'belt'));
+      const placing = g && g.kind === 'one' && (g.mode === 'place' || (g.mode !== 'pan' && isLine(tool)));
       tdrag = null;
       if (placing) { hover = null; playSound('click'); }
       startPinch();
@@ -418,7 +468,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < TAP_SLOP_PX) return;
       // It is a drag. With the belt it lays a line from where it started; with nothing held it
       // moves the view.
-      if (tool === 'belt' && builds() && g.tile) { g.mode = 'build'; startTouchBuild(g.tile); } else g.mode = 'pan';
+      if (isLine(tool) && builds() && g.tile) { g.mode = 'build'; startTouchBuild(g.tile); } else g.mode = 'pan';
     }
     if (g.mode === 'pan') {
       renderer.pan((g.lx - e.clientX) / z, (g.ly - e.clientY) / z);
@@ -563,13 +613,22 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       return;
     }
     // Head Office keeps only the camera keys (and Escape for dialogs).
+    // Tab looks at the other floor (0.4), for everyone, Head Office too: it only moves the view. It
+    // must not move the keyboard focus about the page, as Tab otherwise does.
+    if (key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      if (!e.repeat) setFloor(floor ? 0 : 1);
+      return;
+    }
     if (isOffice() && !['f', 'h', 'Home', 'Escape'].includes(lower0)) return;
     let digit = /^[0-9]$/.test(key) ? key : null;
     if (!digit && /^(Digit|Numpad)[0-9]$/.test(e.code)) digit = e.code.slice(-1);
     if (digit === null && (key === '-' || key === '=')) digit = key;
     if (digit !== null) {
-      const i = HOTKEYS.indexOf(digit);
-      if (i >= 0) { setTool(tool === BUILD_KEYS[i] ? null : BUILD_KEYS[i]); e.preventDefault(); }
+      // In The Back, 1 to 5 are its parts (0.4).
+      const keys = floor ? BACK_KEYS : BUILD_KEYS;
+      const i = (floor ? BACK_HOTKEYS : HOTKEYS).indexOf(digit);
+      if (i >= 0) { setTool(tool === keys[i] ? null : keys[i]); e.preventDefault(); }
       return;
     }
     const lower = key.length === 1 ? key.toLowerCase() : key;
@@ -580,6 +639,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       // With the mouse on a building, upgrade it (whatever is held: the training shift hands you
       // the Upgrade tool and then says "press U"); otherwise pick up or put down the upgrade tool.
       e.preventDefault();
+      if (floor) return; // (nothing in The Back is upgraded)
       if (hover && at(hover) && BUILD[at(hover).k].up) upgrade(hover);
       else setTool(tool === 'upgrade' ? null : 'upgrade');
     } else if (lower === 'r') {
@@ -590,7 +650,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
         onChange();
       } else if (!tool && hover) {
         const b = at(hover);
-        if (b && BUILD[b.k]?.rot) { session.send({ c: 'rotate', x: hover.x, y: hover.y }); playSound('rotate'); }
+        if (b && BUILD[b.k]?.rot) turn(hover);
       }
     } else if (lower === 'b') {
       e.preventDefault();
@@ -663,10 +723,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (placeKind()) {
       dir = (dir + 1) & 3;
       onChange();
-    } else {
-      session.send({ c: 'rotate', x: selected.x, y: selected.y });
-    }
-    playSound('rotate');
+      playSound('rotate');
+    } else turn(selected);
     return true;
   }
 
@@ -687,16 +745,17 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (carry && carry.picked) return { x: carry.lx, y: carry.ly };
     const g = gesture;
     if (!g || g.kind !== 'one') return null;
-    const on = g.mode === 'place' || (tool === 'belt' && (g.mode === 'build' || (g.mode === 'wait' && !!g.tile)));
+    const on = g.mode === 'place' || (isLine(tool) && (g.mode === 'build' || (g.mode === 'wait' && !!g.tile)));
     return on ? { x: g.lx, y: g.ly } : null;
   }
 
-  const view = { tool: null, dir: 0, hover: null, aim: false, lift: null, cursors };
+  const view = { tool: null, dir: 0, hover: null, aim: false, lift: null, cursors, floor: 0 };
   const liftAt = { x: 0, y: 0 };
   function getView() {
     view.tool = placeKind();
     view.dir = dir;
     view.hover = hover;
+    view.floor = floor;
     // The dashed lines along the tile's row and column, for a finger hiding the tile it acts on;
     // a lifted preview is not under the finger, and gets a thin line down to the finger instead.
     const l = lifted();
@@ -737,6 +796,11 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   return {
     get tool() { return tool; },
+    /** The floor being looked at: 0 the shop, 1 The Back (0.4). */
+    get floor() { return floor; },
+    setFloor,
+    /** Test pages only (?hover=x,y): puts the mouse on a tile, for a screenshot of the preview. */
+    setHover(t) { hover = t; },
     get dir() { return dir; },
     get hover() { return hover; },
     /** The building a finger tapped with nothing held, or null. */

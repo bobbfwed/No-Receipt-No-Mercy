@@ -86,16 +86,23 @@ function tag(ctx, pts, at, text, color, shift) {
  * Draws the route shoppers will take from the doors to the tills, and the dads' short cut if
  * they have one.
  * @param {number} time seconds, for the marching dashes
+ * @param {number} [alpha] how strongly (0.4 they are drawn always, a little fainter while shoppers
+ *   are on the floor, and faintly from The Back)
+ * @param {boolean} [tags] the SHOPPER ROUTE and DAD SHORT CUT labels
  */
-export function drawRoutes(ctx, s, time) {
+export function drawRoutes(ctx, s, time, alpha = 1, tags = true) {
   const r = routes(s);
   const offset = (time * 38) % 19;
+  ctx.globalAlpha = alpha;
   for (const pts of r.normal) strokeRoute(ctx, pts, '#ffe14a', offset, 0);
   for (const pts of r.dad) strokeRoute(ctx, pts, '#5cc8ff', offset * 1.6, 5);
   // Each route is labelled once; where routes have merged the labels would sit on top of each
   // other, so they are placed at different points along each route.
-  r.normal.forEach((pts, k) => tag(ctx, pts, 0.5 - k * 0.07, 'SHOPPER ROUTE', '#ffe14a', 0));
-  r.dad.forEach((pts, k) => tag(ctx, pts, 0.3 - k * 0.04, 'DAD SHORT CUT', '#8fdcff', 5));
+  if (tags) {
+    r.normal.forEach((pts, k) => tag(ctx, pts, 0.5 - k * 0.07, 'SHOPPER ROUTE', '#ffe14a', 0));
+    r.dad.forEach((pts, k) => tag(ctx, pts, 0.3 - k * 0.04, 'DAD SHORT CUT', '#8fdcff', 5));
+  }
+  ctx.globalAlpha = 1;
 }
 
 /**
