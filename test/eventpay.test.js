@@ -262,3 +262,17 @@ test('a copy made while the clock runs plays on identically; the checksum sees t
   t.ws.stopped--;
   assert.equal(checksum(t), sum);
 });
+
+test('with more players the store\'s event pay grows as its crowd does, shared evenly (0.4 stage 7)', () => {
+  // 1 player all of it, 2 players 75% each, 3 players two thirds each (TUNE.crowdPerPlayer: each
+  // player after the first adds half a solo game's crowd, and half a solo game's pay).
+  for (const [players, each] of [[1, 1], [2, 0.75], [3, 2 / 3]]) {
+    const s = game(players);
+    assert.equal(eventPay(s, 10), payOf(10, each), `${players} players`);
+    const before = s.players.map((p) => p.cash);
+    const e = finish(s, 10, 5 * TICK_HZ);
+    assert.equal(e.pay, payOf(10, each));
+    assert.equal(e.speed, Math.round(e.pay * TUNE.speedShare), 'the speed bonus is a share of each player\'s pay');
+    s.players.forEach((p, n) => assert.equal(p.cash, before[n] + e.pay + e.speed, `player ${n} is paid what the event says`));
+  }
+});

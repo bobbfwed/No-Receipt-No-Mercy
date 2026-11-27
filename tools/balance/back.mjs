@@ -41,12 +41,14 @@ export class Backroom {
    *   reserved   tiles that must stay clear (under the maze's planned security buildings)
    *   prefix     how many Rebranders each machine's private stretch can take later (raise())
    *   main       the two supplies of each drop's main bus (the third machine makes Razor Wire)
+   *   comb       (the greedy player) Rebranders in parallel on each main bus, before its first
+   *              building: [n1, n2, n3] Rebranders for each step up (see planComb), or none
    *   fences     walls of fence posts, [{x, ys}] (the wall's column and the posts' rows): each gets a
    *              "wire lane", a straight belt down the column beside the wall with a Splitter level
    *              with each post, which hands Razor Wire sideways into the post's Dumbwaiter. Planned
    *              before the cells, so nothing else can cut it off.
    */
-  constructor(s, pid, { reserved = new Set(), prefix = 0, main = ['dmg', 'spd'], fences = [] } = {}) {
+  constructor(s, pid, { reserved = new Set(), prefix = 0, main = ['dmg', 'spd'], fences = [], comb = null } = {}) {
     this.s = s;
     this.pid = pid;
     this.reserved = reserved;
@@ -62,6 +64,7 @@ export class Backroom {
     this.lanes = [];
     for (const f of fences) this.planLane(f.x, f.ys);
     for (const di of this.drops) this.planCell(di);
+    if (comb) for (const c of this.cells) this.planComb(c, comb);
     // Walls-only distance from each cell, to give a building to the nearest drop.
     for (const c of this.cells) c.dist = this.flood(c.split);
   }
@@ -172,6 +175,97 @@ export class Backroom {
     }
   }
 
+  /**
+   * (The greedy player.) Works out a "comb" for cell c's main bus: Rebranders side by side, so that
+   * everything on the bus comes out Platinum at the rate the drop's junk allows. Rows run east, in
+   * a free rectangle as near the cell as there is one: row 0 the belt in, a dead end; row 1 Unpaid
+   * Interns facing south, each taking what the Rebrander below him wants from the belt above; row 2
+   * the first step's Rebranders, facing south onto row 3, a belt that is the next step's way in; and
+   * so on for each step, the last belt (row 3 x steps) being where the bus goes on to the buildings.
+   * Step k has widths[k] Rebranders, from the west end. Each dead end points at a tile kept empty.
+   */
+  planComb(c, widths) {
+    const s = this.s, w = s.w, h = s.h;
+    const steps = widths.length, wide = Math.max(...widths) + 1, high = 3 * steps + 1;
+    const from = this.flood(c.main.binAt);
+    // (Every bus's bin and the tile a wire stretch points at are the buses' to use.)
+    const busy = new Set(this.cells.flatMap((x) => [x.main.binAt, x.wire.face]));
+    let best = null;
+    // Any of four ways round: rows running east or west (sx), steps going south or north (sy).
+    for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      for (let y0 = 0; y0 < h; y0++) {
+        for (let x0 = 0; x0 < w; x0++) {
+          const at = (x, y) => {
+            const X = x0 + sx * x, Y = y0 + sy * y;
+            return X < 0 || Y < 0 || X >= w || Y >= h ? -1 : Y * w + X;
+          };
+          const tiles = [];
+          for (let y = 0; y < high; y++) for (let x = 0; x <= wide; x++) tiles.push(at(x, y));
+          const entry = at(-1, 0);
+          if (entry < 0 || busy.has(entry) || !this.free(entry)) continue;
+          if (!tiles.every((i) => i >= 0 && this.free(i) && !this.noBelt.has(i) && !busy.has(i))) continue;
+          const d = from[entry];
+          if (d >= 0 && (!best || d < best.d)) best = { d, at };
+        }
+      }
+      if (best) best.sx = best.sx || sx, best.sy = best.sy || sy;
+    }
+    if (process.env.BACKDEBUG) console.log('comb for drop', c.drop % w, (c.drop / w) | 0, best ? 'found' : 'NO ROOM');
+    if (!best) return;
+    const { at } = best;
+    // (Directions from the tiles themselves: the way the rows run, and the way the steps go.)
+    const rowD = this.dirTo(at(0, 0), at(1, 0)), stepD = this.dirTo(at(0, 0), at(0, 1));
+    const parts = []; // [kind, tile, facing], in the order to lay them
+    for (let k = 0; k < steps; k++) {
+      const n = widths[k], top = 3 * k;
+      // The belt in (a dead end), as long as this step's Interns and the last step's Rebranders reach.
+      const len = Math.max(n, k ? widths[k - 1] : 1);
+      for (let x = 0; x < len; x++) parts.push(['conv', at(x, top), rowD]);
+      this.noBelt.add(at(len, top));
+      for (let x = 0; x < n; x++) parts.push(['intern', at(x, top + 1), stepD], ['rebrand', at(x, top + 2), stepD]);
+    }
+    // The last belt: under the last step, and one tile on, where the bus goes on.
+    const out = [];
+    for (let x = 0; x <= widths[steps - 1]; x++) out.push(at(x, 3 * steps));
+    for (const [, i] of parts) this.cellTiles.add(i);
+    for (const i of out) this.cellTiles.add(i);
+    c.comb = { first: at(0, 0), parts, out, rowD, laid: false };
+  }
+
+  /** Lays cell c's comb and the main bus's stretch to it. 'ok', 'cash' or 'none'. */
+  layComb(c) {
+    const cb = c.comb, bus = c.main, s = this.s;
+    // From the end of the main bus to the comb's way in (its first belt counts as the goal).
+    this.cellTiles.delete(cb.first);
+    const found = this.search(bus, new Map([[cb.first, { I: -1, d: 0 }]]), false, true);
+    this.cellTiles.add(cb.first);
+    if (!found) return 'none';
+    const ts = found.path.map((p) => p.t);
+    ts.pop(); // (the comb's own first belt is laid with the comb)
+    let cost = cb.parts.reduce((n, [k]) => n + this.price(k), 0) + this.price('conv') * (ts.length + cb.out.length);
+    for (const p of found.path) if (p.over) cost += this.price('over');
+    if (this.cash() < cost) return 'cash';
+    const end = bus.tiles[bus.tiles.length - 1];
+    if (bus.binAt >= 0) this.take(bus.binAt);
+    bus.binAt = -1;
+    const chain = [end, ...ts, cb.first];
+    for (let n = 0; n < chain.length - 1; n++) {
+      const x = chain[n], d = this.dirTo(x, chain[n + 1]);
+      if (n && found.path[n - 1].over) { this.take(x); this.place('over', x, 0); this.info.get(x).kind = 'over'; continue; }
+      this.place('conv', x, d);
+      const inf = this.info.get(x) || {};
+      this.info.set(x, { ...inf, bus, inD: n ? this.dirTo(chain[n - 1], x) : inf.inD, outD: d, end: false, fixed: true });
+    }
+    for (const [k, i, d] of cb.parts) this.place(k, i, d);
+    cb.out.forEach((i, n) => {
+      this.place('conv', i, cb.rowD);
+      this.info.set(i, { bus, inD: cb.rowD, outD: cb.rowD, fixed: n < cb.out.length - 1, end: n === cb.out.length - 1 });
+    });
+    bus.tiles = cb.out.slice();
+    cb.laid = true;
+    return 'ok';
+  }
+
   /** Tiles the cells will take (so the shop floor's plan can stay off them). */
   get keepClear() { return this.cellTiles; }
 
@@ -270,8 +364,15 @@ export class Backroom {
         }
         sl.built = true;
       }
+      // (The greedy player: the main bus goes through its comb of Rebranders before any building.)
+      if (c.comb && !c.comb.laid && c.slots.some((sl) => sl.built && sl.supply !== 'wire')) {
+        const r = this.layComb(c);
+        if (r === 'cash') return;
+        if (r !== 'ok') c.comb = null;
+      }
       for (const bus of [c.main, c.wire]) {
         if (!c.slots.some((sl) => sl.built && (sl.supply === 'wire') === bus.wire)) continue;
+        if (!bus.wire && c.comb && !c.comb.laid) continue;
         while (bus.pending.length) {
           const ai = bus.pending[0];
           if (typeof ai === 'object') {
@@ -461,7 +562,7 @@ export class Backroom {
    * bus's straight belt, at right angles, with an Overpass.
    * Returns { path: [{t, over}], binAt (-1 on a wire bus), split (the Splitter's tile, or -1) }, or null.
    */
-  search(bus, goal, branch) {
+  search(bus, goal, branch, noBin = false) {
     const s = this.s, n = s.tiles.length;
     const from = new Int32Array(n).fill(-2), over = new Uint8Array(n), seed = new Map();
     const goalI = new Set([...goal.values()].map((x) => x.I));
@@ -497,7 +598,7 @@ export class Backroom {
         let x = u;
         for (; ; x = from[x]) { path.unshift({ t: x, over: !!over[x] }); if (from[x] === -1) break; }
         const split = branch ? seed.get(x) : -1;
-        if (bus.wire) return { path, binAt: -1, split };
+        if (bus.wire || noBin) return { path, binAt: -1, split };
         const on = new Set(path.map((p) => p.t));
         // Somewhere beside it for the bin: free, not the Intern's tile, not on the new stretch.
         for (let e = 0; e < 4; e++) {

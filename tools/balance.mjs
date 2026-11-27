@@ -18,9 +18,9 @@
 //              refund, and how much of the time the supplied buildings were stocked. The table in
 //              PLAN.md ("Version 0.4", stage 7) is `node tools/balance.mjs --table`.
 //   --seeds=   the seeds for --table (a list, or a range like 1-20)
-//   --players= (0.4) players in the game (default 1). With 2, one bot runs the shop floor and the
-//              other The Back (and hands his spare cash to the first); the size defaults to the one
-//              recommended for that many players
+//   --players= (0.4) players in the game (default 1). With 2 or more, one bot runs the shop floor
+//              and the second The Back (handing his spare cash to the first); any others hand all
+//              theirs to the first. The size defaults to the one recommended for that many players
 //   --set=     try another number without editing constants.js, for quick trials while tuning:
 //              "--set=BACK.dropSecs=2;TUNE.payStep=40;SHOPPERS.dad.sup.from=6" (any of BACK, TUNE,
 //              BUILD, SHOPPERS, a path of keys, a JSON value; several separated by semicolons)
@@ -52,6 +52,10 @@
 //             levels between its forklifts), and reinforced crates where gym bros keep wrecking.
 //             Tried and dropped while tuning (each did worse): fence posts in every wall, Extension
 //             Cord, Duct Tape, Returns Drop levels early (PLAN.md, 0.4 stage 7)
+//   greedy    (to see whether Platinum is too easy) the maze and its gap security and nothing more on
+//             the shop floor; each drop's Spite and Cola go through a comb of Rebranders side by side
+//             (2, 4 and 8 for the three steps) so all of it arrives Platinum; honest's fence; then
+//             Returns Drop levels
 //   focus     keen, but its forklifts go column by column from the entrance side, so the supplies
 //             concentrate on the channels shoppers reach first
 //   stalls    keen that also puts a TV Salesman, two Free Sample tables and four Wet Floor Signs in
@@ -224,6 +228,15 @@ const KEEN = {
   markers: [TIER('dmg'), TIER('spd'), TIER('wire'), DROP(0), DROP(1), DROP(2)],
   every: 4, extras: 'grid',
 };
+// greedy (0.4 stage 7, to see whether Platinum is too easy for a player who goes all out on it):
+// the maze and its gap security and nothing more on the shop floor; at every drop a Spite Still and
+// a Cola Cannery (and the Barb Bender for honest's fence) whose bus runs through a comb of Rebranders
+// in parallel (2, 4 and 8 for the three steps: enough for the 30 junk a minute the two machines get
+// from a drop at level 0) so all of it arrives Platinum; then Returns Drop levels.
+const GREEDY = {
+  back: true, fences: [0], sup: { tower: ['dmg', 'spd'] }, lines: ['dmg', 'spd'], comb: [2, 4, 8], reinforce: true,
+  markers: [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2].map((n) => DROP(n)), every: 1, extras: '',
+};
 export const BOTS = {
   nothing: null,
   floor: { back: false, fences: [], reinforce: true, sup: {}, extras: 'grid' },
@@ -231,6 +244,7 @@ export const BOTS = {
     back: true, fences: [0], sup: { tower: ['dmg', 'spd'] }, lines: ['dmg', 'spd'], extras: 'grid',
   },
   keen: KEEN,
+  greedy: GREEDY,
   focus: { ...KEEN, extras: 'front' },
   stalls: { ...KEEN, stalls: true },
 };
@@ -274,7 +288,7 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
       const postsAt = new Map();
       for (const it of list) if (it[4] && it[4].post) postsAt.set(it[1], (postsAt.get(it[1]) || []).concat(it[2]));
       const fences = [...postsAt].map(([x, ys]) => ({ x, ys }));
-      back = new Backroom(s, backPid, { reserved, prefix: cfg.prefix || 0, main: cfg.main, fences });
+      back = new Backroom(s, backPid, { reserved, prefix: cfg.prefix || 0, main: cfg.main, fences, comb: cfg.comb });
       list = list.filter((it) => !lifted(it) || !(footprint(s, it[0], it[1], it[2], it[3]) || []).some((t) => back.keepClear.has(t)));
     }
   }
@@ -328,9 +342,10 @@ export function play(bot, seed, map, endless = false, difficulty = null, cards =
     }
     // Two players: the one in The Back (or, for a bot with no Back, the second player) hands what he
     // does not need to the one on the floor.
-    if (players > 1) {
-      const bp = s.players[1], keepBack = back ? 150 : 0;
-      if (bp.cash > keepBack + 150) applyCommand(s, 1, { c: 'give', to: 0, n: Math.floor(bp.cash - keepBack) });
+    // (With three or more, the others are extra hands on the shop floor's one plan: they give it all.)
+    for (let pid = 1; pid < players; pid++) {
+      const bp = s.players[pid], keep = back && pid === backPid ? 150 : 0;
+      if (bp.cash > keep + 150) applyCommand(s, pid, { c: 'give', to: 0, n: Math.floor(bp.cash - keep) });
     }
     const price = (k) => buildPrice(s, k);
     /** The cash the next item needs (0 for one that costs nothing now). */

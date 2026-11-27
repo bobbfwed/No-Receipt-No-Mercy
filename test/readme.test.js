@@ -167,7 +167,8 @@ test("The Back's numbers in the handbook are the rules' own (0.4)", () => {
     assert.equal(BUILD[maker].supply, SUPPLIES[s.track].type, s.name);
     for (const name of s.takers) {
       const k = SECURITY_ORDER.find((c) => BUILD[c].name === name);
-      const b = { k };
+      // (A building takes Razor Wire once it has a wire direction: 0.4, stage 7.)
+      const b = s.track === 'wire' ? { k, wd: 0 } : { k };
       assert.ok(takesSupply(b, itemCode(SUPPLIES[s.track].type, 1)), `${name} takes ${s.name}`);
     }
   }

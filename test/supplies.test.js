@@ -264,15 +264,25 @@ test('stock is never money: what was spent, selling back and the rebuild price i
   assert.equal(s.players[0].cash, before + Math.floor(BUILD.sprinkler.cost * TUNE.sellBack), 'sold back for what was paid');
 });
 
-test('a Dumbwaiter takes only the tracks its building has (and wire), up to stockUnits units of each', () => {
+test('a Dumbwaiter takes only the tracks its building has (and wire once it has a direction), up to stockUnits units of each', () => {
   const s = stage();
   placeOk(s, 'wetfloor', 5, 5);
   placeOk(s, 'samples', 7, 5);
   placeOk(s, 'sprinkler', 9, 5);
   const w = idx(s, 5, 5), sm = idx(s, 7, 5), sp = idx(s, 9, 5);
-  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, w, itemCode(t, 1), E)), [true, false, false, true, true], 'sign: damage, tape, wire');
-  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sm, itemCode(t, 1), E)), [true, false, true, true, true], 'samples: no speed');
-  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sp, itemCode(t, 1), N)), [true, true, true, true, true], 'from any side');
+  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, w, itemCode(t, 1), E)), [true, false, false, true, false], 'sign: damage, tape; no wire without a direction');
+  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sm, itemCode(t, 1), E)), [true, false, true, true, false], 'samples: no speed');
+  assert.deepEqual([1, 2, 3, 4, 5].map((t) => wants(s, sp, itemCode(t, 1), N)), [true, true, true, true, false], 'from any side');
+  // Razor Wire (0.4, stage 7): only a building with a wire direction takes it, so a shared belt
+  // does not fill every building with wire it cannot use. Clearing the direction keeps what it has.
+  for (const [i, x] of [[w, 5], [sm, 7], [sp, 9]]) {
+    assert.ok(applyCommand(s, 0, { c: 'wire', x, y: 5, d: S }).ok);
+    assert.ok(wants(s, i, itemCode(5, 1), E), `wire wanted at ${x},5 once it has a direction`);
+  }
+  assert.ok(give(s, sp, itemCode(5, 2), E));
+  assert.ok(applyCommand(s, 0, { c: 'wire', x: 9, y: 5, d: -1 }).ok);
+  assert.ok(!wants(s, sp, itemCode(5, 1), E), 'no direction, no more wire');
+  assert.equal(unitsIn(bld(s, 9, 5), 'wire', s), 1, 'the wire it had stays');
   assert.ok(!wants(s, sp, JUNK, E), 'never junk');
   // The cap: six units; a unit partly used still counts, so the seventh waits for a whole one.
   const b = bld(s, 9, 5);

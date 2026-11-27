@@ -41,6 +41,13 @@ export function releaseNo(n) {
 }
 
 /**
+ * How much bigger the store's crowd is with this many players sharing it than with one: each player
+ * after the first adds TUNE.crowdPerPlayer of a solo game's crowd. The automatic waves, a Midnight
+ * Release's mob and (0.4, stage 7) the store's total event pay all grow by it.
+ */
+export const crowdFactor = (players = 1) => 1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1);
+
+/**
  * How many Card Traders the Midnight Release in wave n brings (0 if wave n is not one):
  * TUNE.releaseFirst at the first, TUNE.releaseStep more at each one after, for one player; each
  * player after the first adds TUNE.crowdPerPlayer of that, like any crowd. Not scaled by
@@ -49,7 +56,7 @@ export function releaseNo(n) {
 export function releaseSize(n, players = 1) {
   const k = releaseNo(n);
   if (!k) return 0;
-  const crowd = 1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1);
+  const crowd = crowdFactor(players);
   return Math.max(1, Math.round((TUNE.releaseFirst + TUNE.releaseStep * (k - 1)) * crowd));
 }
 
@@ -175,7 +182,7 @@ export function waveSpec(n, players = 1) {
 
   // Later waves bring bigger crowds, and so do more players. A bigger group arrives over the
   // same length of time, just closer together.
-  const crowd = 1 + TUNE.crowdPerPlayer * (Math.max(1, players) - 1);
+  const crowd = crowdFactor(players);
   const tier = bossTier(n);
   // (The late surge, past TUNE.surgeFrom, multiplies both the crowd and its cap below.)
   const surge = surgeCrowdAt(n);
@@ -303,11 +310,20 @@ export function beginWave(state, ev) {
 }
 
 /**
- * What beating sales event n pays in this game (0.4): every store player sharing income gets the
- * whole of it. TUNE.payBase + TUNE.payStep an event, times the difficulty's pay and the cards
- * (cardPay: overtime, clearance, payday), in whole dollars.
+ * What beating sales event n pays EACH store player sharing income in this game (0.4), in whole
+ * dollars: TUNE.payBase + TUNE.payStep an event, times the difficulty's pay and the cards (cardPay:
+ * overtime, clearance, payday), times crowdFactor(players) / players. So the store's total grows as
+ * its crowd does and is shared evenly: one player gets all of it, two 75% each, three 67% each.
+ * (Until 0.4's stage 7 every player got the whole amount, which made sense while goods were the
+ * main income; with event pay nearly all of it, two players had twice the money for 1.5 times the
+ * crowd. A decision made on the owner's behalf: PLAN.md, 0.4 stage 7.) The speed bonus is a share
+ * of this, so it follows.
  */
-export const eventPay = (state, n) => Math.round((TUNE.payBase + TUNE.payStep * n) * difficultyOf(state).pay * cardPay(state));
+export const eventPay = (state, n) => {
+  // (A bare { difficulty } with no players, as the handbook passes, is a one-player game.)
+  const players = state.players ? shareCount(state) : 1;
+  return Math.round((TUNE.payBase + TUNE.payStep * n) * difficultyOf(state).pay * cardPay(state) * crowdFactor(players) / players);
+};
 
 /** Seconds from the last shopper in to a clear floor at or past which sales event n pays no speed bonus. */
 export const speedPar = (n) => TUNE.speedPar * (bossTier(n) ? 2 : 1);
@@ -348,7 +364,7 @@ function endWave(state, ev) {
     ev.push({ e: 'waveEnd', wave: state.wave, pay: 0, speed: 0, took: 0, training: true });
     return;
   }
-  // Every player gets the whole of both. (Cards may change the pay, and the bonus follows: cardPay.)
+  // Every player gets both (eventPay is already each player's share). (Cards may change the pay, and the bonus follows: cardPay.)
   const pay = eventPay(state, state.wave);
   // (Without lastIn, only when the queue was emptied some other way than by shoppers walking in,
   // the clock is taken as starting now.)

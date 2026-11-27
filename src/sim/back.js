@@ -93,6 +93,28 @@ const binPay = (state, tier) => (BACK.binPay[tier] || 0) * cardBin(state);
 /** A Returns Drop as the map puts it down (makeDrops in maps.js), facing d. */
 export const newDrop = (d) => ({ k: 'drop', d: d & 3, t: dropTicks(0), lv: 0 });
 
+/**
+ * Training mode only (0.4, the training shift's lessons on The Back): puts Returns Drops on the
+ * given tiles of The Back, as [x, y, facing] each. A game made without a map has no drops (only
+ * the maps place them, makeDrops in maps.js), and the lessons need a couple close to the security
+ * they feed. A tile that is a wall or already holds a part is left alone; does nothing outside
+ * training, so no real game can be given extra junk.
+ * @returns {number} how many were put down
+ */
+export function addTrainingDrops(state, list) {
+  if (!state.training || !state.back) return 0;
+  let n = 0;
+  for (const [x, y, d] of list) {
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= state.w || y >= state.h) continue;
+    const i = y * state.w + x;
+    if (state.tiles[i] === '#' || state.back[i]) continue;
+    state.back[i] = newDrop(d);
+    n++;
+  }
+  if (n) state.backVer = (state.backVer | 0) + 1;
+  return n;
+}
+
 /** A Back part as a player puts it down: kind k, owned by o, facing d. */
 export function newPart(k, o, d = 0) {
   const p = { k, o };
@@ -499,9 +521,13 @@ export function give(state, i, code, dir, over = 0) {
       }
       return true;
     }
-    case 'lift':
+    case 'lift': {
       addStock(state.grid[p.a], code, state);
+      // (For the sound of a delivery, and the training shift: the building's anchor, the item.)
+      const c = CACHE.get(state);
+      if (c && c.running && c.ev) c.ev.push({ e: 'stocked', i: p.a, c: code });
       return true;
+    }
     case 'rebrand':
       p.q.push(code);
       return true;
@@ -601,7 +627,9 @@ function advance(it, k, cap) {
 /**
  * One tick of The Back: every lane and part in the cached order, downstream first. Runs once per
  * tick in the build pause and during sales events, before the security buildings fire (step.js).
- * `ev`, if given, collects its events: binned {i, v, by} when a Clearance Bin is paid for a supply.
+ * `ev`, if given, collects its events: binned {i, v, by} when a Clearance Bin is paid for a supply;
+ * made {i, c} when a machine or Rebrander on tile i finishes item c (0.4, stage 6); stocked {i, c}
+ * when a Dumbwaiter sends item c up to the building whose anchor is tile i.
  */
 export function stepBack(state, ev = null) {
   const back = state.back;
@@ -674,7 +702,11 @@ export function stepBack(state, ev = null) {
         // Finishing, handing over and starting the next all happen in the same tick, so one takes
         // exactly its time. What is made waits in `out` while the tile in front will not take it,
         // and nothing new is started meanwhile.
-        if (p.t > 0 && --p.t === 0) p.out = kind === MACHINE ? itemCode(BUILD[p.k].supply, 1) : p.q.shift() + 1;
+        if (p.t > 0 && --p.t === 0) {
+          p.out = kind === MACHINE ? itemCode(BUILD[p.k].supply, 1) : p.q.shift() + 1;
+          // (A unit finished, for its sound in The Back and the training shift: the tile, the item.)
+          if (ev) ev.push({ e: 'made', i, c: p.out });
+        }
         const front = to[m * 3];
         if (p.out && front >= 0 && give(state, front, p.out, d, 0)) p.out = 0;
         if (p.out || p.t > 0) break;
@@ -743,6 +775,10 @@ export function takesSupply(b, code, state = null) {
   if (type < 1 || type > 5 || tier < 1 || tier > 4) return false;
   const track = SUPPLY_TRACKS[type];
   if (track !== 'wire' && !(def.up && def.up[track])) return false;
+  // Razor Wire only for a building that has a wire direction (0.4, stage 7): otherwise every
+  // building on a shared belt would fill up with six units of wire it can never use before the real
+  // fence got any. Wire already in stock when a direction is cleared simply stays.
+  if (track === 'wire' && b.wd === undefined) return false;
   if (!usesPer(b.k, track, tier)) return false;
   return unitsIn(b, track, state) < stockCap(state);
 }
