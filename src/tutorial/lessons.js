@@ -38,8 +38,8 @@
 // shoppers and the dads walking straight through it all. Part 2, The Back: Tab, a Returns Drop, a
 // Spite Still, belts into a Dumbwaiter, an Unpaid Intern, a Splitter (the Overpass and the Clearance
 // Bin in words), a building running dry, the Rebrander. Part 3: Razor Wire (the Wire tool, planned
-// and live, the two dad routes, a Barb Bender), Gym Bros with Rebuild, reinforced crates (Duct Tape
-// in words), and money (event pay, the speed bonus, MORE JUNK). The only shoppers sent in are Coupon
+// and live, the two dad routes, a Barb Bender), Gym Bros with Rebuild, reinforced crates (security
+// reinforced the same way, in words), and money (event pay, the speed bonus, MORE JUNK). The only shoppers sent in are Coupon
 // Clippers (super ones in the Barcode Laser lesson), Dads and Gym Bros; test/tutorial.test.js holds
 // it to that, and checks every claim the lessons make against the rules on several seeds.
 //
@@ -110,11 +110,12 @@ const DOOR_CRATES = [[2, 7], [2, 8], [1, 9]];
 
 // The Back (0.4). The training game has no map, so no Returns Drops of its own: the shift puts down
 // two (addTrainingDrops), where the lessons need them. The first stands under the top of the crate
-// wall, facing down: its junk goes down column 10 (nothing in The Back is under the shop's crates),
-// through a Spite Still and on down to the gap Sprinkler's Dumbwaiter, the line every lesson of
-// part 2 adds to. The second stands left of the Forklift's tile, for its Razor Wire.
-const DROP = [10, 2, S];
-const WIRE_DROP = [6, 9, E];
+// wall: its junk goes down column 10 (nothing in The Back is under the shop's crates), through a
+// Spite Still and on down to the gap Sprinkler's Dumbwaiter, the line every lesson of part 2 adds
+// to. The second stands left of the Forklift's tile, for its Razor Wire. (0.4.01: a drop has no
+// facing; it shares its junk between every side that takes it, so each is only [x, y].)
+const DROP = [10, 2];
+const WIRE_DROP = [6, 9];
 export const TRAINING_DROPS = [DROP, WIRE_DROP];
 const JUNK_BELT = [10, 3];
 const STILL = [10, 4];
@@ -154,10 +155,11 @@ const CAP = stockCap(null);
 const hit = (k, tier) => fmt(tierRows(k, 'dmg')[tier].dmg);
 const FORK_SHOTS = usesPer('forklift', 'dmg', 1);
 const WIRE_TURNS = usesPer('forklift', 'wire', 1);
-const TAPE_HITS = usesPer('forklift', 'dur', 1);
 const money = (v) => `$${Math.round(v).toLocaleString('en-US')}`;
 const MORE_JUNK = money(dropUpCost(0));
 const REINFORCE_FIRST = money(reinforceCost({ k: 'crate', r: 0 }));
+/** What the first level costs on the Forklift Turret (0.4.01: security is reinforced too). */
+const REINFORCE_FORK = BUILD.forklift.reinforce ? money(reinforceCost({ k: 'forklift', r: 0 })) : '';
 const REINFORCE_MAX = BUILD.crate.reinforce.max;
 const HITS_WORD = ['no', 'one', 'two', 'three', 'four'][TUNE.smashMax] ?? String(TUNE.smashMax);
 
@@ -206,6 +208,8 @@ function tileHint(s, x, y, k, d, name) {
 function backHint(s, x, y, k, d, name) {
   const p = atB(s, x, y);
   if (!p) return null;
+  // (0.4.01) A part goes straight on a plain belt and replaces it: no taking it out first.
+  if (p.k === 'conv' && k !== 'conv') return `Put the ${name} straight on the highlighted belt: it replaces it.${d !== undefined ? ` Its arrow must point ${FACING[d]}.` : ''}`;
   if (p.k !== k) return `Something else is on the highlighted tile in The Back. Right-click the highlighted part to take it out, then put the ${name} there.`;
   if (d !== undefined && p.d !== d) return `The ${name}'s arrow must point ${FACING[d]}. Point at it with nothing held and press R to turn it.`;
   return null;
@@ -313,8 +317,10 @@ const forkStarved = (s) => !isB(s, ...CUT, 'conv') || !isB(s, ...INTERN, 'intern
 // since taken out, turned the wrong way or replaced is marked again, with a hint saying so, so that
 // no lesson waits for something that cannot come. The lists are [x, y, kind, facing, label]: The
 // Back's in the order the junk meets them, then the shop floor's.
-const DROP_PART = [DROP[0], DROP[1], 'drop', DROP[2], 'Returns Drop, arrow down'];
-const WIRE_DROP_PART = [WIRE_DROP[0], WIRE_DROP[1], 'drop', WIRE_DROP[2], 'Returns Drop, arrow right'];
+// (The drops have no facing from 0.4.01, and nobody can take one out or turn it: they are listed so
+// that a lesson relying on one says so, and are always in place.)
+const DROP_PART = [DROP[0], DROP[1], 'drop', undefined, 'Returns Drop'];
+const WIRE_DROP_PART = [WIRE_DROP[0], WIRE_DROP[1], 'drop', undefined, 'Returns Drop'];
 const INTERN_PART = [...INTERN, 'intern', W, 'Intern, arrow left'];
 const FORK_SHOP = [[...FORKLIFT, 'forklift', undefined, 'Forklift']];
 const GAP_SHOP = [[...GAP_SPRINKLER, 'sprinkler', undefined, 'Sprinkler']];
@@ -351,7 +357,7 @@ function fixHint(s, f, back, shop = []) {
       if (isB(s, x, y, k, d)) continue;
       const name = BUILD[k].name;
       return floorHint(f, 1) || backHint(s, x, y, k, d, name)
-        || `Something an earlier lesson built in The Back is gone. Put ${an(name)} back on the highlighted tile, its arrow pointing ${FACING[d]}.`;
+        || `Something an earlier lesson built in The Back is gone. Put ${an(name)} back on the highlighted tile${d === undefined ? '' : `, its arrow pointing ${FACING[d]}`}.`;
     }
   }
   for (const [x, y, k, d] of shop) {
@@ -362,7 +368,7 @@ function fixHint(s, f, back, shop = []) {
   return null;
 }
 
-/** The build-bar button for the first thing fixMarks marks, or `own` if nothing is (or only a Returns Drop, which is turned, not built). */
+/** The build-bar button for the first thing fixMarks marks, or `own` if nothing is (or only a Returns Drop, which nobody builds). */
 function fixTool(s, own, back, shop = []) {
   if (s.back) for (const [x, y, k, d] of back) if (!isB(s, x, y, k, d)) return k === 'drop' ? own : k;
   for (const [x, y, k, d] of shop) if (!is(s, x, y, k, d)) return k;
@@ -562,12 +568,12 @@ export const STEPS = [
     view: 1,
     text: [
       'Do this: press Tab (or CHECK IN THE BACK, bottom right of the floor) to go down to The Back, the floor under the shop.',
-      `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, onto whatever in front of it will take it.`,
+      `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, shared out in turn between every belt or machine touching it, on any side.`,
       'The dashed boxes are the Dumbwaiters under your security. Down here belts and machines turn junk into supplies and send them up. Tab takes you back up.',
     ],
     touch: [
       'Do this: tap CHECK IN THE BACK (bottom right of the floor) to go down to The Back, the floor under the shop.',
-      `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, onto whatever in front of it will take it.`,
+      `It is the same grid as the shop: the walls go all the way down, and nothing here gets in a shopper's way. The yellow hatch is a Returns Drop: returned junk comes down it, a piece every ${JUNK_SECS} seconds, shared out in turn between every belt or machine touching it, on any side.`,
       'The dashed boxes are the Dumbwaiters under your security. Down here belts and machines turn junk into supplies and send them up. The same button takes you back up.',
     ],
     quip: 'Down to The Back, where the junk goes.',
@@ -581,12 +587,12 @@ export const STEPS = [
     tool: (s) => (isB(s, ...STILL, 'still') ? 'conv' : 'still'),
     view: 1,
     text: [
-      `Do this: click Spite Still (or press ${KEY('still')}), press R until its arrow points DOWN, and click the highlighted tile. Then click Belt (or press ${KEY('conv')}) and drag from the tile under the Returns Drop onto the Still.`,
-      `A Spite Still boils a piece of junk down into a unit of Bottled Spite every ${MAKE_SECS} seconds. It takes junk at its back and sides and puts the Spite out of its front, the way its arrow points. A belt carries anything put on it, the way its arrow points.`,
+      `Do this: click Spite Still (or press ${KEY('still')}), press R until its arrow points DOWN, and click the highlighted tile. Then click Belt (or press ${KEY('conv')}), press on the tile under the Returns Drop, drag onto the Still and let go.`,
+      `A Spite Still boils a piece of junk down into a unit of Bottled Spite every ${MAKE_SECS} seconds. It takes junk at its back and sides and puts the Spite out of its front, the way its arrow points. A belt carries anything put on it, the way its arrow points. The drop hands junk to any belt touching it, on any side.`,
     ],
     touch: [
-      'Do this: tap Spite Still in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, and tap the highlighted tile. Then tap Belt and drag your finger from the tile under the Returns Drop onto the Still.',
-      `A Spite Still boils a piece of junk down into a unit of Bottled Spite every ${MAKE_SECS} seconds. It takes junk at its back and sides and puts the Spite out of its front, the way its arrow points. A belt carries anything put on it, the way its arrow points.`,
+      'Do this: tap Spite Still in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, and tap the highlighted tile. Then tap Belt, press your finger on the tile under the Returns Drop, drag onto the Still and lift.',
+      `A Spite Still boils a piece of junk down into a unit of Bottled Spite every ${MAKE_SECS} seconds. It takes junk at its back and sides and puts the Spite out of its front, the way its arrow points. A belt carries anything put on it, the way its arrow points. The drop hands junk to any belt touching it, on any side.`,
     ],
     quip: 'A Spite Still, arrow down, then a belt from the drop into it. Garbage in, spite out. Like your marriage.',
     marks: (s) => (s.back ? [...wantedB(s, [[...STILL, 'still', S, 'Spite Still, arrow down'], [...JUNK_BELT, 'conv', S, 'Belt']]), ...fixMarks(s, [DROP_PART])] : []),
@@ -601,12 +607,12 @@ export const STEPS = [
     tool: (s) => (LINE.every(([x, y]) => isB(s, x, y, 'conv', S)) && !stockOf(s, GAP_SPRINKLER) ? fixTool(s, 'conv', lineTo(4), GAP_SHOP) : 'conv'),
     view: (s) => (stockOf(s, GAP_SPRINKLER) ? 0 : 1),
     text: [
-      'Do this: click Belt and drag from the highlighted tile under the Still all the way down onto the gap Sprinkler\'s Dumbwaiter. When the Spite gets there, press Tab to go back up and look at the Sprinkler.',
-      `Whatever a belt carries into a Dumbwaiter goes up to the building above. It keeps up to ${CAP} units of each supply it takes, and its pips light up in that supply's colour. Bottled Spite makes it hit harder: Store Brand takes a Sprinkler's hit from ${hit('sprinkler', 0)} to ${hit('sprinkler', 1)}.`,
+      'Do this: click Belt, press on the highlighted tile under the Still, drag all the way down onto the gap Sprinkler\'s Dumbwaiter and let go: the whole line goes down at once. When the Spite gets there, press Tab to go back up and look at the Sprinkler.',
+      `Whatever a belt carries into a Dumbwaiter goes up to the building above. It keeps up to ${CAP} units of each supply it takes: the gauges beside the Dumbwaiter's hatch fill in that supply's colour, and so do the pips over the building. Bottled Spite makes it hit harder: Store Brand takes a Sprinkler's hit from ${hit('sprinkler', 0)} to ${hit('sprinkler', 1)}.`,
     ],
     touch: [
-      'Do this: tap Belt and drag your finger from the highlighted tile under the Still all the way down onto the gap Sprinkler\'s Dumbwaiter. When the Spite gets there, tap BACK TO THE FLOOR and look at the Sprinkler.',
-      `Whatever a belt carries into a Dumbwaiter goes up to the building above. It keeps up to ${CAP} units of each supply it takes, and its pips light up in that supply's colour. Bottled Spite makes it hit harder: Store Brand takes a Sprinkler's hit from ${hit('sprinkler', 0)} to ${hit('sprinkler', 1)}.`,
+      'Do this: tap Belt, press your finger on the highlighted tile under the Still, drag all the way down onto the gap Sprinkler\'s Dumbwaiter and lift: the whole line goes down at once. When the Spite gets there, tap BACK TO THE FLOOR and look at the Sprinkler.',
+      `Whatever a belt carries into a Dumbwaiter goes up to the building above. It keeps up to ${CAP} units of each supply it takes: the gauges beside the Dumbwaiter's hatch fill in that supply's colour, and so do the pips over the building. Bottled Spite makes it hit harder: Store Brand takes a Sprinkler's hit from ${hit('sprinkler', 0)} to ${hit('sprinkler', 1)}.`,
     ],
     quip: 'Belt it all the way down to the gap Sprinkler, then go up and look.',
     marks: (s) => [
@@ -652,16 +658,16 @@ export const STEPS = [
       : fixTool(s, 'conv', lineTo(SPLITTER[1] - 1), SIDE_SHOP)),
     view: 1,
     text: [
-      `Do this: right-click the highlighted belt above the gap Sprinkler to take it out, put a Splitter there (press ${KEY('split')}) with its arrow DOWN, then lay one belt from the tile left of it down into the second Sprinkler.`,
-      'A Splitter deals what comes in behind it to its front, left and right in turn, skipping a way that is full: one line now stocks both Sprinklers.',
-      `Two more parts for later. An Overpass (press ${KEY('over')}) lets two lines cross without mixing. A Clearance Bin (press ${KEY('bin')}) takes anything from any side and pays pennies for supplies: end a line that carries leftovers in one, so nothing nobody wants blocks it.`,
+      `Do this: click Splitter (or press ${KEY('split')}), press R until its arrow points DOWN, and click the highlighted belt above the gap Sprinkler: it goes straight on the belt and replaces it. Then lay one belt from the tile left of it down into the second Sprinkler.`,
+      'A Splitter deals what comes in behind it to its front, left and right in turn, skipping a way that is full: one line now stocks both Sprinklers. Any part put on a plain belt takes its place, for its price less the belt\'s.',
+      `Two more parts for later. An Overpass (press ${KEY('over')}) lets two lines cross without mixing, and a belt line dragged straight across another belt makes one there by itself. A Clearance Bin (press ${KEY('bin')}) takes anything from any side and pays pennies for supplies: end a line that carries leftovers in one, so nothing nobody wants blocks it.`,
     ],
     touch: [
-      'Do this: tap Remove in the bar, then tap the highlighted belt above the gap Sprinkler, to take it out. Put a Splitter there with its arrow DOWN, then tap Belt and drag one belt from the tile left of it down into the second Sprinkler.',
-      'A Splitter deals what comes in behind it to its front, left and right in turn, skipping a way that is full: one line now stocks both Sprinklers.',
-      'Two more parts for later. An Overpass lets two lines cross without mixing. A Clearance Bin takes anything from any side and pays pennies for supplies: end a line that carries leftovers in one, so nothing nobody wants blocks it.',
+      'Do this: tap Splitter in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, and tap the highlighted belt above the gap Sprinkler: it goes straight on the belt and replaces it. Then tap Belt and drag one belt from the tile left of it down into the second Sprinkler.',
+      'A Splitter deals what comes in behind it to its front, left and right in turn, skipping a way that is full: one line now stocks both Sprinklers. Any part put on a plain belt takes its place, for its price less the belt\'s.',
+      'Two more parts for later. An Overpass lets two lines cross without mixing, and a belt line dragged straight across another belt makes one there by itself. A Clearance Bin takes anything from any side and pays pennies for supplies: end a line that carries leftovers in one, so nothing nobody wants blocks it.',
     ],
-    quip: 'Swap that belt for a Splitter, arrow down, and run a belt to the second Sprinkler.',
+    quip: 'A Splitter straight on that belt, arrow down, and run a belt to the second Sprinkler.',
     marks: (s) => [
       ...wantedB(s, [[...SPLITTER, 'split', S, 'Splitter, arrow down'], [...BRANCH, 'conv', S, 'Belt']]),
       ...(stockOf(s, SIDE_SPRINKLER) ? [] : fixMarks(s, lineTo(SPLITTER[1] - 1), SIDE_SHOP)),
@@ -669,9 +675,8 @@ export const STEPS = [
     done: (s) => isB(s, ...SPLITTER, 'split', S) && !!stockOf(s, SIDE_SPRINKLER),
     hint: (s, f) => (isB(s, ...SPLITTER, 'split', S) && isB(s, ...BRANCH, 'conv', S) && !stockOf(s, SIDE_SPRINKLER) && fixHint(s, f, lineTo(SPLITTER[1] - 1), SIDE_SHOP))
       || floorHint(f, 1)
-      || (isB(s, ...SPLITTER, 'conv') ? 'The belt is still there. Right-click the highlighted belt to take it out, then put the Splitter in its place.' : null)
       || backHint(s, ...SPLITTER, 'split', S, 'Splitter') || backHint(s, ...BRANCH, 'conv', S, 'Belt'),
-    solve: () => [view(1), removeB(...SPLITTER), placeB('split', ...SPLITTER, S), placeB('conv', ...BRANCH, S)],
+    solve: () => [view(1), placeB('split', ...SPLITTER, S), placeB('conv', ...BRANCH, S)],
   },
   {
     title: 'Running dry',
@@ -718,14 +723,14 @@ export const STEPS = [
     view: (s) => (isB(s, ...REBRANDER, 'rebrand', S) && isB(s, ...CUT, 'conv', S) ? 0 : 1),
     doors: (s) => forkFull(s) && !forkBranded(s),
     text: [
-      `Do this: press Tab, right-click the highlighted belt above the gap to take it out, put a Rebrander there (press ${KEY('rebrand')}) with its arrow DOWN, and lay the belt back in the gap. Then go up and watch the Forklift fill up again.`,
+      `Do this: press Tab, click Rebrander (or press ${KEY('rebrand')}), press R until its arrow points DOWN, and click the highlighted belt above the gap: it goes straight on the belt. Lay the belt back in the gap, then go up and watch the Forklift fill up again.`,
       `A Rebrander puts a better label on any supply that goes through it, one brand up a pass: Store Brand, Name Brand, Premium, Platinum. Each pass is slower (${REBRAND_SECS.join(', ')} seconds a unit). Name Brand Spite takes the Forklift's hit to ${hit('forklift', 2)} (Store Brand: ${hit('forklift', 1)}), and the ring round its pip turns bronze; silver and gold are the next two.`,
     ],
     touch: [
-      'Do this: tap CHECK IN THE BACK, tap Remove in the bar, then tap the highlighted belt above the gap, to take it out. Put a Rebrander there with its arrow DOWN, and drag a belt back into the gap. Then go up and watch the Forklift fill up again.',
+      'Do this: tap CHECK IN THE BACK, tap Rebrander in the bar, tap the rotate button at the end of the bar until its arrow points DOWN, and tap the highlighted belt above the gap: it goes straight on the belt. Drag a belt back into the gap, then go up and watch the Forklift fill up again.',
       `A Rebrander puts a better label on any supply that goes through it, one brand up a pass: Store Brand, Name Brand, Premium, Platinum. Each pass is slower (${REBRAND_SECS.join(', ')} seconds a unit). Name Brand Spite takes the Forklift's hit to ${hit('forklift', 2)} (Store Brand: ${hit('forklift', 1)}), and the ring round its pip turns bronze; silver and gold are the next two.`,
     ],
-    quip: 'A Rebrander in the line, arrow down, and the belt back. Same junk, fancier label, higher price. Your dating profile.',
+    quip: 'A Rebrander straight on the line, arrow down, and the belt back. Same junk, fancier label, higher price. Your dating profile.',
     mood: 'smug',
     // (Besides its own two tiles it needs the line above it, the Intern and the Forklift: whatever an
     // earlier lesson put there and is gone now, the player above all may have taken out the Intern
@@ -733,7 +738,6 @@ export const STEPS = [
     marks: (s) => [...wantedB(s, [[...REBRANDER, 'rebrand', S, 'Rebrander, arrow down'], [...CUT, 'conv', S, 'Belt']]), ...fixMarks(s, REBRAND_NEEDS, FORK_SHOP)],
     done: (s) => forkBranded(s),
     hint: (s, f) => {
-      if (isB(s, ...REBRANDER, 'conv')) return floorHint(f, 1) || 'The belt is still there. Right-click the highlighted belt to take it out, then put the Rebrander in its place.';
       if (!isB(s, ...REBRANDER, 'rebrand', S)) return floorHint(f, 1) || backHint(s, ...REBRANDER, 'rebrand', S, 'Rebrander');
       if (!isB(s, ...CUT, 'conv', S)) return floorHint(f, 1) || backHint(s, ...CUT, 'conv', S, 'Belt') || 'Lay a belt back in the gap, down into the line.';
       const fix = fixHint(s, f, REBRAND_NEEDS, FORK_SHOP);
@@ -741,7 +745,7 @@ export const STEPS = [
       if (forkFull(s)) return 'The Forklift filled up with Store Brand. Press OPEN THE DOORS: once it has fired some, Name Brand goes up.';
       return floorHint(f, 0) || 'Name Brand is on its way up. Watch the Forklift\'s pip.';
     },
-    solve: () => [view(1), removeB(...REBRANDER), placeB('rebrand', ...REBRANDER, S), placeB('conv', ...CUT, S), view(0)],
+    solve: () => [view(1), placeB('rebrand', ...REBRANDER, S), placeB('conv', ...CUT, S), view(0)],
   },
 
   // ---- Part 3: dads, gym bros, money --------------------------------------------------------------
@@ -751,13 +755,13 @@ export const STEPS = [
     view: 0,
     text: [
       'Do this: click Wire in the bar (or press Z), then click the Forklift Turret once. Its wire now points north, up the screen.',
-      `A building with a wire direction covers its own tiles and the ${BACK.wireReach} beyond it that way, and while it holds Razor Wire no dad can step on them. This one has none yet, so its wire is only planned (dashed), and the floor shows two routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with it.`,
-      'Click again to turn it round; a direction that would wall the dads in is skipped.',
+      `A building with a wire direction covers its own tiles and the ${BACK.wireReach} beyond it that way, and while it holds Razor Wire nobody can step on them: shoppers walk round it like a wall, and a dad walks into it and is turned away. This one has none yet, so its wire is only planned (dashed), its Dumbwaiter blinks red for wire, and the floor shows two routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with it.`,
+      'Click again to turn it round; a direction that would wall anyone in is skipped.',
     ],
     touch: [
       'Do this: tap Wire in the bar, then tap the Forklift Turret once. Its wire now points north, up the screen.',
-      `A building with a wire direction covers its own tiles and the ${BACK.wireReach} beyond it that way, and while it holds Razor Wire no dad can step on them. This one has none yet, so its wire is only planned (dashed), and the floor shows two routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with it.`,
-      'Tap again to turn it round; a direction that would wall the dads in is skipped.',
+      `A building with a wire direction covers its own tiles and the ${BACK.wireReach} beyond it that way, and while it holds Razor Wire nobody can step on them: shoppers walk round it like a wall, and a dad walks into it and is turned away. This one has none yet, so its wire is only planned (dashed), its Dumbwaiter blinks red for wire, and the floor shows two routes: DADS, where they walk now, and DADS, IF WIRED, where they would walk with it.`,
+      'Tap again to turn it round; a direction that would wall anyone in is skipped.',
     ],
     quip: 'The Wire tool on the Forklift, once: its wire points north.',
     marks: (s) => {
@@ -775,12 +779,12 @@ export const STEPS = [
     wave: DAD_WAVE,
     view: (s) => (isB(s, ...BENDER, 'bender', E) ? 0 : 1),
     text: [
-      `Do this: press Tab, click Bender (or press ${KEY('bender')}), press R until its arrow points RIGHT, and click the highlighted tile between the second Returns Drop and the Forklift's Dumbwaiter. Then go back up and press OPEN THE DOORS for ${DAD_COUNT} dads.`,
-      `With Razor Wire in it the Forklift's wire is live. A dad walks into it, is turned away and goes round, under the Forklift's fire. Each dad turned away uses one: a unit of Store Brand turns away ${WIRE_TURNS}, Platinum many more. When it runs out the wire is only planned again, and dads walk straight through.`,
+      `Do this: press Tab, click Bender (or press ${KEY('bender')}), press R until its arrow points RIGHT, and click the highlighted tile between the second Returns Drop and the Forklift's Dumbwaiter (the one blinking a red lamp: it wants wire). Then go back up and press OPEN THE DOORS for ${DAD_COUNT} dads.`,
+      `With Razor Wire in it the Forklift's wire is live and the red lamp goes out. A dad walks into it, is turned away and goes round, under the Forklift's fire. Each dad turned away uses one: a unit of Store Brand turns away ${WIRE_TURNS}, Platinum many more. When it runs out the wire is only planned again, and dads walk straight through.`,
     ],
     touch: [
-      `Do this: tap CHECK IN THE BACK, tap Bender in the bar, tap the rotate button at the end of the bar until its arrow points RIGHT, and tap the highlighted tile between the second Returns Drop and the Forklift's Dumbwaiter. Then go back up and tap OPEN THE DOORS for ${DAD_COUNT} dads.`,
-      `With Razor Wire in it the Forklift's wire is live. A dad walks into it, is turned away and goes round, under the Forklift's fire. Each dad turned away uses one: a unit of Store Brand turns away ${WIRE_TURNS}, Platinum many more. When it runs out the wire is only planned again, and dads walk straight through.`,
+      `Do this: tap CHECK IN THE BACK, tap Bender in the bar, tap the rotate button at the end of the bar until its arrow points RIGHT, and tap the highlighted tile between the second Returns Drop and the Forklift's Dumbwaiter (the one blinking a red lamp: it wants wire). Then go back up and tap OPEN THE DOORS for ${DAD_COUNT} dads.`,
+      `With Razor Wire in it the Forklift's wire is live and the red lamp goes out. A dad walks into it, is turned away and goes round, under the Forklift's fire. Each dad turned away uses one: a unit of Store Brand turns away ${WIRE_TURNS}, Platinum many more. When it runs out the wire is only planned again, and dads walk straight through.`,
     ],
     quip: "A Barb Bender, arrow right, then open the doors. Razor wire for dads: it's like a vasectomy for their schedule.",
     mood: 'smug',
@@ -856,11 +860,11 @@ export const STEPS = [
     wave: [{ k: 'gymbro', n: 1, gap: 1, at: 0 }],
     text: [
       'Do this: click Reinforce in the bar (or press U), click each of the three crates by the entrance once, then press OPEN THE DOORS for another Gym Bro.',
-      `Each level is one more gym bro hit a Crate Stack takes in a sales event, up to ${REINFORCE_MAX} levels (${REINFORCE_FIRST} for the first, more for each after). Security soaks up hits with Duct Tape from The Back instead: each roll it holds takes ${TAPE_HITS === 1 ? 'a hit' : `${TAPE_HITS} hits`} for it at Store Brand, more at the better brands.`,
+      `Each level is one more gym bro hit a Crate Stack takes in a sales event, up to ${REINFORCE_MAX} levels (${REINFORCE_FIRST} for the first, more for each after). Security is reinforced the same way, with this tool or REINFORCE on its card${REINFORCE_FORK ? ` (${REINFORCE_FORK} for a Forklift Turret's first level)` : ''}. Q puts the tool down.`,
     ],
     touch: [
       'Do this: tap Reinforce in the bar, tap each of the three crates by the entrance once, then tap OPEN THE DOORS for another Gym Bro.',
-      `Each level is one more gym bro hit a Crate Stack takes in a sales event, up to ${REINFORCE_MAX} levels (${REINFORCE_FIRST} for the first, more for each after). Security soaks up hits with Duct Tape from The Back instead: each roll it holds takes ${TAPE_HITS === 1 ? 'a hit' : `${TAPE_HITS} hits`} for it at Store Brand, more at the better brands.`,
+      `Each level is one more gym bro hit a Crate Stack takes in a sales event, up to ${REINFORCE_MAX} levels (${REINFORCE_FIRST} for the first, more for each after). Security is reinforced the same way, with this tool or REINFORCE on its card${REINFORCE_FORK ? ` (${REINFORCE_FORK} for a Forklift Turret's first level)` : ''}.`,
     ],
     quip: 'Reinforce the three crates by the door, then let the next meathead in.',
     mood: 'smug',
@@ -913,7 +917,7 @@ export const STEPS = [
       'Do this: press Play a real game when you are ready, or stay and practise as long as you like.',
       'A real game is 20 sales events with a short build break between them, in a bigger store with a Returns Drop or more per player. Cash is limited, each player has his own, refunds are split, and the shoppers get more patient every event.',
       'There are many more kinds of shopper than these three. The Employee Handbook lists them all, with every building, part, supply and brand: press ? at the top right, then 📖 Employee Handbook.',
-      'Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. P pauses; 1x to 5x set the speed.',
+      'Move the view with W, A, S and D, zoom with the mouse wheel, press F to see the whole floor and H to go back to your entrance. Q puts down whatever you are holding. P pauses; 1x to 5x set the speed.',
     ],
     touch: [
       'Do this: tap Play a real game when you are ready, or stay and practise as long as you like.',

@@ -488,7 +488,7 @@ test('every building and part has a plain explanation', () => {
     assert.ok(HOW[k], `help for ${k}`);
     assert.ok(HOW[k].does.length > 20 && HOW[k].use.length > 20, `help for ${k} says what it does and how to use it`);
   }
-  for (const k of ['conv', 'split', 'over', 'intern', 'bin', 'still', 'cannery', 'spooler', 'winder', 'bender', 'rebrand']) assert.ok(BACK_HOW[k], `help for ${k}`);
+  for (const k of ['conv', 'split', 'over', 'intern', 'bin', 'still', 'cannery', 'spooler', 'bender', 'rebrand']) assert.ok(BACK_HOW[k], `help for ${k}`);
 });
 
 test('the player places every building and the parts that matter, and uses every tool (0.4)', () => {
@@ -578,7 +578,8 @@ test('on a touch screen no lesson or help text mentions a key or the mouse', asy
     for (const m of tut.marks()) session.send({ c: 'remove', x: m.x, y: m.y, f: m.f });
     tut.skip();
   }
-  const keys = /\bpress(ing)? (the mouse|[0-9RUBFHZ]\b|Tab\b)|right-click|\bEsc\b|\bmouse\b|W, A, S|\bclick/i;
+  // (0.4.01: Q puts down whatever is held.)
+  const keys = /\bpress(ing)? (the mouse|[0-9RUBFHZQ]\b|Tab\b)|\bQ puts\b|right-click|\bEsc\b|\bmouse\b|W, A, S|\bclick/i;
   let changed = 0;
   for (const t of texts) {
     const out = forTouch(t);
@@ -765,4 +766,36 @@ test('whatever a player takes out, turns or clears, every lesson from The Back o
     }
   }
   assert.deepEqual(stuck, []);
+});
+
+test('the Splitter and the Rebrander go straight on the belt, and the lessons still finish if the belt is taken out first (0.4.01)', () => {
+  for (const title of ['Share a line: the Splitter', 'A better label: the Rebrander']) {
+    const at = STEPS.findIndex((st) => st.title === title);
+    assert.ok(at > 0, title);
+    for (const removeFirst of [false, true]) {
+      const session = trainingSession();
+      const tut = createTutorial(session);
+      assert.deepEqual(tut.autoplay(at), [], `${title}: reached`);
+      const place = STEPS[at].solve(session.state).filter((c) => c.c === 'place');
+      const part = place[0];
+      const tile = session.state.back[part.y * session.state.w + part.x];
+      assert.equal(tile && tile.k, 'conv', `${title}: the marked tile holds a belt`);
+      // The arrow points at the part's button (or the tile once it is held), never at taking the belt out.
+      const m = tut.marks().find((mk) => mk.x === part.x && mk.y === part.y && mk.f);
+      assert.equal(m.k, part.k);
+      if (!removeFirst) {
+        assert.deepEqual(arrowTarget(STEPS[at], session.state, tut.marks(), { floor: 1 }), { kind: 'button', k: part.k }, `${title}: the arrow asks for the part`);
+        assert.deepEqual(arrowTarget(STEPS[at], session.state, tut.marks(), { floor: 1, tool: part.k }), { kind: 'tile', x: part.x, y: part.y }, `${title}: then the belt's tile`);
+      }
+      if (removeFirst) assert.equal(session.send({ c: 'remove', x: part.x, y: part.y, f: 1 }).ok, true);
+      for (const cmd of STEPS[at].solve(session.state)) tut.act(cmd);
+      assert.equal(session.state.back[part.y * session.state.w + part.x].k, part.k, `${title}: placed${removeFirst ? ' after the belt came out' : ' on the belt'}`);
+      for (let n = 0; n < 400 && !tut.check(); n++) { tut.finish(); session.fastForward(15); }
+      if (!tut.check() && STEPS[at].wave) {
+        tut.act({ c: 'start' });
+        for (let n = 0; n < 400 && !tut.check(); n++) session.fastForward(15);
+      }
+      assert.ok(tut.check(), `${title}${removeFirst ? ', belt taken out first' : ''}: completes`);
+    }
+  }
 });

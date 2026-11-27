@@ -85,6 +85,9 @@ function wrongThere(a, m) {
   return big && (((b.d | 0) ^ m.d) & 1) ? 'remove' : 'spin';
 }
 
+/** True if the mark wants a Back part that may go straight on the plain belt p (0.4.01: it replaces it). */
+const onBelt = (p, m) => !!p && p.k === 'conv' && !!m.k && m.k !== 'conv' && !!BUILD[m.k] && !BUILD[m.k].fixed;
+
 const same = (t, m) => !!t && t.x === m.x && t.y === m.y;
 
 /**
@@ -142,7 +145,7 @@ export function arrowTarget(st, s, marks, { tool = null, selected = null, touch 
   if (st.manual) return { kind: 'control', name: st.last ? 'play' : 'next' };
   if (marks && marks.length) {
     const here0 = (mk) => ((mk.f | 0) === (floor | 0));
-    const free = (mk) => (mk.f ? !partAt(s, mk.x, mk.y) : !buildingAt(s, mk.x, mk.y)) && !mk.fix;
+    const free = (mk) => (mk.f ? !partAt(s, mk.x, mk.y) || onBelt(partAt(s, mk.x, mk.y), mk) : !buildingAt(s, mk.x, mk.y)) && !mk.fix;
     // Holding the right thing for one of the tiles on this floor: that tile. Otherwise the first.
     const m = marks.find((mk) => here0(mk) && toolFor(mk) && toolFor(mk) === tool && (free(mk) || mk.wd !== undefined || mk.r !== undefined || mk.del))
       || marks[0];
@@ -206,7 +209,10 @@ export function arrowTarget(st, s, marks, { tool = null, selected = null, touch 
  * with the mouse over it, nothing held (the lesson's hint says so).
  */
 function backTarget(s, marks, m, tool, touch) {
-  const p = partAt(s, m.x, m.y);
+  const at = partAt(s, m.x, m.y);
+  // (0.4.01) A part goes straight on a plain belt and replaces it: such a belt is as good as an
+  // empty tile.
+  const p = onBelt(at, m) ? null : at;
   // Taking it out: a right-click on it, or a finger with the Remove tool.
   const takeOut = () => (touch && tool !== 'remove' ? { kind: 'button', k: 'remove' } : { kind: 'tile', x: m.x, y: m.y });
   if (m.del) return takeOut();
