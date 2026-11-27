@@ -16,9 +16,7 @@
 // second after the card appeared (the rules decide); on the last card the same click ends the deal.
 // The line under the table says how, that this player's click counted, and with friends who is still
 // being waited for. Skip still skips the whole deal.
-import { cardsShown } from '../sim/index.js';
-// (cardWaiting arrives with the rules of 0.4.01: until it does, the count is worked out here.)
-import * as cardRules from '../sim/cards.js';
+import { cardsShown, cardWaiting } from '../sim/index.js';
 import { isTouch } from '../content/touch.js';
 import { h, setText, setClass } from './dom.js';
 import { cardEl } from './hand.js';
@@ -233,9 +231,10 @@ export function createDeal(session, { strip, playSound = () => {} }) {
     if (!showing) setText(next, '');
     else if (!mine) setText(next, cur + 1 < v.cards.length ? `${tapWord} the card for the next one.` : `${tapWord} the card to get on with it.`);
     else {
-      // (cardWaiting from the rules where it is there; the same count from the players otherwise.)
+      // (The rules' count; the names are the same players less this one, whose click may still be
+      // on its way to the host.)
       const waiting = store.filter((p) => (p.nx | 0) <= cur && p !== me0);
-      const left = typeof cardRules.cardWaiting === 'function' ? cardRules.cardWaiting(s) : waiting.length + (asked(s, cur) ? 0 : 1);
+      const left = cardWaiting(s);
       const names = waiting.map((p) => p.name);
       setText(next, store.length < 2 || left <= 0 || !names.length
         ? (cur + 1 < v.cards.length ? 'Got it. Next one coming.' : 'Got it. Wrapping up.')
