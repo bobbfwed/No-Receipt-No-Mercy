@@ -153,9 +153,10 @@ function edgeRow(PIECES, FRAME, dir) {
   const canvas = document.querySelector('canvas.world');
   const g = globalThis.__game, R = g.renderer, s = g.session.state;
   const f = canvas.getBoundingClientRect();
-  // (36 pixels a tile: zoomed in, yet a tile still fits in the band left between the top pieces
-  // and the bottom ones on a phone on its side with the held tool's card up.)
-  R.zoomBy(36 / R.cam.zoom);
+  // (At least 36 pixels a tile: zoomed in, yet a tile still fits in the band left between the top
+  // pieces and the bottom ones on a phone on its side with the held tool's card up. A tall floor,
+  // a phone held upright, needs more for the map not to fit.)
+  R.zoomBy(Math.max(36, (1.5 * f.height) / s.h) / R.cam.zoom);
   R.pan(0, dir * 1e4);
   const cam = R.cam, z = cam.zoom;
   if (s.h * z <= f.height) return { fits: true, hit: [] };
