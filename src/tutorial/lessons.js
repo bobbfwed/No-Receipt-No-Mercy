@@ -296,10 +296,85 @@ const spiteSeen = (s) => {
   if (p && p.out && itemType(p.out) === 1) return true;
   return LINE.some(([x, y]) => { const q = atB(s, x, y); return q && q.it && q.it.some((c, n) => n % 2 === 0 && itemType(c) === 1); });
 };
-const cutDone = (s) => !atB(s, ...CUT);
 /** The Forklift full of Store Brand Spite: Name Brand cannot go up until it has fired some. */
 const forkFull = (s) => { const b = forklift(s); return !!b && b.k === 'forklift' && unitsIn(b, 'dmg', s) >= stockCap(s); };
 const doorCratesDone = (s) => DOOR_CRATES.every(([x, y]) => is(s, x, y, 'crate') && (at(s, x, y).r | 0) >= 1);
+/** The Forklift ran out of Spite during this lesson (its own `stockOut`, not another building's). */
+const forkRanDry = (s, f) => f.outs.includes(`${FORKLIFT[1] * s.w + FORKLIFT[0]}:dmg`);
+/**
+ * Nothing new reaches the Forklift: the belt the Intern takes from is out, or the Intern himself is
+ * not in his place (a player may take him out instead of the belt: the Forklift runs dry all the
+ * same, and the Rebrander lesson puts him back).
+ */
+const forkStarved = (s) => !isB(s, ...CUT, 'conv') || !isB(s, ...INTERN, 'intern', W);
+
+// ---- Putting back what an earlier lesson built (0.4.00) ---------------------------------------
+// Each lesson of parts 2 and 3 relies on what the ones before it built. Anything the player has
+// since taken out, turned the wrong way or replaced is marked again, with a hint saying so, so that
+// no lesson waits for something that cannot come. The lists are [x, y, kind, facing, label]: The
+// Back's in the order the junk meets them, then the shop floor's.
+const DROP_PART = [DROP[0], DROP[1], 'drop', DROP[2], 'Returns Drop, arrow down'];
+const WIRE_DROP_PART = [WIRE_DROP[0], WIRE_DROP[1], 'drop', WIRE_DROP[2], 'Returns Drop, arrow right'];
+const INTERN_PART = [...INTERN, 'intern', W, 'Intern, arrow left'];
+const FORK_SHOP = [[...FORKLIFT, 'forklift', undefined, 'Forklift']];
+const GAP_SHOP = [[...GAP_SPRINKLER, 'sprinkler', undefined, 'Sprinkler']];
+const SIDE_SHOP = [[...SIDE_SPRINKLER, 'sprinkler', undefined, 'Sprinkler']];
+
+/**
+ * The first line, from its Returns Drop down column 10 to row `to`: the drop, the belt under it,
+ * the Spite Still and the belts below. (No lesson needs it below the Rebrander's tile.)
+ */
+function lineTo(to) {
+  const out = [DROP_PART, [...JUNK_BELT, 'conv', S, 'Belt'], [...STILL, 'still', S, 'Spite Still, arrow down']];
+  for (const [x, y] of LINE) if (y <= to) out.push([x, y, 'conv', S, 'Belt']);
+  return out;
+}
+
+/**
+ * Marks for what an earlier lesson built that is no longer right: `back` parts in The Back, then
+ * `shop` buildings on the shop floor. A mark beside one already listed loses its caption, so a run
+ * of missing belts is captioned once.
+ */
+function fixMarks(s, back, shop = []) {
+  const out = [];
+  if (s.back) for (const [x, y, k, d, label] of back) if (!isB(s, x, y, k, d)) out.push({ x, y, f: 1, label, k, d });
+  out.push(...wanted(s, shop));
+  return out.map((m, n) => (out.slice(0, n).some((o) => (o.f | 0) === (m.f | 0) && Math.abs(o.x - m.x) + Math.abs(o.y - m.y) === 1) ? { ...m, label: '' } : m));
+}
+
+const an = (name) => (/^[AEIOU]/.test(name) ? `an ${name}` : `a ${name}`);
+
+/** The hint for the first thing fixMarks marks, or null if nothing is. */
+function fixHint(s, f, back, shop = []) {
+  if (s.back) {
+    for (const [x, y, k, d] of back) {
+      if (isB(s, x, y, k, d)) continue;
+      const name = BUILD[k].name;
+      return floorHint(f, 1) || backHint(s, x, y, k, d, name)
+        || `Something an earlier lesson built in The Back is gone. Put ${an(name)} back on the highlighted tile, its arrow pointing ${FACING[d]}.`;
+    }
+  }
+  for (const [x, y, k, d] of shop) {
+    if (is(s, x, y, k, d)) continue;
+    const name = BUILD[k].name;
+    return floorHint(f, 0) || tileHint(s, x, y, k, d, name) || `The ${name} an earlier lesson built is gone. Put ${an(name)} back on the highlighted tile.`;
+  }
+  return null;
+}
+
+/** The build-bar button for the first thing fixMarks marks, or `own` if nothing is (or only a Returns Drop, which is turned, not built). */
+function fixTool(s, own, back, shop = []) {
+  if (s.back) for (const [x, y, k, d] of back) if (!isB(s, x, y, k, d)) return k === 'drop' ? own : k;
+  for (const [x, y, k, d] of shop) if (!is(s, x, y, k, d)) return k;
+  return own;
+}
+
+/** The Forklift stands, but its wire does not point north (cleared, or turned another way). */
+const wireWrong = (s) => is(s, ...FORKLIFT, 'forklift') && forklift(s).wd !== WIRE_DIR;
+const COMPASS = ['east', 'south', 'west', 'north'];
+
+/** What the Rebrander lesson needs besides its own two tiles: the line above it, and the Intern. */
+const REBRAND_NEEDS = [...lineTo(REBRANDER[1] - 1), INTERN_PART];
 
 export const STEPS = [
   {
@@ -514,15 +589,16 @@ export const STEPS = [
       `A Spite Still boils a piece of junk down into a unit of Bottled Spite every ${MAKE_SECS} seconds. It takes junk at its back and sides and puts the Spite out of its front, the way its arrow points. A belt carries anything put on it, the way its arrow points.`,
     ],
     quip: 'A Spite Still, arrow down, then a belt from the drop into it. Garbage in, spite out. Like your marriage.',
-    marks: (s) => (s.back ? wantedB(s, [[...STILL, 'still', S, 'Spite Still, arrow down'], [...JUNK_BELT, 'conv', S, 'Belt']]) : []),
+    marks: (s) => (s.back ? [...wantedB(s, [[...STILL, 'still', S, 'Spite Still, arrow down'], [...JUNK_BELT, 'conv', S, 'Belt']]), ...fixMarks(s, [DROP_PART])] : []),
     done: (s, f) => f.spite >= 1 || spiteSeen(s),
     hint: (s, f) => floorHint(f, 1) || backHint(s, ...STILL, 'still', S, 'Spite Still') || backHint(s, ...JUNK_BELT, 'conv', S, 'Belt')
+      || fixHint(s, f, [DROP_PART])
       || (isB(s, ...STILL, 'still', S) && isB(s, ...JUNK_BELT, 'conv', S) ? 'Watch the junk go into the Still.' : null),
     solve: () => [view(1), placeB('still', ...STILL, S), placeB('conv', ...JUNK_BELT, S)],
   },
   {
     title: 'Spite up the Dumbwaiter',
-    tool: 'conv',
+    tool: (s) => (LINE.every(([x, y]) => isB(s, x, y, 'conv', S)) && !stockOf(s, GAP_SPRINKLER) ? fixTool(s, 'conv', lineTo(4), GAP_SHOP) : 'conv'),
     view: (s) => (stockOf(s, GAP_SPRINKLER) ? 0 : 1),
     text: [
       'Do this: click Belt and drag from the highlighted tile under the Still all the way down onto the gap Sprinkler\'s Dumbwaiter. When the Spite gets there, press Tab to go back up and look at the Sprinkler.',
@@ -533,11 +609,16 @@ export const STEPS = [
       `Whatever a belt carries into a Dumbwaiter goes up to the building above. It keeps up to ${CAP} units of each supply it takes, and its pips light up in that supply's colour. Bottled Spite makes it hit harder: Store Brand takes a Sprinkler's hit from ${hit('sprinkler', 0)} to ${hit('sprinkler', 1)}.`,
     ],
     quip: 'Belt it all the way down to the gap Sprinkler, then go up and look.',
-    marks: (s) => wantedB(s, LINE.map(([x, y], n) => [x, y, 'conv', S, n === 0 ? 'From here' : n === LINE.length - 1 ? 'into the Sprinkler' : ''])),
+    marks: (s) => [
+      ...wantedB(s, LINE.map(([x, y], n) => [x, y, 'conv', S, n === 0 ? 'From here' : n === LINE.length - 1 ? 'into the Sprinkler' : ''])),
+      ...(stockOf(s, GAP_SPRINKLER) ? [] : fixMarks(s, lineTo(4), GAP_SHOP)),
+    ],
     done: (s, f) => !!stockOf(s, GAP_SPRINKLER) && f.floor === 0,
     hint: (s, f) => {
       for (const [x, y] of LINE) { const h = backHint(s, x, y, 'conv', S, 'Belt'); if (h) return h; }
       if (!stockOf(s, GAP_SPRINKLER)) {
+        const fix = fixHint(s, f, lineTo(4), GAP_SHOP);
+        if (fix) return fix;
         if (f.floor !== 1) return floorHint(f, 1);
         return LINE.every(([x, y]) => isB(s, x, y, 'conv', S)) ? 'Watch the Spite ride down the line.' : null;
       }
@@ -547,7 +628,7 @@ export const STEPS = [
   },
   {
     title: 'An Unpaid Intern',
-    tool: 'intern',
+    tool: (s) => (isB(s, ...INTERN, 'intern', W) ? fixTool(s, 'intern', lineTo(INTERN[1]), FORK_SHOP) : 'intern'),
     view: 1,
     text: [
       `Do this: press Tab, click Intern (or press ${KEY('intern')}), press R until his arrow points LEFT, and click the highlighted tile beside the line. He stocks the Forklift Turret from the same belt.`,
@@ -559,14 +640,16 @@ export const STEPS = [
     ],
     quip: "An Unpaid Intern beside the line, facing the Forklift. He works for exposure. Like your OnlyFans.",
     mood: 'smug',
-    marks: (s) => wantedB(s, [[...INTERN, 'intern', W, 'Intern, arrow left']]),
+    marks: (s) => [...wantedB(s, [INTERN_PART]), ...(stockOf(s, FORKLIFT) ? [] : fixMarks(s, lineTo(INTERN[1]), FORK_SHOP))],
     done: (s) => !!stockOf(s, FORKLIFT),
-    hint: (s, f) => floorHint(f, 1) || backHint(s, ...INTERN, 'intern', W, 'Intern'),
+    hint: (s, f) => (isB(s, ...INTERN, 'intern', W) && fixHint(s, f, lineTo(INTERN[1]), FORK_SHOP))
+      || floorHint(f, 1) || backHint(s, ...INTERN, 'intern', W, 'Intern'),
     solve: () => [view(1), placeB('intern', ...INTERN, W)],
   },
   {
     title: 'Share a line: the Splitter',
-    tool: (s) => (isB(s, ...SPLITTER, 'split') ? 'conv' : 'split'),
+    tool: (s) => (!isB(s, ...SPLITTER, 'split') ? 'split' : !isB(s, ...BRANCH, 'conv', S) || stockOf(s, SIDE_SPRINKLER) ? 'conv'
+      : fixTool(s, 'conv', lineTo(SPLITTER[1] - 1), SIDE_SHOP)),
     view: 1,
     text: [
       `Do this: right-click the highlighted belt above the gap Sprinkler to take it out, put a Splitter there (press ${KEY('split')}) with its arrow DOWN, then lay one belt from the tile left of it down into the second Sprinkler.`,
@@ -579,9 +662,13 @@ export const STEPS = [
       'Two more parts for later. An Overpass lets two lines cross without mixing. A Clearance Bin takes anything from any side and pays pennies for supplies: end a line that carries leftovers in one, so nothing nobody wants blocks it.',
     ],
     quip: 'Swap that belt for a Splitter, arrow down, and run a belt to the second Sprinkler.',
-    marks: (s) => wantedB(s, [[...SPLITTER, 'split', S, 'Splitter, arrow down'], [...BRANCH, 'conv', S, 'Belt']]),
+    marks: (s) => [
+      ...wantedB(s, [[...SPLITTER, 'split', S, 'Splitter, arrow down'], [...BRANCH, 'conv', S, 'Belt']]),
+      ...(stockOf(s, SIDE_SPRINKLER) ? [] : fixMarks(s, lineTo(SPLITTER[1] - 1), SIDE_SHOP)),
+    ],
     done: (s) => isB(s, ...SPLITTER, 'split', S) && !!stockOf(s, SIDE_SPRINKLER),
-    hint: (s, f) => floorHint(f, 1)
+    hint: (s, f) => (isB(s, ...SPLITTER, 'split', S) && isB(s, ...BRANCH, 'conv', S) && !stockOf(s, SIDE_SPRINKLER) && fixHint(s, f, lineTo(SPLITTER[1] - 1), SIDE_SHOP))
+      || floorHint(f, 1)
       || (isB(s, ...SPLITTER, 'conv') ? 'The belt is still there. Right-click the highlighted belt to take it out, then put the Splitter in its place.' : null)
       || backHint(s, ...SPLITTER, 'split', S, 'Splitter') || backHint(s, ...BRANCH, 'conv', S, 'Belt'),
     solve: () => [view(1), removeB(...SPLITTER), placeB('split', ...SPLITTER, S), placeB('conv', ...BRANCH, S)],
@@ -589,7 +676,7 @@ export const STEPS = [
   {
     title: 'Running dry',
     wave: DRY_WAVE,
-    view: (s) => (cutDone(s) ? 0 : 1),
+    view: (s) => (forkStarved(s) ? 0 : 1),
     text: [
       `Do this: right-click the highlighted belt (the one the Intern takes from) to take it out, press Tab to go back up, and press OPEN THE DOORS for ${DRY_CROWD} Coupon Clippers, one a second. Watch the Forklift Turret (5x at the top speeds it up).`,
       `Every shot uses up stock. A unit of Spite lasts the Forklift ${FORK_SHOTS} shots and it holds ${CAP}, about a minute of shooting. With its belt gone nothing replaces them, and when the last is used a red OUT OF SPITE pops up over it: it is back to its plain self until more comes up. Kept fed, a building refills between shoppers.`,
@@ -600,18 +687,32 @@ export const STEPS = [
     ],
     quip: 'Cut the Intern\'s belt, go up, open the doors and watch the Forklift run dry. Performance anxiety: you know it well.',
     mood: 'smug',
-    marks: (s) => (cutDone(s) ? [] : [{ x: CUT[0], y: CUT[1], f: 1, label: 'Take this out', del: true }]),
-    done: (s, f) => f.outs.some((o) => o.endsWith(':dmg')) && f.waveEnds >= 1,
+    // (Taking out the Intern instead of his belt starves the Forklift too: it counts, and the
+    // Rebrander lesson marks him to be put back. A Forklift sold and bought again is empty, with
+    // nothing to run out of: the line to it is marked to be put back until it holds some Spite.)
+    marks: (s, f) => {
+      if (!is(s, ...FORKLIFT, 'forklift')) return wanted(s, FORK_SHOP);
+      if (forkRanDry(s, f)) return [];
+      if (!stockOf(s, FORKLIFT)) return fixMarks(s, [...lineTo(CUT[1]), INTERN_PART]);
+      return forkStarved(s) ? [] : [{ x: CUT[0], y: CUT[1], f: 1, label: 'Take this out', del: true }];
+    },
+    done: (s, f) => forkRanDry(s, f) && f.waveEnds >= 1,
     hint: (s, f) => {
-      if (f.waveEnds && !f.outs.some((o) => o.endsWith(':dmg'))) return cutDone(s) ? 'Nothing ran dry that time. Press OPEN THE DOORS again.' : 'Nothing ran dry: the Forklift was still fed. Right-click the highlighted belt to take it out.';
-      if (!cutDone(s)) return floorHint(f, 1) || 'Right-click the highlighted belt to take it out.';
+      if (!is(s, ...FORKLIFT, 'forklift')) return fixHint(s, f, [], FORK_SHOP);
+      const dry = forkRanDry(s, f);
+      if (!dry && !stockOf(s, FORKLIFT)) {
+        return fixHint(s, f, [...lineTo(CUT[1]), INTERN_PART])
+          || 'The Forklift is empty, so it has nothing to run out of yet. Wait for Spite to come up and fill it.';
+      }
+      if (f.waveEnds && !dry) return forkStarved(s) ? 'Nothing ran dry that time. Press OPEN THE DOORS again.' : 'Nothing ran dry: the Forklift was still fed. Right-click the highlighted belt to take it out.';
+      if (!forkStarved(s)) return floorHint(f, 1) || 'Right-click the highlighted belt to take it out.';
       return floorHint(f, 0) || watchHint('Watch for OUT OF SPITE over the Forklift.')(s, f);
     },
     solve: () => [view(1), removeB(...CUT), view(0), { c: 'start' }],
   },
   {
     title: 'A better label: the Rebrander',
-    tool: (s) => (isB(s, ...REBRANDER, 'rebrand', S) ? 'conv' : 'rebrand'),
+    tool: (s) => (!isB(s, ...REBRANDER, 'rebrand', S) ? 'rebrand' : !isB(s, ...CUT, 'conv', S) ? 'conv' : fixTool(s, 'conv', REBRAND_NEEDS, FORK_SHOP)),
     // (Only if the Forklift has filled up with Store Brand again: once it fires some, Name Brand goes up.)
     wave: DRY_WAVE,
     view: (s) => (isB(s, ...REBRANDER, 'rebrand', S) && isB(s, ...CUT, 'conv', S) ? 0 : 1),
@@ -626,12 +727,17 @@ export const STEPS = [
     ],
     quip: 'A Rebrander in the line, arrow down, and the belt back. Same junk, fancier label, higher price. Your dating profile.',
     mood: 'smug',
-    marks: (s) => wantedB(s, [[...REBRANDER, 'rebrand', S, 'Rebrander, arrow down'], [...CUT, 'conv', S, 'Belt']]),
+    // (Besides its own two tiles it needs the line above it, the Intern and the Forklift: whatever an
+    // earlier lesson put there and is gone now, the player above all may have taken out the Intern
+    // in Running dry instead of his belt, is marked to be put back.)
+    marks: (s) => [...wantedB(s, [[...REBRANDER, 'rebrand', S, 'Rebrander, arrow down'], [...CUT, 'conv', S, 'Belt']]), ...fixMarks(s, REBRAND_NEEDS, FORK_SHOP)],
     done: (s) => forkBranded(s),
     hint: (s, f) => {
       if (isB(s, ...REBRANDER, 'conv')) return floorHint(f, 1) || 'The belt is still there. Right-click the highlighted belt to take it out, then put the Rebrander in its place.';
       if (!isB(s, ...REBRANDER, 'rebrand', S)) return floorHint(f, 1) || backHint(s, ...REBRANDER, 'rebrand', S, 'Rebrander');
       if (!isB(s, ...CUT, 'conv', S)) return floorHint(f, 1) || backHint(s, ...CUT, 'conv', S, 'Belt') || 'Lay a belt back in the gap, down into the line.';
+      const fix = fixHint(s, f, REBRAND_NEEDS, FORK_SHOP);
+      if (fix) return fix;
       if (forkFull(s)) return 'The Forklift filled up with Store Brand. Press OPEN THE DOORS: once it has fired some, Name Brand goes up.';
       return floorHint(f, 0) || 'Name Brand is on its way up. Watch the Forklift\'s pip.';
     },
@@ -665,7 +771,7 @@ export const STEPS = [
   },
   {
     title: 'Razor Wire: the Barb Bender',
-    tool: 'bender',
+    tool: (s) => (!isB(s, ...BENDER, 'bender', E) ? 'bender' : !is(s, ...FORKLIFT, 'forklift') ? 'forklift' : wireWrong(s) ? 'wire' : 'bender'),
     wave: DAD_WAVE,
     view: (s) => (isB(s, ...BENDER, 'bender', E) ? 0 : 1),
     text: [
@@ -678,10 +784,25 @@ export const STEPS = [
     ],
     quip: "A Barb Bender, arrow right, then open the doors. Razor wire for dads: it's like a vasectomy for their schedule.",
     mood: 'smug',
-    marks: (s) => wantedB(s, [[...BENDER, 'bender', E, 'Barb Bender, arrow right']]),
+    // (A building with no wire direction takes no Razor Wire, and one more click with the Wire tool
+    // after north clears it; a Forklift sold and bought again has none. Either way the last lesson's
+    // wire mark comes back, as does anything else it relies on that has gone.)
+    marks: (s) => {
+      const out = [...wantedB(s, [[...BENDER, 'bender', E, 'Barb Bender, arrow right']]), ...fixMarks(s, [WIRE_DROP_PART], FORK_SHOP)];
+      if (wireWrong(s)) out.push({ x: FORKLIFT[0], y: FORKLIFT[1], k: 'forklift', wd: WIRE_DIR, label: 'Wire it north' });
+      return out;
+    },
     done: (s, f) => !!forklift(s) && wireLive(forklift(s)) && f.waveEnds >= 1 && f.turned >= 1,
     hint: (s, f) => {
       if (!isB(s, ...BENDER, 'bender', E)) return floorHint(f, 1) || backHint(s, ...BENDER, 'bender', E, 'Barb Bender');
+      const fix = fixHint(s, f, [WIRE_DROP_PART], FORK_SHOP);
+      if (fix) return fix;
+      if (wireWrong(s)) {
+        const wd = forklift(s).wd;
+        return floorHint(f, 0) || (wd === undefined
+          ? 'The Forklift has no wire direction any more, so it takes no Razor Wire. Click Wire in the bar (or press Z), then click the Forklift until its wire points north.'
+          : `The Forklift's wire points ${COMPASS[wd]}. Click Wire in the bar (or press Z), then click the Forklift until its wire points north.`);
+      }
       if (!forklift(s) || !wireLive(forklift(s))) return 'Wait for the Razor Wire to reach the Forklift.';
       if (f.waveEnds && !f.turned) return 'No dad walked into the wire. Press OPEN THE DOORS again.';
       return floorHint(f, 0) || watchHint('Watch the dads walk into the wire and turn away.')(s, f);

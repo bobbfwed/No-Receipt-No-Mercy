@@ -7,6 +7,7 @@ import { HostSession } from '../src/net/session.js';
 import { createDirector } from '../src/content/director.js';
 import { createTutorial, STEPS, PART_TWO, TRAINING_DROPS } from '../src/tutorial/lessons.js';
 import { HOW, BACK_HOW } from '../src/content/help.js';
+import { arrowTarget } from '../src/tutorial/target.js';
 import { tierRows } from '../src/content/facts.js';
 import {
   createGame, applyCommand, step, queueTrainingWave, statsOf, BUILD, SHOP_KINDS, SHOPPERS, TUNE, TICK_HZ,
@@ -598,4 +599,170 @@ test('every lesson leads with what to do, and DEB says what to do before any jok
     // Short (the owner's guidance in 0.3.03: fewer words): no lesson runs past four paragraphs.
     assert.ok(st.text.length <= 4, `"${st.title}" is short`);
   }
+});
+
+// ---- Unhappy paths (0.4.00): what the player took out, turned or cleared ------------------------
+
+/** Carries out what one mark asks for, as a player following the highlights would. */
+function doMark(session, m) {
+  const s = session.state;
+  if (m.fix === 'rebuild') return session.send({ c: 'rebuild' });
+  if (m.wd !== undefined) return session.send({ c: 'wire', x: m.x, y: m.y, d: m.wd });
+  if (m.r !== undefined) return session.send({ c: 'reinforce', x: m.x, y: m.y });
+  if (m.act === 'more') return session.send({ c: 'dropUp', x: m.x, y: m.y });
+  if (m.del) return session.send({ c: 'remove', x: m.x, y: m.y, f: m.f });
+  if (!m.k) return null;
+  if (m.k === 'drop') {
+    for (let n = 0; n < 4 && s.back[tileOf(s, m.x, m.y)].d !== m.d; n++) session.send({ c: 'rotate', x: m.x, y: m.y, f: 1 });
+    return null;
+  }
+  const here = m.f ? s.back[tileOf(s, m.x, m.y)] : s.grid[tileOf(s, m.x, m.y)];
+  if (here && (here.k !== m.k || (m.d !== undefined && here.d !== m.d))) session.send({ c: 'remove', x: m.x, y: m.y, f: m.f });
+  return session.send({ c: 'place', k: m.k, x: m.x, y: m.y, d: m.d ?? 0, f: m.f });
+}
+
+/**
+ * A player who does only what the lesson highlights, looks at the floor it wants and opens the
+ * doors when the arrow points at them. Plays the current lesson until it is done or `secs` of game
+ * time have passed; returns whether it is done.
+ */
+function followMarks(session, tut, secs = 400) {
+  for (let n = 0; n < (secs * TICK_HZ) / 15 && !tut.check(); n++) {
+    const st = tut.step;
+    if (session.state.phase !== 'wave') for (const m of tut.marks()) doMark(session, m);
+    const marks = tut.marks();
+    if (!marks.length) {
+      const want = typeof st.view === 'function' ? st.view(session.state) : st.view;
+      if (want !== undefined && want !== tut.floor) tut.act({ c: 'view', f: want });
+    } else if ((marks[0].f | 0) !== tut.floor) tut.act({ c: 'view', f: marks[0].f | 0 });
+    const t = arrowTarget(st, session.state, tut.marks(), { floor: tut.floor });
+    if (t.kind === 'control' && t.name === 'doors') tut.act({ c: 'start' });
+    if (tut.check()) break;
+    session.fastForward(15);
+  }
+  return tut.check();
+}
+
+/** A lesson's marks, as [x, y, what, floor] ('wd' for a wire mark, 'del' to take out), for comparing. */
+const markList = (tut) => tut.marks().map((m) => [m.x, m.y, m.wd !== undefined ? 'wd' : m.del ? 'del' : m.k, m.f | 0]);
+const hasMark = (tut, x, y, k, f) => markList(tut).some((m) => m[0] === x && m[1] === y && m[2] === k && m[3] === f);
+const lessonAt = (t) => STEPS.findIndex((st) => st.title === t);
+
+test('Running dry with the Intern taken out instead of his belt: it counts, and the Rebrander lesson has him put back (0.4.00)', () => {
+  const session = trainingSession(9);
+  const tut = createTutorial(session);
+  tut.autoplay(lessonAt(DRY));
+  assert.equal(tut.step.title, DRY);
+  tut.act({ c: 'view', f: 1 });
+  assert.ok(session.send({ c: 'remove', x: 9, y: 9, f: 1 }).ok, 'the Intern comes out');
+  assert.deepEqual(tut.marks(), [], 'the Forklift is starved either way: nothing more to take out');
+  assert.ok(followMarks(session, tut), 'the Forklift ran dry all the same');
+  tut.next();
+  assert.equal(tut.step.title, REBRAND);
+  assert.ok(hasMark(tut, 9, 9, 'intern', 1), 'the Intern is marked to be put back');
+  for (const cmd of tut.step.solve(session.state)) tut.act(cmd);
+  assert.deepEqual(markList(tut), [[9, 9, 'intern', 1]], 'only the Intern is left to do');
+  assert.equal(tut.tool(), 'intern');
+  assert.match(tut.hint(), /Press Tab/, 'he is in The Back');
+  tut.act({ c: 'view', f: 1 });
+  assert.match(tut.hint(), /Unpaid Intern back on the highlighted tile/);
+  assert.doesNotMatch(tut.hint(), /on its way up/);
+  assert.ok(followMarks(session, tut), 'with him back, Name Brand reaches the Forklift');
+  assert.equal(tut.marks().length, 0);
+});
+
+test('the Barb Bender lesson with the Forklift\'s wire direction cleared shows the wire mark again (0.4.00)', () => {
+  const session = trainingSession(9);
+  const tut = createTutorial(session);
+  tut.autoplay(lessonAt(BENDER));
+  assert.equal(tut.step.title, BENDER);
+  // One more click with the Wire tool after north turns it off.
+  assert.ok(session.send({ c: 'wire', x: F[0], y: F[1], d: -1 }).ok);
+  assert.equal(bAt(session.state, F).wd, undefined);
+  for (const cmd of tut.step.solve(session.state)) tut.act(cmd);
+  assert.ok(hasMark(tut, F[0], F[1], 'wd', 0), 'the last lesson\'s wire mark is back');
+  assert.equal(tut.marks().find((m) => m.wd !== undefined).wd, 3, 'north');
+  assert.equal(tut.tool(), 'wire');
+  assert.match(tut.hint(), /no wire direction/);
+  assert.match(tut.hint(), /until its wire points north/);
+  // Turned another way: the same mark, and the hint says which way it points.
+  assert.ok(session.send({ c: 'wire', x: F[0], y: F[1], d: 1 }).ok);
+  assert.match(tut.hint(), /points south/);
+  assert.ok(followMarks(session, tut), 'set north again, the wire goes live and turns dads away');
+  assert.equal(bAt(session.state, F).wd, 3);
+  assert.equal(tut.marks().length, 0);
+});
+
+test('a belt taken out of the line, the Still taken out, the Forklift sold: each lesson marks it and can still be finished (0.4.00)', () => {
+  // A belt out of the line in the Intern lesson, before he is placed.
+  let session = trainingSession(9), tut = createTutorial(session);
+  tut.autoplay(lessonAt(INTERN));
+  assert.ok(session.send({ c: 'remove', x: 10, y: 6, f: 1 }).ok);
+  for (const cmd of tut.step.solve(session.state)) tut.act(cmd);
+  if (!tut.check()) assert.ok(hasMark(tut, 10, 6, 'conv', 1), 'the belt is marked');
+  assert.ok(followMarks(session, tut));
+  // The Still out before the line goes down: nothing more comes.
+  session = trainingSession(9); tut = createTutorial(session);
+  tut.autoplay(lessonAt(LIFT));
+  assert.ok(session.send({ c: 'remove', x: 10, y: 4, f: 1 }).ok);
+  for (const cmd of tut.step.solve(session.state)) tut.act(cmd);
+  assert.ok(hasMark(tut, 10, 4, 'still', 1), 'the Still is marked');
+  tut.act({ c: 'view', f: 1 });
+  assert.match(tut.hint(), /Spite Still back on the highlighted tile, its arrow pointing down/);
+  assert.ok(followMarks(session, tut));
+  // The Forklift sold, in each lesson that needs it.
+  for (const t of [INTERN, DRY, REBRAND, WIRE, BENDER]) {
+    session = trainingSession(9); tut = createTutorial(session);
+    tut.autoplay(lessonAt(t));
+    assert.ok(session.send({ c: 'remove', x: F[0], y: F[1] }).ok);
+    assert.ok(hasMark(tut, F[0], F[1], 'forklift', 0), `${t}: the Forklift is marked`);
+    if (t !== WIRE) {
+      // (The lesson's own work first, which its hint asks for before anything else.)
+      if (t !== DRY) for (const cmd of tut.step.solve(session.state)) if (cmd.c !== 'start') tut.act(cmd);
+      tut.act({ c: 'view', f: 0 });
+      assert.match(tut.hint(), /Forklift Turret back on the highlighted tile/, t);
+    }
+    assert.ok(followMarks(session, tut), `${t}: finished with a new Forklift`);
+  }
+  // Running dry with a new, empty Forklift and its belt already out: the belt goes back first.
+  session = trainingSession(9); tut = createTutorial(session);
+  tut.autoplay(lessonAt(DRY));
+  assert.ok(session.send({ c: 'remove', x: 10, y: 9, f: 1 }).ok);
+  assert.ok(session.send({ c: 'remove', x: F[0], y: F[1] }).ok);
+  assert.ok(session.send({ c: 'place', k: 'forklift', x: F[0], y: F[1], d: 0 }).ok);
+  assert.deepEqual(markList(tut), [[10, 9, 'conv', 1]], 'an empty Forklift has nothing to run out of');
+  assert.match(tut.hint(), /Belt back on the highlighted tile/);
+  assert.ok(followMarks(session, tut));
+});
+
+test('whatever a player takes out, turns or clears, every lesson from The Back on can be finished by following its marks (0.4.00)', () => {
+  // What a player might undo, at the start of each lesson (the same as undoing it in an earlier one).
+  const UNDO = {
+    intern: [{ c: 'remove', x: 9, y: 9, f: 1 }],
+    still: [{ c: 'remove', x: 10, y: 4, f: 1 }],
+    belt: [{ c: 'remove', x: 10, y: 6, f: 1 }],
+    cut: [{ c: 'remove', x: 10, y: 9, f: 1 }],
+    drop: [{ c: 'rotate', x: 10, y: 2, f: 1 }],
+    wireDrop: [{ c: 'rotate', x: 6, y: 9, f: 1 }],
+    forklift: [{ c: 'remove', x: F[0], y: F[1] }],
+    wire: [{ c: 'wire', x: F[0], y: F[1], d: -1 }],
+    sprinklers: [{ c: 'remove', x: G[0], y: G[1] }, { c: 'remove', x: S2[0], y: S2[1] }],
+  };
+  // The game as it is at the start of each lesson, played once.
+  const first = lessonAt(STILL), last = lessonAt(MONEY);
+  const base = trainingSession(9), bt = createTutorial(base);
+  const snaps = [];
+  for (let i = first; i <= last; i++) { assert.deepEqual(bt.autoplay(i), []); snaps.push([i, JSON.parse(JSON.stringify(base.state))]); }
+  const stuck = [];
+  for (const [i, snap] of snaps) {
+    for (const [what, cmds] of Object.entries(UNDO)) {
+      const session = new HostSession({ name: 'Dave', director: createDirector(() => 0.5), state: structuredClone(snap) });
+      const tut = createTutorial(session);
+      tut.start();
+      while (tut.index < i) tut.next();
+      for (const cmd of cmds) session.send(cmd);
+      if (!followMarks(session, tut)) stuck.push(`${STEPS[i].title} after "${what}": hint "${tut.hint()}", marks ${JSON.stringify(markList(tut))}`);
+    }
+  }
+  assert.deepEqual(stuck, []);
 });
