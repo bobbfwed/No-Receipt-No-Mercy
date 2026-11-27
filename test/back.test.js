@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, addPlayer, applyCommand, step, migrateSave, makeDrops, overpassDirs,
+  createGame, addPlayer, applyCommand, step, migrateSave, makeDrops, makeMap, overpassDirs,
   BACK, BUILD, TUNE, TICK_HZ, MAP_DESIGNS, MAP_SIZES, JUNK, itemCode, itemType, itemTier, dropTicks, newPart, wants, give, stepBack, canPlaceBack, canPlace,
   beltShape,
 } from '../src/sim/index.js';
@@ -135,6 +135,94 @@ test('makeDrops: at least one Returns Drop on every design at every size, never 
       assert.equal(s.back.filter(Boolean).length, drops.length);
     }
   }
+});
+
+// Where every Returns Drop is, recorded on 0.4.00 before the old marked floor went (removal step 3).
+// The drops used to be placed from the Unpacker patches of that floor, and the food court's and car
+// park's furniture still keeps clear of where all four kinds of patch were, so the layout code was
+// kept (as factoryPatches in maps.js) and these must never move. Each design and size: the drops of
+// a new game ('tile:facing'), then a hash of the tiles, the furniture and the drops for every number
+// of entrances from 1 to 7.
+const PINNED_DROPS = {
+  'warehouse/xs': ['100:1 380:2', '1eelk0i'],
+  'warehouse/s': ['102:1 118:1 596:3', 'e0qlm0'],
+  'warehouse/m': ['118:1 142:1 856:0', '1r9vp2p'],
+  'warehouse/l': ['192:1 226:1 1371:3 1444:3', '1w06a42'],
+  'warehouse/xl': ['228:1 248:1 274:1 2199:3 2218:3 2238:3', '1gn1xhz'],
+  'warehouse/xxl': ['253:1 293:1 313:1 354:1 3341:3 3361:3 3381:3', 'uxjzb3'],
+  'warehouse/huge': ['307:1 327:1 347:1 367:1 387:1 4970:3 4990:3 5109:3 5129:3', '1ss21l6'],
+  'warehouse/titan': ['373:1 393:1 433:1 453:1 473:1 534:1 7643:3 7663:3 7683:3 7703:3 7723:3', 'mrvv58'],
+  'showroom/xs': ['101:1 381:3', 't16up2'],
+  'showroom/s': ['102:1 118:1 596:3', '1dmkh3f'],
+  'showroom/m': ['118:1 142:1 856:3', 'u5a3ok'],
+  'showroom/l': ['192:1 226:1 1370:3 1444:3', '10nnt8k'],
+  'showroom/xl': ['228:1 248:1 274:1 2198:3 2218:3 2238:3', '1415l17'],
+  'showroom/xxl': ['253:1 293:1 314:1 355:1 3342:3 3362:3 3382:3', 'xjmasn'],
+  'showroom/huge': ['308:1 328:1 348:1 368:1 387:1 4971:3 4991:3 5109:3 5129:3', '3l7zv0'],
+  'showroom/titan': ['373:1 394:1 434:1 453:1 474:1 535:1 7643:3 7664:3 7683:3 7704:3 7723:3', '6jeuqw'],
+  'aisles/xs': ['101:1 410:3', 't9n4ge'],
+  'aisles/s': ['103:1 119:1 632:3', 'xcwn5p'],
+  'aisles/m': ['119:1 143:1 856:3', 'rn3k2p'],
+  'aisles/l': ['193:1 227:1 1370:3 1444:3', '1gk89oh'],
+  'aisles/xl': ['229:1 249:1 275:1 2198:3 2218:3 2238:3', '7okofo'],
+  'aisles/xxl': ['254:1 294:1 314:1 355:1 3341:3 3361:3 3381:3', 'gan4tf'],
+  'aisles/huge': ['308:1 328:1 348:1 368:1 388:1 4970:3 4990:3 5109:3 5129:3', 'fjrsrs'],
+  'aisles/titan': ['374:1 394:1 434:1 454:1 474:1 535:1 7643:3 7663:3 7683:3 7703:3 7723:3', '1g3q7id'],
+  'food/xs': ['100:1 380:3', 'e97r0u'],
+  'food/s': ['102:1 118:1 596:3', 'czayth'],
+  'food/m': ['118:1 142:1 856:3', 'kubllk'],
+  'food/l': ['192:1 226:1 1370:3 1444:3', '1kb7ik2'],
+  'food/xl': ['228:1 248:1 274:1 2198:3 2218:3 2238:3', 'olfhzc'],
+  'food/xxl': ['253:1 293:1 313:1 354:1 3341:3 3361:3 3381:3', 'va3ftk'],
+  'food/huge': ['307:1 327:1 347:1 367:1 387:1 4970:3 4990:3 5109:3 5129:3', 'bj3bi7'],
+  'food/titan': ['373:1 393:1 433:1 453:1 473:1 534:1 7643:3 7663:3 7683:3 7703:3 7723:3', '1b9re0b'],
+  'carpark/xs': ['100:1 350:3', 'fa07y2'],
+  'carpark/s': ['102:1 118:1 596:3', '12y5dz4'],
+  'carpark/m': ['118:1 142:1 856:3', 'zy18zl'],
+  'carpark/l': ['192:1 226:1 1370:3 1390:3', '1ghiet7'],
+  'carpark/xl': ['228:1 248:1 274:1 2198:3 2218:3 2238:3', '17dqs21'],
+  'carpark/xxl': ['253:1 293:1 313:1 354:1 3300:3 3341:3 3361:3', 'j18kyq'],
+  'carpark/huge': ['307:1 327:1 347:1 367:1 387:1 4970:3 4990:3 5030:3 5109:3', 'hk6wy6'],
+  'carpark/titan': ['373:1 393:1 433:1 453:1 473:1 534:1 7602:3 7643:3 7663:3 7683:3 7703:3', 'stt58l'],
+  'corridors/xs': ['100:1 470:3', '1vz6jzq'],
+  'corridors/s': ['102:1 119:1 812:3', 'ouccw9'],
+  'corridors/m': ['142:1 162:1 1032:3', 'h8oyfn'],
+  'corridors/l': ['172:1 192:1 1640:3 1660:3', '12ri9y1'],
+  'corridors/xl': ['208:1 228:1 248:1 2528:3 2548:3 2568:3', 'pkktze'],
+  'corridors/xxl': ['253:1 273:1 293:1 313:1 3908:3 3928:3 3948:3', '3jfpkf'],
+  'corridors/huge': ['307:1 327:1 347:1 367:1 387:1 5960:3 5980:3 6000:3 6020:3', 'lkjhdg'],
+  'corridors/titan': ['373:1 393:1 413:1 433:1 453:1 473:1 8853:3 8873:3 8893:3 8913:3 8933:3', '4mgn2t'],
+  'horseshoe/xs': ['91:1 104:1', '19inbaj'],
+  'horseshoe/s': ['111:1 126:1 339:1', '1qdszer'],
+  'horseshoe/m': ['134:1 151:1 503:1', '4o8obh'],
+  'horseshoe/l': ['154:1 249:1 744:1 1788:3', 'bkwn6i'],
+  'horseshoe/xl': ['249:1 273:1 298:1 1135:1 2644:3 2765:3', '1uv33pb'],
+  'horseshoe/xxl': ['276:1 300:1 320:1 344:1 1823:1 4024:3 4161:3', '24x8y3'],
+  'horseshoe/huge': ['354:1 380:1 406:1 426:1 443:1 2659:1 2679:1 6230:3 6302:3', '1c9wui0'],
+  'horseshoe/titan': ['453:1 473:1 497:1 517:1 542:1 562:1 4081:1 4101:1 9396:3 9416:3 9485:3 9505:3', '1myygrh'],
+};
+
+test('the Returns Drops, and the stores round them, are exactly where they were before the marked floor went', () => {
+  const fnv = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+  let n = 0;
+  for (const design of Object.keys(MAP_DESIGNS)) {
+    for (const size of Object.keys(MAP_SIZES)) {
+      const key = `${design}/${size}`;
+      assert.ok(Object.hasOwn(PINNED_DROPS, key), `${key} has no record: a new design or size needs one`);
+      const s = createGame({ map: { design, size } });
+      const drops = [];
+      s.back.forEach((p, i) => { if (p && p.k === 'drop') drops.push(i + ':' + p.d); });
+      assert.equal(drops.join(' '), PINNED_DROPS[key][0], `${key}: the drops of a new game`);
+      let all = '';
+      for (let slots = 1; slots <= 7; slots++) {
+        const m = makeMap(design, size, slots);
+        all += m.tiles + m.decor + JSON.stringify(makeDrops(m.w, m.h, m.tiles, m.doors, design)) + '|';
+      }
+      assert.equal(fnv(all), PINNED_DROPS[key][1], `${key}: tiles, furniture and drops for 1 to 7 entrances`);
+      n++;
+    }
+  }
+  assert.equal(n, Object.keys(PINNED_DROPS).length);
 });
 
 test('a line of belts carries junk from a Returns Drop to a Clearance Bin', () => {
