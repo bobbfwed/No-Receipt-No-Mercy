@@ -153,6 +153,38 @@ export function cardsShown(state) {
   return shown;
 }
 
+/** The players the deal waits on: every connected store player (Head Office has no say). */
+const dealers = (state) => state.players.filter((p) => p.on && p.side !== 'office');
+
+/**
+ * How many connected store players have not yet clicked the card on show (the nextCard command,
+ * 0.4.01): when it reaches 0 the next card comes (once the card has been up TUNE.cardMin seconds).
+ * 0 outside the deal or before the first card is up. For the interface ("waiting for 1 more").
+ */
+export function cardWaiting(state) {
+  if (state.phase !== 'cards') return 0;
+  const shown = cardsShown(state);
+  if (!shown) return 0;
+  return dealers(state).filter((p) => (p.nx | 0) < shown).length;
+}
+
+/**
+ * The nextCard command (0.4.01): `{ c: 'nextCard', n }`, n being the index of the card on show
+ * (cardsShown - 1). The player is done with the cards up to n: `nx` = n + 1 on him (cleared when a
+ * deal starts and ends). A stale or future n (a click that crossed a reveal on the way) changes
+ * nothing and is answered with ok and `ignored`. Only in the deal ('phase' otherwise), only a store
+ * player ('office'), n a whole number ('bad'). Allowed while the game is paused, like skipCards.
+ */
+export function nextCard(state, pid, cmd) {
+  const player = state.players[pid];
+  if (state.phase !== 'cards') return { ok: false, why: 'phase' };
+  if (player.side === 'office') return { ok: false, why: 'office' };
+  if (!Number.isInteger(cmd.n)) return { ok: false, why: 'bad' };
+  if (cmd.n !== cardsShown(state) - 1) return { ok: true, ignored: true };
+  player.nx = cmd.n + 1;
+  return { ok: true };
+}
+
 /**
  * One step of the deal (the 'cards' phase; step() calls it). The first step sends `deal` {n}.
  * Each card sends `card` {i, id} as it is revealed. When every connected store player has asked to
@@ -165,17 +197,28 @@ export function stepDeal(state, ev) {
   if (!(state.dealT > 0)) {
     state.dealT = 0;
     ev.push({ e: 'deal', n });
+    // (Clicks from an earlier deal never count in this one.)
+    for (const p of state.players) delete p.nx;
   }
   const before = cardsShown(state);
   const end = dealLength(n) * FINE;
-  const store = state.players.filter((p) => p.on && p.side !== 'office');
+  const store = dealers(state);
   if (store.length && store.every((p) => p.skip)) state.dealT = end;
-  else state.dealT = Math.min(end, state.dealT + Math.max(1, Math.round(FINE / (state.speed || 1))));
+  else {
+    state.dealT = Math.min(end, state.dealT + Math.max(1, Math.round(FINE / (state.speed || 1))));
+    // Every connected store player has clicked the card on show (nextCard, 0.4.01) and it has been
+    // up TUNE.cardMin seconds: the next one comes now (after the last, the deal ends: no pause).
+    const shown = cardsShown(state);
+    if (shown > 0 && store.length && store.every((p) => (p.nx | 0) >= shown)
+      && dealTicks(state) - revealTick(shown - 1) >= TUNE.cardMin * TICK_HZ) {
+      state.dealT = shown < n ? revealTick(shown) * FINE : end;
+    }
+  }
   const after = state.dealT >= end ? n : cardsShown(state);
   for (let i = before; i < after; i++) ev.push({ e: 'card', i, id: state.cards[i] });
   if (state.dealT < end) return;
   delete state.dealT;
-  for (const p of state.players) delete p.skip;
+  for (const p of state.players) { delete p.skip; delete p.nx; }
   state.phase = 'build';
   state.phaseT = -1;
   ev.push({ e: 'begun' });

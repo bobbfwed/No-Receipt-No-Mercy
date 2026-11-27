@@ -158,7 +158,8 @@ export function checksum(s) {
   // (The tiles the mallcop card has already stocked a new building on, 0.4.00: only in a game with
   // the card, once it has.)
   if (s.mallcop) { mix(0x4d43); mix(s.mallcop.length); for (let k = 0; k < s.mallcop.length; k++) mix(s.mallcop[k]); }
-  for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); }
+  // (A player's clicks through the deal, nx, 0.4.01: only where there are some.)
+  for (const p of s.players) { mix(p.on ? 1 : 0); dec(p.cash); mix((p.side || '').length); mix(p.ready ? 1 : 0); dec(p.gone ?? -1); if (p.nx) mix(p.nx + 7); }
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);
     mix(sh.kn); mix(sh.cd); mix(sh.pc); mix(sh.ru); dec(sh.sv); mix(sh.pp);

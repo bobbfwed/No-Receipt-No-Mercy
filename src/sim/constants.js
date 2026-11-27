@@ -743,9 +743,13 @@ export const TUNE = {
   // so that left under 4 s to read it, and a typical card (name, rule and joke) is about 33 words,
   // 14 of them the name and the rule. At 7 s a phone player reads the rule and most of the joke
   // before the next card arrives; the long ones can be read again from the slots afterwards.
+  // 0.4.01 (the owner: the deal dragged): 6.5 s, and a card the players have all clicked goes at
+  // once (the nextCard command), but never before it has been up cardMin seconds, so a double
+  // click cannot throw a card away unseen.
   cardLead: 1.5,
-  cardSecs: 7,
+  cardSecs: 6.5,
   cardPause: 1.5,
+  cardMin: 1,
 };
 
 /**

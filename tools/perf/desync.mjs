@@ -139,7 +139,8 @@ function think(s, pid, rnd, plan) {
   const tile = () => ({ x: 1 + Math.floor(rnd() * (s.w - 2)), y: 1 + Math.floor(rnd() * (s.h - 2)) });
   const me = s.players[pid];
   if (!me) return [];
-  if (s.phase === 'cards') return rnd() < 0.3 ? [{ c: 'skipCards', on: true }] : [];
+  // (0.4.01) Clicking through the cards, now and then a stale click; and now and then a skip.
+  if (s.phase === 'cards') return rnd() < 0.05 ? [{ c: 'skipCards', on: true }] : rnd() < 0.3 ? [{ c: 'nextCard', n: sim.cardsShown(s) - (rnd() < 0.8 ? 1 : 2) }] : [];
   if (s.phase !== 'build' && s.phase !== 'wave') return [];
   // In every build pause each player (re)lays supply lines from the drops, Razor Wire mostly, once
   // there is security for them to reach.

@@ -19,7 +19,7 @@ export { applyDemoLayout, DEMO_LAYOUT } from './demo.js';
 export { releaseNo, releaseSize, releaseDoor } from './step.js';
 // The cards (0.3.01): the hand, the deal, and what each card does to the numbers.
 export {
-  dealCards, cleanHand, hasCard, cardKind, cardParts, cardKinds, cardsShown, revealTick, dealLength, dealTicks, DEAL_ORDER,
+  dealCards, cleanHand, hasCard, cardKind, cardParts, cardKinds, cardsShown, revealTick, dealLength, dealTicks, DEAL_ORDER, cardWaiting,
   idShare, cardPicks, buildPrice, cardPatience, cardSpeed, cardCrowd, cardRefund,
   // (The cards that change how shoppers behave: who they pick, by id.)
   cardKidRuns, kidBack, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance,

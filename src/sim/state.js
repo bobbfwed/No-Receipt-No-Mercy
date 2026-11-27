@@ -165,6 +165,8 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  * @property {boolean} ready  lobby only: he has pressed Ready
  * @property {boolean} [skip] the deal only (the 'cards' phase): he wants the rest of the cards shown
  *   at once (the skipCards command); absent means no, and it is removed when the deal ends
+ * @property {number} [nx] the deal only (0.4.01): he is done with the cards before this index (the
+ *   nextCard command); absent means none, cleared when a deal starts and ends
  * @property {string} side   'store' (builds and defends) or 'office' (runs the shoppers; see office.js)
  * @property {number} cash   this player's own money. Everything the store earns or loses is
  *                           split evenly between the connected players.

@@ -6,7 +6,7 @@ import { computeDist, banksOpen, dadPlanCheck, modeOf, UNREACHABLE, DAD } from '
 import { beginWave } from './step.js';
 import { spentOn, rebuildDeal, reinforceCost } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
-import { buildPrice, cardStock, boozeRoll } from './cards.js';
+import { buildPrice, cardStock, boozeRoll, nextCard } from './cards.js';
 import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode, takeOverBelt } from './back.js';
 import { planLine } from './line.js';
 import { carriesWire, wireCovers, buildingTiles, planWith, wireLive, wireChanged } from './wire.js';
@@ -23,7 +23,7 @@ const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'end
  * not go through commands at all: the session calls addPlayer and setPlayerOnline, which work as
  * ever while paused.)
  */
-const WHILE_PAUSED = new Set(['pause', 'speed', 'role', 'skipCards']);
+const WHILE_PAUSED = new Set(['pause', 'speed', 'role', 'skipCards', 'nextCard']);
 
 /** The phases a game may be paused in: the deal, a build pause and a sales event. */
 const PAUSE_PHASES = new Set(['cards', 'build', 'wave']);
@@ -370,6 +370,9 @@ export function stepRebuilds(state, ev) {
  *   { c: 'skipCards', on }      the deal only (phase 'cards'): ask to see the rest of the cards at
  *                               once (or not; without on: yes). When every connected store player
  *                               has asked, the rest are revealed and the build phase begins
+ *   { c: 'nextCard', n }        (0.4.01) the deal only: done with card n, the one on show. When every
+ *                               connected store player is, and it has been up TUNE.cardMin seconds,
+ *                               the next card comes (see nextCard and stepDeal in cards.js)
  *   { c: 'side', side }         take the Head Office job ('office': run the shoppers) or go back
  *                               to the store ('store'). Only between waves, only one at a time,
  *                               and only if somebody is left to run the store
@@ -679,6 +682,8 @@ export function applyCommand(state, pid, cmd, ev = []) {
       player.skip = cmd.on !== false;
       return { ok: true };
     }
+    // (0.4.01) Done with the card on show: when everyone is, the next one comes.
+    if (cmd.c === 'nextCard') return nextCard(state, pid, cmd);
     if (cmd.c !== 'role' && cmd.c !== 'speed') return { ok: false, why: 'cards' };
   }
   // The Back (0.4): `f: 1` on place, remove and rotate means the floor under the shop.
@@ -688,6 +693,7 @@ export function applyCommand(state, pid, cmd, ev = []) {
   }
   switch (cmd.c) {
     case 'skipCards':
+    case 'nextCard':
       return { ok: false, why: 'phase' };
     case 'place': {
       const why = canPlace(state, cmd.k, cmd.x, cmd.y, pid, cmd.d | 0);
