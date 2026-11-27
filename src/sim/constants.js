@@ -239,7 +239,7 @@ export const BACK = {
   internSecs: 0.4,
   dropSecs: 1.5,
   dropMul: 0.85,
-  binPay: [0, 0.1, 0.25, 0.5, 1],
+  binPay: [0, 0.2, 0.5, 1, 2], // (0.4.01: doubled, the owner's request; it was 0.1, 0.25, 0.5, 1)
   makeSecs: 2,
   rebrandSecs: [0, 4, 8, 16],
   stockUnits: 6,

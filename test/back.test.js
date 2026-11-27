@@ -667,10 +667,11 @@ test('Clearance Bin: pays binPay by tier for supplies, shared like income; nothi
   for (const d of [E, S, W, N]) assert.equal(wants(s, i, JUNK, d), true, 'from any side');
   assert.equal(give(s, i, JUNK, E), true);
   assert.deepEqual(s.players.map((p) => p.cash), [100, 100]);
-  give(s, i, itemCode(1, 4), N); // Platinum: $1, split two ways
-  give(s, i, itemCode(3, 3), W); // Premium: $0.50
-  assert.deepEqual(s.players.map((p) => p.cash), [100.75, 100.75]);
-  assert.equal(s.players[1].all.earned, 1.5, 'credited to its owner');
+  assert.deepEqual(BACK.binPay, [0, 0.2, 0.5, 1, 2], 'doubled in 0.4.01');
+  give(s, i, itemCode(1, 4), N); // Platinum: $2, split two ways
+  give(s, i, itemCode(3, 3), W); // Premium: $1
+  assert.deepEqual(s.players.map((p) => p.cash), [101.5, 101.5]);
+  assert.equal(s.players[1].all.earned, 3, 'credited to its owner');
   // Through a belt, with the event.
   row(s, 1, 4, 5, E);
   at(s, 1, 5).it = [itemCode(2, 2), 100];
