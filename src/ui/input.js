@@ -20,11 +20,12 @@
 //     preview follows the finger over the floor, and lifting places one. What was held before is
 //     held again afterwards. A sideways swipe on the bar still scrolls it.
 //   - while a building is being placed, a finger held near an edge of the floor slides the view
-//   - with The Back's belt held, a tap lays one and a drag lays a line under the finger, as the mouse does
-//   - a second finger on the floor while the first is placing cancels it: nothing more is built
-//     when either lifts (belts already laid by a drag stay), and the two fingers move the view
-// Nothing is built until the finger has either lifted or (a belt) moved a little, so a second
-// finger that lands a moment after the first turns the touch into a pinch before anything is placed.
+//   - with The Back's belt held, a tap lays one and a drag plans a line from the first tile to the
+//     one under the finger, laid when it lifts (0.4.01), as the mouse does
+//   - a second finger on the floor while the first is placing cancels it: nothing is built when
+//     either lifts, and the two fingers move the view
+// Nothing is built until the finger has lifted, so a second finger that lands a moment after the
+// first turns the touch into a pinch before anything is placed.
 // touch.js shows a Rotate button and a "second finger cancels" hint while a finger is placing.
 // A pen is treated as a finger; only the mouse keeps the mouse's rules.
 //
@@ -35,9 +36,10 @@
 //     south, west, none, skipping directions the rules would refuse; right-click takes it off. A
 //     finger does the same: drag from the building, or tap it. Anything that cannot carry wire gets
 //     DEB's refusal.
-//   - Reinforce (U): click a Crate Stack for one level; press and drag across crates for a level on
-//     each crossed, stopping quietly when the money runs out. A finger taps, or drags.
-import { BUILD, SHOP_KINDS, doorOf, anchorOf, sizeOf } from '../sim/index.js';
+//   - Reinforce (U): click a Crate Stack or a security building (0.4.01; any tile of a big one) for
+//     one level; press and drag across them for a level on each crossed, stopping quietly when the
+//     money runs out. A finger taps, or drags.
+import { BUILD, SHOP_KINDS, doorOf, anchorOf, sizeOf, planLine } from '../sim/index.js';
 import { startDrag, gridLine } from './drag.js';
 import { liftFraction, createPress, liftedSpot, edgeVelocity, barGesture, EDGE } from './lift.js';
 import { rebuildStatus } from './rebuild.js';
@@ -70,6 +72,8 @@ export const hotkeyOf = (k) => (BUILD[k]?.back ? BACK_HOTKEYS[BACK_KEYS.indexOf(
 const isLine = (k) => k === 'conv';
 /** Tools that are not buildings: Remove, and on the shop floor Wire and Reinforce (0.4). */
 export const TOOL_KEYS = { remove: 'x', wire: WIRE_KEY, reinforce: REINFORCE_KEY };
+/** Puts down whatever is held or selected (0.4.01, the owner's request). */
+export const PUT_DOWN_KEY = 'q';
 /** The tools that belong to the shop floor only. */
 const SHOP_TOOLS = ['wire', 'reinforce'];
 
@@ -115,6 +119,10 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   let rdrag = null;
   // Test pages only (?wireprev=x,y,d): a wire direction shown as if it were being tried.
   let wireFixed = null;
+  // A belt line being laid in The Back (0.4.01): { id (the pointer), start, end (tiles), axis (0
+  // across, 1 up or down: the way the drag first left the start tile; null while it is on it),
+  // left (it has been off the start tile), touch }, or null. Nothing is placed until it is let go.
+  let line = null;
   const held = new Set(); // view-moving keys that are down
   const cursors = new Map(); // player id -> { x, y, t }
 
@@ -148,6 +156,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     tool = next;
     wdrag = null;
     rdrag = null;
+    line = null;
     if (tool) selected = null;
     canvas.dataset.tool = tool || '';
     if (tool) playSound('select');
@@ -163,7 +172,9 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       const r = session.send(c);
       if (!r || r.ok) { did = c.c; last = r; }
     }
+    // (A whole belt line is one command and one sound, however many tiles it lays.)
     if (did === 'place' || did === 'remove') playSound(did);
+    if (did === 'line') playSound('place');
     // (0.4: everyone else hears these from the event, sound.js; this player at once, as for a build.)
     // (0.4, stage 6: their own sounds, sound.js; until then the rotate ratchet and the place sound.)
     if (did === 'wire') playSound('wireLay');
@@ -199,6 +210,94 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   function turn(t) {
     send([{ c: 'rotate', x: t.x, y: t.y }]);
     playSound('rotate');
+  }
+
+  /**
+   * Puts down whatever is held or selected (the Q key, 0.4.01): a line or a drag under way is
+   * dropped without placing anything more, the tool goes back, and an open sheet closes.
+   */
+  function putDown() {
+    drag = null;
+    wdrag = null;
+    rdrag = null;
+    cancelLine();
+    if (gesture && gesture.kind === 'one' && gesture.mode !== 'pan') gesture.mode = 'pan';
+    dropCarry(true);
+    selected = null;
+    if (!tool) { onChange(); return; }
+    setTool(null);
+  }
+
+  // ---- Belt lines in The Back (0.4.01) -------------------------------------------------------------
+  // The owner: press on a start tile, drag to an end tile, and the line is the shortest way with the
+  // fewest turns (planLine in src/sim/line.js), as long as the money lasts; crossing a straight belt
+  // makes an Overpass there. While the drag lasts the floor shows the plan and its price; letting go
+  // sends one `line` command, which the host plans again and lays in one go. A click that never
+  // leaves its tile lays one belt the held way, as before.
+  const sameTile = (a, b) => !!a && !!b && a.x === b.x && a.y === b.y;
+
+  /** A line starts on tile t, under pointer id (a finger when `touch`). */
+  function startLine(id, t, touch) {
+    line = { id, start: t, end: t, axis: null, left: false, touch };
+    hover = t;
+  }
+
+  /**
+   * The pointer laying a line is over tile t (null: off the map, which changes nothing). The axis is
+   * the way the drag first left the start tile (a jump to a diagonal tile: the longer of the two
+   * distances, across on a tie), kept until the pointer comes back to the start tile.
+   */
+  function lineMove(t) {
+    if (!line || !t || sameTile(t, line.end)) return;
+    line.end = t;
+    hover = t;
+    if (sameTile(t, line.start)) { line.axis = null; return; }
+    line.left = true;
+    if (line.axis === null) line.axis = Math.abs(t.x - line.start.x) >= Math.abs(t.y - line.start.y) ? 0 : 1;
+  }
+
+  /**
+   * The line let go (`ok`) or given up. Let go on another tile: one `line` command. Let go on the
+   * start tile without ever leaving it: one belt, the held way (on a belt, that turns it). A drag
+   * that came back to its start tile lays nothing.
+   */
+  function endLine(ok) {
+    const l = line;
+    line = null;
+    if (!l || !ok || !session.state || isOffice()) return;
+    if (sameTile(l.end, l.start)) {
+      if (!l.left) send([{ c: 'place', k: tool, x: l.start.x, y: l.start.y, d: dir }]);
+      return;
+    }
+    send([{ c: 'line', f: 1, x: l.start.x, y: l.start.y, x2: l.end.x, y2: l.end.y, a: l.axis }]);
+  }
+
+  /** Gives up the line being laid, if any (Escape, Q, a second finger, the right button). */
+  function cancelLine() {
+    if (!line) return false;
+    try { canvas.releasePointerCapture(line.id); } catch { /* already released */ }
+    line = null;
+    return true;
+  }
+
+  // The plan shown while the line is dragged: worked out again only when the end tile, the axis or
+  // something it depends on changes (The Back's layout, the player's cash, the phase), not each frame.
+  let planKey = '', plan = null;
+  const lineShow = { plan: null, start: null, end: null, touch: false };
+  function linePreview() {
+    const s = session.state;
+    if (!line || !line.left || !s || floor !== 1 || sameTile(line.start, line.end) || line.axis === null) return null;
+    const cash = s.players[session.me]?.cash ?? 0;
+    const key = `${line.start.x},${line.start.y},${line.end.x},${line.end.y},${line.axis},${s.backVer | 0},${cash},${s.phase},${s.pause ? 1 : 0}`;
+    if (key !== planKey) {
+      planKey = key;
+      plan = planLine(s, session.me, line.start.y * s.w + line.start.x, line.end.y * s.w + line.end.x, line.axis);
+    }
+    lineShow.plan = plan;
+    lineShow.start = line.start;
+    lineShow.end = line.end;
+    lineShow.touch = line.touch;
+    return lineShow;
   }
 
   // ---- Wire and Reinforce (0.4) -------------------------------------------------------------------
@@ -239,7 +338,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (wireBuilding(session.state, t.x, t.y)) send([{ c: 'wire', x: t.x, y: t.y, d: -1 }]);
   }
 
-  /** The Reinforce tool pressed on tile t: the first crate is reinforced at once (or refused, with a word). */
+  /** The Reinforce tool pressed on tile t: the building there is reinforced at once (or refused, with a word). */
   function reinforceDown(id, t) {
     const s = session.state;
     rdrag = { id, r: startReinforce(Math.floor(s.players[session.me]?.cash ?? 0)), last: t };
@@ -247,7 +346,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (c) send([c]);
   }
 
-  /** The pointer reinforcing has moved to tile t: one level on each crate crossed on the way. */
+  /** The pointer reinforcing has moved to tile t: one level on each building crossed on the way. */
   function reinforceMove(t) {
     if (!rdrag || !t) return;
     const s = session.state;
@@ -269,7 +368,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (next === floor) return;
     floor = next;
     drag = null;
-    tdrag = null;
+    line = null;
     wdrag = null;
     rdrag = null;
     dropCarry(true);
@@ -327,6 +426,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     const p = exactTile(e.clientX, e.clientY, t);
     if (p && (!pointer || p.x !== pointer.x || p.y !== pointer.y)) { pointer = p; cursorDirty = true; }
     if (drag) send(drag.planner.moveTo(t, dir));
+    // (The right button pressed while the left lays a line comes as a move, not a press: it cancels.)
+    if (line && e.pointerId === line.id) { if (e.buttons & 2) cancelLine(); else lineMove(t); }
     if (wdrag && e.pointerId === wdrag.id) { const q = exactAt(e.clientX, e.clientY); wireMove(q.x, q.y); }
     if (rdrag && e.pointerId === rdrag.id) reinforceMove(t);
   }
@@ -339,6 +440,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
 
   function onPointerDown(e) {
     if (fingerish(e)) { onTouchDown(e); return; }
+    if (line) { if (e.button === 2) cancelLine(); return; }
     if (drag || grab || wdrag || rdrag) return;
     if (e.button === 1 && renderer.pan) {
       // Middle button: drag the map.
@@ -367,6 +469,13 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       try { canvas.setPointerCapture(e.pointerId); } catch { /* drag still works inside */ }
       return;
     }
+    // The belt: a line from here to where the button is let go (0.4.01).
+    if (e.button === 0 && isLine(tool)) {
+      e.preventDefault();
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* the drag still works inside */ }
+      startLine(e.pointerId, t, false);
+      return;
+    }
     let mode = null;
     if (e.button === 2 || tool === 'remove') mode = 'remove';
     else if (tool) mode = 'build';
@@ -375,9 +484,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     // A building bigger than one tile is placed one at a time: dragging would only pile refusals up.
     if (mode === 'build' && BUILD[tool].size) { send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
     try { canvas.setPointerCapture(e.pointerId); } catch { /* not supported: drag still works inside */ }
-    // Dragging belt over belts that are already there turns them, so those tiles are not skipped.
-    const taken = mode === 'build' && isLine(tool) ? (tile) => { const b = at(tile); return !!b && b.k !== tool; } : hasBuilding;
-    const planner = startDrag({ mode, kind: tool, start: t, dir, hasBuilding: taken });
+    // (The first tile is always sent, whatever is on it: a Back part on a plain belt replaces it.)
+    const planner = startDrag({ mode, kind: tool, start: t, dir, hasBuilding });
     drag = { planner, button: e.button, id: e.pointerId };
     send(planner.first);
   }
@@ -398,6 +506,12 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       try { canvas.releasePointerCapture(rdrag.id); } catch { /* already released */ }
       rdrag = null;
     }
+    // A belt line is laid when let go (a cancelled pointer, or the window losing focus, lays nothing).
+    if (line && !line.touch && (!e || e.pointerId === undefined || e.pointerId === line.id)) {
+      const id = line.id;
+      endLine(!!e && e.type === 'pointerup');
+      try { canvas.releasePointerCapture(id); } catch { /* already released */ }
+    }
     if (!drag || (e && e.pointerId !== undefined && e.pointerId !== drag.id)) return;
     const d = drag;
     drag = null;
@@ -408,7 +522,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   function onPointerLeave(e) {
     // A finger "leaves" every time it lifts; what it last touched stays marked.
     if (e && fingerish(e)) return;
-    if (!drag) hover = null;
+    if (!drag && !line) hover = null;
   }
 
   // ---- Touch -------------------------------------------------------------------------------------
@@ -421,7 +535,6 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
   //     liftAt: when it started to rise (null while the press is still a tap)
   //   { kind: 'two', dist, mx, my }
   let gesture = null;
-  let tdrag = null; // a line being built by one finger: the drag planner
   // A building dragged out of its button in the bar (watchBar), or null:
   //   { id, kind, btn, x0, y0, lx, ly, picked, above }
   //   picked: the finger has left the button upward, and the building follows it; above: the finger
@@ -493,26 +606,11 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     if (p && (!pointer || p.x !== pointer.x || p.y !== pointer.y)) { pointer = p; cursorDirty = true; }
   }
 
-  /** A belt line under one finger (the only thing a finger drags to build). */
-  function startTouchBuild(t) {
-    // As with the mouse: dragging belt over belts turns them, so those tiles are not skipped.
-    const kind = tool;
-    const taken = (tile) => { const b = at(tile); return !!b && b.k !== kind; };
-    tdrag = startDrag({ mode: 'build', kind, start: t, dir, hasBuilding: taken });
-    send(tdrag.first);
-  }
-
-  function endTouchBuild() {
-    if (!tdrag) return;
-    const d = tdrag;
-    tdrag = null;
-    send(d.end(dir));
-  }
-
   /** One finger tapped a tile without moving, with nothing held or the belt. */
   function touchTap(t) {
     if (!t || !session.state || isOffice()) { selected = null; return; }
-    if (isLine(tool)) { hover = t; startTouchBuild(t); endTouchBuild(); return; }
+    // The belt: one, the held way (a drag lays a line, below).
+    if (isLine(tool)) { hover = t; send([{ c: 'place', k: tool, x: t.x, y: t.y, d: dir }]); return; }
     // Nothing held: select the building there (touch.js offers what can be done with it).
     selected = anchorTile(t);
     hover = selected;
@@ -551,12 +649,12 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       }
       notePointer(e.clientX, e.clientY, t);
     } else if (touches.size === 2) {
-      // A second finger on the floor cancels what the first was placing (belts a drag has already
-      // laid stay; the one still under the finger is not laid), and the two move the view.
+      // A second finger on the floor cancels what the first was placing (a belt line being dragged
+      // is not laid at all), and the two move the view.
       const g = gesture;
       const placing = g && g.kind === 'one' && (g.mode === 'place' || (g.mode !== 'pan' && isLine(tool))
         || (g.mode === 'wire' && !!wdrag) || g.mode === 'reinforce');
-      tdrag = null;
+      cancelLine();
       // (A wire not yet set is not set; crates already reinforced by the drag stay reinforced.)
       wdrag = null;
       rdrag = null;
@@ -624,15 +722,15 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < TAP_SLOP_PX) return;
       // It is a drag. With the belt it lays a line from where it started; with nothing held it
       // moves the view.
-      if (isLine(tool) && builds() && g.tile) { g.mode = 'build'; startTouchBuild(g.tile); } else g.mode = 'pan';
+      if (isLine(tool) && builds() && g.tile) { g.mode = 'build'; startLine(g.id, g.tile, true); } else g.mode = 'pan';
     }
     if (g.mode === 'pan') {
       renderer.pan((g.lx - e.clientX) / z, (g.ly - e.clientY) / z);
-    } else if (g.mode === 'build' && tdrag) {
+    } else if (g.mode === 'build' && line) {
+      // (Off the map the line keeps the last tile it was on.)
       const t = renderer.tileAt(e.clientX, e.clientY);
-      hover = t;
-      notePointer(e.clientX, e.clientY, t);
-      send(tdrag.moveTo(t, dir));
+      if (t) notePointer(e.clientX, e.clientY, t);
+      lineMove(t);
     }
     g.lx = e.clientX; g.ly = e.clientY;
   }
@@ -663,7 +761,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
         t = up ? liftTarget(e.clientX, e.clientY, tool, liftFraction(performance.now() - g.liftAt)) : onFloor(e.clientX, e.clientY);
       }
       if (t) placeAt(t); else hover = null;
-    } else if (g.mode === 'build') endTouchBuild();
+    } else if (g.mode === 'build') endLine(e.type === 'pointerup');
     else if (g.mode === 'wait' && e.type === 'pointerup') touchTap(g.tile);
     else if (g.mode === 'wire') {
       // A drag from a building sets its wire; a tap steps it on; a tap on anything else is refused.
@@ -796,7 +894,12 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       return;
     }
     const lower = key.length === 1 ? key.toLowerCase() : key;
-    if (lower === 'x' || key === 'Delete' || key === 'Backspace') {
+    if (lower === PUT_DOWN_KEY) {
+      // Q puts everything down (0.4.01, the owner): what is held, a line or drag under way (nothing
+      // is placed), and a building's open sheet.
+      e.preventDefault();
+      putDown();
+    } else if (lower === 'x' || key === 'Delete' || key === 'Backspace') {
       setTool(tool === 'remove' ? null : 'remove');
       e.preventDefault();
     } else if (lower === WIRE_KEY || lower === REINFORCE_KEY) {
@@ -826,6 +929,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
       goHome();
     } else if (key === 'Escape') {
       if (drag) { drag = null; return; }
+      if (cancelLine()) return;
       if (wdrag || rdrag) { wdrag = null; rdrag = null; return; }
       if (onEscape()) return;
       setTool(null);
@@ -936,7 +1040,7 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     return nextDir;
   }
 
-  const view = { tool: null, dir: 0, hover: null, aim: false, lift: null, cursors, floor: 0, wirePreview: null, wireNext: null };
+  const view = { tool: null, dir: 0, hover: null, aim: false, lift: null, cursors, floor: 0, wirePreview: null, wireNext: null, line: null };
   const liftAt = { x: 0, y: 0 };
   function getView() {
     view.tool = placeKind();
@@ -945,6 +1049,8 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     view.floor = floor;
     view.wirePreview = floor ? null : wirePreview();
     view.wireNext = floor ? null : wireNext();
+    // A belt line being dragged (0.4.01): its plan, for the floor to draw.
+    view.line = linePreview();
     // The dashed lines along the tile's row and column, for a finger hiding the tile it acts on;
     // a lifted preview is not under the finger, and gets a thin line down to the finger instead.
     // (Not for a wire being dragged out: the finger is beside the building, not on it.)
@@ -967,13 +1073,15 @@ export function createInput({ canvas, renderer, session, onEscape = () => false,
     // Fingers lifted while the page was in the background never report it.
     touches.clear();
     gesture = null;
-    endTouchBuild();
+    line = null;
     dropCarry(true);
     wdrag = null;
     rdrag = null;
   };
   // Stop the middle button turning the pointer into the browser's scroll compass.
-  const onMouseDown = (e) => { if (e.button === 1) e.preventDefault(); };
+  // (The right button pressed while the left lays a belt line cancels it: mouse events report a
+  // second button pressed, where pointer events only report a move.)
+  const onMouseDown = (e) => { if (e.button === 1) e.preventDefault(); if (e.button === 2 && line && !line.touch) cancelLine(); };
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointerup', finishDrag);

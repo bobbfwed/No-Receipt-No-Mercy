@@ -80,7 +80,9 @@ export function wirePicker(s, pid, x, y) {
 }
 
 /**
- * A drag of the Reinforce tool across crates: one level for each Crate Stack it crosses (once each),
+ * A drag of the Reinforce tool across buildings: one level for each it crosses that can be
+ * reinforced (a Crate Stack, and from 0.4.01 any security building; a big one once, whichever of its
+ * tiles is crossed),
  * the first tile always sent (so a refusal is explained), the rest only while the money lasts. It
  * keeps its own count of the cash, since a joined player's copy of the game does not see his money
  * go until the host's word comes back.
@@ -105,7 +107,8 @@ export function startReinforce(cash) {
         if (!why) left -= cost;
         return { c: 'reinforce', x, y };
       }
-      if (!b || b.k !== 'crate' || !cost) return null; // not a crate, or already at the top: quietly
+      // Not something that can be reinforced, or already at the top: quietly.
+      if (!b || !BUILD[b.k]?.reinforce || !cost) return null;
       if (cost > left || why === 'cash') { stopped = true; return null; }
       if (why) return null;
       left -= cost;

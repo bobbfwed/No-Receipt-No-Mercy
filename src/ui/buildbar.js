@@ -27,13 +27,23 @@ try { const v = localStorage.getItem(FOLD_KEY); if (v !== null) folded = v === '
 
 const DIR_NAMES = ['east', 'south', 'west', 'north'];
 /** Names short enough for a button; the tooltip has the full one. */
-const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', still: 'Still', cannery: 'Cannery', spooler: 'Spooler', winder: 'Winder', bender: 'Bender', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
+const SHORT = { conv: 'Belt', intern: 'Intern', bin: 'Bin', still: 'Still', cannery: 'Cannery', spooler: 'Spooler', bender: 'Bender', crate: 'Crates', sprinkler: 'Sprinkler', forklift: 'Forklift', wetfloor: 'Wet Floor', samples: 'Samples', salesman: 'Salesman', railgun: 'Laser' };
 const DIR_ARROWS = ['→', '↓', '←', '↑'];
+/**
+ * The cheapest first level of reinforcement of any kind that can have one (0.4.01: every security
+ * building and the Crate Stack, each at its own price), with this game's cards if `s` is given.
+ */
+function cheapestReinforce(s) {
+  let low = Infinity;
+  for (const k of Object.keys(BUILD)) if (BUILD[k].reinforce) low = Math.min(low, reinforceCost({ k }, s));
+  return Number.isFinite(low) ? low : 0;
+}
 /** The tools that are not buildings: label, hotkey, what the price line says, and the help text. */
 const TOOLS = {
-  // The shop floor's own tools (0.4, stage 4b): Razor Wire's direction, and a Crate Stack's levels.
+  // The shop floor's own tools (0.4, stage 4b): Razor Wire's direction, and a building's levels (Crate
+  // Stacks until 0.4.01, every security building since).
   wire: { name: 'Wire', key: WIRE_KEY.toUpperCase(), price: 'free', how: HOW_WIRE, keys: `key ${WIRE_KEY.toUpperCase()} · right-click takes a wire off`, shop: true },
-  reinforce: { name: 'Reinforce', key: REINFORCE_KEY.toUpperCase(), price: `from $${BUILD.crate.reinforce.cost}`, how: HOW_REINFORCE, keys: `key ${REINFORCE_KEY.toUpperCase()}`, shop: true },
+  reinforce: { name: 'Reinforce', key: REINFORCE_KEY.toUpperCase(), price: `from ${cheapestReinforce(null)}`, how: HOW_REINFORCE, keys: `key ${REINFORCE_KEY.toUpperCase()}`, shop: true },
   // Not a tool you hold: one press pays to put back everything of yours that gym bros have wrecked.
   rebuild: { name: 'Rebuild', key: 'B', price: 'half price', how: HOW_REBUILD, keys: 'key B', action: true, shop: true },
   remove: { name: 'Remove', key: 'X', price: `${Math.round(TUNE.sellBack * 100)}% back`, how: HOW_REMOVE, keys: 'key X or Delete' },
@@ -233,8 +243,8 @@ export function createBuildBar(input, session, { prefs = sharedPrefs(), onCardsO
       setClass(tag, 'dearer', p > def.cost);
       btn.setAttribute('aria-label', `${def.name}, ${p}${priceNote(k)}, key ${hotkeyOf(k)}`);
     }
-    // The first level of reinforcement, as this game's cards price a crate.
-    buttons.get('reinforce').querySelector('.bb-price').textContent = `from $${reinforceCost({ k: 'crate' }, s)}`;
+    // The cheapest first level of reinforcement, as this game's cards price it.
+    buttons.get('reinforce').querySelector('.bb-price').textContent = `from ${cheapestReinforce(s)}`;
     if (input.tool && BUILD[input.tool]) showInfo(input.tool);
   }
 

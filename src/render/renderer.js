@@ -51,7 +51,7 @@ import { analyzeMap, mapChanged, createFloorCache, drawDynamic } from './floor.j
 import { drawBackChunk } from './backfloor.js';
 import {
   drawBuilding, createBeltSprites, createBuildingSprites,
-  drawBadge, drawRubble, drawWear, rectOf, BIG, drawOutArrow,
+  drawBadge, drawRubble, drawWear, rectOf, BIG, drawOutArrow, drawBeltTile,
 } from './buildings.js';
 import { buildItemSprites } from './items.js';
 import {
@@ -611,6 +611,7 @@ export function createRenderer(canvas, session) {
    * which nobody can remove), or a plain outline round the tile under the mouse.
    */
   function drawBackPreview(s, view) {
+    if (view.line && view.line.plan) { drawLinePlan(s, view.line); return; }
     const h = view.hover;
     if (!h || !(h.x >= 0 && h.y >= 0 && h.x < s.w && h.y < s.h)) return;
     const i = h.y * s.w + h.x;
@@ -657,6 +658,62 @@ export function createRenderer(canvas, session) {
     if (def.rot) {
       drawOutArrow(ctx, d, i, F, buildingSprites);
     }
+  }
+
+  /** What a refused belt line says over its end tile, by planLine's reason. */
+  const LINE_NO = { blocked: 'NO WAY THROUGH', cash: 'TOO BROKE', same: '', paused: 'PAUSED', cards: 'NOT YET', lobby: 'NOT YET', over: 'TOO LATE', bounds: 'OFF THE MAP', bad: '' };
+  /**
+   * A belt line being dragged in The Back (0.4.01, view.line: { plan, start, end, touch }, plan from
+   * planLine): each new belt as a ghost pointing along the route (a corner where it turns), each
+   * belt to be crossed by an Overpass as an Overpass, the tiles left as they are outlined, and one
+   * label with the price (and SHORT OF CASH where the money stops it). A refused plan is the red
+   * ghost on the tile under the pointer, with the reason. On a touch screen the label stands well
+   * above the end tile, clear of the finger.
+   */
+  function drawLinePlan(s, ln) {
+    const p = ln.plan, end = ln.end;
+    const k = Math.max(1, 30 / cam.zoom);
+    // (World pixels a CSS pixel is: the label lifts this far above a finger.)
+    const lift = ln.touch ? 64 * (T / cam.zoom) : 0;
+    if (!p.steps.length) {
+      const px = end.x * T, py = end.y * T;
+      rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+      ctx.fillStyle = 'rgba(239,68,68,0.4)';
+      ctx.fill();
+      ctx.globalAlpha = 0.75;
+      backArt.drawGhost(ctx, s, 'conv', end.x, end.y, 0, F, base, beltSprites);
+      ctx.globalAlpha = 1;
+      tileOutline(px, py, '#ef4444', 3);
+      const why = LINE_NO[p.why] ?? '';
+      if (why) label(ctx, why, px + T / 2, py - 9 * k - lift, 11 * k, '#fca5a5', INK, 3.5 * k);
+      return;
+    }
+    let prevD = -1;
+    for (const st of p.steps) {
+      const x = st.i % s.w, y = (st.i / s.w) | 0, px = x * T, py = y * T;
+      if (st.keep) {
+        tileOutline(px, py, 'rgba(187,247,208,0.8)', 2);
+      } else {
+        rr(ctx, px + 1, py + 1, T - 2, T - 2, 5);
+        ctx.fillStyle = 'rgba(74,222,128,0.3)';
+        ctx.fill();
+        ctx.globalAlpha = 0.8;
+        if (st.k === 'over') backArt.drawGhost(ctx, s, 'over', x, y, st.d, F, base, beltSprites);
+        else {
+          // A corner where the route turns: fed from its right (1) or its left (-1), as beltShape says.
+          const shape = prevD < 0 || prevD === st.d ? 0 : prevD === ((st.d + 3) & 3) ? 1 : prevD === ((st.d + 1) & 3) ? -1 : 0;
+          drawBeltTile(ctx, x, y, st.d, shape, 0, 0, beltSprites, base);
+        }
+        ctx.globalAlpha = 1;
+        tileOutline(px, py, st.k === 'over' ? '#a5f3fc' : '#22c55e', 2.5);
+      }
+      prevD = st.d;
+    }
+    // Where the money ran out: the tile under the pointer, in red, when the line stops short of it.
+    if (p.cut) tileOutline(end.x * T, end.y * T, 'rgba(239,68,68,0.9)', 2.5);
+    const tx = end.x * T + T / 2, ty = end.y * T;
+    const text = `$${p.cost}${p.cut ? ' · SHORT OF CASH' : ''}`;
+    label(ctx, text, tx, ty - 9 * k - lift, 12 * k, p.cut ? '#fde68a' : '#bbf7d0', INK, 3.5 * k);
   }
 
   /**
@@ -1290,12 +1347,12 @@ export function createRenderer(canvas, session) {
   }
 
   /**
-   * The Reinforce tool over the floor (0.4): a Crate Stack is outlined green with the price of its
-   * next level and the level it would reach, red if this player cannot pay; at the top level it
+   * The Reinforce tool over the floor (0.4): a Crate Stack, or (0.4.01) any security building, whole,
+   * is outlined green with its own price for its next level and the level it would reach, red if this player cannot pay; at the top level it
    * says so; anything else gets a red outline.
    */
   function reinforceHover(s, h, here, hr, px, py) {
-    if (here && here.k === 'crate') {
+    if (here && BUILD[here.k]?.reinforce) {
       const cost = reinforceCost(here, s), why = canReinforce(s, session.me, h.x, h.y);
       const ok = !why;
       tileOutline(hr.x, hr.y, ok ? '#22c55e' : '#ef4444', 3, hr.w, hr.h);
@@ -1305,7 +1362,7 @@ export function createRenderer(canvas, session) {
     }
     const x = hr ? hr.x : px, y = hr ? hr.y : py, w = hr ? hr.w : T, hh = hr ? hr.h : T;
     tileOutline(x, y, 'rgba(239,68,68,0.9)', 2.5, w, hh);
-    if (here) tagOver('CRATES ONLY', x + w / 2, y, '#fca5a5');
+    if (here) tagOver("CAN'T BE REINFORCED", x + w / 2, y, '#fca5a5');
   }
 
   // --- screen-space labels (CSS pixel transform) -------------------------------------------------
