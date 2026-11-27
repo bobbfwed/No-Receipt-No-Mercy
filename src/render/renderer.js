@@ -798,6 +798,34 @@ export function createRenderer(canvas, session) {
     }
   }
 
+  /**
+   * A reinforced building's level (0.4.01): a grey steel plate with rivets and the number, in its
+   * bottom-left corner, pink at the top level. Grows a little when zoomed out (as the badges do) so
+   * the number stays readable on a phone.
+   */
+  function drawPlate(b, r) {
+    const k = Math.max(1, Math.min(1.6, 32 / cam.zoom));
+    const top = (BUILD[b.k].reinforce?.max | 0) || Infinity;
+    const w = 14 * k, hh = 11 * k, x = r.x + 2, y = r.y + r.h - hh - 2;
+    rr(ctx, x, y, w, hh, 2.5 * k);
+    ctx.fillStyle = b.r >= top ? '#f9a8d4' : '#cbd5e1';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    ctx.fillStyle = '#475569';
+    for (const [dx, dy] of [[2.3, 2.3], [2.3, -2.3]]) {
+      ctx.beginPath();
+      ctx.arc(x + dx * k, dy > 0 ? y + dy * k : y + hh + dy * k, 0.9 * k, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = INK;
+    ctx.font = font(9 * k, 900);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(b.r | 0), x + w / 2 + 1.6 * k, y + hh / 2 + 0.5);
+  }
+
   /** "OUT OF ..." warnings over buildings: { i, t, at }, newest last (see warn). */
   const warnings = [];
   const WARN_MS = 4500;
@@ -915,7 +943,10 @@ export function createRenderer(canvas, session) {
         const lv = b.s ? levelOf(b) : 1;
         if (lv > 1) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, lv, bk, bres, maxedOut(b));
         // A reinforced Crate Stack (0.4): its level, pink at the top one.
-        else if (b.r > 0) drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, b.r, bk, bres, b.r >= CRATE_TOP);
+        else if (b.r > 0 && b.k === 'crate') drawBadge(ctx, r.x + r.w - T / 2, r.y + T / 2, b.r, bk, bres, b.r >= CRATE_TOP);
+        // Anything else reinforced (0.4.01): a small steel plate with its level in the bottom-left
+        // corner, beside whatever its badge and pips say, so what was paid for always shows.
+        if (b.r > 0 && b.k !== 'crate') drawPlate(b, r);
         // Its supplies: the row of pips, or zoomed out one status mark (marks.js).
         if (supplies && BUILD[b.k].lift) {
           if (marks) drawMark(ctx, stockMark(b), r.x + r.w / 2, r.y + 2, markR);
