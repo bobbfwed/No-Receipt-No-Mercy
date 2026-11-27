@@ -57,7 +57,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 export function stockGives(b, track) {
   if (!usesIn(b, track)) return 'EMPTY';
   if (track === 'dur') return `soaks up ${plural(usesIn(b, track), 'gym bro hit')}`;
-  if (track === 'wire') return `enough for ${plural(usesIn(b, track), 'dad')} (it does nothing yet)`;
+  // (0.4: Razor Wire works only on a building given a wire direction, the `wire` command.)
+  if (track === 'wire') return `enough for ${plural(usesIn(b, track), 'dad')}${b.wd === undefined ? ' (no wire laid: it does nothing)' : ''}`;
   return `+${plural(stockLevel(b, track), 'level')} of ${SUPPLIES[track].gives}`;
 }
 

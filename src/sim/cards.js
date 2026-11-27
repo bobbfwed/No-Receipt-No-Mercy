@@ -307,14 +307,26 @@ const priceGroup = (k, def) => (def.group === 'walls' ? 'security' : def.group);
 export function buildPrice(state, k) {
   const def = BUILD[k];
   if (!def) return 0;
-  if (!inForce(state)) return def.cost;
+  const m = priceMul(state, k);
+  return m === 1 ? def.cost : Math.max(1, Math.round(def.cost * m));
+}
+
+/**
+ * What the game's cards multiply a building of kind k's price by (1 without any that do):
+ * shrinkflation and staffdiscount every building, rentacop and sweatshop by its group. buildPrice
+ * uses it, and so does reinforcing a Crate Stack (reinforceCost in upgrades.js, 0.4): what changes
+ * the price of a crate changes the price of making one tougher.
+ */
+export function priceMul(state, k) {
+  const def = BUILD[k];
+  if (!def || !inForce(state)) return 1;
   let m = 1;
   for (const [c] of parsed(state)) {
     const card = CARDS[c];
     if (c === 'shrinkflation' || c === 'staffdiscount') m *= card.cost;
     else if (c === 'rentacop' || c === 'sweatshop') m *= card.cost[priceGroup(k, def)] ?? 1;
   }
-  return m === 1 ? def.cost : Math.max(1, Math.round(def.cost * m));
+  return m;
 }
 
 // ---- The Back (0.4): the cards that were about goods prices or the old factory -------------------

@@ -31,11 +31,16 @@ function newWatch() {
     watching: [], // where shoppers stood to watch the TV Salesman, as [x, y]
     escapes: [], // escape events: who reached a till (kind, and 1 if super)
     kinds: new Set(), // kinds of shopper that walked in
+    dadThrough: false, // a dad was seen inside a building that blocks everyone else (0.4)
   };
 }
 
 function watchTick(s, w) {
-  for (const m of s.shoppers) w.kinds.add(m.k);
+  for (const m of s.shoppers) {
+    w.kinds.add(m.k);
+    const b = m.k === 'dad' && s.grid[(m.y | 0) * s.w + (m.x | 0)];
+    if (b && BUILD[b.k].blocks) w.dadThrough = true;
+  }
 }
 
 /**
@@ -119,13 +124,15 @@ function checkLessons(s, waves, seen, label) {
   assert.equal(s.grid[tileOf(s, 6, 4)].k, 'railgun');
   assert.equal(s.grid[tileOf(s, 6, 4)].d, 1, `${label}: the laser faces down`);
 
-  // Dads: the five ordinary dads at the front all crack; some of the three Dads on a Mission at the
-  // back reach a till, and nobody else does.
+  // Dads (0.4): they walk straight through the maze, so most of the eight reach a till, the three
+  // Dads on a Mission at the back among them.
   assert.equal(waves[DADS].stopped + waves[DADS].escaped, 8, `${label}: eight dads came in`);
-  assert.ok(seen[DADS].escapes.length >= 1, `${label}: a Dad on a Mission got a refund`);
-  for (const e of seen[DADS].escapes) assert.deepEqual([e.k, e.sup], ['dad', 1], `${label}: only Dads on a Mission got through`);
-  // The forklift: both Dads on a Mission stopped (without it some get through: see the seeds).
-  assert.deepEqual(waves[STOP_DADS], { stopped: 2, escaped: 0 }, `${label}: the forklift stops both Dads on a Mission`);
+  assert.ok(seen[DADS].dadThrough, `${label}: a dad walked through a building`);
+  assert.ok(seen[DADS].escapes.length > 4, `${label}: most of the dads got a refund`);
+  for (const e of seen[DADS].escapes) assert.equal(e.k, 'dad');
+  assert.equal(seen[DADS].escapes.filter((e) => e.sup).length, 3, `${label}: the Dads on a Mission all got through`);
+  // The forklift gets one of the two Dads on a Mission (without it both get through: see the seeds).
+  assert.deepEqual(waves[STOP_DADS], { stopped: 1, escaped: 1 }, `${label}: the forklift gets one of the two Dads on a Mission`);
 
   // Gym bro: he walked through a crate by the entrance, and Rebuild put everything back.
   const doorCrates = [[2, 7], [2, 8], [1, 9]].map(([x, y]) => tileOf(s, x, y));
@@ -208,8 +215,8 @@ test('the wave lessons play out the same whatever the random seed', () => {
         if (st.title === SUPERS_LESSON) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the third sprinkler some Extreme Couponers get through`);
         // "Without it, your gap cannot take 30 of them."
         if (st.title === LASER) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the laser some Extreme Couponers get through`);
-        // "Your maze alone lets one of the two through."
-        if (st.title === STOP_DADS) assert.ok(whatIf(session.state, [], st.wave).length > 0, `seed ${seed}: without the forklift some Dads on a Mission get through`);
+        // "Without it both of them walk out with a refund."
+        if (st.title === STOP_DADS) assert.equal(whatIf(session.state, [], st.wave).length, 2, `seed ${seed}: without the forklift both Dads on a Mission get through`);
       },
       onDone: (t, st) => assert.equal(t.check(), true, `seed ${seed}: step "${st.title}" completes`),
     });

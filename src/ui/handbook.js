@@ -9,7 +9,7 @@ import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP, BOSS_HELP } from '../content/h
 import {
   SHOPPER_ORDER, WALL_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, shopperTraits, patienceAt, countIn, sampleWaves,
   tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts, fmt, bossFacts, lengthText, toughnessAt, LONGEST,
-  paceText, edgeFacts, payText,
+  paceText, edgeFacts, payText, wireText,
 } from '../content/facts.js';
 import { releaseWaves } from '../content/facts.js';
 import { trackName, SUPPLIES } from '../content/supplies.js';
@@ -196,7 +196,7 @@ function suppliesCard() {
   const list = (names) => names.join(', ');
   const say = (s) => {
     if (s.track === 'dur') return `From the ${s.maker}. Each use soaks up one gym bro hit instead of the building taking it (it still counts as one of his hits). Taken by ${list(s.takers)}.`;
-    if (!s.works) return `From the ${s.maker}. For the dads, coming soon: for now it just sits in the Dumbwaiter taking up room, like you at a team meeting. Every Dumbwaiter takes it anyway (${list(s.takers)}).`;
+    if (s.track === 'wire') return `From the ${s.maker}. The one thing that stops a dad. ${wireText()}. Every Dumbwaiter takes it (${list(s.takers)}).`;
     if (s.track === 'dmg') return `From the ${s.maker}. More damage from a gun; on the others more of whatever they do (a slipperier sign, a longer free sample, a better pitch). Taken by ${list(s.takers)}.`;
     return `From the ${s.maker}. More ${s.gives}. Taken by ${list(s.takers)}.`;
   };
@@ -206,7 +206,7 @@ function suppliesCard() {
     h('header', { class: 'hb-head' }, h('div', null, h('h3', null, 'Supplies'), h('p', { class: 'hb-when' }, 'What The Back makes, and what it does upstairs'))),
     facts(supplyFacts().map((s) => [[h('i', { class: 'hb-swatch', style: { background: s.color } }), ` ${s.name}`], say(s)])),
     h('h4', null, 'Brand tiers'),
-    table('hb-levels', ['Tier', 'Spite, Cola, Cord count as', 'A roll of Duct Tape soaks up', 'A unit of Razor Wire stops (coming soon)', 'Clearance Bin pays', 'Made by'],
+    table('hb-levels', ['Tier', 'Spite, Cola, Cord count as', 'A roll of Duct Tape soaks up', 'A unit of Razor Wire turns away', 'Clearance Bin pays', 'Made by'],
       tiers.map((t, i) => [t.name, `+${t.level} levels`, plural(t.tape, 'gym bro hit'), plural(t.wire, 'dad'), `$${t.bin.toFixed(2)}`,
         t.secs ? `a Rebrander, ${fmt(t.secs)} s from ${tiers[i - 1].name}` : 'the machines'])),
     h('h4', null, 'How long a unit of Spite, Cola or Cord lasts (whatever the tier)'),
@@ -286,7 +286,7 @@ export function handbook({ state = null, onClose }) {
       note.textContent = `The Back is the floor under the shop: Tab, or the floor switch at the bottom right, takes you down. Nothing down here is in a shopper's way. Returns Drops put out junk; belts carry it to the machines, which make supplies; more belts carry those to the Dumbwaiters under your security, which send them up. Security works as built until it is stocked, and better while it is. The Back makes no money, bar a Clearance Bin's pennies. ${payText(ctx.difficulty)} Selling a part back returns ${pct(TUNE.sellBack)} of what was spent on it. The numbers here are for a game without cards.`;
       body.replaceChildren(suppliesCard(), ...BACK_ORDER.map((k) => backCard(k)));
     } else {
-      note.textContent = `Crate Stacks and security are the maze: shoppers walk round them, and only gym bros go through. Security gets stronger only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range) and Duct Tape (soaks up gym bro hits). Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
+      note.textContent = `Crate Stacks and security are the maze: shoppers walk round them, and only gym bros and dads go through (a dad walks through anything but a wall or live Razor Wire: see The Back's Supplies). Security gets stronger only on supplies from The Back, sent up its Dumbwaiter: Bottled Spite (damage), Rage Cola (speed), Extension Cord (range) and Duct Tape (soaks up gym bro hits). Each is used up as the building works, a unit at a time, and the better the brand (a Rebrander puts it up a tier), the more it does. Empty, it works as built. "Hit" is patience taken per hit: compare it with the patience numbers under Known offenders. A Karen in earshot makes security fire at half speed. A gym bro's hits wear a building down; the count starts again every sales event. Press Rebuild (B) to put a wreck back for ${pct(TUNE.rebuildShare)} of what was paid for it, all or nothing: the money goes at once, the building as soon as nothing is in the way (its stock does not come back), and every new wreck needs another press.`;
       body.replaceChildren(...WALL_ORDER.map((k) => crateCard(k)), ...SECURITY_ORDER.map((k) => securityCard(k)));
     }
     body.dataset.tab = id;

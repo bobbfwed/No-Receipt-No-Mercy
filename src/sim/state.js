@@ -21,8 +21,15 @@ import { newDrop } from './back.js';
  * @property {number} [off] ticks it stays switched off (a dog peed on it); absent when working
  * @property {number} [cd]  towers: ticks until it can fire again
  * @property {number} [a]   forklift: aim angle in radians (for drawing)
- * @property {number} [c]   what it cost to put down, only where a card made that differ from its
- *   kind's price (see buildPrice in cards.js); spentOn counts this instead of the price
+ * @property {number} [c]   what was paid for it in all, only where that differs from its kind's
+ *   price: a card changed the price (see buildPrice in cards.js), or a Crate Stack was reinforced
+ *   (0.4: the money for each level is added on); spentOn counts this instead of the price
+ * @property {number} [r]   (0.4) Crate Stack only: its level of reinforcement (the `reinforce`
+ *   command), each one more gym bro hit it takes in a sales event; absent for none. Kept through
+ *   wrecking and rebuilding (rubble carries it)
+ * @property {number} [wd]  (0.4) a building with Dumbwaiters only: the direction its Razor Wire
+ *   runs, 0-3 as DIRS (the `wire` command; see wire.js); absent for none. Live while it holds wire
+ *   stock, planned otherwise. Rubble remembers it, and a rebuild brings it back if it still may be
  * @property {number} [bz]  Free Sample table only: 1 if it hands out booze (the eightyproof card;
  *   decided when it is bought new, and kept through wrecking and rebuilding: rubble carries it too)
  * @property {Object<string, number[]>} [s] (0.4) a building with Dumbwaiters (BUILD[k].lift): its
@@ -139,6 +146,9 @@ export function centreOf(state, ai, b = state.grid[ai]) {
  *                          behind, while he trails her
  * @property {number} [bq]  a shopper who drinks (the eightyproof card): how many booze tables he
  *                          has stopped at (each makes the next likelier to turn him)
+ * @property {number} [rw]  dad (0.4): the anchor tile of the building whose Razor Wire last turned
+ *                          him away (and was charged a use for it), so walking along one wire does
+ *                          not use it up twice; absent until a wire first turns him
  */
 
 /**
@@ -243,7 +253,9 @@ export function createGame({ seed = 1, training = false, map = null, lobby = fal
     carts: [],
     /** What gym bros have destroyed and nobody has rebuilt yet, oldest first, as
      *  { i, k, d, o }: anchor tile, kind, facing, owner; plus `c` and `bz` when a card gave it
-     *  those (as on a building). The 'rebuild' command, or placing the same kind there, puts them
+     *  those (as on a building), `r` a reinforced Crate Stack's level and `wd` a wire's direction
+     *  (0.4; a rebuild brings the wire back only if the `wire` command would allow it then).
+     *  The 'rebuild' command, or placing the same kind there, puts them
      *  back at TUNE.rebuildShare of what was paid for it (rebuildDeal).
      *  Ordered (0.3.04): a wreck somebody has pressed Rebuild for also has `by` (the id of the
      *  player who pressed and paid) and `res` (whole dollars already taken from his cash and held

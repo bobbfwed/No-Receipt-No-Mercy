@@ -2,7 +2,7 @@
 // building is picked in the build bar, and used by the tutorial. These are the "manual": keep them
 // clear first and funny second. If a number in src/sim/constants.js changes, update the text here
 // (the gym bro's limits are read from the rules below).
-import { TUNE, SUPERS, BACK, TICK_HZ } from '../sim/index.js';
+import { TUNE, SUPERS, BACK, BUILD, TICK_HZ } from '../sim/index.js';
 
 /** A small count as a word ("two"), for text that reads better that way. */
 const word = (n) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
@@ -10,13 +10,15 @@ const cap = (t) => t[0].toUpperCase() + t.slice(1);
 const ROID = SUPERS.gymbro;
 /** A time in seconds, as words: "2 seconds". */
 const secs = (n) => `${n} second${n === 1 ? '' : 's'}`;
+/** Reinforcing a Crate Stack (0.4): its levels and the first one's price, from the rules. */
+const RF = BUILD.crate.reinforce;
 
 /** Per building: `does` = what it is for, `use` = how to place it so it works. */
 export const HOW = {
   crate: {
-    does: 'A wall, and nothing else. No Dumbwaiter, no supplies, nothing for a thief to steal.',
-    use: 'Use it to shape the route shoppers must walk: the longer the walk past your security, the better. Nothing in The Back is in anyone\'s way, so crates and security are the whole maze, and crates are the cheap part of it.',
-    maze: 'Blocks all shoppers, dads included, except a gym bro with a hit left in him, who smashes through.',
+    does: `A wall. No Dumbwaiter, no supplies, nothing for a thief to steal. Pay to reinforce it (from $${RF.cost}, up to ${word(RF.max)} levels, each dearer than the last) and it takes one more gym bro hit a sales event for each level.`,
+    use: 'Use it to shape the route shoppers must walk: the longer the walk past your security, the better. Nothing in The Back is in anyone\'s way, so crates and security are the whole maze for everyone but dads, and crates are the cheap part of it.',
+    maze: 'Blocks every shopper but two: a dad walks straight through it (only walls and Razor Wire stop him), and a gym bro with a hit left in him smashes through.',
   },
   sprinkler: {
     does: 'Wears down the patience of up to four shoppers within about 2 tiles, twice a second. In a crowd it picks the four nearest the tills.',
@@ -99,7 +101,7 @@ export const BACK_HOW = {
     use: 'Junk in at the back or the sides, Tape out of the side with the arrow. Send it to whatever the gym bros keep smashing. Press R before placing to turn it.',
   },
   bender: {
-    does: `Takes returned junk and twists it into Razor Wire, one every ${secs(BACK.makeSecs)}. It is for stopping dads, but that comes in a later version: for now the wire only sits in the building's Dumbwaiter.`,
+    does: `Takes returned junk and twists it into Razor Wire, one every ${secs(BACK.makeSecs)}. It is the one thing that stops a dad: a security building given a wire direction keeps dads off its own tiles and the ${BACK.wireReach} beyond it that way while it holds Razor Wire, and each dad it turns away uses some up.`,
     use: 'Junk in at the back or the sides, Wire out of the side with the arrow. Press R before placing to turn it.',
   },
   rebrand: {
@@ -118,7 +120,7 @@ export const BACK_HOW = {
  */
 export const SHOPPER_HELP = {
   hunter: { trick: 'The ordinary shopper. Stops for free samples, and helps himself to a unit of stock from any security building he walks past: whatever supply it holds the most of.', beat: 'Anything. Slow them at a gap and spray them. Hit them before they reach your best-stocked buildings: a crowd walking along a stocked wall strips it bare.' },
-  dad: { trick: 'Arrives in a single-file line, walks fast and ignores free samples. He wants one thing, the tills, and nothing in this shop is going to distract him.', beat: 'Time: his patience drains by itself, so make the walk long. He ignores wet floor signs and slips on them. An Exhibitionist stops him dead, and so, now and then, does a TV Salesman.' },
+  dad: { trick: 'Arrives in a single-file line, walks fast and ignores free samples. He wants one thing, the tills, and walks straight through your crates and security to get there: only the store\'s walls and Razor Wire stop him.', beat: 'Razor Wire from The Back: a stocked wire turns him away, so lay it to make his walk long, as his patience drains by itself. Guns along his straight line. He ignores wet floor signs and slips on them. An Exhibitionist stops him dead, and so, now and then, does a TV Salesman.' },
   clipper: { trick: 'Fast, weak, and there are a lot of them.', beat: 'Sprinklers. Anything that hits a crowd.' },
   mom: { trick: 'Her kid escapes the cart and runs ahead, straight through your crates and security, then waits further along the route. She sprints round the maze to reach him and ignores free samples on the way. If her patience runs out while he is loose, she does not leave: she crawls to him, nothing can hurt her, and security wastes its shots on her. When she reaches him she gets up with a third of her patience back, without her cart, and carries him from then on. He runs away once only, he never runs all the way to the tills, and she will not take her refund without him.', beat: 'Finish her while the kid is in the cart. Forklifts and wet floor signs. Samples only work while the kid is in the cart. A TV Salesman stops most runaway kids.' },
   teen: { trick: 'Slow. Spills a slushie every few seconds; the mess slows every other shopper and dads slip on it.', beat: 'Let him loiter in range. His messes work for you.' },
@@ -127,7 +129,7 @@ export const SHOPPER_HELP = {
   scooter: { trick: 'Cannot be slowed by anything.', beat: 'Raw damage over a long route.' },
   gymbro: {
     trick: `Walks straight through crate stacks, wrecking any in his way and any he passes, and now and then something else beside him: a sprinkler, a sample table, a forklift. But he only has ${word(TUNE.smashMax)} hits in him a visit, and needs ${TUNE.smashWait} seconds to get his breath back after each. While he does, and once he is spent, he walks round crates like anyone else.`,
-    beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts, even one that Duct Tape from The Back soaks up (the damage is forgotten every sales event), so a taped-up building where he first meets your maze takes a hit off him for nothing. A crate stack goes down in one hit. Press B to rebuild what he wrecked for half of what you paid.',
+    beat: 'Stop him early, before he reaches anything expensive. Every hit he lands counts, even one that Duct Tape from The Back soaks up (the damage is forgotten every sales event), so a taped-up building where he first meets your maze takes a hit off him for nothing. A crate stack goes down in one hit, unless you have paid to reinforce it: one more hit for each level. Press B to rebuild what he wrecked for half of what you paid.',
   },
   drinker: { trick: 'Weaves along at a speed that keeps changing. At corners of the route he may fall over and lie there for 4 seconds, and everyone else has to squeeze past him at a third of their speed.', beat: 'Corners near your security: when he goes down, the queue behind him stands in the spray.' },
   dog: { trick: 'Fast, with little patience. Pees on any security it passes (not wet floor signs), which switches that building off for 6 seconds.', beat: 'Stop it before it reaches your best security. Spread security out so one dog cannot switch off a whole gap.' },

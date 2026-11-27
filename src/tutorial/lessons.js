@@ -27,9 +27,11 @@
 // shoppers sent in are Coupon Clippers (super ones in the super shopper and Barcode Laser lessons),
 // Dads (Dads on a Mission among them) and a Gym Bro. test/tutorial.test.js holds it to both.
 // (0.4: the shop floor's factory is gone, and with it the lessons on its machines. The maze is now
-// Crate Stacks and security, and dads walk round walls like everyone else, so the Barcode Laser
-// moved to the end of part 1, aimed down the queue of a crowd, and part 2's dads are the super ones
-// the maze cannot break. Lessons on The Back, where supplies are made, are still to come.)
+// Crate Stacks and security, so the Barcode Laser moved to the end of part 1, aimed down the queue
+// of a crowd. Since 0.4's dads stage dads walk straight through every building, so part 2 shows
+// them walking across the store and the forklift getting one of two Dads on a Mission; Razor
+// Wire, which really stops them, and the lessons on The Back, where supplies are made, are still
+// to come.)
 //
 // Facts gathered during a step (f): nopes (refusals by reason), waveStarts, waveEnds, and counts of
 // what the shoppers did: slip (a dad slipped), watched (a shopper stopped to watch the TV Salesman),
@@ -81,10 +83,11 @@ const LASER_WORD = 'thirty';
 // The Forklift Turret: its circle (6 tiles) covers the whole way down column 6 and along the bottom
 // row to the gap.
 const FORKLIFT = [8, 9];
-// The dads lesson: ordinary dads, all of whom the maze wears down, then Dads on a Mission at the
-// back, some of whom it does not (the tests check every seed).
+// The dads lesson: ordinary dads, then Dads on a Mission at the back. They walk straight through
+// the maze (0.4), so most of them reach a till; the Dads on a Mission all do (the tests check
+// every seed).
 const DADS_FRONT = 5, DADS_BACK = 3;
-// The forklift lesson's Dads on a Mission: more than the maze stops without it, none with it.
+// The forklift lesson's Dads on a Mission: both get through without it, one with it.
 const MISSION_DADS = 2;
 // By the entrance: shoppers coming in must walk round these, a gym bro walks through one.
 const DOOR_CRATES = [[2, 7], [2, 8], [1, 9]];
@@ -191,7 +194,7 @@ export const STEPS = [
     text: [
       'Do this: read this, then press Next. Every lesson starts with a line like this one, and the big yellow arrow points at what to press.',
       'Shoppers come in through the ENTRANCE on the left and walk to the tills on the right. Every shopper who reaches a till takes a refund out of your cash. In a real game, 20 refunds closes the store.',
-      'Your job is to make them suffer on the way. Shoppers cannot walk through Crate Stacks or security, so whatever you build is the maze they have to walk, and your security wears them down along it until they give up and leave.',
+      'Your job is to make them suffer on the way. Shoppers cannot walk through Crate Stacks or security (dads can, as part 2 shows), so whatever you build is the maze they have to walk, and your security wears them down along it until they give up and leave.',
       'This training shift walks you through every building on the shop floor. You cannot lose here, and money is free.',
     ],
     quip: "I'm DEB from HR, and I'm training you today. Read the lesson, do what it says, then press Next.",
@@ -203,12 +206,12 @@ export const STEPS = [
     tool: 'crate',
     text: [
       'Do this: click Crates (or press 1), then press the mouse button on the first highlighted tile, drag straight down to the last one, and let go. A Crate Stack lands on every tile you drag over: a wall from the top of the store to one tile off the bottom.',
-      'A Crate Stack is the cheapest wall there is: it blocks shoppers and does nothing else.',
+      'A Crate Stack is the cheapest wall there is: it blocks shoppers (all but dads) and does nothing else.',
       'The yellow dashed line on the floor is the route shoppers will walk from the doors to the tills, drawn whenever you build. Watch it bend round your wall as it goes up: a longer route gives your security more time to work on them.',
     ],
     touch: [
       'Do this: tap Crates in the bar, then tap each of the highlighted tiles in turn, from the top one down: a wall from the top of the store to one tile off the bottom.',
-      'A Crate Stack is the cheapest wall there is: it blocks shoppers and does nothing else. (A building can also be dragged out of the bar onto its tile: it rides above your finger so you can see where it lands.)',
+      'A Crate Stack is the cheapest wall there is: it blocks shoppers (all but dads) and does nothing else. (A building can also be dragged out of the bar onto its tile: it rides above your finger so you can see where it lands.)',
       'The yellow dashed line on the floor is the route shoppers will walk from the doors to the tills, drawn whenever you build. Watch it bend round your wall as it goes up: a longer route gives your security more time to work on them.',
     ],
     quip: 'Crates down the highlighted column. The construction equivalent of a shrug: you two will get on.',
@@ -375,7 +378,7 @@ export const STEPS = [
     part2: true,
     text: [
       'Do this: read this, then press Next. Part 1 was the buildings, tried out on the plainest shopper there is. Part 2 is two shoppers who play by their own rules: Dads and Gym Bros. Each has a trick that gets past an ordinary defence, and each trick has an answer.',
-      'Your layout from part 1 stays, and the lessons have you add to it. One building is still to come, the Forklift Turret, and it is made for the dads your maze cannot break.',
+      'Your layout from part 1 stays, and the lessons have you add to it. One building is still to come, the Forklift Turret, and it is made for dads, who walk straight through your maze.',
     ],
     quip: "Part 2: the shoppers who cheat. Dads and Gym Bros. Neither of them reads instructions either, so you'll get on.",
     mood: 'smug',
@@ -390,8 +393,8 @@ export const STEPS = [
     ],
     text: [
       'Do this: press OPEN THE DOORS and watch eight dads come in, in single file. A dad wants to get through the line and go home: he walks fast, never stops for Free Samples, and strides straight over Wet Floor Signs (now and then one slips and lies there stunned). Pepper spray bothers him less than most, too.',
-      'What wears a dad down is time: his patience drains by itself every second he is in the store, so a long route does half your work. The five ordinary dads at the front crack before they reach a till.',
-      'The three at the back are Dads on a Mission, super dads: two and a half times the patience, it drains half as fast, and they never slip. Some of them will walk out with a double refund, $50 each, and leave a five-star review.',
+      "A dad walks straight through your Crate Stacks and security, the shortest way to the tills: nothing you have built is in his way. Only the store's walls stop him, and Razor Wire, which is made in The Back. His patience drains by itself every second he is in the store, but the short way leaves it little time. Watch most of these eight walk straight across the store to a till.",
+      'The three at the back are Dads on a Mission, super dads: two and a half times the patience, it drains half as fast, and they never slip. They walk out with a double refund, $50 each, and leave a five-star review.',
     ],
     quip: "Open the doors and count the dads. Eight of them, each told his wife 'two minutes'.",
     mood: 'smug',
@@ -405,13 +408,13 @@ export const STEPS = [
     wave: [{ k: 'dad', n: MISSION_DADS, gap: 0.35, at: 0, sup: MISSION_DADS }],
     text: [
       'Do this: click Forklift (or press 3), click the highlighted tile, then press OPEN THE DOORS for two more Dads on a Mission. A Forklift Turret hits one shopper hard from 6 tiles away, always the one nearest the tills.',
-      'A dad with patience to burn needs big hits, one at a time, for as long as you can keep them coming. So a forklift goes where its circle covers a long stretch of the route: this one covers the whole way down to the gap.',
-      'Your maze alone lets one of the two through. Each dad who reaches a till takes his refund and leaves a five-star review.',
+      "A dad with patience to burn needs big hits, one at a time, for as long as you can keep them coming. So a forklift goes where its circle covers a long stretch of the way they walk: this one covers a long stretch of the dads' straight line across the store as well as the way down to the gap.",
+      'Without it both of them walk out with a refund; with it, it gets one of the two. Each dad who reaches a till takes his refund and leaves a five-star review. Stopping dads for good takes Razor Wire from The Back.',
     ],
     touch: [
       'Do this: drag Forklift from the bar onto the highlighted tile, then tap OPEN THE DOORS for two more Dads on a Mission. A Forklift Turret hits one shopper hard from 6 tiles away, always the one nearest the tills.',
-      'A dad with patience to burn needs big hits, one at a time, for as long as you can keep them coming. So a forklift goes where its circle covers a long stretch of the route: this one covers the whole way down to the gap.',
-      'Your maze alone lets one of the two through. Each dad who reaches a till takes his refund and leaves a five-star review.',
+      "A dad with patience to burn needs big hits, one at a time, for as long as you can keep them coming. So a forklift goes where its circle covers a long stretch of the way they walk: this one covers a long stretch of the dads' straight line across the store as well as the way down to the gap.",
+      'Without it both of them walk out with a refund; with it, it gets one of the two. Each dad who reaches a till takes his refund and leaves a five-star review. Stopping dads for good takes Razor Wire from The Back.',
     ],
     quip: "Forklift on the highlighted tile, then open the doors. Waste his time. You're good at that; I've seen your timesheets.",
     marks: (s) => wanted(s, [[...FORKLIFT, 'forklift', undefined, 'Forklift']]),

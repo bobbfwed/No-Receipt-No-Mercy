@@ -2,15 +2,16 @@
 // The host validates every command here, so a confused or cheating client cannot break the game.
 import { BUILD, BACK, TUNE, TICK_HZ, ST, ROLES, SPEEDS, buildDef } from './constants.js';
 import { inBounds, idxOf, bump, setMap, setSettings, footprint, anchorOf, tilesOf, releaseOrder } from './state.js';
-import { computeDist, banksOpen, modeOf, UNREACHABLE, NORMAL, SMASH } from './path.js';
+import { computeDist, banksOpen, dadPlanCheck, modeOf, UNREACHABLE, DAD } from './path.js';
 import { beginWave } from './step.js';
-import { spentOn, rebuildDeal } from './upgrades.js';
+import { spentOn, rebuildDeal, reinforceCost } from './upgrades.js';
 import { officePlayer, checkPlan, tidyPlan, refreshBudget } from './office.js';
 import { buildPrice, cardStock, boozeRoll } from './cards.js';
 import { canPlaceBack, newPart, syncLifts, dropTicks, takesSupply, addStock, itemCode } from './back.js';
+import { carriesWire, wireCovers, buildingTiles, planWith, wireLive } from './wire.js';
 
 /** Commands a Head Office player may not use: he does not touch the store. */
-const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp']);
+const STORE_ONLY = new Set(['place', 'remove', 'rotate', 'give', 'rebuild', 'endless', 'dropUp', 'wire', 'reinforce']);
 
 /**
  * Commands that still work while the game is paused (0.3.02; state.pause). Everything else is
@@ -140,7 +141,9 @@ function placeCheck(state, k, x, y, pid, d, paid) {
     if (!player || player.cash + held < price) return 'cash';
   }
   if (def.blocks) {
-    for (const s of state.shoppers) if (s.st !== ST.LEAVE && at.tiles.includes(tileOf(state, s))) return 'shopper';
+    // (Dads walk through buildings, 0.4: one standing there is not in the way, and a building can
+    // never wall him in. Only Razor Wire stops a dad, and a new building has no wire.)
+    for (const s of state.shoppers) if (s.st !== ST.LEAVE && modeOf(s.k) !== DAD && at.tiles.includes(tileOf(state, s))) return 'shopper';
     const block = at.tiles.length === 1 ? at.i : at.tiles;
     const dist = computeDist(state, block);
     // Every entrance must keep a way to the tills, including the ones that are still shut.
@@ -148,24 +151,22 @@ function placeCheck(state, k, x, y, pid, d, paid) {
     // In a store with two banks of tills, both stay open: walling one off would turn it back into
     // an ordinary store, and the crowd choosing between them is the point of it.
     if (!banksOpen(state, block)) return 'bank';
-    // Dads get through things others cannot, so each is checked on his own map. A gym bro is
-    // checked as an ordinary shopper: at any moment he may be resting after a hit, or spent, and
-    // then he walks round crates like anyone else, so crates must not wall him in either.
-    const fields = [dist, null, null];
+    // Nobody in the store may be walled in. A gym bro is checked as an ordinary shopper: at any
+    // moment he may be resting after a hit, or spent, and then he walks round crates like anyone
+    // else, so crates must not wall him in either.
     for (const s of state.shoppers) {
-      if (s.st === ST.LEAVE) continue;
-      const mode = modeOf(s.k) === SMASH ? NORMAL : modeOf(s.k);
-      const field = (fields[mode] ||= computeDist(state, block, mode));
-      if (field[tileOf(state, s)] === UNREACHABLE) return 'blocked';
+      if (s.st === ST.LEAVE || modeOf(s.k) === DAD) continue;
+      if (dist[tileOf(state, s)] === UNREACHABLE) return 'blocked';
     }
   }
   return null;
 }
 
 /**
- * A building as it is put down. `card` carries what a card gave it (see the Building fields in
- * state.js): `c` the price paid where it differs from the kind's, `bz` a Free Sample table that
- * hands out booze (the eightyproof card).
+ * A building as it is put down. `card` carries what a card gave it, or what a wreck being rebuilt
+ * had (see the Building fields in state.js): `c` the price paid where it differs from the kind's,
+ * `bz` a Free Sample table that hands out booze (the eightyproof card), `r` a Crate Stack's
+ * reinforcement (0.4). A wire's direction is not copied here: see restoreWire.
  */
 function newBuilding(k, owner, d, card = null) {
   const b = { k, o: owner };
@@ -174,6 +175,7 @@ function newBuilding(k, owner, d, card = null) {
   if (card) {
     if (card.c !== undefined) b.c = card.c;
     if (card.bz) b.bz = 1;
+    if (card.r > 0 && def.reinforce) b.r = card.r;
   }
   if (def.tower) b.cd = 0;
   if (k === 'forklift') b.a = 0;
@@ -189,6 +191,19 @@ function put(state, tiles, b) {
   for (let n = 1; n < tiles.length; n++) state.grid[tiles[n]] = { k: b.k, part: tiles[0] };
   state.gridVer++;
   syncLifts(state, tiles);
+}
+
+/**
+ * A rebuilt wreck had a wire (`wd`, 0.4): the building on anchor ai gets it back if the `wire`
+ * command would allow it now (dadPlanCheck), and is rebuilt without it if not (the store may have
+ * changed round the hole since it was wrecked).
+ */
+function restoreWire(state, ai, wd) {
+  const b = state.grid[ai];
+  if (wd === undefined || !b || !carriesWire(b.k)) return;
+  if (dadPlanCheck(state, planWith(state, [], wireCovers(state, buildingTiles(state, ai, b), wd)))) return;
+  b.wd = wd;
+  state.gridVer++;
 }
 
 /** Takes a building off the grid, all of its tiles, and its Dumbwaiters with it. Returns it. */
@@ -227,6 +242,7 @@ function putBack(state, r) {
   payer.cash += res - deal.pay;
   put(state, tiles, newBuilding(r.k, pid, r.d | 0, r));
   clearRubble(state, tiles);
+  restoreWire(state, tiles[0], r.wd);
   bump(state, pid, 'spent', deal.pay);
   bump(state, pid, 'built');
   return { done: true };
@@ -328,6 +344,10 @@ export function stepRebuilds(state, ev) {
  *   { c: 'remove', x, y }       sell a building back (the money goes to whoever paid for it)
  *   { c: 'rotate', x, y }       turn a building a quarter turn clockwise (half a turn if it is
  *                               bigger than one tile, so it keeps its footprint)
+ *   { c: 'wire', x, y, d }      (0.4) give the building on (x, y) Razor Wire running in direction d
+ *                               (0-3), or take it away (-1); free (see canWire, setWire)
+ *   { c: 'reinforce', x, y }    (0.4) pay for the next level of the Crate Stack on (x, y): one more
+ *                               gym bro hit a sales event (see canReinforce, reinforce)
  *   place, remove and rotate with f: 1 do the same on The Back (0.4; see backCommand)
  *   { c: 'dropUp', x, y }       pay for the next cash level of the Returns Drop on (x, y) in The
  *                               Back: junk comes down faster (0.4; see dropUp)
@@ -476,6 +496,101 @@ function dropUp(state, pid, cmd, ev) {
   return { ok: true };
 }
 
+/**
+ * Whether player pid may give the building on any tile (x, y) the wire direction d (0.4; the `wire`
+ * command): d 0 to 3 as DIRS, or -1 to take the wire away. Anyone in the store may, as anyone may
+ * turn a building, at any time in a running game; it is free.
+ * @returns {string|null} null if allowed (setting what it already has, or clearing none, is a
+ *   harmless yes), otherwise the reason: 'over', 'lobby', 'cards', 'paused' as for canPlace;
+ *   'bad' no such player or d is not -1 to 3; 'office' Head Office does not touch the store;
+ *   'bounds' off the map; 'empty' no building there; 'kind' a building that cannot carry wire (a
+ *   Crate Stack: only buildings with Dumbwaiters can); 'blocked' on the dads' planned map
+ *   (DADPLAN: every wire, live or not) with this change, an entrance, open or shut, would have no
+ *   way to the tills or a bank of tills would be cut off from the others.
+ */
+export function canWire(state, pid, x, y, d) {
+  if (state.phase === 'won' || state.phase === 'lost') return 'over';
+  if (state.phase === 'lobby') return 'lobby';
+  if (state.phase === 'cards') return 'cards';
+  if (state.pause) return 'paused';
+  const player = Number.isInteger(pid) ? state.players[pid] : null;
+  if (!player) return 'bad';
+  if (player.side === 'office') return 'office';
+  if (!Number.isInteger(d) || d < -1 || d > 3) return 'bad';
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
+  const ai = anchorOf(state, idxOf(state, x, y)), b = state.grid[ai];
+  if (!b) return 'empty';
+  if (!carriesWire(b.k)) return 'kind';
+  if (d < 0 || d === b.wd) return null;
+  // (Taking a wire away, or keeping it as it is, can never cut a way: only a new stretch is checked.)
+  const tiles = buildingTiles(state, ai, b);
+  const was = b.wd === undefined ? [] : wireCovers(state, tiles, b.wd);
+  return dadPlanCheck(state, planWith(state, was, wireCovers(state, tiles, d)));
+}
+
+/**
+ * The `wire` command (0.4): `{ c: 'wire', x, y, d }` sets the direction of the Razor Wire of the
+ * building on (x, y) (any tile of it), or takes it away with d -1 (see canWire). The wire's tiles
+ * change, so gridVer moves on and the path maps are worked out again. Sends
+ * wire {x, y, d, by, live} (the anchor tile; live 1 if it holds Razor Wire, so it works at once).
+ */
+function setWire(state, pid, cmd, ev) {
+  const why = canWire(state, pid, cmd.x, cmd.y, cmd.d);
+  if (why) return { ok: false, why };
+  const ai = anchorOf(state, idxOf(state, cmd.x, cmd.y)), b = state.grid[ai];
+  if (cmd.d < 0 ? b.wd === undefined : b.wd === cmd.d) return { ok: true };
+  if (cmd.d < 0) delete b.wd; else b.wd = cmd.d;
+  state.gridVer++;
+  ev.push({ e: 'wire', x: ai % state.w, y: (ai / state.w) | 0, d: cmd.d, by: pid, live: wireLive(b) ? 1 : 0 });
+  return { ok: true };
+}
+
+/**
+ * Whether player pid may reinforce the Crate Stack on (x, y) one more level now (0.4; the
+ * `reinforce` command). Anyone in the store may, paying for it himself, as anyone may pay for a
+ * Returns Drop's level.
+ * @returns {string|null} null if allowed, otherwise the reason: 'over', 'lobby', 'cards',
+ *   'paused' as for canPlace; 'bad' no such player; 'office'; 'bounds' off the map; 'empty'
+ *   nothing there; 'kind' not a Crate Stack; 'max' it has the top level; 'cash' he cannot pay
+ *   reinforceCost.
+ */
+export function canReinforce(state, pid, x, y) {
+  if (state.phase === 'won' || state.phase === 'lost') return 'over';
+  if (state.phase === 'lobby') return 'lobby';
+  if (state.phase === 'cards') return 'cards';
+  if (state.pause) return 'paused';
+  const player = Number.isInteger(pid) ? state.players[pid] : null;
+  if (!player) return 'bad';
+  if (player.side === 'office') return 'office';
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !inBounds(state, x, y)) return 'bounds';
+  const b = state.grid[anchorOf(state, idxOf(state, x, y))];
+  if (!b) return 'empty';
+  if (!BUILD[b.k].reinforce) return 'kind';
+  const cost = reinforceCost(b, state);
+  if (!cost) return 'max';
+  return player.cash < cost ? 'cash' : null;
+}
+
+/**
+ * The `reinforce` command (0.4): `{ c: 'reinforce', x, y }` pays reinforceCost to raise the Crate
+ * Stack's level `r` by one: it takes one more gym bro hit in each sales event (statsOf's hits). The
+ * money counts as spent on the building (added to `c`), so selling it back returns TUNE.sellBack of
+ * it and a rebuild costs TUNE.rebuildShare of it, levels included. Sends
+ * reinforce {x, y, r, by, paid}.
+ */
+function reinforce(state, pid, cmd, ev) {
+  const why = canReinforce(state, pid, cmd.x, cmd.y);
+  if (why) return { ok: false, why };
+  const ai = anchorOf(state, idxOf(state, cmd.x, cmd.y)), b = state.grid[ai];
+  const cost = reinforceCost(b, state);
+  state.players[pid].cash -= cost;
+  bump(state, pid, 'spent', cost);
+  b.c = spentOn(b) + cost;
+  b.r = (b.r | 0) + 1;
+  ev.push({ e: 'reinforce', x: ai % state.w, y: (ai / state.w) | 0, r: b.r, by: pid, paid: cost });
+  return { ok: true };
+}
+
 export function applyCommand(state, pid, cmd, ev = []) {
   // (Every value in a command comes from a player's browser and may be anything. Any of them used to
   // look something up by name goes through Object.hasOwn or a list's includes, never a bare obj[x]:
@@ -551,7 +666,10 @@ export function applyCommand(state, pid, cmd, ev = []) {
         for (let n = 0; n < units && takesSupply(b, code, state); n++) addStock(b, code, state);
       }
       put(state, at.tiles, b);
+      // (A wreck's wire, 0.4, comes back with it if it still may: kept before its record goes.)
+      const wd = deal ? at.rubble.wd : undefined;
       clearRubble(state, at.tiles);
+      restoreWire(state, at.i, wd);
       player.cash -= paid;
       bump(state, pid, 'spent', paid);
       bump(state, pid, 'built');
@@ -576,12 +694,30 @@ export function applyCommand(state, pid, cmd, ev = []) {
     }
     case 'rotate': {
       if (!Number.isInteger(cmd.x) || !Number.isInteger(cmd.y) || !inBounds(state, cmd.x, cmd.y)) return { ok: false, why: 'bounds' };
-      const b = state.grid[anchorOf(state, idxOf(state, cmd.x, cmd.y))];
+      const ai = anchorOf(state, idxOf(state, cmd.x, cmd.y));
+      const b = state.grid[ai];
       if (!b || !BUILD[b.k].rot) return { ok: false, why: 'empty' };
       // A long building turns end for end, so it never needs room it does not already have.
-      b.d = (b.d + (BUILD[b.k].size ? 2 : 1)) & 3;
+      const d = (b.d + (BUILD[b.k].size ? 2 : 1)) & 3;
+      // Its wire (0.4) covers its footprint and runs from its side: if turning it changed what the
+      // wire covers, the same check as the wire command's. (A building that turns end for end keeps
+      // its footprint, and a wire's direction is the store's, not the building's, so today no turn
+      // changes it; the check is here for any building that one day turns onto other tiles.)
+      let moved = false;
+      if (b.wd !== undefined) {
+        const was = wireCovers(state, buildingTiles(state, ai, b), b.wd);
+        const now = wireCovers(state, footprint(state, b.k, ai % state.w, (ai / state.w) | 0, d) || [ai], b.wd);
+        moved = was.length !== now.length || was.some((t, n) => t !== now[n]);
+        if (moved && dadPlanCheck(state, planWith(state, was, now))) return { ok: false, why: 'blocked' };
+      }
+      b.d = d;
+      if (moved) state.gridVer++;
       return { ok: true };
     }
+    case 'wire':
+      return setWire(state, pid, cmd, ev);
+    case 'reinforce':
+      return reinforce(state, pid, cmd, ev);
     case 'give': {
       // (A player's number, nothing else: players['constructor'] would be an array's own function.)
       const to = Number.isInteger(cmd.to) ? state.players[cmd.to] : null;

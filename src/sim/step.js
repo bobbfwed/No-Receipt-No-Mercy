@@ -8,6 +8,7 @@ import { takeOfficeWave, refreshBudget } from './office.js';
 // (commands.js imports from this file too. That is safe: neither uses the other while loading.)
 import { stepRebuilds } from './commands.js';
 import { stepBack, useWork, useStock, usesIn, syncLifts, stealStock } from './back.js';
+import { wireMap, useWire } from './wire.js';
 import { stepDeal, cardPatience, cardBoss, cardSpeed, cardCrowd, cardPops, cardRefund, cardPay, cardTargets, cardPee, cardSlip, cardFall, cardPep, cardShield, cardGrabChance, cardGrabHeal, cardFee,
   hasCard, cardKidRuns, kidBack, kidAlong, pupsOf, trailsFlasher, supportDog, stopsToPet, drinks, boozeChance, wideMess } from './cards.js';
 
@@ -859,13 +860,15 @@ function walkToStand(state, s, def, i, ev) {
   const W = state.w;
   const [cx, cy] = centreOf(state, s.sa, b);
   const far = (ti) => ((ti % W) + 0.5 - cx) ** 2 + (((ti / W) | 0) + 0.5 - cy) ** 2;
-  // (A gym bro does not smash his way to the television: crates stop him like anyone else.)
+  // (A gym bro does not smash his way to the television: crates stop him like anyone else. A dad,
+  // 0.4, could walk through anything but wire, but walks up to the stand round buildings, so he
+  // stands beside it to watch, not inside it, and wire stops him too.)
   const mode = modeOf(s.k) === SMASH ? NORMAL : modeOf(s.k);
   let to = i, best = far(i) - 1e-9;
   if (--s.sl > 0) {
     for (let d = 0; d < 4; d++) {
       const ni = neighbour(state, i, d);
-      if (ni < 0 || !walkable(state, ni, mode) || state.tiles[ni] === 'T') continue;
+      if (ni < 0 || !walkable(state, ni, mode) || (mode === DAD && !walkable(state, ni, NORMAL)) || state.tiles[ni] === 'T') continue;
       const f = far(ni);
       if (f < best) { best = f; to = ni; }
     }
@@ -1143,6 +1146,10 @@ function wreck(state, ti, s, ev, flatten = false) {
   if (b.c !== undefined) r.c = b.c;
   // (A Free Sample table that hands out booze, the eightyproof card, is rebuilt as one.)
   if (b.bz) r.bz = 1;
+  // (0.4: a reinforced Crate Stack comes back with its levels, which were paid for and are in `c`;
+  // a wire's direction comes back if the wire command would allow it then: restoreWire.)
+  if (b.r) r.r = b.r;
+  if (b.wd !== undefined) r.wd = b.wd;
   state.rubble.push(r);
   // (Its stock went with it. Its Dumbwaiters stay under the rubble, wanting nothing: syncLifts
   // leaves them where they are, so nothing changes in The Back.)
@@ -1606,15 +1613,45 @@ function stepShoppers(state, fields, sec, ev) {
       // would take him past her: he waits.
       going = false;
     } else {
-      going = moveAlong(state, fields[routeOf(s, state)], s.x, s.y, s.ox, s.oy, speed, s.id);
+      let field = fields[routeOf(s, state)];
+      // A dad on a tile his map has no way on from (live Razor Wire went up under him, or round
+      // him) is not trapped: he climbs out the way he was going, by the walls-only map (0.4).
+      if (field === fields[DAD] && field[i] === UNREACHABLE) field = fields[GHOST];
+      going = moveAlong(state, field, s.x, s.y, s.ox, s.oy, speed, s.id);
     }
     if (going) {
       s.vx = MV.vx;
       s.vy = MV.vy;
       s.x += MV.vx;
       s.y += MV.vy;
+      if (def.dad) dadStep(state, s, i, fields, ev);
     }
   }
+}
+
+/**
+ * Razor Wire's use (0.4): each time a dad comes onto a new tile, the step he would take next by the
+ * walls-only map (GHOST: the way he would go if there were no wire at all) is looked at. If that
+ * tile is under live wire, a wire has turned him away: the building whose live wire covers it (the
+ * lowest anchor, if several) uses one unit's worth of a use (useWire), unless it is the one that
+ * last turned him (`s.rw`), so walking along one wire costs it once. Not while he is climbing out
+ * from under a wire himself: that wire did not turn him away. Sends turned {i, x, y} (i the
+ * wire's building) for each use.
+ * @param {number} from the tile he was on before this tick's step
+ */
+function dadStep(state, s, from, fields, ev) {
+  const W = state.w, j = (s.y | 0) * W + (s.x | 0);
+  if (j === from) return;
+  const live = wireMap(state).live;
+  if (live[j] >= 0) return;
+  const next = nextTile(state, fields[GHOST], j, s.id);
+  const ai = next === j ? -1 : live[next];
+  if (ai < 0) return;
+  if (s.rw !== ai) {
+    useWire(state, ai, ev);
+    ev.push({ e: 'turned', i: ai, x: s.x, y: s.y });
+  }
+  s.rw = ai;
 }
 
 /**
@@ -1685,6 +1722,10 @@ function stepShoppers(state, fields, sec, ev) {
  *  in track t ('dmg', 'spd', 'rng', 'dur', 'wire'). smash has tape 1 when Duct Tape soaked
  *  the hit up (its `left` then counts the tape still on it). dropUp {x,y,lv,by,paid} (a command)
  *  a player bought the Returns Drop at (x, y) its cash level lv.
+ *  Razor Wire and crates (0.4): turned {i,x,y} a dad at (x, y) was turned away by the live wire of
+ *  the building on anchor tile i, which used one use of its Razor Wire (dadStep). Commands add
+ *  wire {x,y,d,by,live} (the building at anchor (x, y) was given wire direction d, -1 none) and
+ *  reinforce {x,y,r,by,paid} (the Crate Stack at (x, y) was reinforced to level r).
  */
 export function step(state) {
   const ev = [];
@@ -1728,7 +1769,9 @@ export function step(state) {
     if (--state.messes[k][1] <= 0) state.messes.splice(k, 1);
   }
   // A gym bro can change the layout mid-tick; everyone else finishes this tick on the old maps.
-  const fields = [getField(state, NORMAL), getField(state, DAD), getField(state, SMASH)];
+  // (GHOST, walls only, 0.4: a dad caught under wire climbs out by it, and it tells which wire
+  // turned him away: see dadStep.)
+  const fields = [getField(state, NORMAL), getField(state, DAD), getField(state, SMASH), getField(state, GHOST)];
   // The Back (0.4) first: in a later stage it stocks the security buildings, which fire below.
   stepBack(state, ev);
   const sec = stepBuildings(state, fields, ev);

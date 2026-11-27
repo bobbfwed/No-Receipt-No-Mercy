@@ -8,11 +8,11 @@ import { fill, generated, pictures } from '../tools/readme.mjs';
 import { versionText } from '../src/version.js';
 import {
   createGame, addPlayer, applyCommand, step, queueTrainingWave, statsOf, tracksOf, levelIn, itemCode, addStock, takesSupply, usesIn, SHOPPERS, SUPERS, BUILD, SHOP_KINDS, TUNE, MAP_DESIGNS, SETTINGS, BOSS,
-  BACK, TICK_HZ, makeTicks, rebrandTicks, dropUpCost,
+  BACK, TICK_HZ, makeTicks, rebrandTicks, dropUpCost, reinforceCost,
 } from '../src/sim/index.js';
 import {
   SHOPPER_ORDER, WALL_ORDER, SECURITY_ORDER, BACK_ORDER, shopperFacts, shopperTraits, patienceAt, firstWave, countIn,
-  sampleWaves, bossWaves, LONGEST, tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts,
+  sampleWaves, bossWaves, LONGEST, tierRows, crateFacts, backFacts, supplyFacts, tierFacts, unitFacts, wireText, reinforceText,
 } from '../src/content/facts.js';
 import { SUPPLIES, junkPerMinute } from '../src/content/supplies.js';
 import { HOW, BACK_HOW, SHOPPER_HELP, SUPER_HELP } from '../src/content/help.js';
@@ -171,7 +171,13 @@ test("The Back's numbers in the handbook are the rules' own (0.4)", () => {
       assert.ok(takesSupply(b, itemCode(SUPPLIES[s.track].type, 1)), `${name} takes ${s.name}`);
     }
   }
-  assert.equal(sup.filter((s) => !s.works).map((s) => s.track).join(), 'wire', 'only Razor Wire is not working yet');
+  // Razor Wire works since 0.4's dads stage: its rule in words carries the rules' numbers.
+  const wt = wireText();
+  assert.ok(wt.includes(`the ${BACK.wireReach} tiles beyond`), wt);
+  for (const n of BACK.wireTurns.slice(1)) assert.ok(wt.includes(String(n)), `${n} in: ${wt}`);
+  // So does reinforcing a Crate Stack (0.4): every price, from the rules.
+  const rt = reinforceText();
+  for (let r = 0; r < BUILD.crate.reinforce.max; r++) assert.ok(rt.includes(`${reinforceCost({ k: 'crate', r })}`), rt);
   // The tiers: the levels, the tape and wire uses, the bin's pay.
   const tiers = tierFacts();
   assert.deepEqual(tiers.map((r) => r.level), BACK.tierLevel.slice(1));

@@ -128,6 +128,8 @@ export function checksum(s) {
   for (const sh of s.shoppers) {
     mix(sh.id); mix(sh.st); dec(sh.x); dec(sh.y); dec(sh.hp); mix(sh.kd);
     mix(sh.kn); mix(sh.cd); mix(sh.pc); mix(sh.ru); dec(sh.sv); mix(sh.pp);
+    // (A dad's last wire, 0.4: only once one has turned him, so nobody else sums any differently.)
+    if (sh.rw !== undefined) { mix(0x5257); mix(sh.rw); }
   }
   const g = s.grid;
   for (let i = 0; i < g.length; i++) {
@@ -135,6 +137,9 @@ export function checksum(s) {
     if (!b) continue;
     mix(i); mix(b.k.charCodeAt(0)); mix(b.part ?? -1); mix(b.o); mix(b.d); dec(b.cd);
     mix(b.hit); mix(b.off);
+    // (Its wire's direction and a crate's reinforcement, 0.4: only where there are any.)
+    if (b.wd !== undefined) { mix(0x5744); mix(b.wd); }
+    if (b.r) { mix(0x5246); mix(b.r); mix(b.c); }
     // (Its stock from The Back, 0.4: every run's tier and uses, track by track in a fixed order.
     // Only on a stocked building, so an unstocked one sums as it did.)
     if (b.s) {

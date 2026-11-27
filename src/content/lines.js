@@ -380,7 +380,7 @@ export const LINES = {
       '{p}, crates are not a personality.',
       'More crates. {p} is building a fort. He is forty.',
       'Crates. {p} has discovered stacking things. Next week: shapes.',
-      u("{p} placed another crate. The dads can't climb it. Neither can {p}, I'd bet."),
+      u("{p} placed another crate. The dads walk straight through it, the way everyone walks straight through {p}."),
       r('{p} is building a wall of crates. Every man past forty builds a wall eventually. Most build it around their feelings. {p} is doing both.'),
     ],
     sprinkler: [

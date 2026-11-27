@@ -8,7 +8,7 @@
 // money is only the price paid for it, and an unstocked building works at its plain numbers.
 import { BUILD, TUNE, BACK } from './constants.js';
 // (cards.js imports from this file too. That is safe: neither uses the other while loading.)
-import { cardStats } from './cards.js';
+import { cardStats, priceMul } from './cards.js';
 
 /** Every track, in the order they are listed everywhere. */
 const TRACKS = ['dmg', 'spd', 'rng', 'dur'];
@@ -40,10 +40,26 @@ export function levelOf(b) {
 }
 
 /**
- * What was spent on a building: what was paid for it (`c`, where a card made that differ from its
- * kind's price). Selling back and rebuilding are shares of this. Stock is never money.
+ * What was spent on a building: what was paid for it (`c`, where that differs from its kind's
+ * price: a card changed the price, or a Crate Stack was reinforced, 0.4). Selling back and
+ * rebuilding are shares of this. Stock is never money.
  */
 export const spentOn = (b) => b.c ?? BUILD[b.k].cost;
+
+/**
+ * What the next level of reinforcement costs for the Crate Stack b (the `reinforce` command, 0.4):
+ * round(cost * grow ** r) from BUILD.crate.reinforce, times the cards that change a crate's price
+ * (priceMul), whole dollars and never under one; 0 once it has the top level, or for anything that
+ * cannot be reinforced. Pass the game's state wherever there is one, so the cards count.
+ */
+export function reinforceCost(b, state = null) {
+  const rf = b && BUILD[b.k] && BUILD[b.k].reinforce;
+  if (!rf) return 0;
+  const r = b.r | 0;
+  if (r >= rf.max) return 0;
+  const m = state ? priceMul(state, b.k) : 1;
+  return Math.max(1, Math.round(rf.cost * rf.grow ** r * m));
+}
 
 /**
  * A building's working numbers with its stock applied (see levelIn). `b` may be a building from
@@ -57,7 +73,8 @@ export const spentOn = (b) => b.c ?? BUILD[b.k].cost;
  *                        stopLeft), and what each chance to hurry past is multiplied by
  *   slow, slip, slipDmg  wet floor sign (speed multiplier, chance a dad slips, patience he loses)
  *   hits                 every building: gym bro hits it survives in one wave (Duct Tape soaks up
- *                        hits on top of these, one use a hit: see wreck in step.js)
+ *                        hits on top of these, one use a hit: see wreck in step.js; a reinforced
+ *                        Crate Stack takes one more for each level `r`)
  * With `state`, the game's cards are applied too (cardStats in cards.js: the premature and
  * artisanal cards); the simulation always passes it. Without, the plain numbers (the handbook).
  */
@@ -78,7 +95,8 @@ export function statsOf(b, state = null) {
     slow: TUNE.wetSlow * (d.slow || 1) ** lv('dmg'),
     slip: Math.min(0.95, TUNE.slipChance + (d.slip || 0) * lv('dmg')),
     slipDmg: TUNE.slipDmg * (b.k === 'wetfloor' ? mul('dmg') : 1),
-    hits: def.hits || 1,
+    // (A reinforced Crate Stack, 0.4: one more hit for each level, `r`.)
+    hits: (def.hits || 1) + (b.r | 0),
   };
   return state ? cardStats(state, b, st) : st;
 }

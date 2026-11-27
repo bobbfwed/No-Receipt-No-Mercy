@@ -1,7 +1,8 @@
 // Guides drawn over the store to explain it: the route shoppers will walk from every open
-// entrance, the dads' own route where it differs (DAD in path.js: until 0.4 they stepped over the
-// shop floor's belts; for now they walk like everyone else, so it is never drawn, but dads are to
-// get rules of their own), and highlighted tiles the tutorial wants the player to use.
+// entrance, the dads' own route where it differs (DAD in path.js: since 0.4 they walk through every
+// building and only walls and live Razor Wire stop them, so it is drawn whenever they have a
+// shorter way; the planned route, DADPLAN, is the interface package's), and highlighted tiles the
+// tutorial wants the player to use.
 import { DIRS, getDist, getDadDist, UNREACHABLE } from '../sim/index.js';
 import { TILE, INK, rr, label, font } from './paint.js';
 

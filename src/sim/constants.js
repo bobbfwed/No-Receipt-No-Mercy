@@ -67,9 +67,15 @@ export const ROLES = ['Floor Manager', 'Loss Prevention', 'Purchasing', 'Floater
  *   (Until 0.4 these were upgrades bought with cash, and the tracks also carried their prices.)
  */
 export const BUILD = {
+  // reinforce (0.4, the owner's request: crates are the filler of the maze, and fragile ones would
+  // make gym bros too strong): the `reinforce` command raises a crate's level `r` by one, and each
+  // level lets it take one more gym bro hit in a sales event. Level r + 1 costs
+  // round(cost * grow ** r), times the cards that change a crate's price, up to `max` levels: the
+  // numbers its bought durability track had in 0.3.04 (10, 16, 26, 41, 66, 105, 168, 268).
   crate: {
     name: 'Crate Stack', cost: 10, group: 'walls', blocks: true,
-    desc: 'A cheap wall. Does nothing else, and a gym bro goes through it in one hit.',
+    reinforce: { cost: 10, grow: 1.6, max: 8 },
+    desc: 'A cheap wall. A gym bro goes through it in one hit, unless you pay to reinforce it.',
   },
   // (0.4) `lift`: a Dumbwaiter under every tile of it, through which The Back stocks it with
   // supplies (back.js). `shots`: the uses one unit of Bottled Spite, Rage Cola or Extension Cord
@@ -206,7 +212,9 @@ export const buildDef = (k) => (typeof k === 'string' && Object.hasOwn(BUILD, k)
  *   stockUnits  the most units of one supply a building holds (per track)
  *   tierLevel   the level a tier counts as in its track (BUILD[k].up), by tier (index 0: no stock)
  *   tapeHits    gym bro hits one unit of Duct Tape soaks up, by tier
- *   wireTurns   dads one unit of Razor Wire turns away, by tier (no effect until a later stage)
+ *   wireTurns   dads one unit of Razor Wire turns away, by tier
+ *   wireReach   how many tiles a building's Razor Wire runs out beyond its edge, in the direction
+ *               the player gave it (b.wd; see wire.js). A number to tune by playing
  *   dropUpCost, dropUpGrow, dropUpMax  the dropUp command: a Returns Drop's next cash level costs
  *               dropUpCost * dropUpGrow ** (levels it has), up to dropUpMax levels
  */
@@ -226,6 +234,7 @@ export const BACK = {
   tierLevel: [0, 2, 4, 6, 8],
   tapeHits: [0, 1, 2, 3, 4],
   wireTurns: [0, 3, 6, 10, 15],
+  wireReach: 3,
   dropUpCost: 150,
   dropUpGrow: 1.6,
   dropUpMax: 5,
@@ -237,8 +246,8 @@ export const BACK = {
  * browses: stops for free samples, and steals stock from the security buildings he walks past.
  * drain: patience lost per second just for being in the store.
  * ignoresSigns: not slowed by wet floor signs, but may slip on them.
- * dad: walks by his own route map (DAD in path.js). For now it is blocked by exactly what blocks
- *   everyone else; it is kept apart because dads get rules of their own next (Razor Wire).
+ * dad: walks by his own route map (DAD in path.js), straight through every building; only the
+ *   store's walls and live Razor Wire stop him (0.4; see wire.js).
  * messy, kid, bolts, smashes: see the comments on the shoppers that have them.
  * steady: immune to slowing and slipping.
  * nag: slows towers near her.

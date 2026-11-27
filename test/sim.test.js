@@ -114,7 +114,9 @@ test('towers wear down patience until shoppers storm out', () => {
   assert.ok(s.players[0].all.stopped > 0);
 });
 
-test('dads give up when the walk is long enough, with no towers at all', () => {
+test('dads walk straight through a snake of crates that makes everyone else walk it (0.4)', () => {
+  // (Until 0.4 a long enough snake of crates wore dads down by itself: their patience drains while
+  // they walk. Now only walls and Razor Wire stop a dad: test/wire.test.js.)
   const s = newGame();
   s.players[0].cash = 100000;
   // A long snake of crate walls: alternate gaps at top and bottom.
@@ -128,17 +130,14 @@ test('dads give up when the walk is long enough, with no towers at all', () => {
   s.wave = 1; // next wave is 2, the first with a dad line
   applyCommand(s, 0, { c: 'start' });
   const ev = run(s, 150);
-  const dadsLeft = ev.filter((e) => e.e === 'left' && e.k === 'dad');
-  const dadsOut = ev.filter((e) => e.e === 'escape' && e.k === 'dad');
-  assert.ok(dadsLeft.length > 0, 'dads should run out of patience');
-  assert.equal(dadsOut.length, 0);
-  assert.ok(dadsLeft.every((e) => e.why === 'bored' && e.by === -1));
-  assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'hunter'), 'hunters are patient enough to get through');
+  const dads = waveSpec(2).filter((g) => g.k === 'dad').reduce((n, g) => n + g.n, 0);
+  assert.ok(dads > 0);
+  assert.equal(ev.filter((e) => e.e === 'escape' && e.k === 'dad').length, dads, 'every dad walks through and takes his refund');
+  assert.equal(ev.filter((e) => e.e === 'left' && e.k === 'dad').length, 0);
+  assert.ok(ev.some((e) => e.e === 'escape' && e.k === 'hunter'), 'hunters are patient enough to walk the snake');
 });
 
-test('dads walk by their own map, which for now blocks exactly what the ordinary one does', () => {
-  // (Until 0.4 dads stepped over the shop floor's belts. The map is kept apart, DAD, because dads
-  // are to get rules of their own; today it matches the ordinary one tile for tile.)
+test('dads walk by their own map, through every building; others walk round (0.4)', () => {
   const s = newGame();
   s.players[0].cash = 100000;
   // A wall of crates and Free Samples tables down column 10 with one gap at the very bottom, and a wet floor
@@ -146,27 +145,33 @@ test('dads walk by their own map, which for now blocks exactly what the ordinary
   for (let y = 1; y <= 13; y++) assert.ok(place(s, y % 4 ? 'crate' : 'samples', 10, y).ok);
   assert.ok(place(s, 'wetfloor', 10, 14).ok);
   const normal = getDist(s), dad = getDadDist(s);
-  assert.deepEqual([...dad], [...normal]);
-  assert.equal(dad[at(10, 7)], UNREACHABLE);
-  assert.notEqual(dad[at(10, 14)], UNREACHABLE);
-  // In play no dad ever stands on the wall, and building beside a dad is allowed while his own
-  // tile is refused.
+  assert.equal(normal[at(10, 7)], UNREACHABLE);
+  assert.notEqual(dad[at(10, 7)], UNREACHABLE, 'the wall is floor to a dad');
+  assert.ok(dad[at(0, 7)] < normal[at(0, 7)], 'his way is shorter');
+  // In play dads walk over the wall and nobody else does; a dad does not stop anything being built
+  // on his tile (he walks through buildings), anyone else does.
   s.wave = 1; // next wave is 2, the first with a dad line
   applyCommand(s, 0, { c: 'start' });
-  let checked = false;
+  let dadOnWall = false, checked = false, checkedOther = false;
   for (let i = 0; i < 60 * TICK_HZ; i++) {
     step(s);
     for (const sh of s.shoppers) {
       const b = s.grid[at(sh.x | 0, sh.y | 0)];
-      assert.ok(!b || !BUILD[b.k].blocks, `${sh.k} on a ${b && b.k}`);
-      if (!checked && sh.k === 'dad' && (sh.x | 0) > 12 && (sh.x | 0) < 27 && !s.grid[at(sh.x | 0, sh.y | 0)]) {
-        assert.equal(canPlace(s, 'crate', 3, 3), null, 'a dad on the floor does not freeze building');
-        assert.equal(canPlace(s, 'crate', sh.x | 0, sh.y | 0), 'shopper');
+      if (sh.k !== 'dad') assert.ok(!b || !BUILD[b.k].blocks, `${sh.k} on a ${b && b.k}`);
+      else if (b && BUILD[b.k].blocks) dadOnWall = true;
+      const free = !b && s.tiles[at(sh.x | 0, sh.y | 0)] === '.';
+      if (!checked && sh.k === 'dad' && free && (sh.x | 0) > 12 && (sh.x | 0) < 27) {
+        assert.equal(canPlace(s, 'crate', sh.x | 0, sh.y | 0), null, 'a crate may go on a dad');
         checked = true;
+      }
+      if (!checkedOther && sh.k !== 'dad' && sh.st === ST.WALK && free && (sh.x | 0) > 12 && (sh.x | 0) < 27) {
+        assert.equal(canPlace(s, 'crate', sh.x | 0, sh.y | 0), 'shopper');
+        checkedOther = true;
       }
     }
   }
-  assert.ok(checked, 'a dad was seen past the wall');
+  assert.ok(dadOnWall, 'a dad was seen on the wall');
+  assert.ok(checked && checkedOther, 'a dad and somebody else were seen past the wall');
 });
 
 test('dads ignore free samples; bargain hunters stop for them', () => {

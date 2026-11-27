@@ -696,7 +696,7 @@ export function stepBack(state, ev = null) {
  * How many uses one unit of a supply at `tier` gives a building of kind k in `track`: for damage,
  * speed and range the kind's own BUILD[k].shots (whatever the tier: the tier sets the level, see
  * levelIn); for durability BACK.tapeHits[tier] (hits soaked up); for wire BACK.wireTurns[tier]
- * (dads turned away, a later stage). With `state`, the game's cards count (artisanal: times
+ * (dads turned away: see wire.js). With `state`, the game's cards count (artisanal: times
  * cardUses, rounded up); without, the plain number the handbook shows.
  */
 export function usesPer(k, track, tier, state = null) {
@@ -755,6 +755,9 @@ export function takesSupply(b, code, state = null) {
 export function addStock(b, code, state = null) {
   const track = SUPPLY_TRACKS[itemType(code)], tier = itemTier(code);
   const s = b.s || (b.s = {});
+  // (Razor Wire arriving at an empty track puts a planned wire live: the dads' map changes, so
+  // gridVer moves on and the path maps are worked out again. Only a building with a wire matters.)
+  if (track === 'wire' && !s.wire && b.wd !== undefined && state) state.gridVer++;
   const run = s[track] || (s[track] = []);
   const n = usesPer(b.k, track, tier, state);
   if (run.length && run[run.length - 2] === tier) run[run.length - 1] += n;
@@ -796,6 +799,8 @@ export function stealStock(state, b, i, best, ev) {
     delete s[track];
     if (!STOCK_TRACKS.some((t) => s[t])) delete b.s;
     if (ev) ev.push({ e: 'stockOut', i, t: track });
+    // (The last Razor Wire stolen: a live wire goes dead, and the dads' map changes.)
+    if (track === 'wire' && b.wd !== undefined) state.gridVer++;
   }
   return { t: track, tier };
 }

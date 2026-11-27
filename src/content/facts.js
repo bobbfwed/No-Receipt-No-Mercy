@@ -5,7 +5,7 @@ import {
   SHOPPERS, SUPERS, BUILD, TUNE, SETTINGS, TICK_HZ, waveSpec, statsOf, priceOf,
   tracksOf, usesPer, BACK, BOSS, BABY, bossTier, bossTitle, bossPatience, perHead,
   patienceScaleAt, patienceGrowth, OFFICE, releaseNo, releaseSize, eventPay, speedPar,
-  makeTicks, rebrandTicks, stockCap, dropUpCost, SUPPLY_TRACKS,
+  makeTicks, rebrandTicks, stockCap, dropUpCost, SUPPLY_TRACKS, reinforceCost,
 } from '../sim/index.js';
 import { EDGE_HELP } from './help.js';
 import { TIER_NAMES, SUPPLIES, stockTracks, junkPerMinute } from './supplies.js';
@@ -346,10 +346,31 @@ export function tierRows(k, track) {
 /** Plain facts about the Crate Stack, the shop floor's one plain wall, as [label, value] pairs. */
 export function crateFacts() {
   return [
-    ['Shoppers', 'blocked, dads included'],
-    ['Gym bros', `with a hit ready, stop, flatten it with one hit and walk through (a Gym Bro has ${TUNE.smashMax} hits a visit, a ${SUPERS.gymbro.name} ${SUPERS.gymbro.smashMax ?? TUNE.smashMax}); resting after a hit, they walk round`],
-    ['Supplies', 'none: no Dumbwaiter under it, so nothing to stock and nothing to steal'],
+    // (0.4: dads walk through every building; only walls and Razor Wire stop them.)
+    ['Shoppers', 'blocked, all but dads: a dad walks straight through it'],
+    ['Gym bros', `with a hit ready, stop, hit it and walk through once it is down: one hit, and one more for each level it is reinforced (a Gym Bro has ${TUNE.smashMax} hits a visit, a ${SUPERS.gymbro.name} ${SUPERS.gymbro.smashMax ?? TUNE.smashMax}); resting after a hit, they walk round`],
+    ['Reinforce', reinforceText()],
+    ['Supplies', 'none: no Dumbwaiter under it, so nothing to stock, nothing to steal, and no Razor Wire'],
   ];
+}
+
+/**
+ * Reinforcing a Crate Stack (0.4), in words from the rules: what a level does, what each costs
+ * (BUILD.crate.reinforce, for a game without cards) and what happens to the money.
+ */
+export function reinforceText() {
+  const rf = BUILD.crate.reinforce, prices = [];
+  for (let r = 0; r < rf.max; r++) prices.push(money(reinforceCost({ k: 'crate', r })));
+  return `pay for up to ${rf.max} levels, each one more gym bro hit it takes in a sales event: ${prices.join(', ')}. The money counts as paid for the crate: selling it gives back ${pct(TUNE.sellBack)} of it, and a rebuild costs ${pct(TUNE.rebuildShare)} of it, levels and all`;
+}
+
+/**
+ * Razor Wire's rule (0.4) in words, from the rules: where a building's wire runs, when it works and
+ * what a unit lasts. For the handbook's Supplies card and the help.
+ */
+export function wireText() {
+  const turns = BACK.wireTurns.slice(1);
+  return `Give a security building a wire direction and, while it holds Razor Wire, no dad can step on its tiles or the ${BACK.wireReach} tiles beyond it that way (a wall cuts the wire short), open floor included: dads walk round it. Empty, the wire is only planned and stops nobody. Each dad it turns away uses one: a unit turns away ${turns.slice(0, -1).join(', ')} or ${turns[turns.length - 1]} dads, by brand. Nobody but dads notices it. A wire that would cut an entrance off from the tills, stocked or not, is refused`;
 }
 
 // ---- The Back (0.4) ---------------------------------------------------------------------------
@@ -416,20 +437,20 @@ export function backFacts(k) {
 
 /**
  * The five supplies, from the rules: [{ track, name, color, gives, maker (the machine's name),
- * takers (the security buildings that take it, by name), works (false for Razor Wire, which is
- * only stored for now) }], in STOCK_TRACKS order.
+ * takers (the security buildings that take it, by name) }], in STOCK_TRACKS order. (Until 0.4's
+ * dads stage it also had `works`, false for Razor Wire, which was only stored.)
  */
 export function supplyFacts() {
   return Object.keys(SUPPLIES).map((track) => ({
     track, name: SUPPLIES[track].name, color: SUPPLIES[track].color, gives: SUPPLIES[track].gives,
-    maker: BUILD[makerOf(track)].name, takers: takers(track), works: track !== 'wire',
+    maker: BUILD[makerOf(track)].name, takers: takers(track),
   }));
 }
 
 /**
  * One row per brand tier, from Store Brand to Platinum: { tier, name, level (the levels it counts
  * as for Bottled Spite, Rage Cola and Extension Cord), tape (gym bro hits a roll of Duct Tape soaks
- * up), wire (dads a unit of Razor Wire is to turn away), bin (what a Clearance Bin pays for it),
+ * up), wire (dads a unit of Razor Wire turns away), bin (what a Clearance Bin pays for it),
  * secs (the Rebrander's time to make it from the tier below; 0 for Store Brand, which the machines
  * make) }.
  */

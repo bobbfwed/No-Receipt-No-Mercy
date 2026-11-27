@@ -27,7 +27,7 @@ const SUP_SHORT = {
 };
 /** Each shopper's trick in a few words (SHOPPER_HELP has the full sentence, shown in the tooltip). */
 const TRICK = {
-  hunter: 'Grabs samples', dad: 'Hops belts', clipper: 'Fast and weak',
+  hunter: 'Grabs samples', dad: 'Walks through crates', clipper: 'Fast and weak',
   mom: 'Kid runs off', teen: 'Spills mess', karen: 'Slows towers', blind: 'Dog bolts',
   gymbro: 'Smashes stuff', scooter: 'Never slowed',
   drinker: 'Blocks aisles', dog: 'Pees on towers', flasher: 'Stops dads', cosplay: 'Soaks up shots',
