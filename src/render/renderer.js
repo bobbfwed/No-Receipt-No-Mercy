@@ -775,6 +775,29 @@ export function createRenderer(canvas, session) {
     }
   }
 
+  /**
+   * A building upgraded with cash instead of fed from The Back (0.4.01: the Wet Floor Sign): the
+   * same dark strip, with one small pip per level it can have (BUILD[k].upgrade.max), yellow up to
+   * the level it has (b.u). Shown at every zoom: it is small, and it is the only thing it holds.
+   */
+  function drawUpgradePips(b, r) {
+    const n = BUILD[b.k].upgrade.max | 0, u = b.u | 0;
+    if (!n) return;
+    const gap = 6, w = n * gap + 3, cx = r.x + r.w / 2, cy = r.y + 1;
+    rr(ctx, cx - w / 2, cy - 4.5, w, 9, 4.5);
+    ctx.fillStyle = 'rgba(20,24,28,0.88)';
+    ctx.fill();
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    for (let k = 0; k < n; k++) {
+      ctx.beginPath();
+      ctx.arc(cx - ((n - 1) * gap) / 2 + k * gap, cy, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = k < u ? '#facc15' : '#3a4048';
+      ctx.fill();
+    }
+  }
+
   /** "OUT OF ..." warnings over buildings: { i, t, at }, newest last (see warn). */
   const warnings = [];
   const WARN_MS = 4500;
@@ -797,7 +820,8 @@ export function createRenderer(canvas, session) {
       const wn = warnings[n], age = now - wn.at;
       if (age > WARN_MS || age < 0) { warnings.splice(n, 1); continue; }
       const b = s.grid[wn.i];
-      if (!b || b.part !== undefined || !BUILD[b.k]) { warnings.splice(n, 1); continue; }
+      // (Only what is fed from The Back runs out: not a Wet Floor Sign, from 0.4.01.)
+      if (!b || b.part !== undefined || !BUILD[b.k] || !BUILD[b.k].lift) { warnings.splice(n, 1); continue; }
       const r = rectOf(b, wn.i, s.w);
       const pop = age < 160 ? 0.6 + 0.4 * (age / 160) : 1;
       ctx.globalAlpha = age > WARN_MS - 600 ? (WARN_MS - age) / 600 : 1;
@@ -896,7 +920,7 @@ export function createRenderer(canvas, session) {
         if (supplies && BUILD[b.k].lift) {
           if (marks) drawMark(ctx, stockMark(b), r.x + r.w / 2, r.y + 2, markR);
           else drawPips(b, r);
-        }
+        } else if (supplies && BUILD[b.k].upgrade) drawUpgradePips(b, r);
       }
     }
   }
